@@ -1,6 +1,6 @@
 # DSH Plugin Analysis
 
-对 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）插件生态做一次横向分析：GitHub 上有哪些 DSH 插件，各属于什么主题，质量和风险怎样，生态里哪些方向已经扎堆、哪些还空着。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的插件市场准备底层数据：GitHub 上有哪些 DSH 插件，每个能做什么、要什么配置、风险和实现质量怎样，以及让人和 agent 用一句话需求就能搜到并被推荐合适插件的索引文本。
 
 ## 数据从哪来
 
@@ -35,9 +35,9 @@
 
 ## 怎么分析
 
-见 [STRATEGY.md](STRATEGY.md)：每个插件要读什么、按什么口径评质量和风险、怎么并发和续跑、怎么校准和复评、最后产出什么。主题分类见 [TAXONOMY.md](TAXONOMY.md)，每个插件的输出格式见 [schema/analysis.schema.json](schema/analysis.schema.json)。
+见 [STRATEGY.md](STRATEGY.md)。每个插件先用脚本从源码里静态抽出事实，再由模型阅读源码，写出卡片（包括能力、配置要求、外部服务、风险、实现质量）和索引文本。要进检索索引的文本见 [INDEX-TEXTS.md](INDEX-TEXTS.md)，主题见 [TAXONOMY.md](TAXONOMY.md)，各产出的格式见 `schema/`。
 
-分析只做静态阅读：不安装依赖，也不运行插件里的任何代码。
+这一轮只做高优组（A、B 层），0 star 组（C 层）留作后续。分析只做静态阅读，不安装依赖，也不运行插件里的任何代码。
 
 ## 目录
 
@@ -45,7 +45,7 @@
 lists/      清单（由 scripts/dedupe.py 生成）
 schema/     每个插件的输出格式
 scripts/    排重等脚本
-results/    每个插件的分析结果（A/、B/、failed/）
+results/    每个插件的产出：facts/、cards/、units/、failed/、progress.jsonl
 report/     汇总报告
 ```
 
