@@ -1,0 +1,218 @@
+{
+  "repo": "Rain-kl/dsh-preset-plus",
+  "commit": "90674c90ec91a8c60a52d29e92c5218c0edad8e9",
+  "extracted_at": "2026-11-06T18:15:57.514284+00:00",
+  "tree": {
+    "files": 18,
+    "bytes": 330562,
+    "lines_by_language": {
+      "JSON": 85,
+      "JavaScript": 1221,
+      "Markdown": 183,
+      "Other": 27,
+      "YAML": 382
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/assets/console-log.png",
+      "docs/assets/preset-settings.png",
+      "docs/assets/select-patern.png",
+      "lib/core.js",
+      "lib/index.js",
+      "package.json",
+      "pnpm-lock.yaml",
+      "presets/jailbreak.json",
+      "scripts/assert-build.mjs",
+      "scripts/release.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@rain-kl/dsh-preset-plus",
+    "version": "0.2.0",
+    "description": "DeepSeek Harness universal preset enhancement plugin: an editable preset editor (system/user/assistant entries + camouflage model output prepopulation)",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "presets",
+      "scripts",
+      "docs",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "build": "node scripts/assert-build.mjs",
+      "lint": "node --check lib/index.js && node --check lib/core.js && node --check client.js",
+      "release": "node scripts/release.mjs"
+    },
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "preset",
+      "jailbreak",
+      "prefill",
+      "agent"
+    ],
+    "author": "Rain-kl",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Rain-kl/dsh-preset-plus.git"
+    },
+    "bugs": {
+      "url": "https://github.com/Rain-kl/dsh-preset-plus/issues"
+    },
+    "homepage": "https://github.com/Rain-kl/dsh-preset-plus#readme",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-connection",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ]
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-preset-plus bundle patch: inserts the plugin row and the `preset-plus`\n# agent mode into a profile's layer stack.\n#\n# name 必须与真实安装的包名一致（带 scope）：DSH 加载器按 name 导入该包，\n# 未加 scope 会触发 ERR_MODULE_NOT_FOUND。\n#\n# Agent 模式（0.2.x 起的声明方式）：DSH 不再读取 `$DSH_HOME/.agent-presets/<id>/`\n# 目录，一个模式就是一行 `@deepseek-ai/dsh-agent-preset` 声明。PresetPlus 的组合\n# 因此从随包的 preset/agent.cordis.yml 移到这里；插件不再在启动时复制目录。\n- insert:\n    - id: dsh-preset-plus\n      name: '@rain-kl/dsh-preset-plus'\n      config:\n        enabled: true\n        scopedPresets: [\"preset-plus\"]\n        verbose: false\n\n    # PresetPlus — the fixed agent mode supplied by dsh-preset-plus.\n    #\n    # This is an AGENT-PLANE composition (copied from the shipped `standard`\n    # preset). The roster mounts it ONCE under a standing scope; every session\n    # naming `preset-plus` joins by scope parentage, so the tools registered here\n    # cover each joined agent. The system prompt comes from the plugin at runtime\n    # (`systemPrompt.section`), so this list carries no persona row.\n    #\n    # A service row here MUST sit inside a group carrying an `isolate` realm.\n    # `true` means an entry-local realm: this standing mount's own private\n    # instance, apart from every other preset's.\n    - id: preset-preset-plus\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: preset-plus\n        name: PresetPlus\n        description: PresetPlus模式。可动态应用不同的预设。具备标准模式所有的能力.\n        order: 5\n        plugins:\n          # ── shell ───────────────────────────────────────────────────────────────────\n\n          # Both shell tools consume the host registry from here; their executors\n          # (`bash-sandbox`/`pwsh-sandbox`) are host-plane too. `shell-env` stays in the\n          # HOST composition and is not included.\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n\n          # ── filesystem ──────────────────────────────────────────────────────────────\n\n          # Both register into the host `tools` registry and provide nothing, so they\n          # need no realm. The `fs` service and its policy stay in the host.\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n\n          # ── background jobs ─────────────────────────────────────────────────────────\n\n          # Only the model-facing controls. The task REGISTRY stays on the host plane.\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n\n          # `schedule` 服务在 host composition，只有工具行属于会话。\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n\n          # ── skills ──────────────────────────────────────────────────────────────────\n\n          # The skill REGISTRY lives in the host composition and is layered per scope.\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n\n          # ── goals ───────────────────────────────────────────────────────────────────\n\n          # `/goal` 命令行；goal 服务本身在 host composition。\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n\n          # Only the model-facing tool. The goal SERVICE stays on the host plane.\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n\n          # ── plan mode ───────────────────────────────────────────────────────────────\n\n          # Plan state is per-agent by nature, so an entry-local realm is correct.\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                        You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                        Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                        The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                        Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                        Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                        When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n\n          # ── compaction ──────────────────────────────────────────────────────────────\n\n          # `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the pruner\n          # must share this realm rather than sit outside it. `tokenMeter` is\n          # deliberately NOT in this realm (stays on the HOST plane).\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n          # ── delegation and workflows ────────────────────────────────────────────────\n\n          # The `subagents` registry and its spawn/fork backends live in the HOST\n          # composition. This preset contributes the delegation TOOLS.\n          # `workflows` is different — nothing outside an agent reads it — so every row\n          # that reaches it shares one entry-local realm here.\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n                # `list_agents` 由本包自己注册；旧的\n                # `@deepseek-ai/dsh-tool-subagent-control/list-agents` 子路径\n                # 已不再导出，单独列一行会让整个 preset 挂载失败。\n\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n\n              # Production dsh does not install these optional providers. Install the\n              # matching Bundle in this Profile and restart the Host, then remove\n              # `disabled` from the matching tool row.\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  maxDepth: provider-managed\n\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  maxDepth: provider-managed\n\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n\n          # ── remaining model-facing rows ─────────────────────────────────────────────\n\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n\n          # The `web` service and its search provider stay in the host composition; only\n          # the model-facing tool is per-session.\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: false\n              searchTimeoutMs: 60000\n\n          # `present` 是 standard 模式自带的能力（交付文件卡片），保持一致。\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/core.js:28"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/release.yml:37"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "lib/index.js:253"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Rain-kl/dsh-preset-plus.git",
+      "where": "package.json:40"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Rain-kl/dsh-preset-plus/issues",
+      "where": "package.json:43"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Rain-kl/dsh-preset-plus#readme",
+      "where": "package.json:45"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 43,
+    "pushed_at": "2026-11-01T13:18:18Z",
+    "created_at": "2026-08-24T01:58:21Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "lib/core.js",
+    "lib/index.js",
+    "package.json",
+    "scripts/assert-build.mjs",
+    "scripts/release.mjs"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">"
+    },
+    {
+      "section": "DSH 预设增强插件",
+      "text": "参考 SillyTavern 预设模功能开发的一个基础的**预设编辑器**。\n\n<p>\n  <a href=\"LICENSE\"><img src=\"https://img.shields.io/badge/license-MIT-4b8f77\" alt=\"MIT License\"></a>\n  <a href=\"https://nodejs.org/\"><img src=\"https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white\" alt=\"Node.js 24+\"></a>\n  <a href=\"https://linux.do/\"><img src=\"https://img.shields.io/badge/LINUX%20DO-Community-1f6feb\" alt=\"LINUX DO Community\"></a>\n</p>\n\n</div>\n\n---"
+    },
+    {
+      "section": "它解决什么",
+      "text": "- 破限场景下，伪造模型的服从输出从而提升破限效果。\n- 可以很方便的调整自定义模式系统提示词, 并且能够支持导入导出分享提示词"
+    },
+    {
+      "section": "作用域",
+      "text": "插件只提供一个固定 DSH 模式 **`preset-plus`**。仅当**当前会话挂载的 preset id ∈ `scopedPresets`**时，才向请求注入预设上下文。\n\n你可以在你可以在设置界面新增多种预设，但是只能同时生效一个。\n\n默认内置 `jailbreak` 预设\n\n其他模式**一律不进行任何注入**。"
+    },
+    {
+      "section": "注入顺序",
+      "text": "```\n[system 主提示词] → [user 触发] → [assistant 伪装输出] → [真实 user 输入] → [真实模型输出]\n```\n其中 system/user/assistant 来自你编辑的预设条目；真实输入与输出是会话本就有的。\n\n>注意: 伪造输入无法记录到\"轨迹\"中, 可以通过查看控制台打印判断是否注入成功\n>"
+    },
+    {
+      "section": "AB 双模式",
+      "text": "- **自动（auto，可关）**：第一条真实消息到来时自动注入。\n- **手动（/preset-plus prefill）**：用户显式触发，注入标记生效于下一条消息。"
+    },
+    {
+      "section": "命令 / 工具",
+      "text": "- `/preset-plus status | prefill | on | off | save`\n- `/preset-plus list`：列出预设\n- `/preset-plus activate <id>`：激活预设\n- 模型工具：`preset_plus_status`\n\n---"
+    },
+    {
+      "section": "快速开始",
+      "text": "> **装到哪个 profile？** 插件只对**你正在用的那个 profile** 生效。桌面端 App 用的是\n> `desktop` profile（`$DSH_HOME/profiles/desktop`），命令行 `dsh web` 默认是 `web`。\n> 装错 profile 时插件行根本不会出现——先用 `--profile` 指定正确的那一个。"
+    },
+    {
+      "section": "Git (推荐)",
+      "text": "```bash\ndsh plugin --profile desktop add github:Rain-kl/dsh-preset-plus\n```"
+    },
+    {
+      "section": "npm 仓库",
+      "text": "```bash\n#可能存在版本滞后\ndsh plugin --profile desktop add @rain-kl/dsh-preset-plus\n```\n\n在设置里配置完预设后, 选择 PresetPlus 模式使用既可生效\n\n---"
+    },
+    {
+      "section": "友情链接 / Links",
+      "text": "- [LinuxDo](https://linux.do)"
+    },
+    {
+      "section": "License",
+      "text": "The [MIT License](LICENSE) allows use, modification, distribution, and commercial use."
+    }
+  ],
+  "skipped": []
+}
