@@ -26,6 +26,8 @@
 
 ## 2. 分层与工作量
 
+分析的执行者是 Codex 的 `gpt-6-luna` 模型（下称 luna），并发 20 路；Codex 主导整个过程，负责派发、校验、汇总。
+
 | 层 | 范围 | 每个插件 | 估算（luna × 20 并发） |
 |---|---|---|---|
 | A | ≥10 star 的代表仓库 | 完整分析，3–5 分钟 | 见 README 里的数量，约 5 小时 |
@@ -101,6 +103,9 @@ maintenance 用清单里的 `pushed_at` 和 `commits` 判断，不用另外去�
 - **校验**：每个结果写盘前先用 schema 校验，不通过就重试一次；还不通过，就写到 `results/failed/`，并记下原因。
 - **并发**：luna 20 路。下载并发单独控制，建议 8–16 路，别把 codeload 打出限流。
 - **进度**：`results/progress.jsonl` 每完成一个追加一行，内容是仓库名、层、耗时、成功或失败、执行的 worker。
+- **在哪跑**：GCP Spot 机器 `gcp-dsh-analysis`（新加坡，8 核 32 GB），在 Atoll 频道 `c0.dev.dsh-analysis` 里通过 workspace 成员 `device-gcp-dsh` 使用。工作目录是 `/data/dsh-plugin-analysis/`，代码解压到 `/data/dsh-plugin-analysis/work/`（不进 git）。
+- **被抢占**：机器会停机，但磁盘保留。重新拉起后，按断点续跑接着做即可。
+- **同步**：每完成 500 个或每过一小时，就把 `results/` 提交并推到这个仓库的 `main` 分支，最多丢一小时的活。全部跑完后再推一次 `report/`，然后释放机器。
 
 ## 6. 质量把关
 1. **先校准**：A 层头 30 个跑完后先停下，由人抽查 10 个，确认评分口径和主题划分都合适了再继续。必要时改这份文档和 `TAXONOMY.md`，并重跑这 30 个。
