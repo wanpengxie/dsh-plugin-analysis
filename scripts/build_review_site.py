@@ -8,8 +8,10 @@ data=[]
 for row in rows:
  slug=row["repo"].replace("/","__")
  card=json.load(open(ROOT/"results"/"cards"/(slug+".json")))
+ facts=json.load(open(ROOT/"results"/"facts"/(slug+".json")))
+ detail=summary_by_repo[row["repo"]]
  units=[json.loads(x) for x in open(ROOT/"results"/"units"/(slug+".jsonl")) if x.strip()]
- data.append({"rank":int(row["rank"]),"stars":int(row["stars"]),"description":row["description"],"card":card,"units":units})
+ data.append({"rank":int(row["rank"]),"stars":int(row["stars"]),"description":row["description"],"meta":{"url":row["url"],"created_at":row["created_at"],"pushed_at":row["pushed_at"],"commits":int(row["commits"]),"language":row["language"],"license":row["license"] or "—","disk_kb":int(row["disk_kb"]),"copies":int(row["copies"]),"facts_extracted_at":facts["extracted_at"],"card_generated_at":card["generated_at"],"worker":card["worker"],"model":"gpt-6-luna","effort":"high","analysis_elapsed_seconds":detail["analysis_elapsed_seconds"],"validation":"passed","coverage_read_all":card["coverage"]["read_all"],"coverage_skipped":len(card["coverage"].get("skipped",[]))},"card":card,"units":units})
 payload=json.dumps(data,ensure_ascii=False).replace("</","<\\/")
 page=r'''<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
