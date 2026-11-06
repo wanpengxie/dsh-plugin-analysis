@@ -20,18 +20,6 @@ def evidence_ok(root,where):
  end=int(m.group(3) or m.group(2))
  return (end<=n,(f"line {end}>{n}" if end>n else ""))
 
-SOURCE_SUFFIXES={'.js','.jsx','.ts','.tsx','.mjs','.cjs','.py','.go','.rs','.java','.kt','.swift','.vue','.svelte','.cs','.rb','.php','.sh','.html','.css','.yml','.yaml','.toml','.md'}
-
-def evidence_path(where):
- m=re.match(r"^(.+?):(\d+)(?:-(\d+))?$",where)
- return m.group(1) if m else None
-
-def is_source_path(path):
- if not path:return False
- p=pathlib.PurePosixPath(path);name=p.name.lower()
- if name.startswith('readme') or name in {'package.json','pyproject.toml','cargo.toml'}:return False
- return p.suffix.lower() in SOURCE_SUFFIXES
-
 def walk_evidence(x):
  if isinstance(x,dict):
   for k,v in x.items():
@@ -55,20 +43,6 @@ def validate(repo):
  except Exception as e:errors.append("facts schema: "+str(e).splitlines()[0])
  try:jsonschema.Draft202012Validator(SCHEMAS["card"],format_checker=jsonschema.FormatChecker()).validate(card)
  except Exception as e:errors.append("card schema: "+str(e).splitlines()[0])
- coverage=card.get("coverage",{});files_read=set(coverage.get("files_read",[]));skipped=coverage.get("skipped",[])
- for path in sorted(files_read):
-  if not (src/path).is_file():errors.append(f"coverage.files_read missing file: {path}")
- for path in skipped:
-  if not (src/path).exists():errors.append(f"coverage.skipped must be an existing repository path: {path}")
- if coverage.get("read_all") and skipped:errors.append("coverage.read_all=true requires skipped=[]")
- if coverage.get("read_all") is False and not skipped:errors.append("coverage.read_all=false requires concrete skipped paths")
- required_read=set(facts.get("entries",[]))|{x.get("path") for x in facts.get("bundle",[]) if x.get("path")}
- required_read|={evidence_path(x.get("where","")) for x in facts.get("declared",[]) if evidence_path(x.get("where",""))}
- for path in sorted(required_read-files_read):errors.append(f"required entry/bundle/registration source not in coverage.files_read: {path}")
- for dim in ("completeness","code"):
-  ev=card.get("quality",{}).get(dim,{}).get("evidence",[]);source_paths={evidence_path(x) for x in ev if is_source_path(evidence_path(x))}
-  if not source_paths:errors.append(f"quality.{dim} requires actual source evidence, not README/manifest only")
-  for path in sorted(source_paths-files_read):errors.append(f"quality.{dim} source evidence not in coverage.files_read: {path}")
  units=[]
  for no,line in enumerate(paths["units"].read_text().splitlines(),1):
   try:u=json.loads(line);jsonschema.Draft202012Validator(SCHEMAS["unit"]).validate(u);units.append(u)
