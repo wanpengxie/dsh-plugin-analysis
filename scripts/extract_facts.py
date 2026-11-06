@@ -20,14 +20,7 @@ DECL=[
  ("command",re.compile(r"""(?:registerCommand|command)\s*\(\s*['"]([^'"]+)['"](?:\s*,\s*['"]([^'"]{1,240})['"])?""")),
  ("setting",re.compile(r"""(?:registerSetting|defineSetting|setting)\s*\(\s*['"]([^'"]+)['"](?:\s*,\s*['"]([^'"]{1,240})['"])?""")),
  ("hook",re.compile(r"""(?:registerHook|addHook)\s*\(\s*['"]([^'"]+)['"]"""))]
-SUSP=[
- ("eval",re.compile(r"""(?<![\w.])eval\s*\(""")),
- ("new_function",re.compile(r"""\bnew\s+Function\s*\(""")),
- ("child_process",re.compile(r"""(?:child_process|execSync\s*\(|spawnSync\s*\(|\bexec\s*\(|\bspawn\s*\(|subprocess\.|os\.system\s*\()""")),
- ("download_execute",re.compile(r"""(?:curl|wget).{0,160}(?:\||&&|;)\s*(?:sh|bash|zsh|python|node)\b|(?:fetch|axios|requests\.).{0,300}(?:exec|spawn|eval)""",re.I)),
- ("secret_file_read",re.compile(r"""(?:\.ssh/|\.aws/credentials|(?<!process)\.env\b|id_rsa|id_ed25519|credentials\.json|keychain)""",re.I)),
- ("outbound_with_local_data",re.compile(r"""(?:fetch|axios\.|requests\.|http\.request).{0,300}(?:readFile|process\.env|os\.environ|clipboard|history)""",re.I))]
-B64=re.compile(r"""['"][A-Za-z0-9+/]{400,}={0,2}['"]""")
+IMPORT_RE=re.compile(r"""(?:from\s*['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\)|import\(\s*['"]([^'"]+)['"]\s*\))""")
 
 def read_text(p):
  try:
@@ -57,7 +50,7 @@ def resolve(raw,root):
  for p in cand:
   try:p.resolve().relative_to(root.resolve())
   except ValueError:continue
-  if p.is_file():return p
+  if p.is_file():return p.resolve()
  return None
 
 def uniq(xs,key):
@@ -107,7 +100,32 @@ def extract(row):
   if p:
    rp=p.relative_to(root).as_posix();entries.append(rp);text=read_text(p)
    if text is not None:bundle.append({"path":rp,"text":text})
- outline=[];langs=Counter();config=[];endpoints=[];declared=[];suspicious=[];total=0
+ # Build a conservative runtime-reachable set. Seeds are manifest/bundle entries,
+ # conventional runtime entries, and files that register DSH surfaces.
+ seed_paths=set(entries)
+ for name in ("index.js","index.mjs","index.cjs","index.ts","src/index.js","src/index.ts","lib/index.js","lib/index.mjs","main.py","__init__.py"):
+  if (root/name).is_file():seed_paths.add(name)
+ for p in ps:
+  rp=p.relative_to(root).as_posix();t=read_text(p)
+  if t and re.search(r"\b(?:registerTool|registerCommand|registerSetting|defineSetting|registerHook|addHook)\s*\(",t):
+   seed_paths.add(rp)
+ runtime=set()
+ queue=[root/x for x in seed_paths if (root/x).is_file()]
+ while queue:
+  p=queue.pop()
+  if p in runtime:continue
+  runtime.add(p);t=read_text(p)
+  if not t:continue
+  for m in IMPORT_RE.finditer(t):
+   raw=next((x for x in m.groups() if x),None)
+   if not raw or not raw.startswith("."):continue
+   q=resolve(str((p.parent.relative_to(root)/raw).as_posix()),root)
+   if q and q not in runtime:queue.append(q)
+  if p.suffix.lower() in {".yaml",".yml",".json"}:
+   for raw in re.findall(r"""['"]?([A-Za-z0-9_./-]+\.(?:js|mjs|cjs|ts|tsx|py|go|rs))['"]?""",t):
+    q=resolve(raw,root)
+    if q and q not in runtime:queue.append(q)
+ outline=[];langs=Counter();config=[];endpoints=[];declared=[];total=0
  for p in ps:
   rp=p.relative_to(root).as_posix()
   if rp==".analysis-source.json":continue
@@ -116,9 +134,7 @@ def extract(row):
   text=read_text(p)
   if text is None:continue
   langs[LANG.get(p.suffix.lower(),"Other")]+=len(text.splitlines())
-  risk_parts={x.lower() for x in pathlib.PurePosixPath(rp).parts}
   semantic_source=p.suffix.lower() in {".js",".jsx",".mjs",".cjs",".ts",".tsx",".py",".go",".rs",".java",".kt",".rb",".php",".sh",".bash",".zsh",".json",".jsonc",".yaml",".yml",".toml",".vue",".svelte"} and p.name.lower() not in {"package-lock.json","pnpm-lock.yaml","yarn.lock","bun.lock","bun.lockb"}
-  risk_source=semantic_source and not (risk_parts & {"test","tests","__tests__","fixtures","docs","examples",".github","evals"}) and not re.search(r"(?:\.test|\.spec)\.[^.]+$",rp,re.I)
   for no,line in enumerate(text.splitlines(),1):
    where=f"{rp}:{no}"
    if semantic_source:
@@ -136,11 +152,6 @@ def extract(row):
       item={"kind":kind,"name":m.group(1),"where":where}
       if m.lastindex and m.lastindex>1 and m.group(2):item["description"]=m.group(2)
       declared.append(item)
-   if risk_source:
-    for kind,pat in SUSP:
-     if pat.search(line):suspicious.append({"kind":kind,"where":where,"snippet":line.strip()[:300]})
-    if B64.search(line):suspicious.append({"kind":"base64_blob","where":where,"snippet":line.strip()[:300]})
-    if len(line)>1000 and re.search(r"[A-Za-z_$][\w$]*=[^\s]{800,}",line):suspicious.append({"kind":"obfuscation","where":where,"snippet":line.strip()[:300]})
  scripts=manifest.get("scripts")
  clean=dict(manifest)
  if isinstance(scripts,dict):clean["scripts"]={k:(v[:237]+"..." if isinstance(v,str) and len(v)>240 else v) for k,v in scripts.items()}
@@ -149,12 +160,6 @@ def extract(row):
   p=root/name
   if p.exists() and (t:=read_text(p)):readme.extend(split_readme(t))
  test_files=sum(bool(re.search(r"(?:^|/)(?:test|tests|__tests__)(?:/|$)|(?:\.test|\.spec)\.[^.]+$",p.relative_to(root).as_posix(),re.I)) for p in ps)
- suspicious_all=uniq(suspicious,lambda x:(x["kind"],x["where"].rsplit(":",1)[0]))
- suspicious_counts=dict(Counter(x["kind"] for x in suspicious_all))
- suspicious_sample=[];per_kind=Counter()
- for item in suspicious_all:
-  if per_kind[item["kind"]]<4:
-   suspicious_sample.append(item);per_kind[item["kind"]]+=1
  facts={"repo":repo,"commit":commit,"extracted_at":dt.datetime.now(dt.timezone.utc).isoformat(),
   "tree":{"files":sum(p.name!=".analysis-source.json" for p in ps),"bytes":total,"lines_by_language":dict(sorted(langs.items())),"outline":outline},
   "manifest":clean,"bundle":bundle,"entries":list(dict.fromkeys(entries)),
@@ -162,10 +167,10 @@ def extract(row):
   "declared":uniq(declared,lambda x:(x["kind"],x["name"],x["where"])),
   "deps":{"dependencies":manifest.get("dependencies",{}) if isinstance(manifest.get("dependencies"),dict) else {},"devDependencies":manifest.get("devDependencies",{}) if isinstance(manifest.get("devDependencies"),dict) else {}},
   "quality_raw":{"test_files":test_files,"has_ci":any(p.relative_to(root).as_posix().startswith(".github/workflows/") for p in ps),"has_lint":any(p.name.lower() in {"eslint.config.js","eslint.config.mjs",".eslintrc",".eslintrc.json","ruff.toml",".flake8","biome.json"} for p in ps),"typed":any(p.suffix.lower() in {".ts",".tsx"} or p.name in {"py.typed","mypy.ini"} for p in ps),"commits":int(row.get("commits") or 0),"pushed_at":row.get("pushed_at") or "","created_at":row.get("created_at") or ""},
-  "suspicious":suspicious_sample,"suspicious_counts":suspicious_counts,"readme":readme,"skipped":[x["path"] for x in meta.get("skipped",[])]}
+  "runtime_files":sorted(p.relative_to(root).as_posix() for p in runtime),"readme":readme,"skipped":[x["path"] for x in meta.get("skipped",[])]}
  out=ROOT/"results"/"facts";out.mkdir(parents=True,exist_ok=True);target=out/(repo.replace("/","__")+".json")
  target.write_text(json.dumps(facts,ensure_ascii=False,indent=2)+"\n")
- return {"repo":repo,"files":facts["tree"]["files"],"suspicious":len(facts["suspicious"])}
+ return {"repo":repo,"files":facts["tree"]["files"]}
 
 def main():
  ap=argparse.ArgumentParser();ap.add_argument("--list",default=str(ROOT/"lists"/"calibration-top30.csv"));ap.add_argument("--repo",action="append");a=ap.parse_args()

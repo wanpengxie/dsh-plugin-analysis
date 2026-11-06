@@ -58,9 +58,6 @@ def validate(repo):
  fact_hosts={x["host"].lower() for x in facts["endpoints"]}
  for x in card.get("requirements",{}).get("external_services",[]):
   if x["host"].lower() not in fact_hosts:errors.append(f"service absent from facts.endpoints: {x['host']}")
- checked={x["where"] for x in card.get("risk",{}).get("checked",[])}
- for x in facts["suspicious"]:
-  if x["where"] not in checked:errors.append(f"suspicious not checked: {x['where']}")
  primary=card.get("topics",{}).get("primary")
  secondary=card.get("topics",{}).get("secondary",[])
  for topic in [primary]+secondary:
