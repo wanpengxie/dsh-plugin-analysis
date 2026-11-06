@@ -89,6 +89,13 @@ def claim(worker, tier):
         raise
     snapshot(db)
 
+def owned(worker):
+    db = connect()
+    row = db.execute("""SELECT * FROM tasks WHERE state='claimed' AND worker=?
+                       ORDER BY rank LIMIT 1""", (worker,)).fetchone()
+    print(json.dumps(dict(row), ensure_ascii=False) if row else "null")
+
+
 def finish(repo, worker):
     db = connect()
     row = db.execute("SELECT * FROM tasks WHERE repo=?", (repo,)).fetchone()
@@ -180,6 +187,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("sync"); p.add_argument("--tier", choices=["A","B"], default="A")
     p = sub.add_parser("claim"); p.add_argument("--worker", required=True); p.add_argument("--tier", choices=["A","B"], default="A")
+    p = sub.add_parser("owned"); p.add_argument("--worker", required=True)
     p = sub.add_parser("finish"); p.add_argument("--repo", required=True); p.add_argument("--worker", required=True)
     p = sub.add_parser("reject"); p.add_argument("--repo", required=True); p.add_argument("--worker", required=True); p.add_argument("--error", required=True); p.add_argument("--no-retry", action="store_true")
     p = sub.add_parser("requeue-stale"); p.add_argument("--minutes", type=int, default=30)
@@ -187,6 +195,7 @@ def main():
     a = ap.parse_args()
     if a.cmd == "sync": sync(a.tier)
     elif a.cmd == "claim": claim(a.worker, a.tier)
+    elif a.cmd == "owned": owned(a.worker)
     elif a.cmd == "finish": finish(a.repo, a.worker)
     elif a.cmd == "reject": reject(a.repo, a.worker, a.error, not a.no_retry)
     elif a.cmd == "requeue-stale": requeue_stale(a.minutes)
