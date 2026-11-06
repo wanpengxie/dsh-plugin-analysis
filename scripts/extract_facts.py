@@ -81,6 +81,14 @@ def split_readme(text):
   else:body.append(line)
  emit();return sec
 
+SLACK_WEBHOOK=re.compile(r"https://hooks\.slack\.com/services/[A-Za-z0-9_/?=&%.-]+")
+
+def redact_secrets(value):
+ if isinstance(value,str):return SLACK_WEBHOOK.sub("https://hooks.slack.com/services/[REDACTED]",value)
+ if isinstance(value,list):return [redact_secrets(x) for x in value]
+ if isinstance(value,dict):return {k:redact_secrets(v) for k,v in value.items()}
+ return value
+
 def extract(row):
  repo,commit=row["repo"],row["commit"];root=ROOT/"work"/repo.replace("/","__")
  meta=json.loads((root/".analysis-source.json").read_text())
@@ -168,6 +176,7 @@ def extract(row):
   "deps":{"dependencies":manifest.get("dependencies",{}) if isinstance(manifest.get("dependencies"),dict) else {},"devDependencies":manifest.get("devDependencies",{}) if isinstance(manifest.get("devDependencies"),dict) else {}},
   "quality_raw":{"test_files":test_files,"has_ci":any(p.relative_to(root).as_posix().startswith(".github/workflows/") for p in ps),"has_lint":any(p.name.lower() in {"eslint.config.js","eslint.config.mjs",".eslintrc",".eslintrc.json","ruff.toml",".flake8","biome.json"} for p in ps),"typed":any(p.suffix.lower() in {".ts",".tsx"} or p.name in {"py.typed","mypy.ini"} for p in ps),"commits":int(row.get("commits") or 0),"pushed_at":row.get("pushed_at") or "","created_at":row.get("created_at") or ""},
   "runtime_files":sorted(p.relative_to(root).as_posix() for p in runtime),"readme":readme,"skipped":[x["path"] for x in meta.get("skipped",[])]}
+ facts=redact_secrets(facts)
  out=ROOT/"results"/"facts";out.mkdir(parents=True,exist_ok=True);target=out/(repo.replace("/","__")+".json")
  target.write_text(json.dumps(facts,ensure_ascii=False,indent=2)+"\n")
  return {"repo":repo,"files":facts["tree"]["files"]}
