@@ -24,7 +24,15 @@ if audit.returncode:
 if paths: run("git","add","--",*paths)
 diff=run("git","diff","--cached","--quiet",check=False)
 if diff.returncode==0:
- print(json.dumps({"changed":False,"pushed":False,"head":run("git","rev-parse","HEAD").stdout.strip()})); raise SystemExit
+ head=run("git","rev-parse","HEAD").stdout.strip()
+ remote=run("git","rev-parse","origin/main").stdout.strip()
+ if head!=remote:
+  run("git","push","origin","main")
+  run("git","fetch","origin","main")
+  remote=run("git","rev-parse","origin/main").stdout.strip()
+  if head!=remote: raise SystemExit("origin/main mismatch after retry push")
+  print(json.dumps({"changed":False,"pushed":True,"head":head,"retry":True})); raise SystemExit
+ print(json.dumps({"changed":False,"pushed":False,"head":head})); raise SystemExit
 if diff.returncode!=1: raise SystemExit(diff.returncode)
 check=run("git","diff","--cached","--check",check=False)
 if check.returncode:
