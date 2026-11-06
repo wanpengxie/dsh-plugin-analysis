@@ -25,6 +25,7 @@
 
 | 文件 | 内容 |
 |---|---|
+| `lists/calibration-top30.csv` | 校准用的测试清单：A 层 star 最高的 30 个代表仓库，见 STRATEGY §8 第 1 条 |
 | `lists/high-priority.csv` | 高优组：A 层和 B 层的代表仓库，按 star 排序，带分析时要固定的 commit |
 | `lists/zero-star.csv` | 0 star 组：C 层，这一轮不分析 |
 | `lists/duplicates.csv` | 每个副本对应哪个代表仓库，是哪种关系 |
