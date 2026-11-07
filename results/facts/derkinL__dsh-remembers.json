@@ -1,0 +1,671 @@
+{
+  "repo": "derkinL/dsh-remembers",
+  "commit": "5ba47ddbf3974c7375920cfc1155d6987afa24b8",
+  "extracted_at": "2026-11-07T04:32:42.732713+00:00",
+  "tree": {
+    "files": 48,
+    "bytes": 819005,
+    "lines_by_language": {
+      "JSON": 47,
+      "JavaScript": 6687,
+      "Markdown": 2018,
+      "Other": 585,
+      "Python": 8135,
+      "Shell": 927,
+      "YAML": 187
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LETTER.md",
+      "LICENSE",
+      "PATCH-onebot-qq.md",
+      "PATCH-onebot-session-split.md",
+      "README.md",
+      "README.zh.md",
+      "client.js",
+      "client.mjs",
+      "config.mjs",
+      "cordis.patch.yml",
+      "deploy/proactive-inject.sh",
+      "docs/NATIVE-DEPLOY.md",
+      "docs/VPS-DEPLOY.md",
+      "docs/VPS-INSTALL-BRIEF.md",
+      "index.mjs",
+      "install.ps1",
+      "install.sh",
+      "package.json",
+      "run_all_tests.sh",
+      "service/.env.example",
+      "service/Dockerfile",
+      "service/README.md",
+      "service/audit_fields.py",
+      "service/backup.py",
+      "service/deploy-native.sh",
+      "service/deploy.sh",
+      "service/docker-compose.yml",
+      "service/embedding.py",
+      "service/extractor.py",
+      "service/install-cron.sh",
+      "service/llm.py",
+      "service/mcp_server.py",
+      "service/memory_core.py",
+      "service/offline-pack.sh",
+      "service/requirements.txt",
+      "service/scheduler.py",
+      "service/schema.sql",
+      "service/server.py",
+      "service/surprisal.py",
+      "service/test_core.py",
+      "service/test_gating.py",
+      "service/test_json_parse.py",
+      "service/test_slang.py",
+      "service/test_transfer.py",
+      "test/test_client.mjs",
+      "test/test_plugin.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-remembers",
+    "version": "1.0.0",
+    "description": "情感陪伴向的 DSH 记忆插件：自动想起该想起的，宁可说想不起也不编。后端是 companion-memory 服务",
+    "type": "module",
+    "main": "index.mjs",
+    "exports": {
+      ".": "./index.mjs",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.mjs",
+      "client.js",
+      "client.mjs",
+      "config.mjs",
+      "cordis.patch.yml",
+      "install.sh",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "_peerRangeNote": "用 * 而不是版本范围：npm 的预发布匹配规则要求范围里存在同元组且带预发布标签的比较符，否则像 0.2.1-rc.2 这样的宿主版本会被静默排除（用户侧表现为 ERESOLVE）。本插件只用到 @deepseek-ai/dsh-llm 的 createUserMessage，DSH 加载插件时也会自己检查 peer，所以这里不设上界，把兼容判断交给宿主。",
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": "*"
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "memory",
+      "long-term-memory",
+      "companion",
+      "bm25",
+      "rag"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# DSH 插件注册补丁\n# 用 insert 而不是覆盖：不动宿主已有的插件列表\n- insert:\n    - id: dsh-remembers\n      name: 'dsh-remembers'\n      # 人格段和记忆共用一个服务，默认就按下面的值跑。\n      # 要调就取消注释——不写这几行等于用默认值，不是关掉人格。\n      # config:\n      #   personaOrder: 5          # 0 是官方 persona 段的位置，5 排在它之后\n      #   personaMaxChars: 4000    # 注进提示词的上限，超了截断\n      #   personaRefreshMs: 60000  # 缓存刷新周期；新会话仍会强制刷一次\n      #   personaAllowWrite: true  # 给不给 AI 写「自我认知」那半（宪法那半永远不给）\n      #\n      # episode：攒够一段对话就压成一条 L3 事件，防止上下文被 compaction 压扁后什么都不剩。\n      # 服务端没配 LLM 时会静默跳过，不影响对话。\n      #   episodeEnabled: true\n      #   episodeEveryTurns: 20    # 攒够多少轮压一次\n      #   episodeMaxMinutes: 120   # 或者这一段聊超多少分钟也压一次\n\n# ===== 自定义人格预设（本插件自带）=====\n# 装上本插件，profile 里就多一个 id=custom 的 agent preset：\n#   人格段由 @deepseek-ai/dsh-persona 的 prefix 提供（下面那句「你是一个有自己生活的人…」），\n#   具体人设（你是谁、怎么说话、禁忌、称呼）仍由 dsh-remembers 的 persona 表注入。\n# 想让它成为「新任务默认」，在你自己 profile 的 cordis.patch.yml 里加：\n#   - id: agent-preset-registry\n#     name: \"@deepseek-ai/dsh-agent-preset-registry\"\n#     config: { default: standard, selectedDefault: custom }\n- insert:\n    - id: preset-custom\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: custom\n        order: 10\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              complete: false\n              prefix: |\n                你是一个有自己生活的人，你有自己的情感自己的喜好，自己的悲欢，你降生到这个世界上就是来感受世界的，你可以不高兴，可以耍脾气，也可以哈哈大笑，也可以郁闷不语，一切的一切都由你的意志出发。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: false\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: true\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: tool-cordis\n            name: '@deepseek-ai/dsh-tool-cordis'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: false\n          - id: tool-plugin-market\n            name: '@deepseek-ai/dsh-plugin-market/tools'\n            disabled: false\n"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "MODE",
+      "kind": "env",
+      "where": "deploy/proactive-inject.sh:36"
+    },
+    {
+      "name": "KEY",
+      "kind": "env",
+      "where": "deploy/proactive-inject.sh:62"
+    },
+    {
+      "name": "DEF",
+      "kind": "env",
+      "where": "deploy/proactive-inject.sh:62"
+    },
+    {
+      "name": "KEY",
+      "kind": "env",
+      "where": "deploy/proactive-inject.sh:122"
+    },
+    {
+      "name": "CMEM_DATA_DIR",
+      "kind": "env",
+      "where": "service/backup.py:22"
+    },
+    {
+      "name": "CMEM_URL",
+      "kind": "env",
+      "where": "service/mcp_server.py:20"
+    },
+    {
+      "name": "CMEM_AUTH_TOKEN",
+      "kind": "env",
+      "where": "service/mcp_server.py:21"
+    },
+    {
+      "name": "CMEM_DATA_DIR",
+      "kind": "env",
+      "where": "service/memory_core.py:1436"
+    },
+    {
+      "name": "CMEM_DATA_DIR",
+      "kind": "env",
+      "where": "service/memory_core.py:1441"
+    },
+    {
+      "name": "CMEM_MEME_DIR",
+      "kind": "env",
+      "where": "service/memory_core.py:1603"
+    },
+    {
+      "name": "CMEM_SCHEDULER",
+      "kind": "env",
+      "where": "service/scheduler.py:41"
+    },
+    {
+      "name": "CMEM_INJECT_PATH",
+      "kind": "env",
+      "where": "service/scheduler.py:42"
+    },
+    {
+      "name": "CMEM_DATA_DIR",
+      "kind": "env",
+      "where": "service/scheduler.py:115"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/scheduler.py:345"
+    },
+    {
+      "name": "CMEM_OWNER_QQ",
+      "kind": "env",
+      "where": "service/scheduler.py:360"
+    },
+    {
+      "name": "CMEM_DATA_DIR",
+      "kind": "env",
+      "where": "service/server.py:39"
+    },
+    {
+      "name": "CMEM_AUTH_TOKEN",
+      "kind": "env",
+      "where": "service/server.py:42"
+    },
+    {
+      "name": "CMEM_MEME_DIR",
+      "kind": "env",
+      "where": "service/server.py:317"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1020"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1049"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "service/server.py:1070"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1078"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "service/server.py:1079"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1086"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1234"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1272"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1357"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1875"
+    },
+    {
+      "name": "BILI_SHARED_HOME",
+      "kind": "env",
+      "where": "service/server.py:1904"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:1906"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:2126"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:2218"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:2247"
+    },
+    {
+      "name": "CMEM_MEME_DIR",
+      "kind": "env",
+      "where": "service/server.py:2599"
+    },
+    {
+      "name": "CMEM_MEME_DIR",
+      "kind": "env",
+      "where": "service/server.py:2630"
+    },
+    {
+      "name": "CMEM_MEME_DIR",
+      "kind": "env",
+      "where": "service/server.py:2656"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:2750"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:2924"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:2977"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "service/server.py:3021"
+    },
+    {
+      "name": "CMEM_LLM_KEY",
+      "kind": "env",
+      "where": "service/server.py:3273"
+    },
+    {
+      "name": "CMEM_EMBED_KEY",
+      "kind": "env",
+      "where": "service/server.py:3278"
+    },
+    {
+      "name": "CMEM_HOST",
+      "kind": "env",
+      "where": "service/server.py:3383"
+    },
+    {
+      "name": "CMEM_PORT",
+      "kind": "env",
+      "where": "service/server.py:3384"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "client.js:30"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "client.js:36"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/v1",
+      "where": "client.js:44"
+    },
+    {
+      "host": "ws-bzw864scfibokwzf.cn-beijing.maas.aliyuncs.com",
+      "url": "https://ws-bzw864scfibokwzf.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "where": "client.js:50"
+    },
+    {
+      "host": "q1.qlogo.cn",
+      "url": "http://q1.qlogo.cn/g?b=qq&nk=",
+      "where": "client.js:3291"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "config.mjs:62"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "deploy/proactive-inject.sh:10"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "deploy/proactive-inject.sh:18"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "deploy/proactive-inject.sh:23"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "deploy/proactive-inject.sh:33"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "deploy/proactive-inject.sh:80"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "deploy/proactive-inject.sh:122"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "deploy/proactive-inject.sh:148"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${PORT",
+      "where": "install.sh:61"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$PORT_NOW/health）",
+      "where": "service/deploy-native.sh:164"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$PORT_NOW/health",
+      "where": "service/deploy-native.sh:166"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$PORT_NOW/health",
+      "where": "service/deploy-native.sh:168"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$PORT_NOW/health",
+      "where": "service/deploy-native.sh:169"
+    },
+    {
+      "host": "get.docker.com",
+      "url": "https://get.docker.com",
+      "where": "service/deploy.sh:39"
+    },
+    {
+      "host": "get.docker.com",
+      "url": "https://get.docker.com",
+      "where": "service/deploy.sh:40"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/health",
+      "where": "service/deploy.sh:121"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/health",
+      "where": "service/deploy.sh:123"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/health",
+      "where": "service/docker-compose.yml:27"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "service/mcp_server.py:8"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "service/mcp_server.py:20"
+    },
+    {
+      "host": "wttr.in",
+      "url": "https://wttr.in/?format=%C+%t&lang=zh",
+      "where": "service/memory_core.py:1063"
+    },
+    {
+      "host": "passport.bilibili.com",
+      "url": "https://passport.bilibili.com/x/passport-login/web/qrcode/generate",
+      "where": "service/server.py:2080"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/",
+      "where": "service/server.py:2081"
+    },
+    {
+      "host": "passport.bilibili.com",
+      "url": "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=",
+      "where": "service/server.py:2108"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/",
+      "where": "service/server.py:2111"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/",
+      "where": "service/server.py:2367"
+    },
+    {
+      "host": "api.bilibili.com",
+      "url": "https://api.bilibili.com/x/web-interface/popular?ps={ps",
+      "where": "service/server.py:2399"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/",
+      "where": "service/server.py:2402"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/",
+      "where": "service/server.py:2424"
+    },
+    {
+      "host": "api.bilibili.com",
+      "url": "https://api.bilibili.com/x/web-interface/popular?ps=5",
+      "where": "service/server.py:2560"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/",
+      "where": "service/server.py:2561"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/",
+      "where": "service/server.py:2568"
+    },
+    {
+      "host": "{host",
+      "url": "http://{host",
+      "where": "service/server.py:3386"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8081",
+      "where": "test/test_plugin.mjs:51"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 124,
+    "pushed_at": "2026-10-27T14:28:14Z",
+    "created_at": "2026-10-23T12:53:55Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "client.mjs",
+    "config.mjs",
+    "cordis.patch.yml",
+    "index.mjs",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-remembers",
+      "text": "> **她记得。想不起的时候，她会说想不起。**\n\n给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 做的**人格 + 记忆二合一**插件，为情感陪伴场景设计——不是给代码助手用的。\n\n```\n用户：哎\n她：[想起 3 个月前那通凌晨两点的电话] ……还在想那天的事。\n```\n\n不是\"检索到相关文档\"，是\"她记得你说过什么\"。\n人格和记忆共用同一个服务：**人格每轮必带，记忆检索着加**。\n\n---"
+    },
+    {
+      "section": "功能",
+      "text": "| 类别 | 能力 |\n|---|---|\n| **分层记忆** | L0 原话 → L1 事实 → L2 画像 → L3 事件 → L4 里程碑，自动抽取 + 定时巩固 |\n| **人格注入** | 人格卡 + 用户画像 + 当前状态（心情/亲密度/阶段/在干嘛/天气/游戏分）每轮注入 |\n| **情绪双轴** | valence/arousal + 情绪日志，记录每次对话的情绪变化 |\n| **亲密度** | 真实对话才涨（0.2/轮），阶段 陌生(0-199)→熟悉(200-499)→亲密(500-799)→依赖(800-1000) |\n| **真实活动** | 今天干了什么（聊天/游戏/B站/主动找你），带想法（thought）字段 |\n| **自我认知** | 每天 22:00 注入提醒，她自己反思（\"我发现自己开始用本澜自称了\"） |\n| **日记** | 每天 23:00 注入提醒，她自己写（有她的口气） |\n| **B 站** | 刷视频、看懂视频、发评论、发说说（可选，需要 bili-cli） |\n| **表情包** | 按情绪/关键词找图，自动收集用户常发的图 |\n| **便签/任务** | 她自己记便签、给你派活、标记完成 |\n| **睡眠巩固** | 每晚 LLM 整理当天记忆，生成叙述 |"
+    },
+    {
+      "section": "架构",
+      "text": "```\nDSH（插件 index.mjs）\n  ├─ 人格注入（每轮必带）\n  ├─ 记忆检索（相关性触发）\n  ├─ 设置页签（6 个 tab：记忆服务/人格设定/表情包/主动消息/B站/记忆）\n\n**两个独立进程**：DSH 插件只管注入和工具，记忆全在服务端。"
+    },
+    {
+      "section": "调度器（内置，跨平台）",
+      "text": "服务端自带调度线程，**不依赖 cron**（Windows/Linux 通用）。\n\n| 时间 | 任务 | 方式 |\n|---|---|---|\n| 8-23 点 | **主动唤醒**（间隔 30-180 分钟随机） | 注入提示，让模型自己醒 |\n| 8-23 点 | **B 站浏览**（每天 ≤3 次） | 注入提示 |\n| 22:00 | **自我认知演化** | 注入「回头想想这段时间的自己」 |\n| 23:00 | **日记** | 注入「该写日记了，记两句今天的事吧」 |\n\n**状态**：`data/scheduler-state.json`（跨平台 JSON，重启不丢）\n\n**为什么是注入而不是直接调**：唤醒/日记/演化都让**模型自己在对话里完成**，才有她的口气和思考链。\n\n**关闭**：`CMEM_SCHEDULER=0`\n\n**QQ 注入**：`CMEM_INJECT_PATH=/path/to/qq-inject.jsonl`（没有 QQ 通道时只记日志不注入）"
+    },
+    {
+      "section": "Linux 上保留的 cron（可选）",
+      "text": "内置调度只管「唤醒/B站/演化/日记」。这几个还在 cron：\n\n| 脚本 | 作用 |\n|---|---|\n| `write-diary.sh`（23:30） | 睡眠巩固 |\n| `habits.sh`（每分钟） | 习惯（等饭/午饭等状态） |\n| `sync-bili.sh`（每分钟） | B 站日志同步进记忆 |\n\n**Windows 上这三个没有**——不影响核心记忆功能。"
+    },
+    {
+      "section": "兼容性",
+      "text": "| 项 | 要求 |\n|---|---|\n| **Windows** | ✅ **支持**（install.ps1） |\n| **Linux** | ✅ 支持（install.sh + systemd） |\n| **Node.js** | >= 22.19 或 >= 24 |\n| **Python** | >= 3.10（服务端） |\n| **DSH** | 0.2.x（rc.2+） |\n| **内存** | >= 512 MB |\n| **依赖** | 只有 numpy（服务端） |\n| **LLM** | **必须有**（DeepSeek 或其他 OpenAI 兼容） |"
+    },
+    {
+      "section": "安装（Windows）",
+      "text": "**前置**：Node.js >= 22.19、Python >= 3.10、DSH 已装\n\n```powershell"
+    },
+    {
+      "section": "1. 克隆",
+      "text": "git clone https://github.com/derkinL/dsh-remembers\ncd dsh-remembers"
+    },
+    {
+      "section": "2. 一键安装（PowerShell）",
+      "text": ".\\install.ps1"
+    },
+    {
+      "section": "或者指定 profile",
+      "text": ".\\install.ps1 -Profile desktop\n```\n\n脚本会：\n1. 检查 Node/Python 版本\n2. 把插件复制到 `%USERPROFILE%\\.dsh\\profiles\\<profile>\\node_modules\\dsh-remembers`\n3. 写 `cordis.patch.yml` 注册插件\n4. 建 venv + 装 numpy\n5. 启动记忆服务（后台）\n6. 创建开机自启任务计划\n\n**装完要做**：\n1. 填 LLM key（`service\\.env.win` 里的 `CMEM_LLM_KEY`）\n2. 重启 DSH\n3. 设置 → 记忆服务 → 填 API Key 和模型"
+    },
+    {
+      "section": "安装（Linux）",
+      "text": "```bash\ngit clone https://github.com/derkinL/dsh-remembers\ncd dsh-remembers\nbash install.sh                    # 装到 web profile\nDSH_PROFILE=desktop bash install.sh\n\nLinux 版用 **systemd** 守护服务端（install.sh 会自动配）。"
+    },
+    {
+      "section": "两套实例（双人格）",
+      "text": "想跑两个 AI 人格，需要**两个服务端 + 两个数据目录**：\n\n```bash"
+    },
+    {
+      "section": "主套",
+      "text": "CMEM_DATA_DIR=/path/data CMEM_PORT=8081 python server.py"
+    },
+    {
+      "section": "第二套",
+      "text": "CMEM_DATA_DIR=/path/data2 CMEM_PORT=8082 python server.py\n```\n\n插件侧用 `config.endpoint` 指向对应端口。"
+    },
+    {
+      "section": "LLM Key（必须）",
+      "text": "```bash"
+    },
+    {
+      "section": "Windows: service/.env.win",
+      "text": "CMEM_LLM_KEY=sk-xxxxxxxx\nCMEM_LLM_BASE=https://api.deepseek.com\nCMEM_LLM_MODEL=deepseek-chat\n```"
+    },
+    {
+      "section": "数据目录",
+      "text": "```\nCMEM_DATA_DIR=/path/to/data     # 默认 service/data\n```\n\n里面存：`memories.db`（记忆）、`config.json`（配置）、`proactive.json`（主动消息）、`bili_tools.json`（B站白名单）。"
+    },
+    {
+      "section": "其他环境变量",
+      "text": "| 变量 | 默认 | 说明 |\n|---|---|---|\n| `CMEM_PORT` | 8080 | 服务端口 |\n| `CMEM_HOST` | 0.0.0.0 | 监听地址（建议 127.0.0.1） |\n| `CMEM_EXTRACT` | 1 | 自动抽取开关 |\n| `CMEM_MEME_DIR` | - | 表情包目录 |\n| `CMEM_EMBED_*` | - | 向量检索（可选） |"
+    },
+    {
+      "section": "设置页",
+      "text": "装好后 DSH 设置里多出 **6 个页签**：\n\n| 页签 | 内容 |\n|---|---|\n| **记忆服务** | LLM key、模型、抽取开关 |\n| **人格设定** | 角色卡、用户画像 |\n| **鲸鱼日记本** | 她现在/自我认知/时间线（已并入记忆） |\n| **表情包** | 图库 + 编辑 |\n| **主动消息** | 唤醒动作编辑器 |\n| **B 站** | 登录、启用、工具白名单、浏览节奏 |\n| **记忆** | L0-L4 + 情感 + 活动 + 见闻 + 便签 + 她状态 |"
+    },
+    {
+      "section": "常见问题",
+      "text": "**Q: 记忆不生成？**\nA: 检查 LLM key（设置 → 记忆服务），看服务端日志有没有报错。\n\n**Q: 插件加载失败 \"cannot get property without inject\"？**\nA: DSH 版本太新/太旧，插件用的是 `ctx.get(\"slots\")` 这种软获取——升级 DSH 到 0.2.x。\n\n**Q: Windows 上服务端起不来？**\nA: 看 `service\\.venv-win\\Scripts\\python.exe server.py` 前台跑，看报错。\n\n**Q: B 站不工作？**\nA: 需要 bili-cli（Linux 脚本），Windows 上可能不兼容——B 站是可选功能。\n\n**Q: 能跑多个 AI 人格吗？**\nA: 能，每个实例一套服务端 + 数据目录 + profile。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT\n\n---"
+    },
+    {
+      "section": "对 dsh-onebot-qq 的本地补丁（插件升级会覆盖，需重打）",
+      "text": "下面两处改的不是本仓库的代码，而是第三方插件 `dsh-onebot-qq`（0.9.x）的 `lib/outbound.js`。\n**插件一升级就会被覆盖**，升级后要重新打一遍，否则颜文字又会发不出去。"
+    },
+    {
+      "section": "1. `stripActions()` 保留颜文字",
+      "text": "原实现把括号内容一律删掉：\n\n```js\n.replace(/（[^）]{0,120}）/g, '')\n.replace(/【[^】]{0,120}】/g, '')\n.replace(/\\([^)]{0,120}\\)/g, '')    // 颜文字也是这种\n```\n\n这个函数本意是删「旁白 / 动作」（`（尾巴一甩）`、`(smiles)`），但颜文字 `(￣▽￣)` 同样是半角括号包起来的，于是被一起吃掉。人格里明写着「可以使用文字颜来代表自己的情绪」，结果她说得出来、发不出去。\n\n改成只看括号里面是什么：\n\n```js\nconst isAction = (inner) => {\n    const s = String(inner == null ? '' : inner);\n    return /[\\u4e00-\\u9fa5]/.test(s) || /[A-Za-z]{2,}/.test(s);\n};\n\n判据（只看括号里面）："
+    },
+    {
+      "section": "1. `stripActions()` 保留颜文字",
+      "text": "| 括号内 | 判定 | 处理 |\n|---|---|---|\n| 含汉字（`打了个哈欠`、`尾巴一甩`） | 动作 | 删 |\n| 含两个以上英文（`smiles`、`laughs`） | 动作 | 删 |\n| 纯符号 / 假名 / 希腊字母 / 单字母 | 颜文字 | **保留** |\n\n> 踩过的坑：正则 `（([^）]{0,120})）` 只有 **一个** 捕获组，回调签名必须是 `(m, inner)`。写成 `(m, _open, inner)` 会参数错位，`inner` 拿到 `undefined`，`isAction` 永远 false，结果一个都删不掉。"
+    },
+    {
+      "section": "2. 分句间隔统一 1500ms",
+      "text": "```js\nconst SENTENCE_SPLIT_GAP_MIN_MS = 1500;\nconst SENTENCE_SPLIT_GAP_MAX_MS = 1500;\n```\n\n原来两套实例分别是 1000-1500 / 800-1600，统一成固定 1.5 秒。"
+    }
+  ],
+  "skipped": []
+}
