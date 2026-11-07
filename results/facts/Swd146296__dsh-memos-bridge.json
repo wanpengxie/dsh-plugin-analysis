@@ -1,0 +1,524 @@
+{
+  "repo": "Swd146296/dsh-memos-bridge",
+  "commit": "f16a0d643d12d07fecb40f1bf240edf0eac05ba8",
+  "extracted_at": "2026-11-07T03:24:48.865326+00:00",
+  "tree": {
+    "files": 25,
+    "bytes": 134272,
+    "lines_by_language": {
+      "JSON": 55,
+      "JavaScript": 282,
+      "Markdown": 752,
+      "Other": 47,
+      "Python": 1930,
+      "Shell": 5,
+      "YAML": 227
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/ISSUE_TEMPLATE/config.yml",
+      ".github/ISSUE_TEMPLATE/feature_request.yml",
+      ".gitignore",
+      ".npmignore",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "examples/host-run-override.yml",
+      "index.js",
+      "package.json",
+      "scripts/memos_mcp_runner.py",
+      "scripts/patch_memos.py",
+      "scripts/setup.py",
+      "scripts/smoke_test.py",
+      "setup.ps1",
+      "setup.sh",
+      "tests/provider.test.mjs",
+      "tests/test_patch_layer.py",
+      "tests/test_patch_memos.py",
+      "tests/test_runner_helpers.py"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-memos-bridge",
+    "version": "0.2.0",
+    "description": "DeepSeek Harness bundle that bridges the MemOS memory service into the agent over MCP: add, search, update and manage memories as native tools (mcp__memos__*).",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Swd146296/dsh-memos-bridge.git"
+    },
+    "homepage": "https://github.com/Swd146296/dsh-memos-bridge#readme",
+    "bugs": {
+      "url": "https://github.com/Swd146296/dsh-memos-bridge/issues"
+    },
+    "author": "Swd146296",
+    "type": "module",
+    "main": "index.js",
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "scripts/",
+      "setup.ps1",
+      "setup.sh",
+      "examples/"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node --test tests/provider.test.mjs",
+      "lint": "node --check index.js"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek",
+      "deepseek-harness",
+      "memos",
+      "memory",
+      "mcp",
+      "long-term-memory",
+      "agent-memory"
+    ],
+    "engines": {
+      "node": ">=20.0.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Patch layer contributed by the dsh-memos-bridge bundle.\n#\n# Two rows:\n#   1. `memos-bridge`  - this package's provider plugin; exposes `memosBridge`\n#                        with the venv python, this package's MCP runner path,\n#                        the MemOS working directory and the MCP namespace\n#                        (all env-configurable).\n#   2. `memos-mcp`     - one @deepseek-ai/dsh-mcp-client instance that spawns\n#                        the MemOS MCP server over stdio via the runner. The\n#                        runner preflights Neo4j (clear message + fast exit),\n#                        warns on a missing LLM/embedding gateway, and resolves\n#                        host-run endpoints.\n#\n# Environment knobs (read at mount time by the provider):\n#   MEMOS_PYTHON      - python of the MemOS venv (default: python)\n#   MEMOS_HOME        - MemOS repo directory used as the child cwd (default:\n#                       the Harness process cwd). MemOS reads its .env from\n#                       this directory, so set it unless MemOS is the launch\n#                       directory.\n#   MEMOS_MCP_SERVER  - serverName / tool namespace (default: memos). Must\n#                       match [A-Za-z0-9_-]{1,32}.\n#\n# `cwd` is never empty: the MCP SDK forwards it to spawn() verbatim and an\n# empty cwd fails with a bare ENOENT, so the provider always yields a real\n# directory.\n#\n# Reconnect: handled by @deepseek-ai/dsh-mcp-client (0.2.x and newer). The\n# runner exits fast with an actionable message when Neo4j is down, so starting\n# the MemOS docker stack later recovers without a GUI restart. On older\n# mcp-client versions (0.0.1-rc.x) the `reconnect` block is ignored and the\n# row simply stays disconnected until the next reload.\n- insert:\n    - id: memos-bridge\n      name: dsh-memos-bridge\n    - id: memos-mcp\n      name: '@deepseek-ai/dsh-mcp-client'\n      inject: [memosBridge]\n      config:\n        transport: stdio\n        serverName: !!js ctx.memosBridge.serverName\n        command: !!js ctx.memosBridge.python\n        args:\n          - !!js ctx.memosBridge.runner\n        cwd: !!js ctx.memosBridge.cwd\n        # Memory writes and LLM-backed search/chat routinely exceed the 60 s\n        # client default on a local gateway; MemOS itself has no per-call cap.\n        toolCallTimeoutMs: 120000\n        # UTF-8 for the child: a Windows console codepage (cp936/cp1252) turns\n        # a non-ASCII log line into a UnicodeEncodeError inside the server.\n        env:\n          PYTHONUTF8: '1'\n          PYTHONIOENCODING: 'utf-8'\n        # Keep a downed MemOS from disabling the surrounding row set; the\n        # reconnect policy brings the tools back once the stack is up.\n        failOnStartupError: false\n        reconnect:\n          enabled: true\n          initialDelayMs: 5000\n          maxDelayMs: 30000\n          maxAttempts: 100000\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "MEMOS_HOME",
+      "kind": "env",
+      "where": "scripts/memos_mcp_runner.py:190"
+    },
+    {
+      "name": "NEO4J_URI",
+      "kind": "env",
+      "where": "scripts/memos_mcp_runner.py:297"
+    },
+    {
+      "name": "NEO4J_URI",
+      "kind": "env",
+      "where": "scripts/memos_mcp_runner.py:304"
+    },
+    {
+      "name": "NEO4J_URI",
+      "kind": "env",
+      "where": "scripts/memos_mcp_runner.py:339"
+    },
+    {
+      "name": "MEMOS_HOME",
+      "kind": "env",
+      "where": "scripts/memos_mcp_runner.py:407"
+    },
+    {
+      "name": "NEO4J_URI",
+      "kind": "env",
+      "where": "scripts/memos_mcp_runner.py:419"
+    },
+    {
+      "name": "MOS_EMBEDDER_BACKEND",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:151"
+    },
+    {
+      "name": "MOS_EMBEDDER_PROVIDER",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:156"
+    },
+    {
+      "name": "MOS_EMBEDDER_API_KEY",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:157"
+    },
+    {
+      "name": "MOS_EMBEDDER_MODEL",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:158"
+    },
+    {
+      "name": "EMBEDDING_DIMENSION",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:159"
+    },
+    {
+      "name": "MOS_EMBEDDER_API_BASE",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:160"
+    },
+    {
+      "name": "MOS_EMBEDDER_MODEL",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:167"
+    },
+    {
+      "name": "OLLAMA_API_BASE",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:168"
+    },
+    {
+      "name": "MEMOS_HOME",
+      "kind": "env",
+      "where": "scripts/patch_memos.py:420"
+    },
+    {
+      "name": "MEMOS_HOME",
+      "kind": "env",
+      "where": "scripts/setup.py:218"
+    },
+    {
+      "name": "MEMOS_HOME",
+      "kind": "env",
+      "where": "scripts/smoke_test.py:50"
+    },
+    {
+      "name": "MEMOS_PYTHON",
+      "kind": "env",
+      "where": "scripts/smoke_test.py:148"
+    },
+    {
+      "name": "MEMOS_HOME",
+      "kind": "env",
+      "where": "scripts/smoke_test.py:150"
+    },
+    {
+      "name": "MEMOS_TEST_FLAG",
+      "kind": "env",
+      "where": "tests/test_runner_helpers.py:79"
+    },
+    {
+      "name": "MEMOS_TEST_FLAG",
+      "kind": "env",
+      "where": "tests/test_runner_helpers.py:81"
+    },
+    {
+      "name": "MEMOS_TEST_FLAG",
+      "kind": "env",
+      "where": "tests/test_runner_helpers.py:83"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Swd146296/dsh-memos-bridge#install-the-bundle",
+      "where": ".github/ISSUE_TEMPLATE/config.yml:4"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Swd146296/dsh-memos-bridge#troubleshooting",
+      "where": ".github/ISSUE_TEMPLATE/config.yml:7"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Swd146296/dsh-memos-bridge/blob/main/README.zh.md",
+      "where": ".github/ISSUE_TEMPLATE/config.yml:10"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18181/v1",
+      "where": "examples/host-run-override.yml:21"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18182/compatible-mode/v1",
+      "where": "examples/host-run-override.yml:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18181/v1",
+      "where": "examples/host-run-override.yml:23"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18181/v1",
+      "where": "examples/host-run-override.yml:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Swd146296/dsh-memos-bridge.git",
+      "where": "package.json:7"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Swd146296/dsh-memos-bridge#readme",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Swd146296/dsh-memos-bridge/issues",
+      "where": "package.json:11"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18181/v1",
+      "where": "scripts/memos_mcp_runner.py:63"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18182/compatible-mode/v1",
+      "where": "scripts/memos_mcp_runner.py:64"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:11434",
+      "where": "scripts/patch_memos.py:168"
+    },
+    {
+      "host": "hf-mirror.com",
+      "url": "https://hf-mirror.com/openai-community/gpt2/resolve/main/tokenizer.json",
+      "where": "scripts/setup.py:36"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/openai-community/gpt2/resolve/main/tokenizer.json",
+      "where": "scripts/setup.py:37"
+    },
+    {
+      "host": "hf-mirror.com",
+      "url": "https://hf-mirror.com",
+      "where": "scripts/setup.py:122"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "tests/test_runner_helpers.py:30"
+    },
+    {
+      "host": "host.docker.internal",
+      "url": "http://host.docker.internal:18181/v1",
+      "where": "tests/test_runner_helpers.py:53"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18181/v1",
+      "where": "tests/test_runner_helpers.py:54"
+    },
+    {
+      "host": "gateway.docker.internal",
+      "url": "http://gateway.docker.internal:18182/compatible-mode/v1",
+      "where": "tests/test_runner_helpers.py:59"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18182/compatible-mode/v1",
+      "where": "tests/test_runner_helpers.py:60"
+    },
+    {
+      "host": "dashscope.aliyuncs.com",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "where": "tests/test_runner_helpers.py:65"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18181/v1",
+      "where": "tests/test_runner_helpers.py:66"
+    },
+    {
+      "host": "192.168.1.10",
+      "url": "http://192.168.1.10:8000/v1",
+      "where": "tests/test_runner_helpers.py:67"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "add_memory",
+      "where": "scripts/smoke_test.py:116"
+    },
+    {
+      "kind": "tool",
+      "name": "search_memories",
+      "where": "scripts/smoke_test.py:133"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 29,
+    "pushed_at": "2026-11-02T17:06:45Z",
+    "created_at": "2026-08-20T06:57:38Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-memos-bridge",
+      "text": "**English** | [简体中文](README.zh.md)\n\nA [DeepSeek Harness](https://github.com/deepseek-harness/deepseek-harness) **bundle** that bridges the [MemOS](https://github.com/MemTensor/MemOS) memory service into the agent over **MCP**. Install the bundle, run one setup script, restart the Harness, and the agent gains persistent-memory tools named `mcp__memos__*`."
+    },
+    {
+      "section": "What you get",
+      "text": "| Tool | Purpose |\n| --- | --- |\n| `add_memory` | add a memory from text, a document, or conversation messages |\n| `search_memories` | semantic search across the user's memory cubes |\n| `get_memory` / `update_memory` / `delete_memory` | inspect / correct / remove single memories |\n| `create_cube` / `register_cube` / `share_cube` | manage memory cubes |\n| `chat` | memory-enhanced chat with the MOS system |\n| `control_memory_scheduler` | start/stop the async memory scheduler |\n| … | 16 tools total, listed by the smoke test |"
+    },
+    {
+      "section": "How it works",
+      "text": "```\nDeepSeek Harness (web profile)\n  └─ cordis.patch.yml  ──inserts──►  @deepseek-ai/dsh-mcp-client  (ships with the dsh CLI)\n                                        │  stdio\n                                        ▼\n\nThe bundle contributes only a configuration layer (`dsh.bundle` + `cordis.patch.yml`); it mounts the stock `@deepseek-ai/dsh-mcp-client` plugin with a `stdio` server row. No Harness code is modified."
+    },
+    {
+      "section": "Requirements",
+      "text": "- `dsh` CLI installed (the bundle relies on its built-in `@deepseek-ai/dsh-mcp-client`).\n- A MemOS checkout with its docker stack up (the compose in `MemOS/docker` provides Neo4j + Qdrant + the MemOS API).\n- Python ≥ 3.10 for the MemOS virtualenv.\n- The MemOS LLM and embedding gateway reachable from the machine that runs the MCP child (see [Endpoint resolution](#endpoint-resolution))."
+    },
+    {
+      "section": "Install the bundle",
+      "text": "Pick **one** of the three paths — they install the same files."
+    },
+    {
+      "section": "A. From npm (recommended)",
+      "text": "```sh\ndsh plugin --profile web add dsh-memos-bridge\n```\n\nNo `git` binary, no GitHub access, no build step. If the registry answers `404`, the package has not been published yet — use path B or C."
+    },
+    {
+      "section": "B. From git",
+      "text": "```sh\ndsh plugin --profile web add github:Swd146296/dsh-memos-bridge\n```\n\nThis runs `git ls-remote` under pnpm, so it needs **git on `PATH`** *and* a reachable github.com. Behind a restricted network this is the step that fails first:\n\n```\nCommand failed with exit code 1: git ls-remote \"https://github.com/Swd146296/dsh-memos-bridge.git\" HEAD \"HEAD^{}\"\n```\n\nCheck with `git --version`. If git is missing, install it; if github.com is unreachable, use path C."
+    },
+    {
+      "section": "C. From a release tarball or a local checkout (no git)",
+      "text": "```sh"
+    },
+    {
+      "section": "download the tarball attached to a release, then install it as a path",
+      "text": "curl -LO https://github.com/Swd146296/dsh-memos-bridge/releases/download/v0.2.0/dsh-memos-bridge-0.2.0.tgz\ndsh plugin --profile web add ./dsh-memos-bridge-0.2.0.tgz\n```\n\nOr build it yourself from a source copy:\n\n```sh\nnpm pack                 # produces dsh-memos-bridge-<version>.tgz\ndsh plugin --profile web add ./dsh-memos-bridge-<version>.tgz\n```"
+    },
+    {
+      "section": "download the tarball attached to a release, then install it as a path",
+      "text": "> **Windows + spaces in the path:** pnpm splits a forwarded plugin path on spaces, which is how `dsh plugin add` ends up installing packages named `Gu` or similar. Use an 8.3 short path (`C:\\Users\\GULING~1\\...`) or `add .` from a space-free directory."
+    },
+    {
+      "section": "Quick start",
+      "text": "**0. Start the MemOS infrastructure first** — the MCP server requires Neo4j at startup and search/chat need the LLM + embedding gateway:\n\n```sh\ndocker compose -f C:\\path\\to\\MemOS\\docker\\docker-compose.yml up -d   # Neo4j + Qdrant + MemOS API"
+    },
+    {
+      "section": "and make sure the LLM/embedding gateway (e.g. :18181/:18182) is running",
+      "text": "```\n\nIf the stack is down when `dsh` starts, the runner prints one clear line and exits; the client's reconnect policy keeps retrying, so starting the stack later recovers automatically — no GUI restart.\n\n**1. Set up the MemOS side** (venv + dependencies + source patches + local tokenizer):powershell"
+    },
+    {
+      "section": "from the plugin checkout",
+      "text": ".\\setup.ps1 --memos C:\\path\\to\\MemOS\n```\n\nOn POSIX: `./setup.sh --memos /path/to/MemOS`. This creates `MemOS/.venv`, installs `MemoryOS[tree-mem]` plus `python-dotenv`, `tqdm`, `langchain_text_splitters`, `chonkie`, applies the required source patches (see below), and downloads a local gpt2 tokenizer.json (HuggingFace mirror first)."
+    },
+    {
+      "section": "from the plugin checkout",
+      "text": "**2. Install the bundle** — see [Install the bundle](#install-the-bundle).powershell\nsetx MEMOS_PYTHON \"C:\\path\\to\\MemOS\\.venv\\Scripts\\python.exe\"\nsetx MEMOS_HOME   \"C:\\path\\to\\MemOS\"\n```\n\n```sh\nexport MEMOS_PYTHON=/path/to/MemOS/.venv/bin/python\nexport MEMOS_HOME=/path/to/MemOS\n```"
+    },
+    {
+      "section": "from the plugin checkout",
+      "text": "When `MEMOS_PYTHON` is unset the row falls back to `python` on `PATH`; when `MEMOS_HOME` is unset the child runs in the Harness process cwd (MemOS still reads its `.env`, so point `MEMOS_HOME` at the checkout unless MemOS is the launch directory).\n\n**4. Verify and restart:**sh\ndsh --profile web --dump-config    # expect an `id: memos-mcp` row\ndsh --profile web                  # restart the GUI; tools appear as mcp__memos__*\n```"
+    },
+    {
+      "section": "Configuration",
+      "text": "The bundle's patch inserts two rows: the `memos-bridge` provider (exposes `memosBridge` with the venv python, this package's runner path, the child cwd, and the tool namespace) and the `memos-mcp` `@deepseek-ai/dsh-mcp-client` row that spawns the runner over stdio. The runner **preflights** Neo4j (hard dependency: clear one-line error + fast exit), warns when the LLM/embedding gateway is down, and resolves host-run endpoints.\n\nEnvironment knobs read at mount time:"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Variable | Default | Meaning |\n| --- | --- | --- |\n| `MEMOS_PYTHON` | `python` | python of the MemOS venv |\n| `MEMOS_HOME` | Harness cwd | MemOS checkout used as the child cwd |\n| `MEMOS_MCP_SERVER` | `memos` | tool namespace (`mcp__<name>__*`), `[A-Za-z0-9_-]{1,32}` |\n\n`cwd` is never empty: the provider resolves `MEMOS_HOME` and falls back to the Harness process cwd, because an empty cwd makes the MCP SDK spawn fail with a bare `ENOENT` that looks like a missing interpreter."
+    },
+    {
+      "section": "Configuration",
+      "text": "Defaults the row ships with: `toolCallTimeoutMs: 120000` (memory writes and LLM-backed search routinely exceed the 60 s client default), `failOnStartupError: false`, and `PYTHONUTF8=1` / `PYTHONIOENCODING=utf-8` for the child (a Windows console codepage turns a non-ASCII log line into a `UnicodeEncodeError` inside the server)."
+    },
+    {
+      "section": "Configuration",
+      "text": "To change any other field, override the row **by id** in your profile's `cordis.patch.yml` — later layers win, but an id-targeted patch replaces the whole `config`, so restate every key:\n\n```yaml\n- id: memos-mcp\n  config:\n    transport: stdio\n    serverName: memos"
+    },
+    {
+      "section": "Endpoint resolution",
+      "text": "MemOS's `.env` commonly targets `host.docker.internal:18181/18182` (valid *inside* the MemOS docker network). When the MCP child runs on the **host**, the runner resolves endpoints in this order:"
+    },
+    {
+      "section": "Endpoint resolution",
+      "text": "| Priority | Source | Behaviour |\n| --- | --- | --- |\n| 1 | ambient environment (row `env` block, shell) | used verbatim, never rewritten |\n| 2 | `.env` in `MEMOS_HOME` / cwd | kept as-is; a **docker-internal host** is mapped to the published loopback port, but only when that port answers |\n| 3 | this bundle's default | `127.0.0.1:18181` / `:18182` for keys left entirely unset |"
+    },
+    {
+      "section": "Endpoint resolution",
+      "text": "So a `.env` that already points at a real remote gateway (DashScope, DeepSeek, a company proxy) is left untouched, and an explicit `env` block always wins. To keep docker hosts verbatim (e.g. the gateway is only reachable through a local proxy rule), set `MEMOS_MCP_ENDPOINT_REWRITE=0` and override explicitly:\n\n```yaml\n- id: memos-mcp\n  config:\n    transport: stdio\n    serverName: memos\n\nSee [`examples/host-run-override.yml`](examples/host-run-override.yml)."
+    },
+    {
+      "section": "Diagnostics",
+      "text": "Three commands answer \"why aren't the tools there?\" — run them in this order:\n\n```sh"
+    },
+    {
+      "section": "1. Is the MemOS side ready? (venv, import, patches, tokenizer; changes nothing)",
+      "text": "python scripts/setup.py --memos C:\\path\\to\\MemOS --check"
+    },
+    {
+      "section": "2. Is the infrastructure reachable? (endpoints, Neo4j, gateways, import)",
+      "text": "\"C:\\path\\to\\MemOS\\.venv\\Scripts\\python.exe\" scripts/memos_mcp_runner.py --check"
+    },
+    {
+      "section": "3. Does the MCP handshake work? (same entrypoint dsh spawns)",
+      "text": "\"C:\\path\\to\\MemOS\\.venv\\Scripts\\python.exe\" scripts/smoke_test.py --memos C:\\path\\to\\MemOS --search\n```\n\nRunner environment knobs:"
+    },
+    {
+      "section": "3. Does the MCP handshake work? (same entrypoint dsh spawns)",
+      "text": "| Variable | Default | Meaning |\n| --- | --- | --- |\n| `MEMOS_MCP_PREFLIGHT` | `1` | `0` skips the Neo4j/gateway probes entirely (proxies that drop SYN) |\n| `MEMOS_MCP_PREFLIGHT_TIMEOUT` | `2` | seconds per TCP probe |\n| `MEMOS_MCP_ALLOW_NO_NEO4J` | `0` | `1` starts even when Neo4j is down, with a warning |\n| `MEMOS_MCP_ENDPOINT_REWRITE` | `1` | `0` keeps docker-internal hosts verbatim |\n| `MEMOS_MCP_DEBUG` | `0` | `1` echoes the resolved python, version and endpoints |"
+    },
+    {
+      "section": "MemOS source patches",
+      "text": "`scripts/patch_memos.py` applies the following idempotent fixes to the MemOS checkout (tested against **MemoryOS 2.0.30**):"
+    },
+    {
+      "section": "MemOS source patches",
+      "text": "1. `src/memos/api/config.py` — `load_dotenv(override=True)` → `load_dotenv()`, so host-run env overrides are not clobbered.\n2. `src/memos/log.py` — console handler to **stderr**; stdout is the MCP protocol channel and log lines there corrupt the stdio stream.\n3. `src/memos/api/mcp_serve.py` — map `EMBEDDING_DIMENSION` into the default config so the Neo4j vector index matches the embedder dimension.\n4. `src/memos/mem_os/utils/default_config.py`:\n   - env-aware embedder construction honoring `MOS_EMBEDDER_BACKEND` / `MOS_EMBEDDER_API_BASE` / `MOS_EMBEDDER_API_KEY` / `MOS_EMBEDDER_MODEL` / `EMBEDDING_DIMENSION` (mirrors `APIConfig.get_embedder_config`; the MCP default path otherwise ignores them and reuses the chat endpoint);\n   - the sentence-chunker tokenizer points at a **local** gpt2 `tokenizer.json` — chonkie otherwise downloads `gpt2` from huggingface.co, which is unreachable in some networks.\n5. `src/memos/graph_dbs/neo4j.py`, `neo4j_community.py`, `tree_text_memory/retrieve/bm25_util.py`, `internet_retriever.py` — route stray debug `print()`s (raw Cypher queries, BM25 hit lines) to **stderr**; on stdout they corrupt the MCP stdio stream during searches."
+    },
+    {
+      "section": "MemOS source patches",
+      "text": "Every patched file is backed up to `<file>.dsh-bridge.bak` before its first change, writes are atomic, and line endings/BOM are preserved.\n\n```sh\npython scripts/patch_memos.py --list     # what the script changes\npython scripts/patch_memos.py --check    # dry run: which patches fit this checkout\npython scripts/patch_memos.py --revert   # restore the backups\n```"
+    },
+    {
+      "section": "MemOS source patches",
+      "text": "If a patch reports \"not in pre-patch state\", your MemOS version differs from 2.0.30 — `--check` shows every mismatch at once, so check the diff and apply it by hand."
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Symptom | Cause / fix |\n| --- | --- |\n| `git ls-remote ... exit code 1` during `dsh plugin add` | git is not installed, or github.com is unreachable from that machine. Use the npm package or a release tarball ([path A/C](#install-the-bundle)). |\n| `dsh plugin add` installs `Gu` / split packages | On Windows, a plugin path containing **spaces** is split when dsh forwards it to pnpm. Use the 8.3 short path or `add .` from a space-free directory. |\n| MCP row never connects; `spawn` fails with `ENOENT` | Either `cwd` was empty (fixed in 0.2.0) or `MEMOS_PYTHON` does not point at a real interpreter. Run the runner `--check`. |\n| Wall of `Couldn't connect to localhost:7687` tracebacks at startup | Neo4j is down. Start the MemOS docker stack first; the runner preflights Neo4j and prints one clear line, and the row keeps retrying. |\n| Row stays pending after restart | `MEMOS_PYTHON`/`MEMOS_HOME` wrong, or the MemOS venv is missing. Check `dsh --profile web --dump-config`, then `setup.py --check`. |\n| Tools appear, but search/chat fails with 401/403 | dsh scrubs credential-shaped names (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`) from a child's environment. Keep the key in MemOS's `.env"
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "When opening an issue, paste the output of `scripts/memos_mcp_runner.py --check` (it covers python, version, endpoints, Neo4j and gateways) plus your `dsh --dump-config` row."
+    },
+    {
+      "section": "Security",
+      "text": "The MCP server command runs as **trusted executable code outside the agent sandbox** (this is why the Harness enables no MCP server by default). Only connect to MemOS servers you run yourself.\n\nTwo consequences worth knowing:"
+    },
+    {
+      "section": "Security",
+      "text": "- `patch_memos.py` edits a third-party checkout in place. Read `--list` before running it; `--revert` restores the backups.\n- The Harness forwards a scrubbed environment to MCP children: names matching `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, and every `DSH_*` variable are dropped. Secrets belong in MemOS's own `.env` or in an explicit row `env` block."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode --check index.js                  # provider syntax\nnode --test tests/provider.test.mjs    # provider contract (cwd, namespace, fallbacks)\npython -m unittest discover -s tests   # patch engine, patch layer, runner helpers\n```\n\nBoth suites run offline and need no MemOS installation, and they are\nplatform-neutral (Windows and Linux, Python 3.10+)."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
