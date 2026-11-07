@@ -1,0 +1,292 @@
+{
+  "repo": "AcidGr/dsh-web-lan-access",
+  "commit": "00d9ded99bfc9f86e890f73efb17a2194e9290ec",
+  "extracted_at": "2026-11-06T23:36:27.056541+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 343261,
+    "lines_by_language": {
+      "JSON": 69,
+      "JavaScript": 318,
+      "Markdown": 389,
+      "Other": 24,
+      "YAML": 64
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "assets/screenshot-lan-access.jpg",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/webserver.js",
+      "package.json",
+      "test/index.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-web-lan-access",
+    "version": "1.4.0",
+    "description": "LAN / remote access support for the DeepSeek Harness Web UI: all-interface binding through a replacement webserver row, remote Host settings, and automatic /api trust-fence widening.",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./webserver": "./lib/webserver.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml"
+    ],
+    "scripts": {
+      "test": "node --test"
+    },
+    "engines": {
+      "node": ">=20.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "compatibility": {
+        "dsh": ">=0.2.1-rc.1",
+        "dshReleases": {
+          "0.1.2-alpha.2": "compatible",
+          "0.1.2-alpha.3": "compatible",
+          "0.1.2-alpha.4": "compatible",
+          "0.1.2-alpha.5": "compatible",
+          "0.1.2-rc.1": "compatible",
+          "0.1.3-alpha.1": "compatible",
+          "0.1.3-alpha.2": "compatible",
+          "0.1.5-alpha.1": "compatible",
+          "0.1.5-alpha.2": "compatible",
+          "0.1.5-rc.1": "compatible",
+          "0.1.5-rc.2": "compatible",
+          "0.1.5-rc.3": "compatible",
+          "0.1.6-alpha.1": "compatible",
+          "0.1.6-alpha.2": "compatible",
+          "0.1.7-alpha.1": "compatible",
+          "0.1.7-alpha.2": "compatible",
+          "0.1.7-rc.1": "compatible",
+          "0.2.1-rc.1": "compatible",
+          "0.2.1-rc.2": "compatible",
+          "0.2.2-rc.1": "compatible"
+        }
+      }
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/AcidGr/dsh-web-lan-access.git"
+    },
+    "homepage": "https://github.com/AcidGr/dsh-web-lan-access",
+    "bugs": {
+      "url": "https://github.com/AcidGr/dsh-web-lan-access/issues"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "lan",
+      "remote-access",
+      "polyfill"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch: bind every interface, widen the /api trust fence, and mount the\n# remote-Host bootstrap.\n#\n# ## Why the shipped `webserver` row is disabled instead of re-configured\n#\n# From dsh 0.2.1 the shipped webserver rejects `0.0.0.0` / `::` in its config\n# schema:\n#\n#   webserver: host \"0.0.0.0\" is an unspecified (wildcard) address, which is\n#   not supported: binding every interface would expose remote code execution\n#   to the network\n#\n# Writing `host: '0.0.0.0'` into that row (what this bundle did through 1.3.x)\n# therefore fails validation and aborts the boot. A patch cannot retarget the\n# row's `name` either — app-boot skips a patch whose `name` differs from the\n# target's — so the only route to an all-interface listener is to disable the\n# shipped row and mount `lib/webserver.js`, a subclass that rescues exactly the\n# wildcard rejection and leaves every other rule intact.\n#\n# The replacement row injects `webStartup`, so `--port`, `--host` and the TLS\n# flags still reach it exactly as they reached the shipped row.\n#\n# ## Why `trustedHosts` is derived here\n#\n# `isBindAddressAuthority` auto-trusts the listener's own bind literal, which is\n# what makes `--host 100.78.28.76` work with no extra config. A wildcard bind\n# has no such literal — `0.0.0.0` matches no request Host — so without an\n# explicit list every remote `/api` call returns 403 while the page shell still\n# loads. This layer therefore publishes every non-internal IPv4 the host has\n# (LAN, Tailscale 100.x, VPN), re-derived at each config load.\n#\n# NOTES:\n#   - The expression is a single YAML scalar and must stay on one line.\n#   - `process.getBuiltinModule` requires Node >= 22.3.\n#   - The loader evaluates `!!js` inside `with (ctx)`, which can shadow plain\n#     globals, so every global is reached through `globalThis`.\n#   - MagicDNS hostnames are not discoverable this way. Add them with\n#     `--trusted-host <name>`, or by replacing this key with a literal list,\n#     when you browse by name rather than by IP.\n#\n# Remove this bundle to restore stock loopback-only behaviour.\n- id: webserver\n  disabled: true\n\n- insert:\n    - id: lan-webserver\n      name: 'dsh-web-lan-access/webserver'\n      inject:\n        - webStartup\n      config:\n        host: '0.0.0.0'\n        port: !!js ctx.webStartup.port ?? 3080\n        tls: !!js ctx.webStartup.tls\n        compression: gzip\n        compressionLevel: 1\n        compressionThresholdBytes: 1024\n\n- id: connection\n  config:\n    trustedHosts: !!js '[...(() => { const os = globalThis.process?.getBuiltinModule?.(\"os\"); return os ? globalThis.Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === \"IPv4\" && !i.internal).map(i => i.address) : []; })()]'\n\n- insert:\n    - id: lan-access\n      name: 'dsh-web-lan-access'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/webserver.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "0.0.0.0",
+      "url": "http://0.0.0.0:3080`",
+      "where": "lib/webserver.js:20"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080`",
+      "where": "lib/webserver.js:130"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AcidGr/dsh-web-lan-access.git",
+      "where": "package.json:55"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AcidGr/dsh-web-lan-access",
+      "where": "package.json:57"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AcidGr/dsh-web-lan-access/issues",
+      "where": "package.json:59"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 19,
+    "pushed_at": "2026-11-05T02:24:43Z",
+    "created_at": "2026-08-14T14:17:04Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/webserver.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-web-lan-access",
+      "text": "[](https://awesome-dsh-plugin.com)\n\n**English** | [简体中文](README.zh.md)\n\nLAN / remote access support for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI.\n\nBind every interface with one command, reach the GUI from a LAN IP, a Tailscale IP, or a VPN address, and keep Host-backed settings working on the remote page."
+    },
+    {
+      "section": "Compatibility",
+      "text": "| dsh | plugin | notes |\n|---|---|---|\n| **0.2.2-rc.1** | **1.4.x** | current; verified end to end |\n| 0.2.1-rc.x | 1.4.x | verified end to end |\n| 0.2.0-rc.x | 1.3.x | shipped webserver still accepted `0.0.0.0` |\n| ≤ 0.1.7 | 1.3.x | no wildcard ban yet |\n\nVersion 1.4.0 is the release that tracks dsh 0.2.1's stricter webserver. See [Why 1.4.0 had to change](#why-140-had-to-change) if you are upgrading from 1.3.x."
+    },
+    {
+      "section": "The problem",
+      "text": "Three separate things stand between a remote browser and a working GUI:\n\n**1. The listener binds loopback only.** `dsh web` defaults to `127.0.0.1`, and from 0.2.1 the CLI rejects a wildcard host outright:\n\n```\nerror: --host 0.0.0.0 is an unspecified (wildcard) address, which is not supported:\nbinding every interface would expose remote code execution to the network\n```"
+    },
+    {
+      "section": "The problem",
+      "text": "**2. The `/api` fence rejects unknown authorities.** Every request must name a loopback host, the listener's own bind literal, or a declared `trustedHosts` entry. A wildcard bind has no literal of its own — `0.0.0.0` matches no request `Host` — so the page shell loads but every `/api` call returns **403** and sessions never appear."
+    },
+    {
+      "section": "The problem",
+      "text": "**3. Host-backed settings are gated on `isLoopback`.** `client-connection` derives `isLoopback: transport?.ownsHost === true`, and client plugins consult that fact before reaching Host surfaces. A page served from a LAN or Tailscale address is not loopback by hostname, so the Models and plugin settings pages stay empty even after authentication succeeds."
+    },
+    {
+      "section": "The fix",
+      "text": "Two small pieces, both reversible."
+    },
+    {
+      "section": "A replacement `webserver` row",
+      "text": "`lib/webserver.js` subclasses `@deepseek-ai/dsh-host-webserver` and changes exactly two things:"
+    },
+    {
+      "section": "A replacement `webserver` row",
+      "text": "- **`Config`** delegates to the shipped schema and rescues *only* the wildcard rejection. A non-literal host, a port out of range, or a missing port still fail exactly as before — the relaxation is one error message wide.\n- **`getOrigin()`** never returns a wildcard origin. The parent builds its URL from the bind address, which would yield `http://0.0.0.0:3080` — an address no browser can dial. A wildcard listener reports loopback instead, and `--public-url` still overrides the advertised root upstream."
+    },
+    {
+      "section": "A replacement `webserver` row",
+      "text": "Everything else — the service name, routes, index taps, TLS handling, gzip, listener lifecycle — is inherited untouched."
+    },
+    {
+      "section": "A `/api` fence widened from the live interface list",
+      "text": "The bundle patch derives `trustedHosts` from every non-internal IPv4 the host currently has, so LAN, Tailscale (`100.x`), and VPN addresses are all accepted without per-IP configuration."
+    },
+    {
+      "section": "A bootstrap script for Host ownership",
+      "text": "Injected as the first script in `<head>`, before the boot manifest and shell entry, through the webserver's official index-tap extension point (`webServer.tapIndex`). It declares `ownsHost: true` while keeping the ordinary HTTP `fetch` transport, and leaves a transport supplied by another shell untouched."
+    },
+    {
+      "section": "A bootstrap script for Host ownership",
+      "text": "> **What 1.4.0 removed:** the `crypto.randomUUID` polyfill. From 0.2.1 DSH mints UUIDs through `@deepseek-ai/dsh-util-crypto`, which is built on `crypto.getRandomValues` — available on insecure origins — so a plain-HTTP LAN page needs no patch to render. The old polyfill is gone because the bug it worked around no longer exists."
+    },
+    {
+      "section": "Why 1.4.0 had to change",
+      "text": "Through 1.3.x this plugin worked by writing `host: '0.0.0.0'` into the shipped `webserver` row's config. That stopped working in 0.2.1 for two independent reasons:\n\n1. The webserver's own schema now rejects wildcard addresses, so the row fails validation and the boot aborts with `3 required plugins did not activate`.\n2. A patch cannot retarget a row's `name` — app-boot skips any patch whose `name` differs from the target's — so the row could not be swapped for a custom module in place."
+    },
+    {
+      "section": "Why 1.4.0 had to change",
+      "text": "1.4.0 therefore disables the shipped row (`disabled: true`, which startup auditing skips) and mounts the subclass under a new id. A second breakage came from the same upgrade: `web-app` no longer provides the `webRuntime` service, so the old `ctx.webRuntime?.trustedHosts` expression threw `cannot get property \"webRuntime\" without inject`. The fence list is now derived directly from `os.networkInterfaces()`."
+    },
+    {
+      "section": "Method 1: Ask your DSH Agent (Easiest 🤖)",
+      "text": "Send this repo URL directly to your DSH chat with the instruction:\n> \"Install this plugin for me: https://github.com/AcidGr/dsh-web-lan-access\"\n\nYour DSH Agent will automatically install the package and configure it in the background."
+    },
+    {
+      "section": "Method 2: Bundle install via CLI (Recommended)",
+      "text": "From npm:\n\n```sh\ndsh plugin --profile web add dsh-web-lan-access\n```\n\nFrom the repo (no npm publish / local development):\n\n```sh\ndsh plugin --profile web add github:AcidGr/dsh-web-lan-access\n```\n\nRestart `dsh web`, then hard-refresh the browser."
+    },
+    {
+      "section": "Method 3: Manual install (no pnpm / offline)",
+      "text": "```sh\nPROFILE=\"$DSH_HOME/profiles/web\"                 # adjust DSH_HOME and profile name\nmkdir -p \"$PROFILE/plugins\"\ncp -r dsh-web-lan-access \"$PROFILE/plugins/lan-access\"\nln -sfn ../../plugins/lan-access \"$PROFILE/node_modules/dsh-web-lan-access\"\n\nThen add `dsh-web-lan-access` to the profile's `dsh.profile.bundles` in `package.json`. The bundle patch registers its own rows, so no manual `cordis.patch.yml` edit is needed."
+    },
+    {
+      "section": "Usage",
+      "text": "The plugin is **self-contained**: the bundle patch supplies the bind host, so you do **not** pass `--host` (and must not — the CLI still rejects `0.0.0.0`). `--port`, `--tls-cert`, `--tls-key`, and `--public-url` all still work.\n\n1. **Install the plugin, then start normally:**\n\n```sh\n   dsh --profile web --port 3080\n   ```"
+    },
+    {
+      "section": "Usage",
+      "text": "The patch derives the `/api` fence from **every non-internal IPv4** the host currently has — LAN (`192.168.x`), **Tailscale (`100.x`)**, and VPN interfaces. As long as the remote interface is up when `dsh web` starts, **LAN and Tailscale IP access need zero extra config**: open `http://<server-ip>:3080` or `http://<tailscale-ip>:3080` and sessions and models load."
+    },
+    {
+      "section": "Usage",
+      "text": "> If you would rather not let the plugin take over the bind host (for example you want loopback plus a port forward), remove the `dsh-web-lan-access` bundle and forward a port (socat / rinetd / `tailscale serve`) from `127.0.0.1:3080`, adding the forwarded address to `trustedHosts` manually.\n\n2. **MagicDNS hostnames (e.g. `xxx.tailXXXX.ts.net`)** — the fence discovers IP literals only, never hostnames. Add your own names when you browse by name rather than by IP, using the repeatable CLI flag:"
+    },
+    {
+      "section": "Usage",
+      "text": "```sh\n   dsh --profile web --trusted-host myhost --trusted-host myhost.tailXXXX.ts.net\n   ```\n\nOr replace the `connection` row's `trustedHosts` with a literal list that still includes the interface addresses:\n\n```yaml\n   - id: connection\n     config:\n       trustedHosts:\n         - <short-name>            # e.g. myhost — MUST be listed separately!"
+    },
+    {
+      "section": "Usage",
+      "text": "⚠️ The fence compares the `Host` header **literally**: a MagicDNS short name (`http://myhost:3080`) is *not* the full domain — list the short name on its own line, or every `/api` call returns 403 (page shell loads, sessions and models absent).\n\n> ⚠️ A literal list on `connection.config.trustedHosts` **replaces** the bundle's derived expression rather than merging with it. Either keep the derived expression and add names with `--trusted-host`, or spell out every IP you need. Do not mix the two."
+    },
+    {
+      "section": "Host ownership scope",
+      "text": "The transport signal enables every client surface DSH associates with owning the Host, not only Models. That includes Host-backed settings and native Host actions such as opening a produced file. Use this plugin only when the authenticated remote browser is meant to operate the agent machine. DSH's Host/Origin fence and browser authentication remain in force; this signal changes the client's capability projection, not request authentication."
+    },
+    {
+      "section": "Host ownership scope",
+      "text": "Older harness builds that pin privileged methods to loopback on the server continue returning 403 for those methods. This client bootstrap does not weaken that server-side fence."
+    },
+    {
+      "section": "Verify",
+      "text": "```sh"
+    },
+    {
+      "section": "1. the bootstrap is injected",
+      "text": "curl -s http://127.0.0.1:3080/ -b <cookie> | grep lan-access-bootstrap"
+    },
+    {
+      "section": "2. every interface is listening (0.0.0.0 in the address column)",
+      "text": "ss -ltnp | grep 3080"
+    },
+    {
+      "section": "3. the fence admits your interface IPs and refuses anything else",
+      "text": "curl -s -o /dev/null -w '%{http_code}\\n' -H \"Host: 100.64.0.5:3080\" http://127.0.0.1:3080/api  # 401\ncurl -s -o /dev/null -w '%{http_code}\\n' -H \"Host: evil.example:3080\" http://127.0.0.1:3080/api  # 403\n```\n\n`401` means the fence admitted the authority and only the session cookie is missing — that is the expected result for a trusted IP without a browser session. `403` means the authority was rejected. Then open `http://<server-ip>:3080` from another device: sessions and models must load."
+    },
+    {
+      "section": "Security warning",
+      "text": "Binding `0.0.0.0` exposes the DSH authentication surface to **every** reachable interface, including addresses you may not have considered — container bridges, VPN tunnels, and any other network the host is attached to. `trustedHosts` is an Origin/Host fence, not identity; DSH separately authenticates the browser.\n\nThis plugin deliberately relaxes a restriction the DSH maintainers added on purpose:\n\n> binding every interface would expose remote code execution to the network"
+    },
+    {
+      "section": "Security warning",
+      "text": "Use it only on trusted networks, restrict the port with a firewall (e.g. `ufw allow from 192.168.0.0/16`), or front it with Tailscale or an authenticated reverse proxy. If a single interface is enough, prefer plain `dsh web --host <ip>` — it needs no plugin, and the fence auto-trusts the bind literal.\n\nBecause this plugin depends on the webserver's schema and URL-building internals, a future DSH release may break it again. Check the compatibility table before upgrading."
+    },
+    {
+      "section": "Rollback",
+      "text": "- Bundle install: `dsh plugin --profile web remove dsh-web-lan-access`\n- Manual install: remove `dsh-web-lan-access` from `dsh.profile.bundles`; the bundle patch's rows disappear with it and the shipped loopback-only `webserver` takes over again."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode --test        # 9 tests, no dependencies beyond the linked dsh packages\n```\n\n`lib/webserver.js` needs `@deepseek-ai/dsh-host-webserver` resolvable from the package root. When developing outside a profile, link it once:\n\n```sh\nmkdir -p node_modules/@deepseek-ai\nln -sfn \"$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-host-webserver\" \\\n        node_modules/@deepseek-ai/dsh-host-webserver\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,575 @@
+{
+  "repo": "helloHub1212/dsh-windows-mcp",
+  "commit": "30bed20fded4a7dba2a482168fe2477fe771b441",
+  "extracted_at": "2026-11-06T23:50:59.522915+00:00",
+  "tree": {
+    "files": 28,
+    "bytes": 470490,
+    "lines_by_language": {
+      "JSON": 66,
+      "JavaScript": 6848,
+      "Markdown": 958,
+      "Other": 53,
+      "YAML": 135
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "assets/screenshot-1.png",
+      "assets/screenshot-2.png",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/dependency.js",
+      "lib/index.js",
+      "lib/installs.js",
+      "lib/mirrors.js",
+      "lib/pypi.js",
+      "lib/settings.js",
+      "lib/updater.js",
+      "package.json",
+      "screenshots.json",
+      "scripts/dump-config.mjs",
+      "test/plugin.test.mjs",
+      "test/settings.test.mjs",
+      "test/update.test.mjs",
+      "tools/README.md",
+      "tools/mcp-handshake.mjs",
+      "tools/probe-asar.mjs",
+      "tools/update-e2e.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-windows-mcp",
+    "version": "0.2.3",
+    "description": "Windows desktop automation for DeepSeek Harness — plugs CursorTouch/Windows-MCP (screenshot, UI automation, input, clipboard, processes, registry) into DSH through the official MCP client bridge.",
+    "license": "MIT",
+    "author": "dsh-windows-mcp contributors",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "mcp",
+      "model-context-protocol",
+      "windows",
+      "windows-mcp",
+      "automation",
+      "computer-use",
+      "ui-automation",
+      "screenshot"
+    ],
+    "engines": {
+      "node": ">=22"
+    },
+    "scripts": {
+      "test": "node --test \"test/**/*.test.mjs\"",
+      "check": "node --check lib/index.js",
+      "dump": "node scripts/dump-config.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/helloHub1212/dsh-windows-mcp.git"
+    },
+    "bugs": {
+      "url": "https://github.com/helloHub1212/dsh-windows-mcp/issues"
+    },
+    "homepage": "https://github.com/helloHub1212/dsh-windows-mcp#readme",
+    "devDependencies": {
+      "js-yaml": "^4.1.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-windows-mcp — bundle patch layer\n#\n# This package is a CARRIER bundle: it ships no service of its own, it only\n# mounts two loader rows in the DSH profile.\n#\n#   1. `windows-mcp-plugin`  → this package's host half (lib/index.js). It adds\n#      one diagnostic tool (`windows_mcp_doctor`) and nothing else.\n#   2. `windows-mcp-bridge`  → the OFFICIAL in-box MCP client bridge shipped by\n#      DeepSeek Harness itself (`@deepseek-ai/dsh-mcp-client`). It lives inside\n#      app.asar and is resolved by the loader from the Desktop install anchor;\n#      a third-party plugin must NOT try to import it.\n#\n# Every tool the bridge registers shows up as `mcp__windows__<ToolName>`.\n#\n# BOOT SAFETY — the bridge row ships `disabled: true` on purpose.\n#\n# The fallback command below is `uvx windows-mcp@0.8.8`, which resolves and\n# downloads Windows-MCP's Python dependencies from the package index. On a slow\n# or blocked network that resolve can sit inside DSH's startup for minutes and\n# the window stays on \"Loading plugins…\". A plugin must never be able to do that\n# to the host, so the row ships inert: DSH boots, the Plugins page says the\n# dependency is missing, and the user starts the install from there (it probes\n# mirrors and installs into the plugin's own toolchain directory).\n#\n# The installer then writes the row again into the profile's own patch layer\n# ($DSH_HOME/profiles/<profile>/cordis.patch.yml) between the\n# `# >>> dsh-windows-mcp …` markers, with `disabled: false` and `command:`\n# pointing at the installed executable — so later boots spawn the exe directly\n# and never touch the network or `uvx`.\n#\n# Tuning: change `args` / `env` below, or override this row from your profile's\n# own patch layer:\n#\n#   - id: windows-mcp-bridge\n#     disabled: false\n#     config:\n#       command: 'C:\\path\\to\\windows-mcp.exe'\n#       args:\n#         - serve\n#         - --exclude-tools\n#         - App\n#\n- insert:\n    - id: windows-mcp-plugin\n      name: dsh-windows-mcp\n\n    - id: windows-mcp-bridge\n      name: \"@deepseek-ai/dsh-mcp-client\"\n      # Inert until the installer points it at a real executable (see above):\n      # a cold `uvx` resolve inside DSH's startup can hang the whole window.\n      disabled: true\n      config:\n        # Namespace for every tool name: mcp__windows__Screenshot, ...\n        serverName: windows\n        transport: stdio\n        # Only reached if someone re-enables this row without rewriting\n        # `command`; harmless, because by then the toolchain is installed.\n        command: uvx\n        args:\n          # Pinned for reproducibility. Replace with `windows-mcp` to float, or\n          # with an absolute path to a fixed interpreter (`python -m windows_mcp`).\n          - windows-mcp@0.8.8\n          - serve\n          # Curation: drop the tools DSH already covers (its own shell and file\n          # tools), plus `App`, which upstream only supports reliably on an\n          # English Windows install. Never list `ControlStatus` here — upstream\n          # keeps it unconditionally.\n          - --exclude-tools\n          - App,PowerShell,FileSystem\n        # Screenshots, UIA tree walks and PowerShell-style waits are slow.\n        # Keep the pinned version in `args` below: the settings page and the\n        # installer read it, and the profile block the installer writes restates\n        # this row at that version.\n        toolCallTimeoutMs: 120000\n        # Belt and braces: a missing Windows-MCP must never fail the profile.\n        failOnStartupError: false\n        reconnect:\n          enabled: true\n          initialDelayMs: 500\n          maxDelayMs: 30000\n          maxAttempts: 10\n        env:\n          # Upstream defaults to PostHog telemetry ON; a desktop-automation\n          # plugin should not phone home.\n          ANONYMIZED_TELEMETRY: \"false\"\n          # Suppress the orange \"control taken over\" flash on every screenshot.\n          WINDOWS_MCP_DISABLE_FLASH: \"1\"\n          # Downscale screenshots (0.1–1.0) to cut image tokens. Lower it to\n          # 0.5 if your budget is tight; raise it if small UI text is unreadable.\n          WINDOWS_MCP_SCREENSHOT_SCALE: \"0.75\"\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/dependency.js:46"
+    },
+    {
+      "name": "UV_TOOL_DIR",
+      "kind": "env",
+      "where": "lib/dependency.js:52"
+    },
+    {
+      "name": "APPDATA",
+      "kind": "env",
+      "where": "lib/dependency.js:55"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:76"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/index.js:189"
+    },
+    {
+      "name": "PATHEXT",
+      "kind": "env",
+      "where": "lib/index.js:202"
+    },
+    {
+      "name": "DSH_CLI",
+      "kind": "env",
+      "where": "scripts/dump-config.mjs:36"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "scripts/dump-config.mjs:37"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:188"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:248"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:301"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:404"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/settings.test.mjs:183"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/helloHub1212/dsh-windows-mcp",
+      "where": "lib/client.js:42"
+    },
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "lib/client.js:1583"
+    },
+    {
+      "host": "docs.astral.sh",
+      "url": "https://docs.astral.sh/uv/",
+      "where": "lib/dependency.js:270"
+    },
+    {
+      "host": "docs.astral.sh",
+      "url": "https://docs.astral.sh/uv/",
+      "where": "lib/index.js:546"
+    },
+    {
+      "host": "pypi.org",
+      "url": "https://pypi.org/simple",
+      "where": "lib/mirrors.js:29"
+    },
+    {
+      "host": "mirrors.ustc.edu.cn",
+      "url": "https://mirrors.ustc.edu.cn/pypi/simple",
+      "where": "lib/mirrors.js:30"
+    },
+    {
+      "host": "mirrors.aliyun.com",
+      "url": "https://mirrors.aliyun.com/pypi/simple",
+      "where": "lib/mirrors.js:31"
+    },
+    {
+      "host": "mirrors.cloud.tencent.com",
+      "url": "https://mirrors.cloud.tencent.com/pypi/simple",
+      "where": "lib/mirrors.js:32"
+    },
+    {
+      "host": "repo.huaweicloud.com",
+      "url": "https://repo.huaweicloud.com/repository/pypi/simple",
+      "where": "lib/mirrors.js:33"
+    },
+    {
+      "host": "mirrors.nju.edu.cn",
+      "url": "https://mirrors.nju.edu.cn/pypi/web/simple",
+      "where": "lib/mirrors.js:34"
+    },
+    {
+      "host": "pypi.tuna.tsinghua.edu.cn",
+      "url": "https://pypi.tuna.tsinghua.edu.cn/simple",
+      "where": "lib/mirrors.js:35"
+    },
+    {
+      "host": "…",
+      "url": "https://…/simple/windows-mcp/`",
+      "where": "lib/pypi.js:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/helloHub1212/dsh-windows-mcp.git",
+      "where": "package.json:53"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/helloHub1212/dsh-windows-mcp/issues",
+      "where": "package.json:56"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/helloHub1212/dsh-windows-mcp#readme",
+      "where": "package.json:58"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/helloHub1212/dsh-windows-mcp",
+      "where": "test/plugin.test.mjs:658"
+    },
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "test/plugin.test.mjs:660"
+    },
+    {
+      "host": "slow.example",
+      "url": "https://slow.example/simple",
+      "where": "test/update.test.mjs:65"
+    },
+    {
+      "host": "fast.example",
+      "url": "https://fast.example/simple",
+      "where": "test/update.test.mjs:66"
+    },
+    {
+      "host": "pypi.example",
+      "url": "https://pypi.example/simple",
+      "where": "test/update.test.mjs:67"
+    },
+    {
+      "host": "mirror.example",
+      "url": "https://mirror.example/simple",
+      "where": "test/update.test.mjs:150"
+    },
+    {
+      "host": "mirror.example",
+      "url": "https://mirror.example/simple/",
+      "where": "test/update.test.mjs:151"
+    },
+    {
+      "host": "mirror.example",
+      "url": "https://mirror.example/simple/windows-mcp/",
+      "where": "test/update.test.mjs:155"
+    },
+    {
+      "host": "mirror.example",
+      "url": "https://mirror.example/packages/aa/windows_mcp-0.8.8-py3-none-any.whl#sha256=abc",
+      "where": "test/update.test.mjs:161"
+    },
+    {
+      "host": "fast.example",
+      "url": "https://fast.example/simple",
+      "where": "test/update.test.mjs:221"
+    },
+    {
+      "host": "mirrors.ustc.edu.cn",
+      "url": "https://mirrors.ustc.edu.cn/pypi/simple",
+      "where": "test/update.test.mjs:316"
+    },
+    {
+      "host": "fast.example",
+      "url": "https://fast.example/simple",
+      "where": "test/update.test.mjs:404"
+    },
+    {
+      "host": "fast.example",
+      "url": "https://fast.example/simple",
+      "where": "test/update.test.mjs:407"
+    },
+    {
+      "host": "fast.example",
+      "url": "https://fast.example/simple",
+      "where": "test/update.test.mjs:421"
+    },
+    {
+      "host": "fast.example",
+      "url": "https://fast.example/simple",
+      "where": "test/update.test.mjs:428"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "js-yaml": "^4.1.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 12,
+    "pushed_at": "2026-11-03T15:40:56Z",
+    "created_at": "2026-10-11T02:20:53Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/dependency.js",
+    "lib/index.js",
+    "lib/installs.js",
+    "lib/mirrors.js",
+    "lib/pypi.js",
+    "lib/settings.js",
+    "lib/updater.js",
+    "package.json",
+    "scripts/dump-config.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-windows-mcp",
+      "text": "**English** · [中文](https://github.com/helloHub1212/dsh-windows-mcp/blob/main/README.zh.md)\n\n[](https://www.npmjs.com/package/dsh-windows-mcp)\n[](https://github.com/helloHub1212/dsh-windows-mcp/actions/workflows/ci.yml)\n\n**Windows desktop automation for [DeepSeek Harness](https://github.com/sandbaseai/deepseek-harness-handbook)** — lets the DSH agent see your screen and drive your PC."
+    },
+    {
+      "section": "dsh-windows-mcp",
+      "text": "This plugin connects [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) to DSH by mounting one loader row against the **MCP client bridge that already ships inside DeepSeek Harness**. There is no reimplemented protocol client and no second copy of the MCP SDK: the plugin is a *carrier bundle*, and everything you can do comes from the official bridge."
+    },
+    {
+      "section": "dsh-windows-mcp",
+      "text": "```text\nDSH agent\n  └─ tool call  mcp__windows__Screenshot\n       └─ @deepseek-ai/dsh-mcp-client        (in-box, mounted by this plugin's patch row)\n            └─ uvx windows-mcp@0.8.8 serve   (stdio child process)"
+    },
+    {
+      "section": "What it gives the agent",
+      "text": "With the plugin installed and Windows-MCP reachable, these tools appear in the tool list:"
+    },
+    {
+      "section": "What it gives the agent",
+      "text": "| Tool | What it does |\n| --- | --- |\n| `mcp__windows__Screenshot` | Capture the screen; the image lands in the conversation as a real attachment |\n| `mcp__windows__Snapshot` | Capture an accessibility tree (text, no image tokens) |\n| `mcp__windows__DisplayInventory` | Enumerate displays and their geometry |\n| `mcp__windows__Click` / `Move` / `Scroll` | Mouse input |\n| `mcp__windows__Type` / `Shortcut` | Keyboard input |\n| `mcp__windows__Wait` / `WaitFor` | Sleep, or wait until a UI condition holds |\n| `mcp__windows__Scrape` | Extract text from a window |\n| `mcp__windows__MultiSelect` / `MultiEdit` | Batch element selection / batch edits |\n| `mcp__windows__Clipboard` | Read and write the clipboard |\n| `mcp__windows__Process` | List, start and stop processes |\n| `mcp__windows__Notification` | Read notifications |\n| `mcp__windows__Registry` | Read and write registry values |\n| `mcp__windows__ControlStatus` | Control-loop state. **Cannot be disabled** — upstream force-keeps it |\n| `mcp__windows__App` | Launch/switch apps. *Excluded by default* (upstream only supports it reliably on an English Windows install) |\n| `mcp__windows__PowerShell` / `FileSystem` | *Excluded by default* — DSH "
+    },
+    {
+      "section": "What it gives the agent",
+      "text": "Plus one tool of its own, `windows_mcp_doctor`, which explains what is wrong when the `mcp__windows__*` tools are missing.\n\nThe composer also gains a **Computer Use** pill, next to the permission control: it shows how many desktop tools are actually registered and remembers your choice across restarts (state file: `~/.dsh/dsh-windows-mcp.state.json`). It starts **off** — a fresh install never hands the agent your desktop until you switch the pill on yourself."
+    },
+    {
+      "section": "What it gives the agent",
+      "text": "Switching it off is a hard switch, not a hint. The bridge keeps running, but from the next step on every `mcp__windows__*` tool is filtered out of the tool list the model sees, and a call that still names one is refused at dispatch — in every session and subagent, live, with no restart. Switch it back on and they return immediately; `windows_mcp_doctor` always reports which way it is set."
+    },
+    {
+      "section": "What it gives the agent",
+      "text": "> **Verified:** Windows 11 + DSH Desktop 0.2.0-rc.2 — the bridged server advertises\n> **18 tools** (the 21 upstream tools minus the three excluded here) and is ready\n> about 1.5 s after launch. The bridge publishes each as `mcp__windows__<ToolName>`."
+    },
+    {
+      "section": "Requirements",
+      "text": "- **Windows 10/11.**\n- **DeepSeek Harness Desktop** with the in-box `@deepseek-ai/dsh-mcp-client` bridge (0.2.0-rc.2 or newer).\n- **[uv](https://docs.astral.sh/uv/)** on the `PATH` of the process that runs DSH — **Settings → Desktop** uses it to install Windows-MCP. DSH itself boots without it. `%USERPROFILE%\\.local\\bin` is searched even when it is not on `PATH`.\n- **A model that accepts image input** if you want the agent to actually *see* screenshots."
+    },
+    {
+      "section": "Boot is never blocked by the dependency",
+      "text": "The bridge row ships **disabled**, on purpose. A `uvx`-style first launch\nresolves Windows-MCP's Python dependencies from the package index, and on a slow\nor blocked network that resolve can sit inside DSH's startup for minutes — the\nwindow stays on “Loading plugins…”. A plugin must never be able to do that to\nits host, so:"
+    },
+    {
+      "section": "Boot is never blocked by the dependency",
+      "text": "- **First boot after installing the bundle:** DSH starts normally, no Windows\n  tools yet, and the dependency is reported as *not installed* — both on the\n  Plugins page and in **Settings → Desktop**.\n- **Install it from Settings → Desktop** (next section). It probes PyPI mirrors,\n  installs into the plugin's own toolchain directory, and rewrites the bridge row\n  with `disabled: false` and `command:` pointing at the installed executable.\n- **Restart DSH once.** From then on the bridge spawns the exe directly — on\n  Windows 11 the server is ready about **1.5 s** after launch, with no network."
+    },
+    {
+      "section": "Boot is never blocked by the dependency",
+      "text": "`uv` is only needed by the installer. On a restricted network, point `uv` at a\nmirror once (`%APPDATA%\\uv\\uv.toml`) and the manual/CLI paths get the same\nspeed-up:\n\n```toml\ndefault-index = \"https://mirrors.aliyun.com/pypi/simple\"\n```"
+    },
+    {
+      "section": "Install",
+      "text": "The plugin is a normal DSH bundle. Install it with DSH's own plugin manager:\n\n1. Open **DSH Desktop → Settings → Plugins**.\n2. Add the bundle, pointing at either the published package name, the repository (`github:helloHub1212/dsh-windows-mcp`), or a local checkout of this repo.\n3. **Restart DSH** so the new patch layer is composed at startup.\n\nFor non-Electron profiles the CLI does the same thing:\n\n```powershell\ndsh plugin --profile <profile> add github:helloHub1212/dsh-windows-mcp\n```"
+    },
+    {
+      "section": "Install",
+      "text": "> The Electron app owns the `desktop` profile; the CLI refuses every command against it, including read-only ones. Use the GUI for `desktop`."
+    },
+    {
+      "section": "Install the dependency from the app",
+      "text": "Windows-MCP itself is a Python program, so the **Dependency** card in **Settings → Desktop** shows its state and installs it for you:"
+    },
+    {
+      "section": "Install the dependency from the app",
+      "text": "- **Dependency** — `installed 0.8.8`, or *not installed*, or *uv not found*.\n- **Download and install** — runs `uv tool install windows-mcp@<pinned>` once (through the fastest mirror), streams the installer output into the page, and offers **Cancel** while it runs.\n- When it finishes, the plugin **writes the bridge row into your profile's `cordis.patch.yml` itself** — after a timestamped backup, inside idempotent markers — with `disabled: false` and `command:` pointing at the installed executable. **Restart DSH** to apply that; from then on the bridge launches the exe directly and never resolves a package index during boot."
+    },
+    {
+      "section": "Install the dependency from the app",
+      "text": "The block it writes is the row documented under [Pin a local interpreter instead of `uvx`](#pin-a-local-interpreter-instead-of-uvx); delete the marked block to return to the inert, `uvx`-based row. The plugin's own page in **Settings → Plugins** keeps a one-line status that points here, and the activation prompt shown after enabling the bundle offers the same install button."
+    },
+    {
+      "section": "Install the dependency from the app",
+      "text": "The page also shows the **Patch target**: the `cordis.patch.yml` a manual write would touch, which is the profile this host booted — including a `dsh --profile web` host. If this package sits in more than one profile and the host does not report which one it started, the plugin writes nothing and says so instead of guessing: set `DSH_WINDOWS_MCP_PROFILE=<profile name>` (or an absolute profile directory) for the process that runs DSH and retry."
+    },
+    {
+      "section": "Update Windows-MCP, and roll back",
+      "text": "The same page manages the upstream version, so an upgrade never means reinstalling the dependency by hand:"
+    },
+    {
+      "section": "Update Windows-MCP, and roll back",
+      "text": "- **It checks by itself.** On boot, and whenever the page asks, the plugin probes the PyPI mirrors, takes the fastest one that answers and reads its `windows-mcp` index. The result is cached for six hours in `$DSH_HOME/dsh-windows-mcp.versions.json`, so restarts do not hammer the network.\n- **Versions live side by side.** Every version is installed into its own tool root, `$DSH_HOME/dsh-windows-mcp/toolchain/<version>/windows-mcp`, through `UV_TOOL_DIR`. Activating a version only rewrites the bridge row (backed up, as above): no reinstall, and the previous version stays on disk.\n- **Update in one click.** **Update to vX** downloads that version from the fastest mirror that works, verifies the executable and its `dist-info`, then activates it — the panel names the running version and the mirror it came from.\n- **Roll back the same way.** **Roll back to vPrev** points the bridge back at the version the active one replaced; nothing is downloaded."
+    },
+    {
+      "section": "Update Windows-MCP, and roll back",
+      "text": "Only managed installs are used by the bridge: it stays disabled until an install (or **Point the bridge at it**) rewrites the row with a real executable, and the panel says which side is live (`uv-tool` vs `managed`)."
+    },
+    {
+      "section": "Fast mirrors for the Python dependency",
+      "text": "The check measures all seven candidates — PyPI plus the USTC, Aliyun, Tencent Cloud, Huawei Cloud, Nanjing University and TUNA mirrors — with a 96 KiB ranged read, and ranks them by throughput. An install uses the fastest mirror that works and falls back to the next one when a mirror fails, with `UV_CONCURRENT_DOWNLOADS=4`, `UV_HTTP_RETRIES=3` and `UV_HTTP_TIMEOUT=600`, because mirrors rate-limit uv's default of eight parallel downloads (HTTP 429). A mirror that has blocked this network is ranked out instead of failing the install; the measured speed is shown per mirror in the panel."
+    },
+    {
+      "section": "Settings page and the star button",
+      "text": "Everything above, plus a few knobs that do not belong on a plugin card, lives in **Settings → Desktop** — a new entry in the settings sidebar, next to the other plugins' pages:"
+    },
+    {
+      "section": "Settings page and the star button",
+      "text": "- **Dependency** — install, reinstall, update, roll back, and a **Point the bridge at it** action, with the live installer log and the patched row's target. The plugin's own page only carries a pointer to this card.\n- **Bridge** — `toolCallTimeoutMs`, the screenshot scale, the capture backend, upstream's flash overlay, and the three tools the bridge may exclude (`App`, `PowerShell`, `FileSystem`). These are written into the bridge row of your profile's `cordis.patch.yml` (timestamped backup first), so **they apply after DSH restarts**; the page states which row is in effect.\n- **Updates** — whether the plugin checks for a newer Windows-MCP on boot, and the mirror policy: `auto` keeps the measured ranking, an explicit mirror pins it, and the official index always stays as the last resort.\n- **Tool exposure** — **Lazy tools** (on by default): the model sees a single `windows_desktop` entry instead of eighteen schemas, calls it, and from the next step the desktop tools it revealed are in the tool table. Turn it off to send every schema on every step.\n- **About** — the plugin version, the repository link, and a **Star** button that opens the project on GitHub in a new tab."
+    },
+    {
+      "section": "Settings page and the star button",
+      "text": "Saving is atomic (`$DSH_HOME/dsh-windows-mcp.settings.json`). A value out of range is clamped to its default and reported instead of being written silently, and a change that leaves the bridge row untouched does not rewrite the patch layer at all. **Revert** restores the defaults in the form."
+    },
+    {
+      "section": "Lazy tools",
+      "text": "Eighteen tool schemas cost context on every step, including the steps where nobody touches the desktop. With lazy tools on (the default), the model is offered one entry:\n\n> `windows_desktop` — *Reveal the Windows desktop capabilities (screenshots, clicking, typing, windows, clipboard, processes) for this session.*"
+    },
+    {
+      "section": "Lazy tools",
+      "text": "Calling it with no arguments reveals every capability for that session; `{\"query\": \"screenshot\"}` or `{\"names\": [\"mcp__windows__Click\"]}` narrows it. The definitions come back in the tool result and the revealed tools join the tool table on the next step, so the choice survives until the session ends. A hidden tool that gets called anyway is refused with a hint to reveal first."
+    },
+    {
+      "section": "Lazy tools",
+      "text": "Revelation is per session, and the switch is honest both ways: with **Computer Use** off the entry is hidden too, and nothing can be revealed behind the human's back."
+    },
+    {
+      "section": "The welcome dialog",
+      "text": "The first time the bundle is enabled — and on every later enable from the Plugins page — a **Welcome to the DSH desktop automation plugin** dialog is raised over the whole window: a frosted sheet on a blurred scrim that leaves the app's own DOM and mounts on `document.body`, so nothing in the page can clip or bury it. It says, in three lines, where the dependency (install, update, rollback) and the parameters live (**Settings → Desktop**), and where the **Computer Use** switch is, and it carries a prominent **Star on GitHub** button. Escape, the backdrop or *Got it* dismisses it; focus is trapped inside while it is open, and a CLI/config enable shows it once per browser instead of every time."
+    },
+    {
+      "section": "Verify",
+      "text": "```text\nwindows_mcp_doctor\n```\n\nPrints the resolved `uv`/`uvx`/`python`, the state of `%USERPROFILE%\\.windows-mcp`, the effective bridge row, and the `mcp__windows__*` tools that are actually registered. Then ask the agent:\n\n> Take a screenshot of my desktop and tell me what is on screen."
+    },
+    {
+      "section": "Configuration",
+      "text": "The defaults live in [`cordis.patch.yml`](cordis.patch.yml). Everything below is set through the `env` block of the `windows-mcp-bridge` row."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Variable | Default here | Effect |\n| --- | --- | --- |\n| `WINDOWS_MCP_SCREENSHOT_SCALE` | `0.75` | Screenshot downscale, `0.1`–`1.0`. The single biggest lever on image token cost. |\n| `WINDOWS_MCP_DISABLE_FLASH` | `1` | Suppresses upstream's orange \"control taken over\" border on every capture. |\n| `WINDOWS_MCP_SCREENSHOT_BACKEND` | `auto` | Capture backend; see upstream docs before overriding. |\n| `WINDOWS_MCP_MAX_TREE_ELEMENTS` | `500` | Cap on the accessibility-tree size reported by `Snapshot`. |\n| `WINDOWS_MCP_WATCHDOG` | `off` | Upstream watchdog. Off by default because the UIA event pump can take the whole process down ([upstream #332](https://github.com/CursorTouch/Windows-MCP/issues/332)). |\n| `ANONYMIZED_TELEMETRY` | `false` | Upstream defaults to **on** (PostHog). This plugin turns it off. |"
+    },
+    {
+      "section": "Override the row from your profile",
+      "text": "Do not edit the plugin's own file — patch the row by id from your profile's\n`$DSH_HOME/profiles/<profile>/cordis.patch.yml`, which is composed *after* bundle\nrows and therefore wins."
+    },
+    {
+      "section": "Override the row from your profile",
+      "text": "**A patch replaces the whole `config` object; it does not deep-merge it.** The\nloader applies overrides as `target[key] = value` (`applyEntryPatches` in\n`dsh-app-boot`), so a key you leave out is a key you delete: `serverName` is\nrequired (and names every tool), `transport` is required, `command` is required\nfor `stdio`, `url` for `streamable-http`. A patch whose `id` does not exist, or\nwhose `name` does not match, is skipped with a warning instead of failing.\n\n```yaml"
+    },
+    {
+      "section": "$DSH_HOME/profiles/<profile>/cordis.patch.yml — the complete row",
+      "text": "- id: windows-mcp-bridge\n  config:\n    serverName: windows\n    transport: stdio\n    command: uvx\n    args: [windows-mcp@0.8.8, serve, --exclude-tools, \"App,PowerShell,FileSystem\"]\n    toolCallTimeoutMs: 120000\n    failOnStartupError: false\n    reconnect: { enabled: true, initialDelayMs: 500, maxDelayMs: 30000, maxAttempts: 10 }\n    env:\n      ANONYMIZED_TELEMETRY: \"false\"\n      WINDOWS_MCP_DISABLE_FLASH: \"1\"\n      WINDOWS_MCP_SCREENSHOT_SCALE: \"0.5\"\n```"
+    },
+    {
+      "section": "$DSH_HOME/profiles/<profile>/cordis.patch.yml — the complete row",
+      "text": "`--exclude-tools` takes its names as one comma-separated argument\n(`\"App,PowerShell,FileSystem\"`), and `ControlStatus` is always kept — upstream\noffers no way to exclude it."
+    },
+    {
+      "section": "Pin a local interpreter instead of `uvx`",
+      "text": "`uvx` re-resolves the package on every launch. For a reproducible setup, install\nit once (`uv tool install windows-mcp`) or use any Python that already has it,\nand change `command`/`args` in the complete row above:\n\n```yaml\n- id: windows-mcp-bridge\n  config:\n    serverName: windows\n    transport: stdio"
+    },
+    {
+      "section": "Use a long-lived HTTP server instead",
+      "text": "Windows-MCP can also run as a background server. Upstream's `windows-mcp install`\nregisters an ONLOGON scheduled task that serves **streamable-http** on\n`127.0.0.1:8000`; switch the row to match — this variant has `url` instead of\n`command`/`args`/`env`:\n\n```yaml\n- id: windows-mcp-bridge\n  config:\n    serverName: windows\n    transport: streamable-http"
+    },
+    {
+      "section": "Use a long-lived HTTP server instead",
+      "text": "There is no `env` field in this variant, so the telemetry and flash defaults no\nlonger apply to the server: start it yourself with `ANONYMIZED_TELEMETRY=false`\nand `WINDOWS_MCP_DISABLE_FLASH=1` if you want the same behaviour."
+    },
+    {
+      "section": "Use a long-lived HTTP server instead",
+      "text": "This survives DSH restarts and skips per-launch startup cost, at the price of a\nprocess that outlives the app. Two upstream caveats: `install` binds the\nscheduled task to the interpreter it was run from (installing from a temporary\n`uvx` environment registers a task pointing at a cache directory that `uv` may\nreclaim — install with `uv tool install windows-mcp` or a fixed venv instead),\nand non-loopback hosts refuse to start without `--auth-key`/`--oauth-client-id`\nor an explicit `--allow-insecure-remote`."
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Symptom | Likely cause and fix |\n| --- | --- |\n| No `mcp__windows__*` tools at all | Run `windows_mcp_doctor`. On a fresh install that is expected: the bridge ships disabled until you install the dependency from **Settings → Desktop** and restart DSH. If it is installed already, the doctor prints the effective row — look for `disabled` / `command` — and the host log carries `mcp-client(windows)` lines. |\n| Tools disappeared after an upgrade | The tool names are `mcp__<serverName>__<tool>`. Changing `serverName` changes every tool name (and breaks the prompt cache prefix). |\n| Screenshots come back as text | The active model does not accept image input, or attachments are disabled in your harness configuration. Upstream images are only projected when admission succeeds. |\n| `App` tool fails or returns nothing | Upstream documents it as reliable on English Windows installs only; it is excluded by default. |\n| DSH takes noticeably longer to boot | The bridge should not cost boot time: it ships `disabled: true` and only starts once an install has pointed it at an executable. A slow boot means some *other* row is resolving a toolchain at boot — check the effective row printed by `wind"
+    },
+    {
+      "section": "Security",
+      "text": "This plugin hands the model your mouse, your keyboard, your clipboard, your\nprocesses and your registry. Treat installing it as handing over control of the\ndesktop session it runs in.\n\nWhat the design does and does not do:"
+    },
+    {
+      "section": "Security",
+      "text": "- **No network exposure by default.** The default row is stdio: a child process\n  connected by pipes, not a listening socket.\n- **Secret hygiene on the child process.** The bridge starts MCP children from a\n  scrubbed environment: variable names matching `KEY|PASSWORD|SECRET|TOKEN` and\n  **all** `DSH_*` variables are removed before the configured `env` is merged in.\n  Credentials should therefore be passed explicitly through the row's `env`, not\n  inherited.\n- **No telemetry from this plugin.** Upstream's own PostHog reporting is\n  explicitly disabled in the shipped defaults.\n- **Remote serving is upstream's problem, not a hidden default.** If you switch\n  to HTTP, upstream enforces loopback host filtering and refuses to start on a\n  non-loopback address without an auth key.\n- **Switch flips are a window decision, not a network one.** Every mutating\n  route (`/state`, `/prepare`, `/prepare/cancel`, `/bridge`, `/update`,\n  `/settings`) requires the signed session cookie the DSH window receives during\n  the launch-token exchange; without it the request is refused with `401`. A\n  script, `curl`, or a model with shell access cannot turn desktop control on for\n  itself. Reads stay open "
+    },
+    {
+      "section": "How it works",
+      "text": "DeepSeek Harness plugins are loader patches, and a patch row may mount a package\nthat lives inside the Electron `app.asar` — the loader resolves official\n`@deepseek-ai/*` names from the Desktop install anchor. Third-party code cannot\n`import` those packages, but it *can* name them in a patch, because the mount\nhappens inside the loader rather than inside plugin code. That is the whole trick\nbehind this package:"
+    },
+    {
+      "section": "How it works",
+      "text": "```yaml\n- insert:\n    - id: windows-mcp-plugin\n      name: dsh-windows-mcp                  # lib/index.js: doctor tool + startup audit\n    - id: windows-mcp-bridge\n\nConsequences worth knowing:"
+    },
+    {
+      "section": "How it works",
+      "text": "- The integration is **version-sensitive** in one direction only: the bridge\n  config schema belongs to DSH, not to this plugin. `package.json` declares the\n  patch; DSH decides how to read it.\n- Image projection is a bridge feature: MCP image blocks are saved as DSH\n  attachments and surfaced as native image content. Audio and embedded resources\n  degrade to diagnostic text.\n- **MCP prompts are not supported** by the bridge (resources are, on demand)."
+    },
+    {
+      "section": "Development",
+      "text": "```powershell\nnpm install\nnpm test          # node --test, including a real YAML parse of the patch\nnpm run check     # node --check lib/index.js\n```\n\nTo see the composed config without touching a live profile — and without\nrestarting DSH — use the dump harness:\n\n```powershell"
+    },
+    {
+      "section": "one-time: a scratch profile with the real profile's node_modules",
+      "text": "mkdir  $env:USERPROFILE\\.dsh\\profiles\\dtest\ncopy   $env:USERPROFILE\\.dsh\\profiles\\desktop\\package.json $env:USERPROFILE\\.dsh\\profiles\\dtest\\\ncmd /c mklink /J $env:USERPROFILE\\.dsh\\profiles\\dtest\\node_modules $env:USERPROFILE\\.dsh\\profiles\\desktop\\node_modules\n\nnpm run dump\n```\n\nLayout:"
+    },
+    {
+      "section": "one-time: a scratch profile with the real profile's node_modules",
+      "text": "```text\ncordis.patch.yml      the integration: two insert rows\nlib/index.js          host half: routes + windows_mcp_doctor + startup audit (no dependencies)\nlib/dependency.js     dependency state, uv invocation, profile bridge-row writer\nlib/pypi.js           PyPI index parsing and version maths (pure functions)\nlib/mirrors.js        mirror candidates, ranged speed probe, ranking\nlib/installs.js       per-version tool roots and the versions state file\nlib/updater.js        version manager: check / install / activate / roll back\nlib/settings.js       user settings: validation, storage, bridge round-trip\nlib/client.js         web half: composer switch, plugin panel, settings page\ntest/plugin.test.mjs  patch composition + hostile-context + panel tests\ntest/update.test.mjs  version maths, mirror ranking, isolation and rollback state machine\ntest/settings.test.mjs  settings validation, bridge round-trip, settings route\nscripts/dump-config.mjs  dev helper for composing against a scratch profile\ntools/                zero-dependency debug probes (not published to npm)\n```"
+    },
+    {
+      "section": "one-time: a scratch profile with the real profile's node_modules",
+      "text": "To exercise the update path for real — real mirrors, real `uv`, real profile\nwrite — use the e2e harness:\npowershell\nnode tools/update-e2e.mjs --check          # probe the mirrors, read the newest stable version\nnode tools/update-e2e.mjs --install 0.8.8  # download, activate, rewrite the bridge row\nnode tools/update-e2e.mjs --rollback\n```\n\nContributions are welcome; keep `lib/index.js` free of runtime dependencies and\nkeep `apply()` throw-proof."
+    },
+    {
+      "section": "Credits and license",
+      "text": "MIT — see [LICENSE](LICENSE).\n\n- [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) (MIT) does\n  the actual desktop automation. This plugin only wires it up.\n- The MCP client bridge is part of DeepSeek Harness and is not redistributed here.\n- Not affiliated with DeepSeek or with the Windows-MCP authors."
+    }
+  ],
+  "skipped": []
+}
