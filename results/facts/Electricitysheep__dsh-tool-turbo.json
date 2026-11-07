@@ -1,0 +1,168 @@
+{
+  "repo": "Electricitysheep/dsh-tool-turbo",
+  "commit": "d29e7d9d73032516e37797ea69592ce18e0fe05f",
+  "extracted_at": "2026-11-07T10:08:07.709270+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 17382,
+    "lines_by_language": {
+      "JSON": 59,
+      "Markdown": 144,
+      "Other": 3,
+      "TypeScript": 232,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "package.json",
+      "src/effort-decision.ts",
+      "src/index.ts",
+      "tests/effort-decision.spec.ts",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tool-turbo",
+    "version": "0.1.0",
+    "description": "DSH host plugin: cuts tool-call latency by auto-downgrading reasoning_effort for simple tool tasks, with per-tool timing telemetry.",
+    "private": true,
+    "type": "module",
+    "main": "src/index.ts",
+    "exports": {
+      ".": {
+        "types": "./src/index.ts",
+        "default": "./src/index.ts"
+      },
+      "./effort-decision": {
+        "types": "./src/effort-decision.ts",
+        "default": "./src/effort-decision.ts"
+      },
+      "./package.json": "./package.json"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-settings": "^0.1.0-rc.6"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
+      "@types/node": "^24.0.0",
+      "typescript": "^5.6.0",
+      "vitest": "^3.0.0"
+    },
+    "scripts": {
+      "typecheck": "tsc --noEmit",
+      "test": "vitest run"
+    },
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-tool-turbo\n      name: dsh-tool-turbo\n"
+    }
+  ],
+  "entries": [
+    "src/index.ts",
+    "src/effort-decision.ts",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
+      "@types/node": "^24.0.0",
+      "typescript": "^5.6.0",
+      "vitest": "^3.0.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 3,
+    "pushed_at": "2026-08-17T02:14:23Z",
+    "created_at": "2026-08-13T15:03:50Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/effort-decision.ts",
+    "src/index.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tool-turbo",
+      "text": "**Cut tool-call latency in [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/deepseek-harness) by auto-adjusting `reasoning_effort` per tool round.**\n\n[中文文档](./README.zh.md) · English"
+    },
+    {
+      "section": "dsh-tool-turbo",
+      "text": "In a multi-step tool chain, the model re-thinks before **every** tool call — and that thinking dominates the wall-clock time (a 50-step agent task can spend minutes in reasoning between tools). `dsh-tool-turbo` watches the recent tool calls of a step and injects the *lowest sensible* reasoning effort into the next model request, then lifts it again the moment the work gets heavy."
+    },
+    {
+      "section": "How it works",
+      "text": "DeepSeek's API exposes `reasoning_effort` in three steps (`low` / `high` / `max`, shipped 2026-08-13). dsh re-resolves the request config for **every step** through an `agent/request` waterfall (see `packages/core/agent-loop/src/agent.ts` — \"plugins propose the next request config\"). `dsh-tool-turbo` plugs into that waterfall:"
+    },
+    {
+      "section": "How it works",
+      "text": "1. **Watch** the step's recent `tool/call` records from the session.\n2. **Decide**: simple, deterministic tools (`write`, `read`, `grep`, `glob`, `bash`, `fs_*`, …) with small payloads → `low`; mixed/heavy work → `high`; very heavy payloads → `max` (opt-in).\n3. **Inject** the decision into the `agent/request` config for the next model call of that step.\n\nLong tool chains keep the cheap rounds cheap, and never starve the hard rounds of reasoning."
+    },
+    {
+      "section": "Install",
+      "text": "```bash"
+    },
+    {
+      "section": "1. clone + build the plugin",
+      "text": "git clone https://github.com/Electricitysheep/dsh-tool-turbo.git\ncd dsh-tool-turbo && npm install"
+    },
+    {
+      "section": "name: dsh-tool-turbo",
+      "text": "cd ~/.dsh/profiles/web && pnpm install"
+    },
+    {
+      "section": "3. restart dsh web",
+      "text": "dsh web\n```"
+    },
+    {
+      "section": "Verified",
+      "text": "- **Injector works in a live dsh instance** (log lines from a real run):\n\n```\n[tool-turbo] agent/request: baseline=high calls=[]                    => reasoningEffort=high\n[tool-turbo] agent/request: baseline=high calls=[{\"name\":\"write\",…}] => reasoningEffort=low\n```"
+    },
+    {
+      "section": "Verified",
+      "text": "- **6/6 unit tests** on the effort policy (`decideEffort`): fresh prompt keeps the baseline, simple-tool chains downgrade to `low`, downgrades respect the user toggle, heavy payloads upgrade to `max` (opt-in), mixed tools lift to `high`.\n- `tsc --noEmit` clean."
+    },
+    {
+      "section": "Policy (pure, testable)",
+      "text": "| Recent tool calls | Decision |\n|---|---|\n| none (fresh prompt) | keep user's selected effort |\n| ≥75% simple tools, small args, downgrade allowed | `low` |\n| mixed / heavy tools | `high` (when upgrades allowed) |\n| very heavy payloads, upgrade allowed | `max` |\n| otherwise | keep user's selected effort |\n\nToggles (settings namespace planned): `allowDowngrade` (default on), `allowUpgrade` (default off — keep `max` conservative), `baseline` (default `high`)."
+    },
+    {
+      "section": "Roadmap",
+      "text": "- [x] effort-decision core + waterfall injection\n- [x] per-tool duration telemetry (host log)\n- [ ] settings namespace (dsh-settings) for the toggles\n- [ ] tool timing surfaced in the UI / agent context\n- [ ] profile-agnostic install docs (`headless`/`tui`)"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
