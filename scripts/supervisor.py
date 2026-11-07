@@ -67,6 +67,13 @@ def claim(worker, tier):
     db = connect()
     db.execute("BEGIN IMMEDIATE")
     try:
+        # Repeated or ambiguous claim calls must return this worker's existing task.
+        existing = db.execute("""SELECT * FROM tasks WHERE state='claimed' AND worker=?
+                                 ORDER BY rank LIMIT 1""", (worker,)).fetchone()
+        if existing:
+            db.execute("COMMIT")
+            print(json.dumps(dict(existing), ensure_ascii=False))
+            return
         row = db.execute("""SELECT * FROM tasks WHERE state='queued' AND tier=?
                             ORDER BY rank LIMIT 1""", (tier,)).fetchone()
         if not row:
