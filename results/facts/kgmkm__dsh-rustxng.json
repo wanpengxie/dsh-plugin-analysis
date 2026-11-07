@@ -1,0 +1,571 @@
+{
+  "repo": "kgmkm/dsh-rustxng",
+  "commit": "ab2d4fc2194969853a93d5d4249d3534783199e4",
+  "extracted_at": "2026-11-07T12:49:08.114210+00:00",
+  "tree": {
+    "files": 31,
+    "bytes": 272960,
+    "lines_by_language": {
+      "JSON": 95,
+      "JavaScript": 4652,
+      "Markdown": 1100,
+      "Other": 69,
+      "Shell": 190,
+      "YAML": 61
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.ja.md",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/PLATFORMS.md",
+      "docs/UPSTREAM.md",
+      "icon.svg",
+      "index.js",
+      "lib/client.js",
+      "lib/fetch-provider.js",
+      "lib/install-binary.js",
+      "lib/process-manager.js",
+      "lib/rustxng-client.js",
+      "lib/tools.js",
+      "lib/web-provider.js",
+      "locale/en.json",
+      "locale/ja.json",
+      "package.json",
+      "scripts/contract-smoke.mjs",
+      "scripts/install-binary.mjs",
+      "scripts/verify-linux.sh",
+      "tests/apply.test.mjs",
+      "tests/fixtures/signal-host.mjs",
+      "tests/install.test.mjs",
+      "tests/process.test.mjs",
+      "tests/resolve.test.mjs",
+      "tests/signal.test.mjs",
+      "tests/smoke.mjs",
+      "tests/stubs/dsh-tools.mjs",
+      "tests/tools.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-rustxng",
+    "version": "0.5.5",
+    "description": "Replace the built-in web_search of DeepSeek Harness with a self-hosted RustXNG instance, and add a RustXNG search tool plus a settings card. Cross-platform (Windows / macOS / Linux).",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "locale",
+      "scripts",
+      "cordis.patch.yml",
+      "README.md",
+      "README.ja.md",
+      "LICENSE",
+      "icon.svg"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "rustxng",
+      "searxng",
+      "metasearch",
+      "web-search",
+      "search",
+      "privacy"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/kgmkm/dsh-rustxng.git"
+    },
+    "homepage": "https://github.com/kgmkm/dsh-rustxng#readme",
+    "bugs": {
+      "url": "https://github.com/kgmkm/dsh-rustxng/issues"
+    },
+    "bin": {
+      "dsh-rustxng-fetch": "scripts/install-binary.mjs"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "scripts": {
+      "test": "node tests/smoke.mjs",
+      "fetch-server": "node scripts/install-binary.mjs"
+    },
+    "dsh": {
+      "manifestVersion": 1,
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      },
+      "compatibility": {
+        "dsh": ">=0.2.0-rc.2 <0.3.0",
+        "dshReleases": {
+          "0.2.0-rc.2": "compatible",
+          "0.2.1-rc.2": "compatible"
+        },
+        "node": ">=20",
+        "profiles": [
+          "web"
+        ],
+        "platforms": [
+          "win32",
+          "darwin",
+          "linux"
+        ]
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*",
+      "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2 <0.3.0"
+    },
+    "dependencies": {}
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-rustxng — bundle patch layer\n#\n# `dsh plugin --profile <profile> add dsh-rustxng` (or the plugin_manager's\n# install_bundle) adds this row to the profile. The row id must match the\n# package name and the `name` exported by index.js.\n- insert:\n    - id: dsh-rustxng\n      name: 'dsh-rustxng'\n      config:\n        # Master switch. false unloads the tool and unregisters the provider.\n        enabled: true\n\n        # Where your RustXNG instance listens. Volatile: editable from the\n        # plugin's settings card without restarting DSH.\n        baseUrl: 'http://127.0.0.1:8888'\n\n        # Timeout for one search request (milliseconds).\n        timeoutMs: 20000\n\n        # Results handed to web_search by default (the caller's maxResults wins when smaller).\n        defaultLimit: 12\n\n        # Extra RustXNG query parameters. Empty string / -1 / [] = leave it to the server.\n        language: ''\n        timeRange: ''\n        safeSearch: -1\n        categories: []\n\n        # Register the `rustxng_search` / `rustxng_status` tools for the agent.\n        exposeTools: true\n\n        # Replace the built-in web_search with RustXNG.\n        #\n        #   enabled    … register a `rustxng` provider on ctx.web\n        #   autoSelect … also write web.searchProvider = 'rustxng' (the same\n        #                field the official \"Web search\" page writes)\n        #\n        # Both are volatile, so the settings card flips them live.\n        webSearch:\n          enabled: false\n          autoSelect: true\n\n        # Replace the built-in web_fetch with a charset-aware fetcher (BOM -> header -> meta).\n        # Useful for Japanese sites that declare Shift_JIS only in <meta> and send no charset.\n        webFetch:\n          enabled: false\n          autoSelect: true\n\n        # Start the binary for the user when the instance does not answer, and stop it\n        # again after idleMinutes without a search (0 = keep until DSH unloads the plugin).\n        # Only a process this plugin started is ever stopped.\n        # On by default: a fresh install would otherwise answer every search with ECONNREFUSED.\n        # Nothing downloads at mount time; the first search fetches and starts the instance.\n        autoStart:\n          enabled: true\n          binaryPath: ''\n          idleMinutes: 60\n          # Download a release binary into $DSH_HOME/bin when none is found.\n          download: true\n\n        debug: false\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "scripts/install-binary.mjs",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_RUSTXNG_TRACE",
+      "kind": "env",
+      "where": "index.js:41"
+    },
+    {
+      "name": "DSH_RUSTXNG_TOOLS_MODULE",
+      "kind": "env",
+      "where": "index.js:254"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:321"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:322"
+    },
+    {
+      "name": "DSH_RUSTXNG_TOOLS_MODULE",
+      "kind": "env",
+      "where": "tests/apply.test.mjs:23"
+    },
+    {
+      "name": "RUSTXNG_BASE_URL",
+      "kind": "env",
+      "where": "tests/apply.test.mjs:89"
+    },
+    {
+      "name": "SEARXNG_PORT",
+      "kind": "env",
+      "where": "tests/process.test.mjs:117"
+    },
+    {
+      "name": "RUSTXNG_BASE_URL",
+      "kind": "env",
+      "where": "tests/smoke.mjs:72"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "cordis.patch.yml:15"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/sahenjp/RustXNG",
+      "where": "index.js:15"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "index.js:149"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "index.js:151"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "lib/client.js:42"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888。",
+      "where": "lib/client.js:77"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "lib/client.js:250"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "lib/client.js:355"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${repo",
+      "where": "lib/install-binary.js:59"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com/repos/${RELEASE_REPO",
+      "where": "lib/install-binary.js:95"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${RELEASE_REPO",
+      "where": "lib/install-binary.js:105"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/sahenjp/RustXNG",
+      "where": "lib/rustxng-client.js:4"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "lib/rustxng-client.js:204"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "lib/rustxng-client.js:296"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kgmkm/dsh-rustxng.git",
+      "where": "package.json:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kgmkm/dsh-rustxng#readme",
+      "where": "package.json:39"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kgmkm/dsh-rustxng/issues",
+      "where": "package.json:41"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "scripts/contract-smoke.mjs:30"
+    },
+    {
+      "host": "$host",
+      "url": "http://$HOST:$PORT",
+      "where": "scripts/verify-linux.sh:36"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "tests/apply.test.mjs:14"
+    },
+    {
+      "host": "stub",
+      "url": "http://stub",
+      "where": "tests/apply.test.mjs:29"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "tests/apply.test.mjs:54"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/b",
+      "where": "tests/apply.test.mjs:55"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "tests/apply.test.mjs:85"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "tests/apply.test.mjs:354"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "tests/fixtures/signal-host.mjs:67"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/sahenjp/RustXNG/releases/tag/${redirectTag",
+      "where": "tests/install.test.mjs:48"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/sahenjp/RustXNG/releases",
+      "where": "tests/install.test.mjs:167"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:18899",
+      "where": "tests/process.test.mjs:141"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "tests/smoke.mjs:6"
+    },
+    {
+      "host": "host",
+      "url": "http://host:8888",
+      "where": "tests/smoke.mjs:7"
+    },
+    {
+      "host": "www.rust-lang.org",
+      "url": "https://www.rust-lang.org/",
+      "where": "tests/smoke.mjs:31"
+    },
+    {
+      "host": "www.rust-lang.org",
+      "url": "https://www.rust-lang.org/",
+      "where": "tests/smoke.mjs:38"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example",
+      "where": "tests/smoke.mjs:59"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "tests/smoke.mjs:72"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "tests/tools.test.mjs:29"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "tests/tools.test.mjs:48"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "tests/tools.test.mjs:56"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 9,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 20,
+    "pushed_at": "2026-11-05T11:38:52Z",
+    "created_at": "2026-10-25T10:42:21Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/client.js",
+    "lib/fetch-provider.js",
+    "lib/install-binary.js",
+    "lib/process-manager.js",
+    "lib/rustxng-client.js",
+    "lib/tools.js",
+    "lib/web-provider.js",
+    "package.json",
+    "scripts/install-binary.mjs",
+    "tests/smoke.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-rustxng",
+      "text": "Use a self-hosted [RustXNG](https://github.com/sahenjp/RustXNG) instance from\n[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — and answer the\nbuilt-in **`web_search`** with it."
+    },
+    {
+      "section": "dsh-rustxng",
+      "text": "RustXNG is a SearXNG-compatible metasearch engine written in Rust: one query fans out to\nover a hundred search engines (119 enabled in 0.28's default `standard` profile),\ndeduplicates the results and returns them without ads or tracking. This\nplugin connects DSH to a RustXNG you run yourself (Windows, macOS or Linux)\nand adds:"
+    },
+    {
+      "section": "dsh-rustxng",
+      "text": "| Contribution | What it gives you |\n| :--- | :--- |\n| **Search provider** | A `rustxng` provider on the web seam. Point `web.searchProvider` at it and the built-in `web_search` is answered by your instance — no DeepSeek search API key involved. |\n| **Settings card** | A card in **Plugins** with two live switches and the instance URL. No restart, no hand-edited YAML. |\n| **Tools** | `rustxng_search` (engine, category, language and time-range scoped) and `rustxng_status` (reachability, version, engine count, provider state). |\n| **Fetch provider** (optional) | A charset-aware `web_fetch`: resolves BOM → HTTP header → `<meta charset>` before decoding, so Shift_JIS pages that declare their encoding only in `<meta>` stop coming back as `�`. Does not use RustXNG. |\n| **Process supervision** (optional) | Start the binary when the instance does not answer, and stop it again after an idle timeout (default 60 min, editable in the card). Only a process this plugin started is stopped — this is also the only thing that cleans up after a Harness that was killed. |\n| **Binary fetcher** | `node scripts/install-binary.mjs` downloads and verifies the right release binary for your OS and CPU. |"
+    },
+    {
+      "section": "dsh-rustxng",
+      "text": "Nothing in DSH is patched: the plugin uses the documented `ctx.web.registerSearchProvider()`\nAPI and the ordinary `web.searchProvider` settings field, so it survives Harness upgrades."
+    },
+    {
+      "section": "Do you need this plugin at all?",
+      "text": "**If you use rustdsh (`rdsh`), let rustdsh handle search.** Since v0.15.0 it checks whether\nrustxng / `SEARXNG_URL` actually answers at start-up and, only when it does, passes\n`DSH_WEB_SEARCH_PROVIDER=rdsh-rustxng` to the delegated DSH so the bundled\n`rdsh-web-search-searxng` provider takes `web_search` over (`web_search_bridge`, on by\ndefault)."
+    },
+    {
+      "section": "Do you need this plugin at all?",
+      "text": "| Your situation | Use |\n| :--- | :--- |\n| You start **DSH through rdsh** (`rdsh tui`, `rdsh web`, …) and want `web_search` to hit a local engine | **rustdsh's own bridge.** Nothing to configure; stop it with `rdsh features off web_search_bridge` |\n| You start **`dsh` directly** (desktop app, systemd, …) and want `web_search` replaced | **This plugin.** rdsh only injects into the children it launches, so a plain `dsh` boot is untouched |\n| You need **`web_fetch` to stop garbling** pages whose charset is declared only in `<meta>` | **This plugin** (`webFetch.enabled`) — rustdsh's bridge is search only |\n| You want the agent to call RustXNG **as a tool** (`rustxng_search` / `rustxng_status`) | **This plugin.** |\n| You want the binary **downloaded, started and idle-stopped** for you | **This plugin** (`autoStart`); rustdsh never downloads anything on behalf of the bridge |\n| You use both and want **one instance for both** | Point rdsh at this plugin's instance: `RUSTXNG_URL=http://127.0.0.1:8888` |"
+    },
+    {
+      "section": "Do you need this plugin at all?",
+      "text": "**Give search to exactly one of them.** With both, two providers are registered (`rustxng` and\n`rdsh-rustxng`) and two sidecars can end up running. Letting rustdsh own it means turning this\nplugin's `webSearch.enabled` off; letting this plugin own it means\n`rdsh features off web_search_bridge` (or `RDSH_WEB_SEARCH_BRIDGE=0`)."
+    },
+    {
+      "section": "Do you need this plugin at all?",
+      "text": "**Delegating search to rustdsh does not change `web_fetch`.** Use this plugin's\n`webFetch.enabled` when you want the fetch side replaced too. See\n[If you also use rdsh](#if-you-also-use-rdsh) for sharing one instance and one binary.\n\n---"
+    },
+    {
+      "section": "Requirements",
+      "text": "- DeepSeek Harness `>= 0.2.0-rc.2 < 0.3.0` (host `tools`, `web` and `settings` services).\n  Verified on **0.2.0-rc.2** and **0.2.1-rc.2**; see [docs/PLATFORMS.md](docs/PLATFORMS.md#dsh-versions).\n- Node.js 20+ (the plugin uses the global `fetch`)\n- A running RustXNG instance — see below"
+    },
+    {
+      "section": "1. Get RustXNG",
+      "text": "**Easiest:** let the plugin fetch a release binary.\n\n```bash\nnode scripts/install-binary.mjs          # into $DSH_HOME/bin (or ~/.dsh/bin)\nnode scripts/install-binary.mjs --dir ./bin --musl   # Linux without glibc\n```\n\nThe script picks the asset for your platform, verifies the published SHA-256, and prints\nthe start command.\n\n**Or** download it yourself from the\n[releases page](https://github.com/sahenjp/RustXNG/releases/latest):"
+    },
+    {
+      "section": "1. Get RustXNG",
+      "text": "| Platform | Asset |\n| :--- | :--- |\n| Windows x64 | `rustxng-v<ver>-x86_64-pc-windows-msvc.exe` |\n| macOS arm64 | `rustxng-v<ver>-aarch64-apple-darwin` |\n| macOS x64 | `rustxng-v<ver>-x86_64-apple-darwin` |\n| Linux x64 (glibc) | `rustxng-v<ver>-x86_64-unknown-linux-gnu` |\n| Linux x64 (musl) | `rustxng-v<ver>-x86_64-unknown-linux-musl` |\n\nStart it:\n\n```bash\nrustxng --port 8888                       # listens on 127.0.0.1:8888 by default\ncurl 'http://127.0.0.1:8888/healthz'      # → OK\n```"
+    },
+    {
+      "section": "1. Get RustXNG",
+      "text": "RustXNG serves its own search UI at <http://127.0.0.1:8888/>; this plugin does not replace\nthat page, it just consumes the same JSON API."
+    },
+    {
+      "section": "2. Install the plugin",
+      "text": "```bash"
+    },
+    {
+      "section": "registry install (recommended)",
+      "text": "dsh plugin --profile web add dsh-rustxng"
+    },
+    {
+      "section": "or from a checkout of this repository",
+      "text": "git clone https://github.com/<owner>/dsh-rustxng.git"
+    },
+    {
+      "section": "then: Plugin Manager → install bundle → the checkout directory",
+      "text": "```\n\nInstalling from a checkout **links** the directory, so Node resolves the plugin's real path\n(`.../dsh-rustxng`). The plugin copes with that: if `@deepseek-ai/schemastery` is not\nresolvable from there, it loads the schema builder through the running Harness's own entry\npoint instead of silently dropping the schema."
+    },
+    {
+      "section": "3. Turn it on",
+      "text": "Open **Plugins → RustXNG** and switch on *Use RustXNG for web_search*. Or set it in your\nprofile patch (`~/.dsh/profiles/<profile>/cordis.patch.yml`):\n\n```yaml\n- id: dsh-rustxng\n  config:\n    baseUrl: http://127.0.0.1:8888\n    webSearch:\n\nFrom then on `web_search` is answered by RustXNG. The `enabled` and `autoSelect` switches\nand the instance URL are *volatile*: the settings card changes them live, and turning the\nfeature off hands `web.searchProvider` back to whatever it was before."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n| :--- | :--- | :--- |\n| `enabled` | `true` | Master switch; `false` unloads the tools and unregisters the provider. |\n| `baseUrl` | `http://127.0.0.1:8888` | Where RustXNG listens. Volatile (editable in the card). |\n| `timeoutMs` | `20000` | Timeout for one search. |\n| `defaultLimit` | `12` | Sources handed to `web_search` (1–50). |\n| `language` | `''` | Search language (`ja`, `en`, …); empty = instance default. |\n| `timeRange` | `''` | `day` / `week` / `month` / `year`; empty = no filter. |\n| `safeSearch` | `-1` | `-1` = instance default, else `0` / `1` / `2`. |\n| `categories` | `[]` | Category filters applied to every search (`general`, `it`, …). |\n| `exposeTools` | `true` | Register `rustxng_search` / `rustxng_status`. |\n| `webSearch.enabled` | `false` | Replace the built-in `web_search`. Volatile. |\n| `webSearch.autoSelect` | `true` | Write `web.searchProvider = 'rustxng'` for you. Volatile. |\n| `webFetch.enabled` | `false` | Replace `web_fetch` with the charset-aware fetcher. Volatile. |\n| `webFetch.autoSelect` | `true` | Write `web.fetchProvider = 'rustxng-http'` for you. Volatile. |\n| `autoStart.enabled` | `true` (shipped patch) | Start the binar"
+    },
+    {
+      "section": "Optional: charset-aware fetch",
+      "text": "The built-in HTTP fetcher reads `charset` from the `Content-Type` header only. Many Japanese\nsites (JRA, municipal sites, older corporate sites) send `text/html` with the encoding\ndeclared *only* in `<meta charset=\"Shift_JIS\">`, so the page arrives as replacement\ncharacters. Turning on `webFetch.enabled` registers a small provider that resolves\n**BOM → HTTP header → `<meta>`** and decodes with `TextDecoder` (Node ships the legacy\nencodings), with a size cap and the same html/text classification."
+    },
+    {
+      "section": "Optional: charset-aware fetch",
+      "text": "```yaml\n- id: dsh-rustxng\n  config:\n    webFetch:\n      enabled: true\n\nIt does not touch RustXNG: it is plain HTTP plus decoding. Leave it off if you prefer the\nbuilt-in fetcher."
+    },
+    {
+      "section": "Optional: charset-aware fetch",
+      "text": "> **On hosts that hide the `web` settings row** (DSH 0.2.0-rc.2 publishes only entries with a\n> volatile field), `autoSelect` cannot write the selection — it needs the same context rules\n> as the search side. Set both fields in the profile patch, exactly as above; the card's\n> switches then still control whether the plugin is active. `rustxng_status` says so:\n> `Fetch provider: enabled, but the selection was not written (…)`."
+    },
+    {
+      "section": "First run: nothing is installed yet",
+      "text": "The plugin does not bundle the binary and ships with the replacement **off**, so a fresh\ninstall answers like this until one of the two paths below is taken:\n\n```\nRustXNG could not be reached: fetch failed (connect ECONNREFUSED 127.0.0.1:8888)\nStart it (for example `rustxng --port 8888`), or point the `baseUrl` setting at your instance.\n```"
+    },
+    {
+      "section": "First run: nothing is installed yet",
+      "text": "**Easiest:** the shipped bundle already has *Start RustXNG automatically* on, so the first search fetches and starts the instance; nothing to click. On the next start it\ndownloads the matching release (SHA-256 verified, ~22-27 MB) into `$DSH_HOME/bin`, starts it,\nand stops it again after the idle timeout. Nothing else to install.\n\n**Manual:** `npx dsh-rustxng-fetch` drops the binary in the same place; run it yourself, or\nwire it into launchd / systemd and leave auto-start off."
+    },
+    {
+      "section": "First run: nothing is installed yet",
+      "text": "The download never depends on GitHub's API: if the \"latest release\" lookup is rate-limited it\nfalls back to a pinned version, and `autoStart.binaryPath` (or `--version`) needs no lookup at\nall."
+    },
+    {
+      "section": "About the automatic selection",
+      "text": "`autoSelect` writes `web.searchProvider = 'rustxng'` for you, but a plugin cannot do that\nwhile it is mounting: the loader runs `apply()` inside its own transaction and rejects the\nsettings write with *\"HMR transactions cannot be nested\"*. 0.3.0 therefore retries the write\nfrom a context that is allowed to write — a tool call (`rustxng_status` / `rustxng_search`) or\na live settings change from the card — and reports the outcome in `rustxng_status`."
+    },
+    {
+      "section": "About the automatic selection",
+      "text": "If it still cannot be written (for example on a host that refuses plugin-initiated writes),\nset the field once by hand; it is remembered:\n\n```yaml\n- id: web\n  config:\n    searchProvider: rustxng\n    fetchProvider: http"
+    },
+    {
+      "section": "Optional: start and stop the instance",
+      "text": "If you would rather not run RustXNG as a service, let the plugin own the process:\n\n```yaml\n- id: dsh-rustxng\n  config:\n    autoStart:\n      enabled: true\n\nBehaviour:"
+    },
+    {
+      "section": "Optional: start and stop the instance",
+      "text": "- It starts the binary only when the instance does not already answer, and waits for\n  `/healthz` before using it. Concurrent callers share one attempt, so two starts cannot race\n  for the port.\n- It **stops only a process it started** — a systemd unit or a manually started instance is\n  never touched.\n- On plugin unload (a normal DSH shutdown) it stops the process immediately.\n- A Harness that is killed never runs that cleanup, so the **idle timeout** finishes the job:\n  after `idleMinutes` without a search the process is stopped, and the next search starts it\n  again. Reachability probes do not count as activity.\n- `rustxng_status` reports `Auto-start: on — managed (pid …), idle timeout 60 min (12 min idle)`\n  and `Selection: web.searchProvider: rustxng (this plugin), web.fetchProvider: http`.\n- The `rustxng_search` tool starts the instance too, so a tool-only setup (no replacement of\n  `web_search`) also works from the first call. `rustxng_status` never starts it — it only\n  reports.\n- **Which version is downloaded:** always the latest release. The tag is resolved through\n  GitHub's release API and, when that is rate-limited, through the `/releases/latest` redirect;\n  `PINNED_VE"
+    },
+    {
+      "section": "Optional: start and stop the instance",
+      "text": "Set `idleMinutes: 0` when using a service manager instead; the two mechanisms are independent."
+    },
+    {
+      "section": "Tools",
+      "text": "```jsonc\n// rustxng_search\n{ \"query\": \"rust async runtime\", \"limit\": 8, \"engine\": \"arxiv\", \"time_range\": \"year\" }\n{ \"query\": \"東京 天気\", \"category\": \"news\", \"language\": \"ja\" }\n```\n\n`rustxng_status` reports whether the instance answers, its version, how many engines are\nenabled, whether the provider is registered, and whether `web.searchProvider` points at it —\nrun it first when a search fails."
+    },
+    {
+      "section": "If you also use rdsh",
+      "text": "- **`rdsh search-web --engine rustxng`** — a shell command for rdsh's own search\n  (`SEARXNG_URL` → `RUSTXNG_URL` → a local `rustxng` → `127.0.0.1:8888`);\n  `rdsh rustxng install` puts the binary in `~/.local/bin`.\n- **`web_search_bridge`** (v0.15.0+, on by default) — injects\n  `DSH_WEB_SEARCH_PROVIDER=rdsh-rustxng` into a DSH that rdsh launches, so the bundled\n  `rdsh-web-search-searxng` provider serves `web_search`. A plain `dsh` boot sees none of it."
+    },
+    {
+      "section": "If you also use rdsh",
+      "text": "So search is already handled in a rustdsh-driven session: leave this plugin's\n`webSearch.enabled` off there. Turn it on — and stop the bridge with\n`rdsh features off web_search_bridge` — when you want the Harness-side replacement from a\ndirect `dsh` start, the model-facing tools, or managed download/start/idle-stop.\n\n`web_fetch` is outside the bridge either way. If you run both, one instance can serve both:"
+    },
+    {
+      "section": "If you also use rdsh",
+      "text": "- point rdsh at the plugin's instance with `RUSTXNG_URL=http://127.0.0.1:8888`, or\n- let the plugin reuse rdsh's binary: the search order is `autoStart.binaryPath` →\n  `$DSH_HOME/bin` → `~/.local/bin` → `PATH`, and `rustxng_status` prints which file is\n  actually running (`Auto-start: on — managed (pid …) [rustxng]`).\n\nSet `autoStart.binaryPath` when you have several builds and want a specific one."
+    },
+    {
+      "section": "Platform support",
+      "text": "| Platform | Status |\n| :--- | :--- |\n| Windows 10/11 x64 | Verified: release binary + this plugin (search, provider replacement, settings card) on DSH 0.2.1-rc.2 |\n| Linux x64 (glibc / musl) | Verified on a standalone Ubuntu 26.04 server (DSH 0.2.0-rc.2: replacement + card) and on WSL2 (both release builds 12/12) |\n| macOS arm64 / x64 | Verified on macOS 26.6.2 / M1 Max with DSH 0.2.1-rc.3 (Electron desktop app): 0.1.3 answered rustxng_search in ~3 s across 6-10 engines; 0.2.1 adds first-run download and auto-start |"
+    },
+    {
+      "section": "Platform support",
+      "text": "See [docs/PLATFORMS.md](docs/PLATFORMS.md) for how each platform is expected to be\nverified, binary placement, and the platform-specific notes (PATH, service managers, WSL,\nmusl)."
+    },
+    {
+      "section": "Upstream versions",
+      "text": "This plugin talks only to RustXNG's SearXNG-compatible surface (`/healthz`, `/search?format=json`,\n`/config`, `--bind`/`--port`/`RUSTXNG_IDLE_TIMEOUT`) and does not check a version, so a new\nupstream release is normally a no-op here. The rules for when it is not — the two verification\ntiers, what `PINNED_VERSION` means, and the five upstream changes that trigger a smoke run — are\nin [docs/UPSTREAM.md](docs/UPSTREAM.md), together with a log of the changes already handled\n(the default port moving to 29483, and the Google engine removals)."
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Symptom | Fix |\n| :--- | :--- |\n| `RustXNG is not answering at …` | Start the instance, or fix `baseUrl` in the card. `rustxng_status` shows the probe error. |\n| `web_search` still fails with a DeepSeek 401 | The provider is not selected: check the card's first switch, or `web.searchProvider` on the official *Web search* page. On DSH 0.2.0-rc.2 that field is not writable from a plugin — set it in the profile patch (see above) or with `DSH_WEB_SEARCH_PROVIDER=rustxng`. |\n| Card missing from Plugins | The plugin row is not active — check Plugin Manager, and that the DSH version matches `dsh.compatibility`. On a linked checkout the schema comes through the Harness installation: `rustxng_status` prints `Config schema: loaded via …` or the resolution error. 0.1.2 resolves symlinked launchers such as `<prefix>/bin/dsh`. |\n| `rustxng_status` says `Replace web_search: no (default)` although it is on | Fixed in 0.1.2 (live config values were compared as primitives). |\n| `Wanted to register a provider but web is missing` | The profile has no `@deepseek-ai/dsh-web`; this plugin needs it for the replacement (the tools still work). |\n| Results look thin | A few engines rate-limit per IP; `rus"
+    },
+    {
+      "section": "Development",
+      "text": "```bash\nnode tests/smoke.mjs            # payload normalisation + platform mapping (+ live search if an instance answers)\nnode tests/apply.test.mjs       # host half against a stub instance: provider gate, selection, tools, live values\nnode tests/resolve.test.mjs     # host-package resolution through a symlinked launcher (Linux npm-global layout)\nnode tests/tools.test.mjs       # the search tool triggers auto-start; status stays read-only"
+    },
+    {
+      "section": "Development",
+      "text": "`apply.test.mjs` and `resolve.test.mjs` need no running instance and no network.\n\nLayout:\n\n```\nindex.js                 host plugin: Config, provider + tools wiring, selection hand-over,\n                         symlink-aware host-package resolution\nlib/rustxng-client.js    HTTP client: query building, payload normalisation, timeouts\nlib/web-provider.js      the `rustxng` seam provider and the web.searchProvider hand-over"
+    },
+    {
+      "section": "License and attribution",
+      "text": "MIT — see [LICENSE](LICENSE).\n\nRustXNG itself is **AGPL-3.0-or-later** and is *not* bundled here: the plugin talks to a\nseparate process over HTTP, and `scripts/install-binary.mjs` downloads it from its own\nrelease page. If you redistribute a modified RustXNG, AGPL §13 applies to that work, not to\nthis plugin."
+    }
+  ],
+  "skipped": []
+}
