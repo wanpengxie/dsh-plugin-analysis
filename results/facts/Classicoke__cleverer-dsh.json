@@ -1,0 +1,337 @@
+{
+  "repo": "Classicoke/cleverer-dsh",
+  "commit": "40bd216ea9c7a95da887aa97fb661a0e8c7b1dd2",
+  "extracted_at": "2026-11-07T04:10:48.505742+00:00",
+  "tree": {
+    "files": 50,
+    "bytes": 754053,
+    "lines_by_language": {
+      "JSON": 20,
+      "JavaScript": 6937,
+      "Markdown": 837,
+      "Other": 546,
+      "Python": 44,
+      "YAML": 175
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "boards/discipline-board.cordis.yml",
+      "boards/tools-board.cordis.yml",
+      "cordis.patch.yml",
+      "docs/ARCHITECTURE.md",
+      "docs/TESTING.md",
+      "install.ps1",
+      "package.json",
+      "plugins/_shared.mjs",
+      "plugins/anti-stuck.mjs",
+      "plugins/discipline-hub.mjs",
+      "plugins/dsh-cordis-discipline.mjs",
+      "plugins/dsh-discipline.mjs",
+      "plugins/dsh-env-check-tool.mjs",
+      "plugins/dsh-env-triage.mjs",
+      "plugins/dsh-fast-locate.mjs",
+      "plugins/dsh-memory.mjs",
+      "plugins/dsh-plan-discipline.mjs",
+      "plugins/dsh-skill-loader.mjs",
+      "plugins/dsh-skill-provider.mjs",
+      "plugins/skill-evolver.mjs",
+      "scripts/dsh-deploy.ps1",
+      "scripts/dsh-env-check.mjs",
+      "scripts/publish-audit.ps1",
+      "skills/debug-by-root-cause.md",
+      "skills/dsh-error-protocol.md",
+      "skills/dsh-error-triage.md",
+      "skills/dsh-fast-lookup.md",
+      "skills/local-first.md",
+      "skills/plan-before-execute.md",
+      "social-preview.png",
+      "tests/analyze-cov.py",
+      "tests/replay-discipline.mjs",
+      "tests/run-all.ps1",
+      "tests/test-anti-stuck.mjs",
+      "tests/test-cordis-discipline.mjs",
+      "tests/test-discipline-hub.mjs",
+      "tests/test-dsh-discipline.mjs",
+      "tests/test-dsh-memory.mjs",
+      "tests/test-env-check-tool.mjs",
+      "tests/test-env-check.mjs",
+      "tests/test-env-triage.mjs",
+      "tests/test-fast-locate.mjs",
+      "tests/test-plan-discipline.mjs",
+      "tests/test-skill-evolver.mjs",
+      "tests/test-skill-loader.mjs",
+      "tests/test-skill-provider.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "cleverer-dsh",
+    "version": "1.2.0",
+    "description": "Execution-discipline plugin suite for DeepSeek Harness: anti-stuck retry interception, forced reflection, todo discipline, memory dedup, and self-evolving skills. Zero dependencies, never touches DSH source.",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "ai-agents",
+      "agent-skills"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# cleverer-dsh bundle patch — installed via `dsh plugin add github:Classicoke/cleverer-dsh`\n# (or any git/path spec). Applied as a profile bundle layer; every plugin is\n# resolved as `cleverer-dsh/plugins/<file>.mjs` from the profile's node_modules\n# (pnpm hoisted layout), so no absolute paths and no {{DSH_HOME}} templates.\n#\n# If you previously installed cleverer-dsh manually (install.ps1), uninstall it\n# first — mounting both ways applies every plugin twice (duplicated event hooks,\n# doubled failure counters, premature denials).\n- insert:\n    # discipline-hub must load first — it builds the __errLog / __reminder /\n    # __hubStats collaboration facilities the other discipline plugins read.\n    - id: discipline-hub\n      name: 'cleverer-dsh/plugins/discipline-hub.mjs'\n      config:\n        maxRemindersPerStep: 2\n\n    # ── interception: identical-retry denial + reflection injection ────────\n    - id: anti-stuck\n      name: 'cleverer-dsh/plugins/anti-stuck.mjs'\n      config:\n        maxSameFingerprintFails: 2\n        maxFailsBeforeReflect: 3\n        maxFailsBeforeSteer: 5\n\n    # ── root-cause triage (scheme-level, O3 responsibility split) ──────────\n    - id: dsh-env-triage\n      name: 'cleverer-dsh/plugins/dsh-env-triage.mjs'\n      config:\n        minFailsForTrace: 2\n        maxSchemesBeforeReport: 3\n\n    # ── planning: todo discipline ───────────────────────────────────────────\n    - id: dsh-plan-discipline\n      name: 'cleverer-dsh/plugins/dsh-plan-discipline.mjs'\n      config:\n        enabled: true\n        maxRemindersPerTurn: 2\n        failDensityTodoRefresh: 3\n\n    # ── cross-session memory with dedup ────────────────────────────────────\n    - id: dsh-memory\n      name: 'cleverer-dsh/plugins/dsh-memory.mjs'\n      config:\n        enabled: true\n\n    # ── self-evolving skills (failure → success harvesting) ────────────────\n    - id: skill-evolver\n      name: 'cleverer-dsh/plugins/skill-evolver.mjs'\n      config:\n        enabled: true\n\n    # ── system-prompt discipline section (injected every turn) ─────────────\n    - id: dsh-discipline\n      name: 'cleverer-dsh/plugins/dsh-discipline.mjs'\n      config:\n        enabled: true\n\n    # ── skill loading promotion (conditional catalog + keyword naming) ─────\n    - id: dsh-skill-loader\n      name: 'cleverer-dsh/plugins/dsh-skill-loader.mjs'\n      config:\n        enabled: true\n\n    # ── runtime skill provider: registers the 6 bundled skills (skills/*.md)\n    #    via ctx.skills.register() so the model's skill tool can load them ──\n    - id: dsh-skill-provider\n      name: 'cleverer-dsh/plugins/dsh-skill-provider.mjs'\n      config:\n        enabled: true\n\n    # ── cordis dynamic-plugin discipline (three-layer guard) ───────────────\n    - id: dsh-cordis-discipline\n      name: 'cleverer-dsh/plugins/dsh-cordis-discipline.mjs'\n      config:\n        enabled: true\n\n    # ── functional layer: fast file lookup ─────────────────────────────────\n    - id: dsh-fast-locate\n      name: 'cleverer-dsh/plugins/dsh-fast-locate.mjs'\n      config:\n        maxDepth: 5\n        limit: 50\n\n    # ── functional layer: env check tool (default scriptPath resolves\n    #    ../scripts/dsh-env-check.mjs inside this package — no config needed) ──\n    - id: dsh-env-check-tool\n      name: 'cleverer-dsh/plugins/dsh-env-check-tool.mjs'\n      config:\n        timeoutMs: 60000\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "plugins/dsh-memory.mjs:51"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "plugins/skill-evolver.mjs:45"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/dsh-env-check.mjs:22"
+    },
+    {
+      "name": "DSH_REPO",
+      "kind": "env",
+      "where": "scripts/dsh-env-check.mjs:37"
+    },
+    {
+      "name": "ELECTRON_MIRROR",
+      "kind": "env",
+      "where": "scripts/dsh-env-check.mjs:152"
+    },
+    {
+      "name": "ELECTRON_BUILDER_BINARIES_MIRROR",
+      "kind": "env",
+      "where": "scripts/dsh-env-check.mjs:153"
+    },
+    {
+      "name": "ELECTRON_MIRROR",
+      "kind": "env",
+      "where": "scripts/dsh-env-check.mjs:157"
+    },
+    {
+      "name": "COV_JSON",
+      "kind": "env",
+      "where": "tests/analyze-cov.py:5"
+    },
+    {
+      "name": "COV_TARGET",
+      "kind": "env",
+      "where": "tests/analyze-cov.py:6"
+    },
+    {
+      "name": "LINE_FROM",
+      "kind": "env",
+      "where": "tests/analyze-cov.py:7"
+    },
+    {
+      "name": "LINE_TO",
+      "kind": "env",
+      "where": "tests/analyze-cov.py:8"
+    },
+    {
+      "name": "UNCOVERED_ONLY",
+      "kind": "env",
+      "where": "tests/analyze-cov.py:22"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tests/test-dsh-memory.mjs:314"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tests/test-dsh-memory.mjs:315"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tests/test-dsh-memory.mjs:325"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tests/test-dsh-memory.mjs:326"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tests/test-env-check.mjs:80"
+    },
+    {
+      "name": "DSH_REPO",
+      "kind": "env",
+      "where": "tests/test-env-check.mjs:81"
+    },
+    {
+      "name": "ELECTRON_MIRROR",
+      "kind": "env",
+      "where": "tests/test-env-check.mjs:82"
+    },
+    {
+      "name": "ELECTRON_BUILDER_BINARIES_MIRROR",
+      "kind": "env",
+      "where": "tests/test-env-check.mjs:83"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "mirror",
+      "url": "https://mirror",
+      "where": "tests/test-env-check.mjs:298"
+    },
+    {
+      "host": "builder",
+      "url": "https://builder",
+      "where": "tests/test-env-check.mjs:298"
+    },
+    {
+      "host": "mirror",
+      "url": "https://mirror",
+      "where": "tests/test-env-check.mjs:299"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 16,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 31,
+    "pushed_at": "2026-08-16T03:52:25Z",
+    "created_at": "2026-08-15T14:32:44Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "cleverer-dsh",
+      "text": "English | [中文](README.zh.md)\n\nA plugin suite that makes [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness) actually smart — execution discipline, practical tools, and a skill library, installed in one shot.\n\n---"
+    },
+    {
+      "section": "✨ Feature Highlights",
+      "text": "| Icon | Feature |\n|---|---|\n| ⚡ | **Faster & cheaper (measured)**: same task vs bare DSH — **49% faster**, 44% fewer estimated tokens (small sample, not yet broadly tested) |\n| 🧠 | **Execution discipline**: automatic failure interception, forced reflection, task-planning reminders, memory dedup, experience auto-distilled into skills |\n| 🛠️ | **Ready-made tools**: instant multi-directory file lookup + 9-point environment health check — stop guessing |\n| 📦 | **One-command install/uninstall** via DSH's own plugin manager |\n| 🧪 | **478 unit tests green**, statement & line coverage 100%; pure code, **zero dependencies**, never touches DSH itself |\n| 📚 | **6 built-in skills**: 6-step error handling, error lookup table, fast file lookup, root-cause debugging, local-first, plan-before-execute |"
+    },
+    {
+      "section": "✨ Feature Highlights",
+      "text": "---"
+    },
+    {
+      "section": "Measured results",
+      "text": "We ran the same real task (analyzing a software packaging log) on **DSH with this suite** vs a **bare DSH** (nothing installed):\n\n| Metric | With suite | Bare DSH | Diff |\n|---|---|---|---|\n| **Total time** | 8.6 min | 12.8 min | **49% faster** |\n| LLM calls | 51 | 61 | -20% |\n| Tool calls | 59 | 67 | -14% |\n| **Estimated total tokens** | ~41,000 | ~73,000 | **44% fewer** |\n| Reasoning chunks | 401 | 1,163 | -65% |"
+    },
+    {
+      "section": "Measured results",
+      "text": "**What you notice in practice**: with the suite, the agent stops retrying the same broken approach (it automatically switches), distills working commands into reusable scripts, and asks you before acting at key decision points. Bare DSH retried the same problem 13 times, never distilled anything, and never consulted you."
+    },
+    {
+      "section": "Measured results",
+      "text": "> ⚠️ **Disclaimer**: n=1 per group; tokens are character-estimated (±20%); **not broadly tested yet** — the direction is evidenced, exact numbers await more samples and real API billing data.\n\n---"
+    },
+    {
+      "section": "What it fixes",
+      "text": "DSH is full-featured but **not smart by default**: empty system prompt, stubborn retries on failure, skills installed but never used, todo tool ignored. This suite fixes it:"
+    },
+    {
+      "section": "What it fixes",
+      "text": "| Layer | What it does |\n|---|---|\n| **Discipline layer** (8 plugins) | failure interception, forced reflection, task planning, memory dedup |\n| **Hub** (discipline-hub) | shared failure log + reminder throttling — plugins don't collide, issues are traceable |\n| **Tools layer** (2 plugins) | instant file lookup, env health check |\n| **Skill layer** (6 skills) | on-demand auto-loading — know what to do on errors, find things fast |\n\n---"
+    },
+    {
+      "section": "Installed via Option 1 (plugin manager) — all plugins in one inline patch",
+      "text": "```\ncordis.patch.yml\n├─ discipline-hub          hub (failure log / reminder throttle / turn stats)\n├─ anti-stuck              stuck-loop guard: no repeat same-arg retries, force new approach\n├─ dsh-env-triage          problem tracing: stop & report when several schemes fail"
+    },
+    {
+      "section": "Installed via Option 2 (script install) — grouped into boards",
+      "text": "```\ncordis.patch.yml (home patch)\n├─ discipline-hub              hub, loaded first (failure log / reminder throttle / turn stats)\n├─ cordis:include → discipline-board.cordis.yml   (8 discipline plugins)\n│  ├─ anti-stuck               stuck-loop guard\n\nThe board layout makes plugin cooperation structural: the discipline group shares the hub's unified failure log and reminder pipeline, working as one suite instead of in isolation.\n\n---"
+    },
+    {
+      "section": "Installation",
+      "text": "**Prerequisites**: DSH installed and initialized; `pnpm` available (DSH's plugin manager).\n\n**Choose before you install** — the two options differ in how plugins are organized:"
+    },
+    {
+      "section": "Installation",
+      "text": "| | Option 1: plugin manager (official) | Option 2: script install |\n|---|---|---|\n| Command | `dsh plugin add ...` | paste one PowerShell line |\n| Plugin organization | all plugins in one inline config | grouped into `discipline-board` (discipline) + `tools-board` (tools) boards |\n| Plugin cooperation | plugins work independently | **stronger** — discipline plugins share one failure log & reminder pipeline, working as one suite |"
+    },
+    {
+      "section": "Installation",
+      "text": "> 💡 **Why boards are the better architecture**: the plugins are not meant to work in isolation — one traces the root cause, one distills the lesson, one reminds you to plan. Boards make this cooperation a **structural guarantee** (plugins belong to the same group and share the same facilities by construction) instead of leaving it to chance. Discipline and tools are physically separated with clear boundaries, so adding your own plugin later has an obvious home; groups start/stop as a whole, which makes upgrades and troubleshooting simpler."
+    },
+    {
+      "section": "Option 1: via DSH's plugin manager (official)",
+      "text": "```bash\ndsh plugin --profile web add github:Classicoke/cleverer-dsh"
+    },
+    {
+      "section": "headless instead:  dsh plugin --profile headless add github:Classicoke/cleverer-dsh",
+      "text": "```\n\nNo build step — plugins and skills are ready as soon as the command finishes. Uninstall:\n\n```bash\ndsh plugin --profile web remove cleverer-dsh\n```"
+    },
+    {
+      "section": "Option 2: one-command script (PowerShell 7+)",
+      "text": "Paste this into PowerShell (auto-downloads the release zip → extracts → installs → cleans up):\n\n```powershell\n$u = 'https://github.com/Classicoke/cleverer-dsh/archive/refs/tags/v1.2.zip'\n$z = \"$env:TEMP\\cleverer-dsh.zip\"; $d = \"$env:TEMP\\cleverer-dsh-install\"\nInvoke-WebRequest $u -OutFile $z\nExpand-Archive $z $d -Force\n\n> ⚠️ **Pick ONE install method.** Installing both applies every plugin twice (duplicated behavior, premature denials). Uninstall one before switching to the other."
+    },
+    {
+      "section": "Uninstall (Option 2)",
+      "text": "```powershell"
+    },
+    {
+      "section": "cordis.patch.yml before, the backup is an empty [] patch = pre-install state)",
+      "text": "$dshHome = Join-Path $HOME '.dsh'\nif (-not (Test-Path $dshHome)) { Write-Host \"Not found: $dshHome — aborting\"; exit 1 }\n$bak = Get-ChildItem \"$dshHome\\cordis.patch.yml.bak-cleverer-*\" |\n       Sort-Object LastWriteTime -Descending | Select-Object -First 1\nif ($bak) { Copy-Item $bak.FullName \"$dshHome\\cordis.patch.yml\" -Force }"
+    },
+    {
+      "section": "plugins/skills in the same folders are left untouched)",
+      "text": "$plugins = @('_shared','anti-stuck','discipline-hub','dsh-cordis-discipline','dsh-discipline',\n             'dsh-env-check-tool','dsh-env-triage','dsh-fast-locate','dsh-memory',\n             'dsh-plan-discipline','dsh-skill-loader','dsh-skill-provider','skill-evolver')\nforeach ($p in $plugins) { Remove-Item \"$dshHome\\plugins\\$p.mjs\" -ErrorAction SilentlyContinue }\n$skills = @('debug-by-root-cause','dsh-error-protocol','dsh-error-triage','dsh-fast-lookup','local-first','plan-before-execute')\nforeach ($s in $skills) { Remove-Item \"$dshHome\\skills\\$s.md\" -ErrorAction SilentlyContinue }\nRemove-Item \"$dshHome\\discipline-board.cordis.yml\", \"$dshHome\\tools-board.cordis.yml\" -ErrorAction SilentlyContinue\nRemove-Item \"$dshHome\\scripts\\dsh-env-check.mjs\" -ErrorAction SilentlyContinue"
+    },
+    {
+      "section": "3. Restart DSH",
+      "text": "```\n\nAll deletions are scoped to `$HOME\\.dsh` (your own user directory, never a system path), and only the files listed above are touched.\n\n---"
+    },
+    {
+      "section": "Plugins",
+      "text": "| Plugin | Problem it solves | When it triggers |\n|---|---|---|\n| `anti-stuck` | stubbornly retrying the same failing command | ≥2 same-arg fails → deny; ≥3 turn fails → remind; ≥5 → force reflection |\n| `dsh-env-triage` | param-tweaking loops, going in circles | ≥2 schemes fail → trace card; ≥3 → stop & report |\n| `dsh-plan-discipline` | todo tool ignored | multi-step task without plan → remind; ≥3 fails & stale plan → refresh |\n| `dsh-memory` | memory bloat, force-write abuse | dedup before write + 60s window dedup |\n| `skill-evolver` | junk skills being saved | generalization gate before persisting |\n| `dsh-discipline` | empty system prompt | injects 11 execution rules every turn |\n| `dsh-skill-loader` | skills installed but never used | available-skills reminder at task start + keyword summoning |\n| `dsh-cordis-discipline` | dynamic-plugin misuse | precondition checks (no run before define, no undefine before stop) |\n| `discipline-hub` | plugins each doing their own thing, reminder spam | unified failure log + reminder throttle |\n| `dsh-fast-locate` | slow file lookup | one call, parallel multi-directory scan |\n| `dsh-env-check-tool` | guessing at environment issues | one-shot "
+    },
+    {
+      "section": "Plugins",
+      "text": "---"
+    },
+    {
+      "section": "Built-in skills",
+      "text": "| Skill | Purpose |\n|---|---|\n| `dsh-error-protocol` | 6-step error handling (classify → diagnose → decide → verify → distill) |\n| `dsh-error-triage` | error lookup table: which error maps to which command |\n| `dsh-fast-lookup` | fast file lookup methodology |\n| `debug-by-root-cause` | find the root cause first, don't blindly retry |\n| `local-first` | verify locally before guessing online |\n| `plan-before-execute` | plan before acting, keep the plan updated |\n\n---"
+    },
+    {
+      "section": "Known limitations",
+      "text": "- Verified on **Windows + PowerShell** only; Linux/macOS untested (plugins are cross-platform, install scripts are PowerShell)\n- Never modifies DSH source code; only config injection and skill injection\n- Headless mode: some features limited (no web server → some web-dependent features skipped)\n\n---"
+    },
+    {
+      "section": "License",
+      "text": "MIT © 2026 cleverer-dsh contributors"
+    }
+  ],
+  "skipped": []
+}
