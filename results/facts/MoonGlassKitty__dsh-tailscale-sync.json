@@ -1,0 +1,115 @@
+{
+  "repo": "MoonGlassKitty/dsh-tailscale-sync",
+  "commit": "bb54ac93063bebb4f17147a94b64ab0a6ca901b3",
+  "extracted_at": "2026-11-09T13:54:42.974058+00:00",
+  "tree": {
+    "files": 5,
+    "bytes": 1459022,
+    "lines_by_language": {
+      "JSON": 20,
+      "Markdown": 62,
+      "Other": 21,
+      "YAML": 17
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "assets/banner.png",
+      "cordis.patch.yml",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tailscale-sync",
+    "version": "1.0.0",
+    "description": "Zero-config Tailscale sync for DeepSeek Harness — expose the web GUI to your phone over an encrypted tunnel. 零配置：在手机上继续电脑端 DeepSeek Harness 的工作，自动探测 *.ts.net 域名。",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "tailscale",
+      "remote",
+      "sync"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tailscale-sync — phone ⇄ computer sync over Tailscale, zero config.\n#\n# 1. Keeps the harness web server on loopback so the port never touches the LAN.\n# 2. Auto-detects this machine's `*.ts.net` name via `tailscale status` and\n#    trusts only it on the /api fence. No env var, no editing required.\n#\n# The one external step (documented in README.md) is `tailscale serve --bg 3080`,\n# which proxies https://<machine>.ts.net -> http://127.0.0.1:3080 with a real cert.\n\n- id: webserver\n  config:\n    host: '127.0.0.1'\n    port: 3080\n\n- id: connection\n  config:\n    trustedHosts: !!js \"(() => { try { const { execFileSync } = process.getBuiltinModule('node:child_process'); const status = JSON.parse(execFileSync('tailscale', ['status', '--json'], { encoding: 'utf8', timeout: 5000 })); const raw = status.Self.DNSName || ''; const host = typeof raw === 'string' && raw.endsWith('.') ? raw.slice(0, -1) : raw; return host ? [host] : [] } catch { return [] } })()\"\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080",
+      "where": "cordis.patch.yml:8"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-08-14T12:30:50Z",
+    "created_at": "2026-08-14T12:04:24Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<img src=\"assets/banner.png\" alt=\"dsh-tailscale-sync\" width=\"100%\">"
+    },
+    {
+      "section": "dsh-tailscale-sync",
+      "text": "在手机上继续电脑端 DeepSeek Harness 的工作 —— **装好 Tailscale、装好本插件，即可用**，无需改任何配置。\n\n本插件会自动：\n\n1. 把 harness 的 web 服务锁死在 `127.0.0.1:3080`（不暴露局域网）；\n2. 自动探测本机的 `*.ts.net` 域名（`tailscale status`），并让 `/api` 信任围栏只放行这个域名。"
+    },
+    {
+      "section": "1. 装 Tailscale（一次性）",
+      "text": "电脑和手机都安装 [Tailscale](https://tailscale.com/download) 并登录同一个账号（确认 tailnet 已开 MagicDNS，新版默认开启）。"
+    },
+    {
+      "section": "2. 装本插件",
+      "text": "```sh\ndsh plugin --profile web add github:MoonGlassKitty/dsh-tailscale-sync\n```"
+    },
+    {
+      "section": "3. 开 HTTPS 隧道（一次性，一条命令）",
+      "text": "在电脑上运行：\n\n```sh\ntailscale serve --bg 3080\n```\n\n> 若提示 \"Serve is not enabled on your tailnet\"，按提示点链接授权一次即可。"
+    },
+    {
+      "section": "4. 手机访问",
+      "text": "手机保持 Tailscale 连接，浏览器打开：\n\n```\nhttps://<你的机器名>.ts.net\n```\n\n（在电脑上运行 `tailscale status` 能看到你的 `*.ts.net` 完整域名。）"
+    },
+    {
+      "section": "工作方式",
+      "text": "```\n手机浏览器 ──Tailscale HTTPS──▶ tailscale serve ──▶ 127.0.0.1:3080 (harness)\n```\n\n- 手机和电脑看到的是**同一个服务、同一份会话**，不是\"两处数据互相同步\"；\n- 端口只监听回环，普通局域网访问不到；\n- 流量走 Tailscale 的加密隧道 + 设备鉴权。"
+    },
+    {
+      "section": "注意事项",
+      "text": "- **设置 / API key 管理仍只能在本机** `http://127.0.0.1:3080` 操作（harness 源码安全限制，Tailscale 也绕不过）。\n- 停用隧道：`tailscale serve --https=443 off`。\n- 若你的 tailnet 没开 MagicDNS（没有 `*.ts.net` 域名），本插件会自动退化为\"仅本机可访问\"，此时需手动在 `cordis.patch.yml` 里填 `trustedHosts`。"
+    },
+    {
+      "section": "跨平台",
+      "text": "Windows / macOS / Linux 均可用。`tailscale serve`、`dsh`、本插件在三个平台上的命令一致。"
+    }
+  ],
+  "skipped": []
+}
