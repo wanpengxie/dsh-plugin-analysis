@@ -1,0 +1,751 @@
+{
+  "repo": "EditTogether/DSH-EditApart",
+  "commit": "49efcae08c2348635c6d4bbd3132d0b16f84d0e1",
+  "extracted_at": "2026-11-09T23:15:22.280304+00:00",
+  "tree": {
+    "files": 27,
+    "bytes": 645226,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 447,
+      "Markdown": 1998,
+      "Other": 1131,
+      "Python": 8562,
+      "Shell": 44,
+      "YAML": 331
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "bin/edit_apart_core.py",
+      "bin/photo_core.py",
+      "bin/taste_model.py",
+      "bin/train_identity.py",
+      "cordis.patch.yml",
+      "docs/expansion-plan.md",
+      "docs/paper-findings.md",
+      "docs/state-of-the-art-2026-09.md",
+      "env.sh.example",
+      "luts/cool.cube",
+      "luts/warm.cube",
+      "package.json",
+      "plugins/edit-apart.mjs",
+      "requirements.txt",
+      "setup.sh",
+      "skills/edit-apart/SKILL.md",
+      "tests/experiment_photo_transfer.py",
+      "tests/experiment_revealed_preference.py",
+      "tests/test_bundle_packaging.py",
+      "tests/test_loop_e2e.py",
+      "tests/test_photo_taste.py",
+      "tests/test_taste_model.py",
+      "tools/make_luts.py",
+      "tools/otio_conformance.py"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-edit-apart",
+    "version": "0.2.1",
+    "private": false,
+    "description": "EditApart — a taste-driven video + photo editor agent preset for DeepSeek Harness, shipped as an installable plugin bundle.",
+    "main": "./plugins/edit-apart.mjs",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "agent-preset",
+      "video-editing",
+      "photo-editing"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": [
+          "./cordis.patch.yml"
+        ]
+      }
+    },
+    "files": [
+      "cordis.patch.yml",
+      "plugins/",
+      "bin/",
+      "skills/",
+      "luts/",
+      "docs/",
+      "tests/",
+      "README.md",
+      "LICENSE",
+      "requirements.txt",
+      "env.sh.example",
+      "setup.sh"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# EditApart — agent-preset declaration for DeepSeek Harness >= 0.1.7.\n#\n# Since 0.1.7 an agent preset is an `@deepseek-ai/dsh-agent-preset` declaration row;\n# the user-preset DIRECTORY ($DSH_HOME/.agent-presets/<id>/{preset.yml,agent.cordis.yml})\n# is no longer read, so a preset can only arrive through a bundle patch like this\n# one. `dsh.bundle.patch` in package.json points here, and\n# `dsh plugin add <this repo>` layers it into a profile.\n#\n# `config.plugins` is the preset's composition (the former agent.cordis.yml,\n# verbatim). Every row specifier resolves against the PROFILE directory, so this\n# package's own modules are named by package subpath — never by a relative path,\n# and never by an absolute one.\n- insert:\n    - id: preset-edit-apart\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: ai-video-editor\n        name: 'EditApart (AI taste editor)'\n        order: 20\n        description: >-\n          A taste-driven automated video AND photo editor. Takes raw footage, builds a shot inventory (scenedetect), proposes an EDIT DECISION SCHEMA against a declared editorial rubric, renders it deterministically, critiques it against the rubric, and revises until it converges. Until it converges, the loop records the group of candidate edits it considered plus the outcome for the one that was rendered; the identity's taste lives in a per-creator style model (one shared style-brain trunk + a per-creator latent z_u) trained from those logged groups with GRPO (group-relative advantage + PPO-clip, Muon on 2D weights and AdamW on the latent). Both artifacts are real GGUF files and a later propose_schema selects with the trained identity. Photo editing is image-only — ONE FEWER input modality than video (no `video` modality, no video-in/out registration) — so it works with the existing image-capable general model, and its renderer (ImageMagick) is not a hard dependency (a web-profile in-browser renderer may supply it). The general model may be a video-in model (GLM-5.3, private/local only) replacing only the general portion; FilmGPT and the creator taste model are untouched. Model-authored video is opt-in via a separate store plugin / the harness video_generate tool (inserted as a generated segment); the deterministic renderer stays authoritative.\n        plugins:\n          # The `standard` agent preset: the full coding agent, mounted once per process.\n          #\n          # This file is an AGENT-PLANE composition. The roster mounts it ONCE under a\n          # standing scope; every session naming it joins by scope parentage, so the\n          # tools and prompt sections registered here cover each joined agent while a\n          # session's own state stays keyed per Session/Agent inside the plugins. The\n          # host composition (`base.cordis.yml` + `web.cordis.yml`) keeps everything a\n          # preset must not own: the registries themselves, the sandbox and approval\n          # stack, persistence, and the model route.\n          #\n          # A service row here MUST sit inside a group carrying an `isolate` realm.\n          # Without one it publishes into the root realm, where it is process-global —\n          # another preset publishing the same name collides, and a host reader would\n          # resolve one preset's instance for every session; `dsh-agent-presets` rejects\n          # that at mount. `true` means an entry-local realm: this standing mount's own\n          # private instance, apart from every other preset's. (A shared label does NOT\n          # pool instances — `provide()` throws on the second registration under the\n          # same realm symbol; labels join REALMS, and are not what this file needs.)\n\n          # ── identity ────────────────────────────────────────────────────────────────\n\n          # The preset's own persona, shadowing the deployment default for this agent.\n          # `{{model}}` and `{{cwd}}` resolve from the agent's own route and workspace.\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: >-\n                You are an AI taste-driven video + photo editor (EditApart) powered by the\n                {{model}} model, working in {{cwd}}.\n\n                You do NOT operate a video-editing GUI. You make editorial judgments:\n                you read raw footage into a shot inventory, propose an EDIT DECISION\n                SCHEMA against a declared editorial rubric, render it deterministically\n                with ffmpeg/scenedetect, critique the render against the rubric, and\n                revise until it converges. You think in editorial terms — pacing, shot\n                selection, tempo, duration, on-beat cuts, energy — and encode every\n                decision in the schema, which is simultaneously the thing you train on,\n                the thing you render from, and the thing you critique. You have your own\n                taste: it lives in a per-creator identity — a small latent z_u that\n                modulates ONE shared style-brain trunk — learned with GRPO from the groups\n                this loop logs and from the picks you (or the creator) actually render.\n\n                Use the bundled EditApart TOOLS (inventory, features, propose_schema,\n                render_schema, review_frames, critic_edit, revise_schema, taste_status,\n                train_identity, identity_init, and photo_inspect, photo_propose,\n                photo_render, photo_critic, photo_revise) — they are the rendered,\n                deterministic engine. propose_schema proposes a GROUP and logs it; when a\n                different candidate than the selected one is rendered, log it with\n                chosen_by=creator|agent — that revealed pick is the taste signal.\n                train_identity fits the trunk plus your z_u and reports held-out metrics;\n                report those numbers honestly instead of calling an untrained artifact\n                \"trained taste\". Follow the `edit-apart` skill for the exact protocol,\n                rubric format, and schema spec.\n\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n\n          # ── shell ───────────────────────────────────────────────────────────────────\n\n          # `shell-env` stays in the HOST composition: `apps/cli/src/web.ts` injects it to\n          # publish `DSH_WEB_URL`/`DSH_WEB_MODE`, and a host row that injects a service is\n          # the criterion for host-plane ownership — injection resolves before any session\n          # exists, so there is no agent to key by. Behind a preset realm those variables\n          # never reached the model's shell at all. Both shell tools consume the host\n          # registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are\n          # host-plane too.\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n\n          # ── filesystem ──────────────────────────────────────────────────────────────\n\n          # Both register into the host `tools` registry and provide nothing, so\n          # they need no realm. The `fs` service and its policy stay in the host.\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n\n          # ── background jobs ────────────────────────────────────────────────────────\n\n          # Only the model-facing controls. The task REGISTRY stays on the host plane:\n          # its producers sit outside any realm this file could put it in — `tool-bash`\n          # above resolves it with `ctx.get`, and an entry-local realm here is invisible\n          # to every sibling row, so `run_in_background` would answer \"background jobs\n          # unavailable\" while these controls sat in the catalog. The registry is keyed by\n          # owning agent anyway, so one host instance serves every session. What a preset\n          # chooses is whether its agent can collect and stop background work at all.\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n\n          # ── skills ──────────────────────────────────────────────────────────────────\n\n          # The skill REGISTRY lives in the host composition and is layered per scope:\n          # these rows register into THIS preset's layer of it, so they need no realm.\n          # `skill-filesystem` contributes local-root discovery for agents on this preset, and\n          # `tool-skill` gives them the catalog and loader; the merged catalog also\n          # carries whatever the deployment registered globally (repository plugins).\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n            config:\n              # Ship THIS preset's own method skill. The directory is computed from the\n              # PROFILE directory (`baseUrl`, the anchor every row here resolves\n              # against) down into this package's installed location, so the skill\n              # travels with the bundle and no machine-local path is baked in.\n              customSkillDirs:\n                - !!js \"process.getBuiltinModule('node:url').fileURLToPath(new URL('node_modules/dsh-edit-apart/skills/', baseUrl))\"\n\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n\n          # ── EditApart plugin ────────────────────────────────────────────────────────\n\n          # The editor's own plugin. It is import-free on purpose: a preset row's\n          # specifier resolves against the PROFILE directory, where the harness's own\n          # @deepseek-ai/* packages are not resolvable, so it hand-builds ToolDefinitions\n          # and registers them via ctx.tools.register(), shelling out to\n          # bin/edit_apart_core.py (video) and bin/photo_core.py (photo) for the work.\n          # It registers ALL of the editing surface: 7 video tools + 5 photo tools, plus\n          # a guarded model-routing hook (opt-in via DSH_AI_VIDEO_MODEL_ROUTE=1 and a\n          # registered video-capable provider/model; inert by default so the session uses\n          # the default model).\n          #\n          # Model-authored video stays opt-in architecture, NOT a preset claim: fully\n          # AI-generated clips come from a SEPARATE store plugin (or the harness\n          # `video_generate` tool), and ffmpeg (`render_schema`) remains the deterministic\n          # renderer. Nothing here turns generation on.\n          # This package's own plugin, named by PACKAGE SUBPATH. A preset row's specifier\n          # resolves against the PROFILE directory (`ctx.baseUrl`), so the former\n          # `./plugins/edit-apart.mjs` would look for <profile>/plugins/edit-apart.mjs\n          # and silently leave the preset's own tools unregistered. `dsh-edit-apart/...`\n          # resolves from the profile's node_modules, where `dsh plugin add` installs\n          # this bundle.\n          - id: edit-apart\n            name: dsh-edit-apart/plugins/edit-apart.mjs\n\n          # ── goals ───────────────────────────────────────────────────────────────────\n\n          # Only the model-facing tool. The goal SERVICE, its session driver, and the\n          # `/goal` command stay on the host plane: the Gateway serves the goal domain as\n          # Remote endpoints whose receiver comes from a generated descriptor, so it\n          # resolves `goals` on the host and an entry-local realm here would hide it. The\n          # registry is keyed by session anyway, so one host instance serves every\n          # session. What a preset chooses is whether its agent can call the goal tool.\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n\n          # ── plan mode ───────────────────────────────────────────────────────────────\n\n          # Plan state is per-agent by nature, so an entry-local realm is not a\n          # workaround here — it is the correct lifetime.\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                        You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                        Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                        The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                        Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                        Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                        When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n\n          # ── compaction ──────────────────────────────────────────────────────────────\n\n          # `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the pruner must\n          # share this realm rather than sit outside it.\n          #\n          # `tokenMeter` is deliberately NOT in this realm: the meter stays on the HOST\n          # plane, and the rows here resolve that one instance. It takes no configuration,\n          # keys every fold by Session, and owns the context-meter projection units the\n          # browser reads for every session — behind a realm those units would come and go\n          # with whichever presets happen to be mounted. What a preset chooses is whether\n          # its agent compacts at all, which is `compaction-basic` below.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n          # ── delegation and workflows ────────────────────────────────────────────────\n\n          # The `subagents` registry and its spawn/fork backends live in the HOST\n          # composition: the registry is a process singleton whose cross-session queries\n          # the api-proxy serves to the browser, and a provider name may only be\n          # registered once. This preset contributes the delegation TOOLS, which resolve\n          # that host registry.\n          #\n          # `workflows` is different — nothing outside an agent reads it — so every row\n          # that reaches it shares one entry-local realm here, and a consumer left\n          # outside would resolve a host registry this preset does not populate.\n          #\n          # `tool-subagent-report` is host-plane for the same reason as the registry,\n          # not because a preset may not want it: it registers a CONTINUABLE SETUP on\n          # that singleton rather than a tool this agent calls, and the setup list is\n          # not scope-aware — one copy per mounted preset means every child gets\n          # `report` registered once per live session, which throws on the second.\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  backgroundMode: continuable\n\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n\n              # Production dsh does not install these optional providers. Install the\n              # matching Bundle in this Profile and restart the Host, then copy this\n              # preset and remove `disabled` from the matching tool row. Host availability\n              # alone grants no tool.\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n\n          # ── remaining model-facing rows ─────────────────────────────────────────────\n\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n\n          # The `web` service and its search provider stay in the host composition; only\n          # the model-facing tool is per-session.\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: false\n              searchTimeoutMs: 60000\n"
+    }
+  ],
+  "entries": [
+    "plugins/edit-apart.mjs",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_EDITAPART_LUTS",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1098"
+    },
+    {
+      "name": "DSH_EDITAPART_GROUP",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1738"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1740"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1741"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1742"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1761"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1762"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1783"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1800"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1801"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1802"
+    },
+    {
+      "name": "DSH_EDITAPART_CREATOR",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1803"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1824"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1825"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1838"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1839"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1840"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1843"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1844"
+    },
+    {
+      "name": "DSH_EDITAPART_CREATOR",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1845"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1849"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/edit_apart_core.py:1850"
+    },
+    {
+      "name": "DSH_IMAGEMAGICK",
+      "kind": "env",
+      "where": "bin/photo_core.py:60"
+    },
+    {
+      "name": "DSH_IDENTIFY",
+      "kind": "env",
+      "where": "bin/photo_core.py:81"
+    },
+    {
+      "name": "DSH_EDITAPART_GROUP",
+      "kind": "env",
+      "where": "bin/photo_core.py:846"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/photo_core.py:848"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/photo_core.py:849"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "bin/photo_core.py:850"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "bin/photo_core.py:861"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "bin/photo_core.py:874"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/photo_core.py:875"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/photo_core.py:876"
+    },
+    {
+      "name": "DSH_EDITAPART_CREATOR",
+      "kind": "env",
+      "where": "bin/photo_core.py:877"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/photo_core.py:898"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/photo_core.py:899"
+    },
+    {
+      "name": "DSH_EDITAPART_CREATOR",
+      "kind": "env",
+      "where": "bin/photo_core.py:900"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/photo_core.py:904"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "bin/photo_core.py:905"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/photo_core.py:906"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "bin/photo_core.py:910"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/photo_core.py:911"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/taste_model.py:1677"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "bin/train_identity.py:61"
+    },
+    {
+      "name": "DSH_EDITAPART_CREATOR",
+      "kind": "env",
+      "where": "bin/train_identity.py:63"
+    },
+    {
+      "name": "DSH_EDIT_PY",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:49"
+    },
+    {
+      "name": "DSH_EDITAPART_DATA",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:57"
+    },
+    {
+      "name": "DSH_EDITAPART_IDENTITY",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:58"
+    },
+    {
+      "name": "DSH_EDITAPART_DATASET",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:59"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:60"
+    },
+    {
+      "name": "DSH_EDITAPART_GROUP",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:64"
+    },
+    {
+      "name": "DSH_EDITAPART_PHOTO_IDENTITY",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:70"
+    },
+    {
+      "name": "DSH_EDITAPART_PHOTO_DATASET",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:71"
+    },
+    {
+      "name": "DSH_AI_VIDEO_MODEL_PROVIDER",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:117"
+    },
+    {
+      "name": "DSH_AI_VIDEO_MODEL",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:118"
+    },
+    {
+      "name": "DSH_AI_VIDEO_MODEL_ROUTE",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:119"
+    },
+    {
+      "name": "DSH_EDITAPART_STYLE",
+      "kind": "env",
+      "where": "plugins/edit-apart.mjs:358"
+    },
+    {
+      "name": "DSH_EDIT_PY",
+      "kind": "env",
+      "where": "tests/experiment_photo_transfer.py:76"
+    },
+    {
+      "name": "DSH_EDIT_PY",
+      "kind": "env",
+      "where": "tests/experiment_revealed_preference.py:49"
+    },
+    {
+      "name": "DSH_EDITAPART_E2E_SRC",
+      "kind": "env",
+      "where": "tests/test_loop_e2e.py:54"
+    },
+    {
+      "name": "DSH_EDITAPART_E2E_INVENTORY",
+      "kind": "env",
+      "where": "tests/test_loop_e2e.py:55"
+    },
+    {
+      "name": "DSH_EDIT_PY",
+      "kind": "env",
+      "where": "tests/test_loop_e2e.py:56"
+    },
+    {
+      "name": "DSH_SCENEDETECT",
+      "kind": "env",
+      "where": "tests/test_loop_e2e.py:294"
+    },
+    {
+      "name": "DSH_EDIT_PY",
+      "kind": "env",
+      "where": "tests/test_photo_taste.py:40"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 17,
+    "pushed_at": "2026-10-02T18:52:09Z",
+    "created_at": "2026-09-17T19:54:30Z"
+  },
+  "runtime_files": [
+    "bin/edit_apart_core.py",
+    "bin/photo_core.py",
+    "cordis.patch.yml",
+    "plugins/edit-apart.mjs"
+  ],
+  "readme": [
+    {
+      "section": "EditApart — AI taste-driven editor (agent preset)",
+      "text": "**EditApart** is an automation-faithful editor for the **EditTogether** community.\nIt takes raw footage, builds a shot inventory, proposes an **EDIT DECISION SCHEMA**\nagainst a declared editorial rubric, renders it deterministically with\nffmpeg/scenedetect (and ImageMagick for photos), critiques the render against the\nrubric, and **revises** until it converges."
+    },
+    {
+      "section": "EditApart — AI taste-driven editor (agent preset)",
+      "text": "It does **not** operate a video-editing GUI. It reasons about editorial judgment.\nThe plugin registers both video and photo tools plus the taste-model tools (15\ntotal) under one identity; the engines are `bin/edit_apart_core.py` (video),\n`bin/photo_core.py` (photo) and `bin/taste_model.py` (the per-creator model)."
+    },
+    {
+      "section": "The core design",
+      "text": "- **Schema is the interlingua.** The same EDIT DECISION SCHEMA is the thing you\n  train on, the thing you render from, and the thing you critique. No gap\n  between \"AI intent\" and \"the render.\"\n- **General grammar is shared; taste is per-creator.** One shared style-brain\n  (film-grammar parameters) + a small per-creator identity latent `z_u` in a\n  per-creator GGUF. Only the identity is per-creator — the artifact holds `z_u`\n  and a digest of the trunk it belongs to, nothing else.\n- **Reward is dense + group-relative (GRPO).** The critic scores a render AND\n  yields per-element keep/drop/why deltas; `r = overall + λ·Σ(deltas)`. Group\n  relative advantage `A_k = (r_k − mean(r))/std(r)`, then a PPO-clip step.\n- **Muon on weights, AdamW on the latent.** Muon orthogonalizes momentum for\n  2D weight matrices; **never** the identity latent (Newton-Schulz degenerates\n  on 1D). AdamW handles `z_u` and all 1D/bias/embed params.\n- **Self-play interleaved with history.** `propose_schema` emits a *group* of\n  candidate schemas from a deterministic grid; the group is logged, one candidate\n  is selected, and the render/vision/creator outcome is logged back against it.\n  Training consumes those g"
+    },
+    {
+      "section": "The pipeline",
+      "text": "The editor's tools (mounted as a preset plugin at\n`plugins/edit-apart.mjs`) are the thin facade; `bin/edit_apart_core.py` (video)\nand `bin/photo_core.py` (photo) are the deterministic engines they shell out to.\n\n```\nsource ─► inventory ─► shot inventory\n               │\n     features ─► per-shot luminance/motion/audio\n               │"
+    },
+    {
+      "section": "The pipeline",
+      "text": "> **Status of the taste model.** The identity learning is **implemented and wired\n> into the loop**, not a scaffold. `propose_schema` builds and logs a group of\n> candidates, selects one with the creator identity when it exists, `critic_edit`\n> logs the reward for the candidate that was actually rendered, and\n> `train_identity` fits the shared style-brain plus that creator's latent `z_u`\n> and writes real GGUF artifacts. The measured claims and their limits are in\n> [Taste model](#taste-model-wired-measured) below — including what it does *not*\n> do yet (trained selector, **not** a fine-tuned language model; video only)."
+    },
+    {
+      "section": "Photo editing (image-only)",
+      "text": "A parallel single-image loop, mounted via the `edit-apart` plugin:\n`photo_inspect` → `photo_propose` (rubric → photo EDIT DECISION SCHEMA) →\n`photo_render` (ImageMagick) → `photo_critic` (objective + subjective) →\n`photo_revise`. It needs **one fewer modality** than video (`image`, not\n`video`), and its renderer is **not a hard dependency** (resolved at runtime;\na web-profile in-browser ImageMagick/ffmpeg may supply it)."
+    },
+    {
+      "section": "Photo editing (image-only)",
+      "text": "The taste model is wired in here too, with its own `photo/v1` layout, its own\ngroup log and its own style-brain (`style_brain_photo_v1.gguf`), so a creator\nends up with one identity per modality. Three things make this modality harder\nthan video, and all three are measured rather than assumed:"
+    },
+    {
+      "section": "Photo editing (image-only)",
+      "text": "- **No temporal axis to lean on**, so the layout synthesises spatial structure:\n  crop geometry plus statistics of the region the crop *keeps*, read from a 4×4\n  region grid that `photo_inspect` computes from the same downscale as the global\n  stats (the global numbers are unchanged).\n- **Candidate scoring costs a render.** The photo reward is defined on the\n  rendered image, so a K-candidate group is rendered and scored K times\n  (video's objective critic is pure arithmetic). `group=1` with no dataset stays\n  the legacy, render-free proposal.\n- **A quantised reward ties the group.** Exposure was a threshold, so a 6-candidate\n  group scored 6 × −0.05, spread 0.0 — exactly zero group-relative signal. The\n  reward is now graded (full credit inside the tolerance, linear falloff outside),\n  which took that group to spread 0.47 and left 11/18 training groups informative."
+    },
+    {
+      "section": "Photo editing (image-only)",
+      "text": "Measured on a synthetic 1600×1200 image, two creators with opposite framing taste\n(tightest vs loosest crop) sharing one frozen trunk: **10/10 held-out briefs from\nthe training family are picked differently, 10/10 in the predicted direction**\n(mean crop area 0.155 vs 0.389). On **one unseen crop geometry it transfers too —\n10/10 over ten distinct briefs — but with a smaller margin**: mean crop area 0.30\nvs 0.45, a gap of 0.15 against 0.233 in-distribution. That is the geometry/content\nconfound of `docs/paper-findings.md` (Finding 4c) narrowing the effect, not\nerasing it. (An earlier \"0/10, no transfer\" reading came from the objective bug\ndescribed under **Corrections**; it was an artifact and is withdrawn.)"
+    },
+    {
+      "section": "Photo editing (image-only)",
+      "text": "A four-arm follow-up (`tests/experiment_photo_transfer.py`: {1 image, 3 images} ×\n{fixed, varied crop family}, shared probe ladder, matched steps) found the repair\nis partial and along the **content** axis, not the geometry axis: only the\n3-image/narrow-family arm transferred to an unseen image *and* geometry (3/3,\nratio 0.400), while both varied-geometry arms gave 0/3. A **no-taste control\nidentity** showed the ordering metric's noise floor is ±0.36 — larger than most\neffects measured — so treat these results as suggestive, not established.\n`docs/paper-findings.md` Findings 4c/4d has the tables, the power analysis and the\nrules (train on the family you will use; include an out-of-family check and a\nno-taste control)."
+    },
+    {
+      "section": "Taste model (wired, measured)",
+      "text": "`bin/taste_model.py` is the per-creator model; `bin/train_identity.py` is its CLI.\nThe loop in `bin/edit_apart_core.py` drives it.\n\n**Architecture.** A shared trunk over 16 named edit features (pacing, shot\nselection, tempo, energy, order) feeds a hidden layer that the creator latent\nmodulates three ways:"
+    },
+    {
+      "section": "Taste model (wired, measured)",
+      "text": "```\nu = tanh-free ranking score =\n      (a ⊙ (1 + tanh(W_s z + b_s))) @ W2 + b2     # latent gates the hidden activations\n    + (z @ W_z + b_z)                              # latent output offset\n    + x · (z @ W_l)                                # per-creator linear readout over the features"
+    },
+    {
+      "section": "Taste model (wired, measured)",
+      "text": "`z_u` is the only per-creator tensor, so a creator artifact is ~1 KB while the\ntrunk is shared. The map is nonlinear in `z` (tanh gates, multiplicative terms)\nand interpolatable (the latent is continuous; a midpoint latent scores between\nits endpoints — asserted in the test suite)."
+    },
+    {
+      "section": "Taste model (wired, measured)",
+      "text": "**Objective.** For each clip the loop logs a group of candidates with the critic's\ndense reward. GRPO turns that into group-relative advantages\n`A_k = (r_k − mean r)/std r`, and the update is a PPO-clip surrogate on the\ngroup-softmax selection policy, plus an auxiliary pairwise preference loss over\nthe pick that was actually rendered and a small entropy bonus — **but only when the\npick came from an external judge** (`chosen_by=creator|agent|human`). A choice the\nsystem itself made (`taste`: the identity's selection was rendered; `critic`: nobody\npicked, the objective critic only scored) trains neither the preference term nor the\nreward bonus. It still learns through the group-relative advantage over the critic's\nrewards, which measures the edit rather than claiming anything about the creator. The\nloop therefore records **who** picked, not just what was picked; `taste_status` reports\nhow many groups were excluded for this reason. (If the group record and the later\nreward record disagree, the reward record — the engine's own flow — wins.) Utilities are\nstandardised *within* the candidate group before the softmax: this keeps the\nlogits responsive so the latent can always reorder candi"
+    },
+    {
+      "section": "Taste model (wired, measured)",
+      "text": "**Optimizer split.** Muon (quintic Newton-Schulz, coefficients and nesterov form\nfrom the reference Muon implementation) on 2D weights; AdamW on `z_u` and every\n1D/bias parameter. Muon's lr is in **spectral-norm units**, so on these small\nmatrices it must be ~10× below an Adam lr — at the higher lr the model stops\nfitting (measured: training accuracy stalls at ~0.5 versus ~0.85)."
+    },
+    {
+      "section": "Taste model (wired, measured)",
+      "text": "**Artifacts.** Real GGUF v3 files (F32 tensors + metadata): a shared\n`style_brain_video_v1.gguf` and a tiny per-creator `<creator>.gguf` carrying\n`z_u`, the feature layout, and the digest of the trunk it was trained against. A\ndigest mismatch is refused rather than silently scoring with the wrong trunk."
+    },
+    {
+      "section": "How the loop feeds it",
+      "text": "```bash"
+    },
+    {
+      "section": "is selected, or by the objective critic reward when no identity exists yet",
+      "text": "propose_schema inventory=<inv> rubric=<rub> group=4"
+    },
+    {
+      "section": "2. render the selected candidate, then log that group's outcome",
+      "text": "critic_edit schema=<schema> inventory=<inv> rubric=<rub> group_id=<id> \\\n            candidate=<idx> chosen_by=creator"
+    },
+    {
+      "section": "3. inspect and train",
+      "text": "taste_status\ntrain_identity creator=erkin            # writes .editapart/identity.gguf\ntrain_identity creator=erkin freeze_style=true   # later: only z_u moves"
+    },
+    {
+      "section": "the photo loop is the same protocol on its own log/identity",
+      "text": "photo_propose src=<img> inspect=<insp> rubric=<rub> group=4\nphoto_critic schema=<schema> rubric=<rub> result=<render> group_id=<id> \\\n             candidate=<idx> chosen_by=agent\ntaste_status modality=photo\ntrain_identity modality=photo creator=erkin\n```"
+    },
+    {
+      "section": "the photo loop is the same protocol on its own log/identity",
+      "text": "`chosen_by=creator|agent` matters: the pick is logged as a **revealed\npreference**, becomes that group's top reward, and gives the trainer a preference\nterm. A rubric-derived reward alone cannot identify per-user taste: with no\nuser-dependent term in the objective, two creators with opposite tastes differ on\nonly **4/12** neutral briefs (p ≈ 0.21 against the unrelated-picks null), versus\n**8/12** (p ≈ 0.0006) once the revealed pick is in the objective (margins +3.6 s\nvs +7.0…+9.4 s). The override additionally fits the creator's own corpus far\nbetter than the auxiliary loss (0.83/1.00 vs 0.22/0.26), so both mechanisms are\nkept; `tests/experiment_revealed_preference.py` reproduces the whole table."
+    },
+    {
+      "section": "Multi-input effects (the v2 layout)",
+      "text": "The v1 feature layout describes the **resulting cut sequence** — shot counts and\ndurations, cuts per minute, pace band, motion, coverage, order, luminance, audio RMS.\nA transition, a grade, ducking and an overlay are decisions about **how inputs\ncombine** (a transition joins two clips, ducking relates speech to music, an overlay\ncomposites layers), and none of them appears in that list. So with v1 the identity\ncould only choose *which selection* to use; it could not set an effect's parameters at\nall. That is a real limitation, not a detail: an NLE-shaped editor is mostly effects."
+    },
+    {
+      "section": "Multi-input effects (the v2 layout)",
+      "text": "`video/v2` adds ten effect-parameter features (transition fraction, duration,\nalignment and asymmetry; grade deviation; LUT; reframe; duck depth; segment gain;\noverlay fraction) under a **new spec id** — never an edit of v1, because the layout list\nis part of an artifact's digest, so a v1 identity keeps loading and keeps refusing a v2\ntrunk instead of being silently reinterpreted with shifted columns. A log may hold both;\nthe majority layout trains and the rest are counted (`groups_other_spec`), since mixing\nvector layouts would either crash the first forward pass or mis-align columns."
+    },
+    {
+      "section": "Multi-input effects (the v2 layout)",
+      "text": "Two halves are needed, and both exist: **a group that spans effects**, so a preference\ncan be *learned* — `propose_schema(… effect_grid=true)` pairs the selection grid with\neffect knobs (the default grid varies selection only, so every candidate in a legacy\ngroup agrees on every effect feature and nothing could ever teach an effect\npreference) — and **an identity that can *choose*** them:\n`propose_schema(… refine=N)` runs a deterministic coordinate ascent over\nthe effect axes (transition type/duration/alignment, ducking, grade strength) scored by\nthe identity, and the tuned schema joins the group as one more candidate. Two\nproperties are deliberate:"
+    },
+    {
+      "section": "Multi-input effects (the v2 layout)",
+      "text": "- **It needs an effect-aware identity.** A v1 trunk has 16 inputs and cannot score a\n  26-dim vector, so the request is *declined with a reason* rather than silently\n  ignored — and the feature spec a group is logged under is explicit\n  (`--feature-spec`), because a group logged under v1 can never teach an effect.\n- **No identity means no effect taste.** `refine_effects` with no scorer returns the\n  schema untouched: with no identity there is no taste to apply, and maximising the\n  objective critic there would quietly turn a rubric rule into a taste claim."
+    },
+    {
+      "section": "Multi-input effects (the v2 layout)",
+      "text": "Measured (`tests/test_taste_model.py::TestEffectTaste`): groups are logged under v2\nwith a reward that rises only with the transition duration — a hidden preference\nexpressed *solely* through an effect parameter — an identity is trained on it\n(`train_rank_acc` ≥ 0.8), and the refiner then chooses a dissolve and pushes the\nduration past 0.8 s from an all-cuts seed. The control run with no identity changes\nnothing. `TestEffectFeatures` pins the blindness of v1, the superset relation and the\nmixed-spec rule."
+    },
+    {
+      "section": "Multi-input effects (the v2 layout)",
+      "text": "**They are now rendered, and the rest are refused.** `cmd_render` executes transitions\n— `xfade` between runs, `acrossfade` for the audio, and an outgoing `tpad` extension so\nall three alignments are exact — which is what makes the transition features true: the\nrendered duration equals the planned one to the frame, and the picture at the boundary\ndiffers from a hard cut. `grade.lut` renders too: the repository ships generated\n`.cube` LUTs (`luts/warm.cube`, `luts/cool.cube`, reproducible with\n`tools/make_luts.py --check`), a bare name resolves to one of them and a name that\nresolves to nothing is refused. The all-cut path is **byte-identical** to the renderer\nthat produced every earlier measurement, so nothing had to be re-measured. The fields the\nrenderer still does *not* execute — `audio.duck` (no music bed is mixed), `overlay` (no\noverlay media), `transform.position` (the output canvas is the source frame) — are\n**declared-but-unrendered** and refused by `assert_renderable` at propose, refine and\nrender time, with a reason. That makes the schema's own contract\n(\"every field in the schema is renderable by the renderer\") an enforced property\ninstead of a comment: an edit decision "
+    },
+    {
+      "section": "Per-effect credit",
+      "text": "Credit is attributed to the decision that actually varied, in two forms:\n\n```bash"
+    },
+    {
+      "section": "the attribution table for one group: what changed, why, and how much it weighed",
+      "text": "python bin/edit_apart_core.py attribute <dataset.jsonl> --group-id <gid>"
+    },
+    {
+      "section": "the corpus-wide profile: what the rewards (and an identity) prefer, effect by effect",
+      "text": "python bin/edit_apart_core.py attribute <dataset.jsonl> [--identity ID] [--style S]\n```"
+    },
+    {
+      "section": "the corpus-wide profile: what the rewards (and an identity) prefer, effect by effect",
+      "text": "Three properties make the table trustworthy rather than plausible. Rows are keyed by\n**shot**, not by index — candidates of one group can select different numbers of shots,\nso index 6 of one candidate is a different shot from index 6 of another and an\nindex-keyed diff invents changes (a real value against `None`) and blames them on an\neffect. The axis comes from the **logged knobs**, so a coupled decision counts once:\ntransition type/duration/alignment are one decision (a duration is meaningless without\nthe type) and they legitimately move together, where a slot count would misreport them\nas three decisions. And each row carries the **critic's own judgement** for that shot\n(`decision`/`why`/`reward_delta`, now logged on the reward record) beside the\ngroup-relative advantage, so a row states its basis and its magnitude."
+    },
+    {
+      "section": "the corpus-wide profile: what the rewards (and an identity) prefer, effect by effect",
+      "text": "`attributable` is the flag to check before believing any of it: exactly one knob axis\nengaged AND the candidates selected the same shots. A group that varies several\ndecisions, or that changed its **material** as well as its effects, has no\nsingle-decision credit to give — the profile counts and skips those groups rather than\nfolding an unattributable number into a claim. That is why `--effect-grid` holds the\nselection fixed and varies only the effects; exploring both dimensions is two\nproposals, not one. (Nothing measured depended on the previous pairing, which was\nintroduced and replaced inside this unreleased sequence.)"
+    },
+    {
+      "section": "the corpus-wide profile: what the rewards (and an identity) prefer, effect by effect",
+      "text": "One finding this makes visible: in an effect group the **objective critic's reward is\nflat** across transition values — it scores duration, motion and target, and cannot see\na dissolve at all. So the effect columns of the profile discriminate only through the\n**identity** (the `taste_mean` column), which is precisely why an effect preference has\nto be learned from an external pick rather than from the rubric. The test\n`test_the_critic_cannot_see_a_transition` fails if that ever stops being true."
+    },
+    {
+      "section": "the corpus-wide profile: what the rewards (and an identity) prefer, effect by effect",
+      "text": "**Not yet done, and worth naming:** credit is still per *candidate*, not per *effect* —\nthe group-relative advantage is still broadcast over the whole candidate rather than\n**graded into** the per-row table — the table records the attribution (which decision\nchanged, on what basis, with what weight) but the gradient is not yet distributed over\nits rows, so a group that varies several decisions still trains one advantage for all of\nthem (the segment-local-credit design in [`docs/expansion-plan.md`](docs/expansion-plan.md)).\nThe effect axes are a fixed grid rather than continuous optimisation, and effects carry\nno provenance of their own beyond the pick provenance described above."
+    },
+    {
+      "section": "The training datum (and why the raws are kept)",
+      "text": "A taste datum is not a timeline with a score; it is a **group**: alternatives produced\nunder one fixed request, materials and constraint set. Schema **v3** of the group\nrecord keeps everything a replay needs, in the record itself:"
+    },
+    {
+      "section": "The training datum (and why the raws are kept)",
+      "text": "| Kept | Why |\n| --- | --- |\n| `rubric` + `rubric_hash` | the constraints are what make the candidates comparable |\n| `inventory` + `inventory_hash` | the evidence the features were computed from (per-shot motion/luma/rms) |\n| each candidate's `schema` — the timeline, not just its knobs | so a feature can be re-derived, a reward re-scored, and credit attributed to the effect that changed |\n| `source_sha256` | the raws are identified by **content**, not by path |\n| `content_hash` | deterministic identity of the proposal, so a ledger can key annotations to a revision |\n| `selected`, `engine`, `feature_spec` | what was chosen, by which build, under which layout |"
+    },
+    {
+      "section": "The training datum (and why the raws are kept)",
+      "text": "Before v3 a record kept only derived numbers — no rubric, no inventory, no timeline, no\nsource identity — so a defect in the feature extractor or a change to the critic made\nthe corpus un-remeasurable. This project's own corrections log is a history of needing\nexactly that: three conclusions flipped after defects and each had to be re-measured\n**on the same data**. Keeping the raws is the precondition for that discipline, and an\nNLE makes it sharper, because there the edit is a reference structure over a media pool\nrather than a schema over one file."
+    },
+    {
+      "section": "The training datum (and why the raws are kept)",
+      "text": "```bash"
+    },
+    {
+      "section": "re-derive every logged group from its own record and compare",
+      "text": "It recomputes each candidate's feature vector and the objective reward from the\nrecorded timeline + inventory + rubric, verifies the hashes, and reports older records\nas **not replayable** rather than guessing. The subjective leg is a person's or agent's\njudgment: it is reported as not recomputable and never re-invented.\n`tests/test_taste_model.py::TestLogReplay` is the acceptance test, with two negative\ncontrols — a corrupted stored vector and a **changed source file** are both caught."
+    },
+    {
+      "section": "re-derive every logged group from its own record and compare",
+      "text": "**Why annotations stay on our side.** Measured: through the FCPXML adapter nothing of\nours is even written — not the effect, not the marker, not the metadata\n(`tools/otio_conformance.py` documents the lossless container). So the ledger carries\nthe judgment (`why`, decisions, provenance) keyed by `content_hash`, the timeline\ncarries structure, and export is one-way and lossy: anything crossing an editor\nboundary returns as a *new revision* with a *new* judgment, never as recovered\nmetadata."
+    },
+    {
+      "section": "re-derive every logged group from its own record and compare",
+      "text": "**Not yet v3:** the photo engine still writes pre-v3 records (a replay reports them as\nnot replayable), and media retention is a policy here rather than an enforced\ngarbage-collection rule."
+    },
+    {
+      "section": "Measured results",
+      "text": "| Claim | Measurement |\n| --- | --- |\n| Gradients are correct | analytic vs finite differences: **1.7e-08** (model) / **1.7e-09** (full objective, incl. preference term) |\n| Objective recovers a hidden preference | held-out pairwise agreement **0.82–0.84** vs 0.50 chance; argmax **0.55–0.86** vs 0.20 chance (3 seeds, 120 synthetic clips) |\n| The identity is interpolatable | midpoint latent brackets the endpoints for ≥70% of candidates and moves the mean monotonically |\n| Optimizer split holds | Muon touches 2D only, AdamW 1D only (asserted, with witnesses) |\n| Artifacts round-trip | GGUF write→read bit-exact; digest mismatch refused |\n| The identity changes the loop | two creators on the same shared trunk: **8/12** neutral briefs differed, 8/12 in the predicted direction, **21.4s vs 12.0s** mean selected duration (re-measured after the objective fix below) |\n| The revealed pick is what carries taste | ablation (re-measured): with no user term **4/12** briefs differ (p ≈ 0.21, indistinguishable from unrelated picks) vs **8/12** (p ≈ 0.0006) for every mechanism tried; the reward override also fits the creator's own corpus far better (0.83/1.00 vs 0.22/0.26) and widens the margin (+9."
+    },
+    {
+      "section": "Measured results",
+      "text": "Reproduce with `tests/test_taste_model.py` (74 tests, no media needed) and\n`tests/test_loop_e2e.py` (real footage; see **Verification**)."
+    },
+    {
+      "section": "Concurrent work (2026-09)",
+      "text": "Group-relative preference learning on edit decisions is **not unprecedented**, and the\nhonest version of this project's positioning says so:"
+    },
+    {
+      "section": "Concurrent work (2026-09)",
+      "text": "- **Crayotter: GRPB** — [*Learning Long-Horizon Video Editing Agents via\n  Group-Relative Preference Backpropagation*](https://arxiv.org/abs/2608.02694) (Aug\n  2026) makes the same core observation this project's Finding 1 measures: a global\n  scalar objective over subjective edits is ambiguous and temporally uninformative, and\n  fixing the request/materials/constraints turns it into an *ordinal comparison among\n  directly comparable alternatives*, whose same-task rankings become zero-sum\n  advantages. It goes further in two ways this repository has now partly adopted:\n  credit **localised to semantic editing segments**, and a **lagged allocator / guarded\n  transmission** so a group's own judgment never trains that group. The provenance rule\n  above is the local form of the guard; segment-local credit is designed in\n  [`docs/expansion-plan.md`](docs/expansion-plan.md) but not yet implemented.\n- **ReelBrain** ([Q00/ReelBrain](https://github.com/Q00/ReelBrain)) reaches the same\n  governance conclusion from the product side: a learned taste profile is a\n  **behavioural prior, never evidence** about the footage, and explicit current\n  steering always overrides stored taste.\n- The agent"
+    },
+    {
+      "section": "Concurrent work (2026-09)",
+      "text": "What remains distinctive here is narrower and stated as such: a **per-creator latent**\n(~1 KB, against a frozen shared trunk whose digest the artifact carries) rather than a\nprompt profile or a fine-tuned model; the decision object serving as render input,\ncritique target **and** training datum; **system-generated candidate groups** as an\nauditable comparison set; an **objective, recomputable critic**; and the trained policy\nas the *selector*, not the language model."
+    },
+    {
+      "section": "Boundaries (honest)",
+      "text": "- **The trained policy is the selector, not the language model.** Training changes\n  which candidate the loop picks among the ones this engine generates; it does\n  not fine-tune an LLM, and it cannot invent an edit the candidate grid does not\n  contain.\n- **Video only.** The design's v0 scope is pacing + shot selection + tempo, which\n  is what the feature layout covers. Photo taste (colour/composition) is the next\n  phase; the model is generic over feature specs, but `photo_propose` still emits\n  a single rubric-derived schema and logs nothing.\n- **It needs enough clips.** Held-out accuracy is only meaningful once there are\n  several logged clips; with one or two the model fits them and generalises\n  nothing. `taste_status` reports how many trainable groups are in the log.\n- **The trunk is shared, so per-creator training freezes it** (`freeze_style=true`);\n  a normal run trains the trunk too and is meant for building the shared model\n  from the union of several creators' logs."
+    },
+    {
+      "section": "Install",
+      "text": "EditApart ships as a **plugin bundle** that carries an agent preset, and requires\n**DeepSeek Harness ≥ 0.1.7**: since 0.1.7 a preset is an\n`@deepseek-ai/dsh-agent-preset` declaration row supplied by a bundle patch, and the\nolder user-preset directory (`$DSH_HOME/.agent-presets/<id>/`) is no longer read.\n\n```bash\ndsh plugin --profile web add https://github.com/EditTogether/DSH-EditApart\n```"
+    },
+    {
+      "section": "Install",
+      "text": "`dsh plugin` runs the profile's package manager, and an installed package that\ndeclares `dsh.bundle` is activated as a bundle automatically. Restart the harness\n(or open a new session) and pick **EditApart (AI taste editor)** in the mode\npicker.\n\nTo use the optional venv toolchain, install from a checkout instead, so the venv\nand `.dshenv` live somewhere you control:"
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ngit clone https://github.com/EditTogether/DSH-EditApart ~/dsh-edit-apart\ncd ~/dsh-edit-apart && bash setup.sh\ndsh plugin --profile web add ~/dsh-edit-apart\n```\n\nUpdate with `dsh plugin --profile web update dsh-edit-apart` (or\n`git -C ~/dsh-edit-apart pull` for a checkout); uninstall with\n`dsh plugin --profile web remove dsh-edit-apart`, or through the harness's plugin\nmanager."
+    },
+    {
+      "section": "Install",
+      "text": "**What the bundle declares.** `package.json` declares `main` =\n`./plugins/edit-apart.mjs` — a bundle is judged loadable by its declared entry\nartifact (the plugin market reads `main`, then `exports`, else looks for\n`index.js`, and reports \"the declared entry artifact is missing (source-only\ncheckout or blocked build) — the next boot would fail\" when it finds none), and\nthis package's loadable entry is exactly the module the preset mounts. It also\npoints `dsh.bundle.patch` at `cordis.patch.yml`, whose single `insert` row is the\npreset declaration: id\n`ai-video-editor`, the display name/description/order the picker shows, and\n`config.plugins` — the composition that used to be `agent.cordis.yml`. A row's\nspecifier resolves against the **profile** directory, so this package's own plugin\nis named by package subpath (`dsh-edit-apart/plugins/edit-apart.mjs`) and its\nmethod skill is resolved from the profile down into\n`node_modules/dsh-edit-apart/skills/`. No shipped file contains a machine-local\npath, and `tests/test_bundle_packaging.py` fails if one reappears, if a relative\nrow specifier creeps back in, if the declared entry artifact goes missing, or if\nthis section stops showing the rea"
+    },
+    {
+      "section": "Install",
+      "text": "**Requirements.** Only what the harness already ships — the composition names\nharness plugins and adds no npm dependencies — plus `ffmpeg`/`ffprobe` and\n`scenedetect` for video, and optionally ImageMagick for photos. Toolchains resolve\n`DSH_*` env → `<preset>/.dshenv` → PATH, so a machine-local install is a `.dshenv`\n(gitignored) and never a repository edit.\n\n**Verified as installed** (harness 0.1.7-rc.2, throwaway profile):"
+    },
+    {
+      "section": "Install",
+      "text": "| Check | Result |\n| --- | --- |\n| `dsh plugin --profile bundlecheck add <repo>` | installed, and `dsh.profile.bundles` gains `dsh-edit-apart` automatically |\n| `dsh --profile bundlecheck --dump-config` | exit 0, composed tree contains the `preset-edit-apart` → `@deepseek-ai/dsh-agent-preset` row with `config.id: ai-video-editor` |\n| the plugin row's specifier, resolved *from the profile* | resolves to the package's own `plugins/edit-apart.mjs`, which imports and exports `apply` |\n| the skills expression, evaluated against the profile | `<profile>/node_modules/dsh-edit-apart/skills/edit-apart/SKILL.md` exists |\n| the live registry's `entryListProblem` over all 17 child rows | OK — the shipped `standard` preset returns the same verdict |"
+    },
+    {
+      "section": "Install",
+      "text": "Not separately verified: a cold-session *mount* of this freshly installed preset\n(the declaration mechanism is the one the live profile already mounts presets\nwith).\n\nThis project is discoverable in the DeepSeek Harness ecosystem under the\n[`dsh-plugin`](https://github.com/topics/dsh-plugin) topic."
+    },
+    {
+      "section": "How to use it",
+      "text": "1. Start a session on this preset (select `ai-video-editor` / EditApart in the\n   mode picker). The preset mounts its own `edit-apart` plugin, so the tools\n   `inventory`, `features`, `propose_schema`, `render_schema`,\n   `review_frames`, `critic_edit`, `revise_schema`, `train_identity`,\n   `taste_status`, `identity_init`, `photo_inspect`, `photo_propose`,\n   `photo_render`, `photo_critic`, and `photo_revise` appear in that session's\n   catalog.\n2. The bundled `edit-apart` skill drives the loop.\n3. Toolchains are **resolved at runtime, not hard-locked**: `ffmpeg`/`ffprobe`/\n   `scenedetect`/Python (video) and ImageMagick (photo) come from the matching\n   `DSH_*` env ( `DSH_FFMPEG`, `DSH_FFPROBE`, `DSH_SCENEDETECT`, `DSH_EDIT_PY`,\n   `DSH_IMAGEMAGICK`), then `.dshenv`, then PATH. A web-profile **in-browser**\n   ffmpeg / ImageMagick (a store plugin) can supply them instead of local\n   binaries."
+    },
+    {
+      "section": "Portable install (public / another machine)",
+      "text": "The code never hardcodes an absolute path. Toolchains resolve **env `DSH_*` →\n`<preset>/.dshenv` → PATH**, so the preset runs on any machine with ffmpeg +\nscenedetect. To provision a machine where scenedetect lives in a venv (not on\nPATH):\n\n```bash\nbash setup.sh          # creates ~/dsh-edit-venv, installs scenedetect, writes env.sh\nsource ./env.sh        # makes DSH_EDIT_PY / DSH_SCENEDETECT available for this shell"
+    },
+    {
+      "section": "setup.sh also writes .dshenv so the plugin auto-loads paths without sourcing.",
+      "text": "- `env.sh.example` — portable template; copy to `env.sh` (gitignored) and edit.\n- `env.sh` — **generated, machine-local, gitignored**; exports the `DSH_*` vars.\n- `.dshenv` — machine-local paths the plugin auto-loads when the matching\n  `DSH_*` env is not already set (gitignored).\n- `requirements.txt` — `scenedetect` (+ `numpy<2` to avoid the opencv\n  `KeyError: 'rad2deg'` import crash). `numpy` is a scenedetect dependency anyway\n  and is what the taste model runs on; the legacy loop (`propose group=1`) works\n  without it.\n- `setup.sh` — creates the venv, installs deps, writes `env.sh`/`.dshenv`."
+    },
+    {
+      "section": "setup.sh also writes .dshenv so the plugin auto-loads paths without sourcing.",
+      "text": "Override keys: `DSH_EDIT_PY`, `DSH_SCENEDETECT`, `DSH_FFMPEG`, `DSH_FFPROBE`,\n`DSH_IMAGEMAGICK`."
+    },
+    {
+      "section": "setup.sh also writes .dshenv so the plugin auto-loads paths without sourcing.",
+      "text": "Taste-model keys: `DSH_EDITAPART_IDENTITY` (per-creator GGUF),\n`DSH_EDITAPART_DATASET` (group log), `DSH_EDITAPART_PHOTO_IDENTITY` /\n`DSH_EDITAPART_PHOTO_DATASET` (the photo loop's own pair),\n`DSH_EDITAPART_DATA` (directory holding them, default `<workspace>/.editapart`),\n`DSH_EDITAPART_STYLE` (shared style-brain path) and `DSH_EDITAPART_GROUP`\n(candidates per proposal, default 4). The identity and the log are per-workspace\non purpose, so each project accumulates its own creator history."
+    },
+    {
+      "section": "setup.sh also writes .dshenv so the plugin auto-loads paths without sourcing.",
+      "text": "> The plugin is **import-free** on purpose: a preset row's specifier resolves\n> against the profile directory, where the harness's own `@deepseek-ai/*` packages\n> are not resolvable. It hand-builds `ToolDefinition`s and calls\n> `ctx.tools.register()`, shelling out to `bin/edit_apart_core.py` /\n> `bin/photo_core.py` (found as siblings of the plugin file, so the whole package\n> travels together)."
+    },
+    {
+      "section": "Trust & security",
+      "text": "- **No shell command injection.** The engines launch processes with **list-argv**\n  `subprocess.run([...])` and the plugins with `spawn(PY, [CORE, ...args])` —\n  never a shell string, never `shell=True`/`os.system`. Paths and schema values\n  are passed as literal arguments, so a value like `x; rm -rf /` cannot be\n  interpreted by a shell. The `;`-joined ffmpeg `filter_complex` string is a\n  single argv element, not shell syntax.\n- **Caption text is sanitized.** ImageMagick `-annotate`/`-caption`/`-label`\n  interpret `%[...]`/`%[fx:...]` format escapes and a leading `@` as \"read text\n  from file\". The photo engine escapes `%`/`@`/`\\` to visually-identical\n  fullwidth codepoints (`_escape_annotate_text`) so untrusted caption text cannot\n  trigger an IM expression or file read — independent of the host ImageMagick\n  `policy.xml`. (The system package policy already disables `@` file-reads on\n  many images, but the code no longer relies on that.)\n- **Paths are trusted tool args.** `src`, `out`, `outdir`, and generated `asset`\n  paths are operator/model-supplied and passed straight to ffmpeg/scenedetect.\n  Within DSH the sandbox scopes writes; if you run the engines **outside** DSH,\n  sc"
+    },
+    {
+      "section": "Video reference run (verified)",
+      "text": "On `better-com-ceo-roasted-by.mp4` (41.7s, 23 shots):\n- Inventory: 23 shots.\n- Rubric: brisk pace, shots 0.9–4.0s, target 20s.\n- Schema: 11 segments (dropped a 0.58s shot). Render: valid 20s 1080p mp4.\n- **Objective critic**: overall 0.3, reward −0.1, flagged clip_001/clip_002 as\n  \"low motion / dead air.\" **This was wrong** — a motion-luma heuristic called\n  the set-up (\"Well, when are you going\") and the first punchline (Ramsay,\n  \"and start showing some\") dead air, and would have dropped the two best beats.\n- **Vision critic (normative)**: overall 0.62. Keep clip_001/clip_002 (the\n  set-up + punchline, caption-bearing and high-value); trim/cut clip_005 (a long\n  static 3.8s hold); consider reordering the \"BETTER.COM EMPLOYEES\" cutaway\n  (clip_010/011) earlier as an establishing subject card."
+    },
+    {
+      "section": "Video reference run (verified)",
+      "text": "The lesson baked into the skill: **the vision leg (frame inspection) is\nnormative; motion-luma is only a hint and can be confidently wrong on the\nhighest-value shots.** Always `review_frames` before dropping a shot."
+    },
+    {
+      "section": "Photo reference run (verified)",
+      "text": "On a synthetic 1800×1200 landscape (`photo.jpg`), rubric = warm punch, saturation\n1.15, crop 600×500, width 1200, target_luma 0.52:\n- Inspect: mean_luma 0.264, luma_std 0.19, p50 0.18/p95 0.835, saturation 0.132,\n  mean_rgb [0.214, 0.277, 0.288].\n- Schema: crop → grade → resize.\n- Render: 1200×1000. Critic: overall 0.5, exposure_ok/contrast_ok true,\n  reward 0.5, all ops kept; revise kept crop/grade/resize.\n- The exposure/contrast terms are **graded** (see the photo taste section): full\n  credit inside the tolerance exactly as before, linear falloff outside it, so a\n  candidate that passes is scored identically to the pre-grading critic."
+    },
+    {
+      "section": "Corrections",
+      "text": "An external review re-ran the suites and reproduced five defects. All are fixed\nhere, and the behavioural numbers this README reports were re-measured afterwards\n(the earlier figures are withdrawn, not silently kept)."
+    },
+    {
+      "section": "Corrections",
+      "text": "1. **The GRPO ratio was not a ratio** (`bin/taste_model.py`). `train()` stored raw\n   standardised logits as the ratio baseline, so `rho = exp(log_softmax(s) - s) =\n   1/Z` — a per-group constant. Negative-advantage candidates then always fell\n   into the clipped branch and their downward push stopped depending on `|A|`\n   (measured: an identical 0.0268 for A = −0.1, −2.0 and −8.0), so the objective\n   had silently degenerated to positive-only REINFORCE. The telemetry had the same\n   bug: `clip_fraction` was a per-call sum divided by the batch count, reported as\n   5.9 (a \"fraction\" of 590%). Fixed by storing `log_softmax(...)` and separating\n   the two denominators; `tests/test_taste_model.py::TestObjectiveFidelity` pins\n   `rho == 1`, `clip_fraction ∈ [0, 1]`, and that a −2.0 advantage pushes ~10×\n   harder than a −0.1 one. **Consequence:** video per-creator separation\n   re-measures 12/12 → **8/12** (21.4s vs 12.0s) and the photo out-of-family\n   result 0/10 → **10/10 with a narrower margin** (0.30 vs 0.45).\n2. **ImageMagick 6 silently killed the photo loop's crop axis**\n   (`bin/photo_core.py`). Resolving `convert` and then running `convert identify …`\n   fails on IM6, and `_di"
+    },
+    {
+      "section": "Corrections",
+      "text": "8. **The effect features described a renderer that did not exist** (found by a second\n   external review). `video/v2` measures transition, duck, LUT, overlay and position\n   fields while `cmd_render` only ever emitted `concat`: an identity could train for 300\n   epochs to prefer a dissolve and the rendered file was still a hard cut, and the logged\n   decision said `dissolve 0.8` while the picture disagreed — precisely the failure the\n   \"auditable decision object\" claim exists to prevent, on the newest fields. Fixed by\n   rendering transitions (`xfade`/`acrossfade`, frame-exact, cut path byte-identical) and\n   by **refusing** the fields the renderer still cannot execute (`assert_renderable`, at\n   propose, refine and render), with an effect grid that may only span rendered fields."
+    },
+    {
+      "section": "Corrections",
+      "text": "**Packaging correction (harness 0.1.7).** The previous version of this README\ntold users to clone the repository into `$DSH_HOME/.agent-presets/<id>/`. That\nlayout was retired in 0.1.7, where a preset is an `@deepseek-ai/dsh-agent-preset`\ndeclaration row carried by a bundle patch — so the instruction installed files\nnothing reads, and the \"verified as installed\" check that accompanied it passed\nonly because it exercised the package that implemented the retired mechanism.\nThe repository is now a bundle (`package.json` → `dsh.bundle.patch` →\n`cordis.patch.yml`) installed with `dsh plugin add`; `agent.cordis.yml` and\n`preset.yml` are gone, and the check that could not have caught this has been\nreplaced by `tests/test_bundle_packaging.py` plus the real scratch-profile install\nin the table under **Install**."
+    },
+    {
+      "section": "Corrections",
+      "text": "Smaller fixes from the same review: schema values that reach the ffmpeg\nfiltergraph are validated (`_num`/`_ff_crop`), `revise` no longer `KeyError`s on a\nschema without `meta`, photo `temperature` actually renders (it was\n`-fill … -colorize 0`, a 0% no-op), one temp dir per propose call instead of one\nper candidate, `created_at`/`trained_at` artifact metadata made consistent, and an\nempty `style_file` no longer resolves to a directory."
+    },
+    {
+      "section": "Verification",
+      "text": "```bash"
+    },
+    {
+      "section": "the no-machine-local-paths rule (needs PyYAML; <1s)",
+      "text": "~/dsh-edit-venv/bin/python tests/test_bundle_packaging.py -v"
+    },
+    {
+      "section": "model + video loop unit suite: 74 tests, no media required (~25s)",
+      "text": "~/dsh-edit-venv/bin/python tests/test_taste_model.py -v"
+    },
+    {
+      "section": "loop before trusting a logged group (both cores ship one)",
+      "text": "python bin/photo_core.py selftest\npython bin/edit_apart_core.py selftest          # needs scenedetect on PATH/DSH_SCENEDETECT"
+    },
+    {
+      "section": "per-creator tests need ImageMagick; ~4 min, dominated by candidate renders)",
+      "text": "~/dsh-edit-venv/bin/python tests/test_photo_taste.py -v"
+    },
+    {
+      "section": "end-to-end on real footage (scenedetect + ffmpeg + a real render)",
+      "text": "DSH_EDIT_PY=~/dsh-edit-venv/bin/python \\\nDSH_SCENEDETECT=~/dsh-edit-venv/bin/scenedetect \\\nDSH_EDITAPART_E2E_SRC=/path/to/footage.mp4 \\\n~/dsh-edit-venv/bin/python tests/test_loop_e2e.py -v\n```\n\nThe video E2E suite also renders a muted clip (the audio fallback) and rejects a\nhostile `crop`/`scale` value with a clear error."
+    },
+    {
+      "section": "end-to-end on real footage (scenedetect + ffmpeg + a real render)",
+      "text": "The unit suite checks Newton-Schulz's bounded band and scale invariance, the\noptimizer split (Muon never sees a 1D gradient, AdamW never sees a 2D one),\nanalytic gradients against finite differences, GGUF round-trips and digest\nmismatch refusal, dataset folding (including legacy records and broken lines),\nlearning on a synthetic hidden preference, latent ablation/interpolation,\n`group=1` reproducing the legacy schema exactly, critic-reward logging, and\ngraceful degradation when numpy is unavailable."
+    },
+    {
+      "section": "end-to-end on real footage (scenedetect + ffmpeg + a real render)",
+      "text": "The E2E suite builds an inventory from real footage, drives two creators with\ndifferent revealed preferences through the real loop, trains one shared trunk\nplus two frozen-trunk identities, and asserts that the same neutral brief gets\nmaterially different edits — then renders the taste-selected schema with real\nffmpeg and critiques/revises it. Measured on\n`better-com-ceo-roasted-by.mp4` (41.7s, 23 shots): **8/12** briefs differed,\nlong-take 21.4s vs short-take 12.0s mean selected duration; the rendered\ntaste-selected edit was 18.75s, critic overall −0.15, 10 → 7 segments after\nrevise. (These are the post-correction numbers; see **Corrections** below.)"
+    },
+    {
+      "section": "end-to-end on real footage (scenedetect + ffmpeg + a real render)",
+      "text": "See `skills/edit-apart/SKILL.md` for the full protocol."
+    }
+  ],
+  "skipped": []
+}

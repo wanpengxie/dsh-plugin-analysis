@@ -1,0 +1,231 @@
+{
+  "repo": "Def1ce/dsh-lan-bridge",
+  "commit": "f665f8ccaf4cf69883387dea8ba095bd3b3cedd9",
+  "extracted_at": "2026-11-09T23:07:45.089999+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 20837,
+    "lines_by_language": {
+      "JSON": 51,
+      "JavaScript": 176,
+      "Markdown": 239,
+      "Other": 33,
+      "YAML": 21
+    },
+    "outline": [
+      ".gitignore",
+      "ABOUT.md",
+      "LICENSE",
+      "README.md",
+      "bin/dsh-bridge.cjs",
+      "cordis.patch.yml",
+      "dsh/index.js",
+      "package.json",
+      "start.bat"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-lan-bridge",
+    "version": "0.2.1",
+    "description": "DeepSeek Harness plugin + LAN bridge: injects a crypto.randomUUID polyfill so the harness web UI works over plain HTTP from phones (no certs, no public tunnels, works on old iOS). Install as a dsh plugin, or run the standalone proxy via the CLI.",
+    "type": "module",
+    "main": "dsh/index.js",
+    "exports": {
+      ".": "./dsh/index.js",
+      "./package.json": "./package.json"
+    },
+    "bin": {
+      "dsh-lan-bridge": "bin/dsh-bridge.cjs"
+    },
+    "files": [
+      "bin",
+      "dsh",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "start": "node bin/dsh-bridge.cjs"
+    },
+    "engines": {
+      "node": ">=18"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh",
+      "deepseek",
+      "harness",
+      "plugin",
+      "lan",
+      "proxy",
+      "reverse-proxy",
+      "randomuuid",
+      "polyfill",
+      "mobile",
+      "ipad",
+      "obs"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/Def1ce/dsh-lan-bridge.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle layer: mount the dsh-lan-bridge plugin (dsh/index.js via the\n# package root export; bin stays the standalone CLI proxy).\n#\n# The webserver override below makes LAN access work out of the box: the\n# harness binds 127.0.0.1 by default, so a phone on the same network cannot\n# reach it. Binding 0.0.0.0 (all interfaces) plus the polyfill injected by\n# the plugin row is what makes the phone flow work. With an all-interfaces\n# bind, the web runtime auto-derives the LAN IP literals for the /api trust\n# fence, so no trustedHosts entry is needed. `--port` flags still win via\n# the webStartup expression.\n# SECURITY: the harness web UI has NO authentication; binding 0.0.0.0 exposes\n# it to the whole LAN. Only install on a trusted network.\n\n- insert:\n    - id: dsh-lan-bridge\n      name: 'dsh-lan-bridge'\n\n- id: webserver\n  config:\n    host: 0.0.0.0\n    port: !!js ctx.webStartup.port ?? 3080\n"
+    }
+  ],
+  "entries": [
+    "dsh/index.js",
+    "bin/dsh-bridge.cjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080",
+      "where": "bin/dsh-bridge.cjs:13"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080",
+      "where": "bin/dsh-bridge.cjs:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Def1ce/dsh-lan-bridge.git",
+      "where": "package.json:49"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 18,
+    "pushed_at": "2026-08-15T11:48:00Z",
+    "created_at": "2026-08-15T09:51:54Z"
+  },
+  "runtime_files": [
+    "bin/dsh-bridge.cjs",
+    "cordis.patch.yml",
+    "dsh/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-lan-bridge",
+      "text": "Fixes the DeepSeek Harness web UI on phones: injects a [`crypto.randomUUID`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID) polyfill so the harness works over **plain HTTP** — no certs, no warnings, no public tunnels, works on old iOS too. **Zero dependencies.**"
+    },
+    {
+      "section": "dsh-lan-bridge",
+      "text": "Two ways to use it:\n- **dsh plugin** (recommended): install into the harness, the polyfill is served by dsh itself — the phone opens dsh's own port directly, no extra process.\n- **Standalone proxy** (`bin/dsh-bridge.cjs`): proxy any local web app on the LAN with the polyfill.\n\n| 简体中文 | English |\n| --- | --- |\n| [中文说明](#中文说明) | [English](#english) |\n\n---"
+    },
+    {
+      "section": "为什么会有这个项目",
+      "text": "用手机访问 dsh 网页界面时会碰到一个隐蔽的坑：\n\n```\ncrypto.randomUUID is not a function. (In 'crypto.randomUUID()', 'crypto.randomUUID' is undefined)\n```\n\n原因：\n\n1. dsh 前端代码大量调用 `crypto.randomUUID()`（生成 RPC 消息 ID）。\n2. 这个函数**只在 HTTPS（或 localhost）安全上下文中存在**，普通 `http://` 下是 `undefined`。\n3. 更糟的是 **iOS 15.4 以下的 Safari/浏览器根本没有这个函数**，连 HTTPS 都没用。\n4. 想补 HTTPS？自签名证书在 **iOS Safari 里会直接拒绝打开，连\"继续访问\"按钮都没有**；正式证书又要域名/公网。\n\n于是手机访问陷入死循环：`http` 打不开功能，`https` 打不开网页。"
+    },
+    {
+      "section": "解决办法",
+      "text": "`crypto.getRandomValues()` 是**所有浏览器、所有环境**（包括 http、老 iOS）都有的 API。本项目在 dsh 返回的页面里注入一段**极小的 polyfill**，用 `getRandomValues` 实现 `randomUUID`：\n\n```js\nif (typeof crypto === 'object' && crypto && !crypto.randomUUID && crypto.getRandomValues) {\n  crypto.randomUUID = function () { /* 用 getRandomValues 生成 UUID v4 */ };\n}\n```\n\n于是**纯 HTTP 就能完整使用 dsh**：零证书、零警告、任何浏览器、任何 iOS 版本。"
+    },
+    {
+      "section": "方式一：作为 dsh 插件安装（推荐）",
+      "text": "包内 `dsh/index.js` 是一个 dsh bundle 插件：它通过 `webServer.tapIndex` 把 polyfill 注入 dsh 自己返回的 index.html。装进 harness 后**不需要任何额外进程**，手机直接访问 dsh 端口即可。\n\n```bash"
+    },
+    {
+      "section": "注意：刚发布的版本有 pnpm 24 小时闸门，请用带版本号的命令：",
+      "text": "dsh plugin --profile web add dsh-lan-bridge@0.2.1"
+    },
+    {
+      "section": "http://<电脑局域网IP>:3080",
+      "text": "```\n\n> `0.2.1` 起插件的 bundle patch 会把 dsh webserver 自动绑到 `0.0.0.0`（所有网卡），局域网 IP 由 dsh 自动加入 `/api` 信任名单——装完即可用，无需手动改配置。⚠️ dsh 界面无登录认证，请只在可信局域网使用。"
+    },
+    {
+      "section": "方式二：独立 CLI 代理（适用于任何本地 Web 应用）",
+      "text": "```bash"
+    },
+    {
+      "section": "本地直接运行（无需安装，默认代理 127.0.0.1:3080）",
+      "text": "node bin/dsh-bridge.cjs"
+    },
+    {
+      "section": "或安装后",
+      "text": "npm install -g dsh-lan-bridge && dsh-lan-bridge"
+    },
+    {
+      "section": "自定义参数",
+      "text": "dsh-lan-bridge --backend http://127.0.0.1:3080 --http-port 8088\n```\n\n启动后，**手机连同一 WiFi**，打开：\n\n```\nhttp://<电脑局域网IP>:8088\n```\n\n例：`http://192.168.1.100:8088` —— 直接可用，无需任何设置（WebSocket 实时通道已自动转发）。\n\n> 获取电脑局域网 IP：Windows 运行 `ipconfig`，找\"IPv4 地址\"。"
+    },
+    {
+      "section": "一键启动（Windows，CLI 方式）",
+      "text": "解压后双击根目录 [`start.bat`](start.bat)（会自动定位到自身目录，从任何位置双击都不会报\"找不到路径\"）。dsh 需先在 3080 端口运行。"
+    },
+    {
+      "section": "CLI 参数",
+      "text": "| 参数 | 说明 | 默认 |\n| --- | --- | --- |\n| `--backend <url>` | 要代理的后端 | `http://127.0.0.1:3080` |\n| `--http-port <n>` | 监听端口 | `8088` |\n| `--host <addr>` | 绑定地址 | `0.0.0.0` |\n| `--help, -h` | 帮助 | |"
+    },
+    {
+      "section": "安全提醒",
+      "text": "- dsh 网页**没有登录认证**。本工具只适合在**可信局域网**内使用。\n- 请不要把局域网端口直接暴露到公网（没有认证 = 控制权）。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT\n\n---"
+    },
+    {
+      "section": "Why this exists",
+      "text": "Accessing the DeepSeek Harness web UI from a phone hits a nasty trap:\n\n```\ncrypto.randomUUID is not a function\n```"
+    },
+    {
+      "section": "Why this exists",
+      "text": "- The harness client calls `crypto.randomUUID()` for RPC/message ids.\n- That function **only exists in secure contexts (HTTPS or localhost)**; under plain `http://` it is `undefined`.\n- Worse, **Safari/iOS before 15.4 does not have it at all** — even over HTTPS.\n- Adding HTTPS with a self-signed cert doesn't help on **iOS Safari, which hard-blocks invalid certificates with no \"proceed anyway\" button**; a trusted cert needs a real domain/public setup."
+    },
+    {
+      "section": "Why this exists",
+      "text": "So phones are stuck: `http` breaks the app, `https` breaks the page."
+    },
+    {
+      "section": "The fix",
+      "text": "`crypto.getRandomValues()` exists **everywhere** (http, old iOS, every browser). This project injects a tiny polyfill that implements `randomUUID` on top of it, so the UI works over **plain HTTP**."
+    },
+    {
+      "section": "Way 1: install as a dsh plugin (recommended)",
+      "text": "`dsh/index.js` is a dsh bundle plugin that uses `webServer.tapIndex` to inject the polyfill into the harness's own index.html — no extra process, the phone opens dsh's own port.\n\n```bash\ndsh plugin --profile web add dsh-lan-bridge     # or: add /path/to/dsh-lan-bridge"
+    },
+    {
+      "section": "http://<your-lan-ip>:3080",
+      "text": "```"
+    },
+    {
+      "section": "Way 2: standalone CLI proxy (any local web app)",
+      "text": "```bash\nnode bin/dsh-bridge.cjs                          # default backend :3080"
+    },
+    {
+      "section": "or",
+      "text": "npm install -g dsh-lan-bridge && dsh-lan-bridge\ndsh-lan-bridge --backend http://127.0.0.1:3080 --http-port 8088\n```\n\nThen on a phone on the same Wi-Fi open `http://<your-lan-ip>:8088` — no setup at all. WebSocket streams are forwarded automatically. Find your LAN IP with `ipconfig` / `ip addr`.\n\nOn Windows, double-click `start.bat` for the CLI mode (dsh must already be running on 3080)."
+    },
+    {
+      "section": "Security note",
+      "text": "The harness UI has **no authentication**. Use this only on a trusted LAN, and do not expose the LAN port to the public internet."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
