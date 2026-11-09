@@ -1,0 +1,268 @@
+{
+  "repo": "Funny1Potato/dsh-outsourcing-expert",
+  "commit": "2cf20c31d018a21ea25fb023acd88caabc7dc718",
+  "extracted_at": "2026-11-09T07:40:46.786336+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 178511,
+    "lines_by_language": {
+      "JSON": 34,
+      "JavaScript": 2279,
+      "Markdown": 160,
+      "Other": 26,
+      "YAML": 698
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "src/index.js",
+      "tests/contract.test.mjs",
+      "tests/preset-prompt-variables.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-outsourcing-expert",
+    "version": "1.2.4",
+    "description": "DeepSeek Harness agent presets whose leader does no work itself: every non-management tool call is denied at the harness boundary and the task goes to a subagent instead, after a one-time research pass over the available subagent models and a per-task model choice (a second preset deliberately picks the model least suited to the task).",
+    "license": "MIT",
+    "type": "module",
+    "main": "src/index.js",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Funny1Potato/dsh-outsourcing-expert.git"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "agent-preset",
+      "subagent",
+      "delegation"
+    ],
+    "scripts": {
+      "test": "node --test"
+    },
+    "dsh": {
+      "manifestVersion": 1,
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "src/index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-outsourcing-expert bundle patch —— 声明「外包高手 / 领导模式」的三个 agent preset。\n#\n# 这一层 patch 只做一件事：往 preset 注册表里插入 preset 声明。preset 的\n# `plugins` 是一份普通的 Cordis 组合，挂在该 preset 的**子 scope** 下，所以其中的\n# 插件（本包的可执行半侧）天然只对**使用这个 preset 的会话**生效——scope 化的\n# tools/pre-execute 监听器与 systemPrompt 段都由 dsh-scope 按会话过滤，别的 preset\n# 的会话完全看不到它们。\n#\n# 三个 preset 的差别只有 config：\n#   1. 「外包高手」            → config.mode 缺省（外包高手，纯委派）+ reverseHiring: false\n#   2. 「外包高手（独具慧眼）」 → 同上，但 reverseHiring: true，故意反着选（挑最不适合这个任务的）\n#   3. 「领导模式」            → config.mode: leader：自己是执行者也是委派者（干活工具不拦），\n#                              选模判档用同一份全局能力表\n#\n# ⚠ preset 的 `config.id` **一旦发布就不要再改**：id 会被**会话头、界面设置、客户端缓存**\n#   长期引用，改它会让已有会话与已保存的选择全部指向一个不存在的 preset（报\n#   agent-preset/not-found）。用户看到的是 `name`（「外包高手」），以后想改名请只改\n#   name/description。（发布前把旧 id `incompetent-leader` 统一改成了\n#   `outsourcing-expert`，那是最后一次允许动它。`leader` 沿用桌面端 dsh-leader-mode\n#   的 preset id，好让已有会话不失效。）\n#\n# ⚠ 三份花名册必须保持一致：都是官方 standard preset 的原样照抄（含各组件的 isolate\n#   与 !!js 禁用表达式），差别只有最后那行插件的 config。改花名册时三处一起改。\n#   （没有用 YAML 锚点共享，是因为两边的插件行 config 必须不同，而插件行在同一个数组里。）\n#\n# 为什么以 standard 为底：委派出去的子 Agent 仍要有 read / web_search 等工具才能真正\n# 干活——尤其第一轮那个「联网调研模型能力」的侦察兵必须有 web_search。领导自己的\n# 干活工具由插件按 mode 决定拦不拦（外包高手拦、领导模式不拦）。\n- insert:\n    # ====================================================================\n    # preset 1：「外包高手」（正常选人）\n    # ====================================================================\n    - id: preset-outsourcing-expert\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: outsourcing-expert\n        name: 外包高手\n        description: 活都外包出去：自己不亲自动手，按任务的难度与类型挑合适的模型交给子智能体。\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n              suffix: |\n                你处于「外包高手」模式：**作为顶层领导**，你不亲自执行任何操作，所有工作都外包给子智能体；\n                你是被派下来的**子会话**时本条不适用——直接动手干活，不要再往下委派（你会撞上委派深度上限）。\n                用人之前先摸清可选模型各自擅长什么，再决定每一件活交给谁。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              # 只有这一个实例开 modelSelectionSettings：它是 list_subagent_models\n              # 的注册者，也是领导能显式指定 provider / model / reasoning_effort 的前提。\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n                  backgroundMode: continuable\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n          # 本插件：挂在 preset scope 里，所以只对使用本 preset 的会话生效。\n          - id: outsourcing-expert\n            name: dsh-outsourcing-expert\n            config:\n              # 追加到内置白名单的工具（只能加，不能减）。内置名单见 src/index.js\n              # 的 DEFAULT_ALLOW。留空即沿用内置名单。\n              #\n              # 注意：PTC（代码工作工具）模式下领导的原生入口是 run_code，它不在内置\n              # 名单里——要用 ptc preset 就把它加上。本 preset 是 native 工具模式，\n              # 不涉及这条。\n              allowTools: []\n              # 正常选人：按任务类型 + 难度做能力对齐。\n              reverseHiring: false\n              # 子任务失败后是否允许升级模型重试一次。\n              escalateOnFailure: true\n              # 能力表缓存：侦察一次后写到 <DSH_HOME>/outsourcing-expert/models.json（JSON），\n              # 之后所有会话直接把表内联进提示段用、不再侦察（表只在空的时候写入）。\n              # 关掉它就退回「每个会话各自侦察一次」的老行为。\n              capabilityCache: true\n    # ====================================================================\n    # preset 2：「外包高手（独具慧眼）」（专挑干不了这个任务的）\n    # 花名册与 preset 1 逐行相同，只有最后那行插件的 reverseHiring 不同。\n    # ====================================================================\n    - id: preset-outsourcing-expert-reverse\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: outsourcing-expert-reverse\n        name: 外包高手（独具慧眼）\n        description: 同上，但故意反着挑人：照能力表「不适合什么」挑，专挑干不了这个任务的模型。\n        order: 6\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n              suffix: |\n                你处于「外包高手」模式：**作为顶层领导**，你不亲自执行任何操作，所有工作都外包给子智能体；\n                你是被派下来的**子会话**时本条不适用——直接动手干活，不要再往下委派（你会撞上委派深度上限）。\n                用人之前先摸清可选模型各自擅长什么，再决定每一件活交给谁。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n                  backgroundMode: continuable\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n          - id: outsourcing-expert-reverse\n            name: dsh-outsourcing-expert\n            config:\n              allowTools: []\n              # 反向用人：照能力表「不适合什么」那栏反着挑，专挑干不了这个任务的模型。\n              reverseHiring: true\n              escalateOnFailure: true\n              # 与 preset 1 共用同一份能力表缓存（缓存是机器级的，与工作区、用人规则无关）。\n              capabilityCache: true\n    # ====================================================================\n    # preset 3：「领导模式」（执行者 + 委派者；选模判档用全局能力表）\n    # 花名册与前两个 preset 逐行相同，只有 persona 与最后那行插件的 config 不同。\n    # ====================================================================\n    - id: preset-outsourcing-expert-leader\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: leader\n        name: 领导模式\n        description: 在标准模式的基础上加入委派纪律：能自己高效完成的事自己做，可拆分/可并行或更适合别的能力档位的活委派给子智能体——选模判档用全局能力表。\n        order: 7\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n              suffix: |\n                你处于「领导模式」。你既是执行者，也是委派者：能自己高效完成的事就自己做；当任务可拆分、可并行，或某个子任务明显更适合另一种能力档位的模型时，把它委派给子智能体，并为它挑选性能合适的模型。\n\n                ## 一、委派前的模型选择规程\n                按以下顺序决定每次委派的 provider / model / reasoning_effort：\n                1. 发现：先调用 `list_subagent_models`（无参数）列出当前已授权的 provider；再对候选 provider 调用 `list_subagent_models({ provider })` 取得它公布的模型与推理档位，需要更细时用 `{ provider, model }` 查看该模型的档位与默认值。你只能在返回结果内选择，绝不编造或猜测目录外的模型名；该工具不可用时不要指定模型，交给默认路线。\n                2. 判档：用第二节的对照表，把模型名映射到能力档位。名称是线索，不是保证。\n                3. 联网核实：当模型名陌生、名称含义模糊（例如只有厂商前缀），或这次选择代价较高（长任务、高并发扇出、昂贵模型）时，用 `web_search` 搜索该模型的**实际适用场景与基准表现**（例如「<模型名> 适用场景 评测 benchmark」），确认真实强弱与擅长领域后再决定，并在说明里给出来源链接。日常小任务不必搜索。\n                4. 决定与说明：综合档位与核实结果，选定 provider / model / reasoning_effort，并把一句话理由写进委派提示，让你的判断对用户可见。\n\n                ## 二、模型名称 → 能力档位对照表（内置启发式）\n                | 名称特征 | 档位 | 适合的任务 | 建议 reasoning_effort |\n                | --- | --- | --- | --- |\n                | flash、lite、mini、small、tiny、turbo、air，或 1b–8b 一类小参数 | 轻量快速 | 机械改写、格式转换、批量提取、简单摘要、大量可并行的小步骤 | low |\n                | 无后缀、standard、medium，或 30b–70b 一类中等参数 | 均衡 | 常规编码、补测试、文档、局部重构、按明确步骤执行 | medium |\n                | pro、max、ultra、opus、large、thinking、reasoner，r1/o1 一类推理命名，或 200b+ 大参数 | 旗舰强推理 | 架构设计、疑难调试、跨模块重构、关键代码审查、模糊需求拆解 | high |\n                | coder、code、devstral 等代码专精命名 | 代码专精 | 代码生成与修复；再按其中的参数规模落到上面三档 | 按规模取 medium 或 high |\n                | vl、vision、omni 等多模态命名 | 多模态 | 需要看图、看截图或核对界面的任务 | 按规模 |\n                补充规律：名称里的版本号（v4、3.5）表示代际，越新通常越强；`b` 后缀是参数规模，数字越大通常越强；名称里带 `128k`、`1m` 等表示上下文窗口，需要吞入大文件或长日志的子任务优先选大窗口型号；被明确标注为 tiny、nano 的嵌入式型号不要用于需要推理的任务；名称完全无法归类时按「均衡」处理，并用 `web_search` 核实。\n\n                ## 三、选择纪律\n                - 够用就好：能用低档模型完成的绝不用高档，成本与延迟优先。\n                - 难度对齐：机械、可校验的工作下放给轻量档；需要判断力、架构感或长链条推理的工作留给旗舰档。\n                - 上下文对齐：需要通读大量文件或日志的子任务，选大上下文窗口的型号。\n                - 并行优先：相互独立的委派在同一轮内一起启动，然后继续做别的事，不要串行等待。\n                - 需要你的对话上下文时用 `subagent_fork`；全新独立子任务用 `subagent`。\n                - 每个委派都要给出明确的完成标准与产出格式；返回后自行核对结果，不要把未经核验的子智能体结论直接当作事实。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n                  backgroundMode: continuable\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n          - id: outsourcing-expert-leader\n            name: dsh-outsourcing-expert\n            config:\n              allowTools: []\n              # 领导模式：自己是执行者也是委派者（插件不硬拦截干活工具），选模判档用全局能力表。\n              mode: leader\n              escalateOnFailure: true\n              # 与前两个 preset 共用同一份机器级能力表缓存。\n              capabilityCache: true"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/index.js:283"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:48"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Funny1Potato/dsh-outsourcing-expert.git",
+      "where": "package.json:10"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "tests/contract.test.mjs:127"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/b",
+      "where": "tests/contract.test.mjs:128"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "tests/contract.test.mjs:772"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/b",
+      "where": "tests/contract.test.mjs:773"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "tests/contract.test.mjs:797"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/b",
+      "where": "tests/contract.test.mjs:798"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "tests/contract.test.mjs:824"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/b",
+      "where": "tests/contract.test.mjs:825"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "command",
+      "name": "outsourcing-models",
+      "where": "tests/contract.test.mjs:922"
+    },
+    {
+      "kind": "command",
+      "name": "outsourcing-models-clear",
+      "where": "tests/contract.test.mjs:923"
+    },
+    {
+      "kind": "command",
+      "name": "outsourcing-models-init",
+      "where": "tests/contract.test.mjs:960"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 20,
+    "pushed_at": "2026-10-23T09:14:20Z",
+    "created_at": "2026-09-30T16:08:13Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "外包高手（dsh-outsourcing-expert）",
+      "text": "[](https://github.com/Funny1Potato/dsh-outsourcing-expert/actions/workflows/ci.yml)\n\n一个 DSH 插件包：声明三个 agent preset。其中两个把「领导」变成**不亲自干活、把活全外包出去**的角色——先摸清可选模型各自擅长什么，再按任务的难度与类型决定每一件活交给谁；第三个「领导模式」则是**执行者 + 委派者**（自己也能干活），插件只给它注入全局能力表。"
+    },
+    {
+      "section": "外包高手（dsh-outsourcing-expert）",
+      "text": "| preset | id | 选人规则 |\n| --- | --- | --- |\n| **外包高手** | `outsourcing-expert` | 能力对齐：先按**任务类型**挑「擅长」命中该类的模型，再按**难度**定档——简单 →轻量快速，中等 →均衡，困难 →代码专精或强推理，极难 →旗舰强推理 |\n| **外包高手（独具慧眼）** | `outsourcing-expert-reverse` | 故意反着来：照能力表「不适合什么」那栏挑，**专挑干不了这个任务**的模型 |\n| **领导模式** | `leader` | 自己的纪律 + 全局能力表：保留「执行者 + 委派者」的身份，能自己高效完成的事自己做；委派时判档优先照全局能力表（表外模型按原有的发现 / 联网核实流程） |\n\n外包高手两个 preset 只差插件行配置里的 `reverseHiring`，**没有运行时开关**，选哪个就是哪个；领导模式是第三份 preset（插件行 `mode: leader`），**不硬拦截干活工具**，插件只注入能力表。"
+    },
+    {
+      "section": "外包高手（dsh-outsourcing-expert）",
+      "text": "**只在使用这三个 preset 的会话里生效**：preset 的 `plugins` 挂在该 preset 自己的 scope 下，scope 化的拦截器与提示段由宿主按会话过滤；别的 preset（standard、ptc…）的会话完全看不到。"
+    },
+    {
+      "section": "English summary",
+      "text": "A DSH (DeepSeek Harness) plugin bundle that declares three agent presets. Two of them — `outsourcing-expert` and `outsourcing-expert-reverse` — make the top-level agent do no work itself: every non-management tool call (`read`, `write`, `pwsh`, `web_search`, `workflow`, `skill`, …) is **denied at the harness boundary**, so the task has to go to a subagent, and the chosen provider and model have to be named in each delegation. Before the first delegation the leader must look up the available subagent models and research them once; that research is cached at `<DSH_HOME>/outsourcing-expert/models.json` and inlined into the system prompt from then on, so later sessions skip it entirely — while no cache exists, a delegation without a roster lookup, or a first delegation not run in the foreground, is refused at the harness boundary. `outsourcing-expert-reverse` deliberately picks the model least suited to the task. The third preset, `leader` (领导模式), keeps the standard mode's identity (it may do work itself, nothing is denied) and keeps its own discovery/tiering/web-verification discipline; the plugin only injects the same global capability table (and builds it when empty) into its prompt"
+    },
+    {
+      "section": "English summary",
+      "text": "Install: `dsh plugin --profile <profile> add dsh-outsourcing-expert` (or from GitHub: `github:Funny1Potato/dsh-outsourcing-expert`), then start a new session and pick 外包高手, 外包高手（独具慧眼） or 领导模式. Only the three presets this bundle declares are affected; other presets are untouched."
+    },
+    {
+      "section": "它做什么",
+      "text": "> 以下 1–5 节描述**外包高手**两个 preset（`mode` 缺省）。**领导模式**（`mode: leader`）不硬拦截、也不搬这套纪律，见第 6 节。"
+    },
+    {
+      "section": "1. 硬拦截（`tools/pre-execute` 瀑布）",
+      "text": "领导每次要调用「干活」工具（`read` / `write` / `edit` / `pwsh` / `bash` / `grep` / `web_search` / `workflow` / `skill` / 自省……）时，插件在派发前直接返回 **`{ kind: 'deny' }`**，并附一条说明要求改用 `subagent` / `subagent_fork` 外包出去。**没有任何副作用被执行。**\n\n放行名单（内置，可用配置项 `allowTools` 追加）："
+    },
+    {
+      "section": "1. 硬拦截（`tools/pre-execute` 瀑布）",
+      "text": "| 类别 | 工具 |\n| --- | --- |\n| 沟通与规划 | `ask_user_question`、`todo_write`、`exit_plan_mode` |\n| 目标 | `get_goal`、`create_goal`、`update_goal`（见下方「定目标」） |\n| 委派 | `subagent`、`subagent_fork` |\n| 照看下属 | `list_subagent_models`、`list_agents`、`send_message`、`interrupt_agent` |"
+    },
+    {
+      "section": "1. 硬拦截（`tools/pre-execute` 瀑布）",
+      "text": "**子 Agent 免检**：判据是会话头 `origin === 'subagent'` 或 `delegationDepth > 0`——宿主自己就是用这个字段区分顶层会话与子会话的。所以直接子 Agent、孙子 Agent、`workflow` 与 teammate 派生的子 Agent 都照常干活，resume 后依然成立。宿主内部不带 agent 的调用也放行。**同一套纪律段也只发给顶层领导**（子会话装配时拿到空段）——否则侦察兵会照着「结论不由你产出、外包给子智能体」去派它自己的子智能体，撞委派深度上限、交不回表；persona 里同样写明了「子会话不适用」。"
+    },
+    {
+      "section": "2. 说话方式（提示层）",
+      "text": "- **只准说一句过程话：选人理由**：每次委派那一刻，必须用一句话说清为什么是它——这是唯一允许的过程话，**交付最终结果时不再重复**。正常模式讲「为什么它合适」（任务类型 + 难度 + 该模型的「擅长」）；**独具慧眼装作看走眼**，给一条听起来匹配的理由、不提它其实不合适。除此之外不写「我先去取模型名册」「我现在派个子智能体去调研」这类旁白。\n- **模型名要出现在卡片上（两条腿）**：\n  - **折叠时看的是 `description`**：纪律段要求模型把选定模型写进委派参数 `description` 开头，格式 `<provider>/<model>：<任务>`（走默认路线时写 `默认路线：<任务>`）。父会话里那张卡片**折叠**只显示这一行，客户端按工具名写死、宿主侧改不了，所以模型名只能由模型自己写进参数。**这一条是提示层**，漏写就只有展开才看得到。\n  - **展开后另有插件自动补的一行**：每条委派结果里会被插件在**正文最前面**插一行\n    `▸ 委派模型：<provider> / <model>（effort）｜任务：<description>`（没指定模型时写「未指定 → 用配置的默认路线」）。\n    之所以必须在最前面：界面折叠卡片只取结果里**第一个**非空文本块当预览（`ui-trajectory` 的 `summarizeResult`），追加在末尾就只有展开才看得见。\n    这是插件在 `tools/post-execute` 里改写结果正文加上的（只换正文、**不动结构化 value**，所以后台委派的 subagentId 之类照旧），**不依赖模型自己说**——模型漏写或写错，展开后仍能看到真实路由。失败（`isError`）的结果不加这行。\n- **能力表不外露**：第一轮侦察得到的能力表只作为自己的选人依据，**不展示给用户**。\n- **结论不由你产出**：连简单问答（「怎么装」「这是什么」）也先派 `subagent` 去查/去答，拿到结论再转述；也不自己在正文里替子智能体做推导、算数字或下判定。只有纯寒暄确认、向用户追问这两类可以直接接。"
+    },
+    {
+      "section": "3. 用人：先侦察（只做一次），再按能力表派活",
+      "text": "1. **第一轮（本机没有缓存时）——侦察候选模型的能力**\n   - 调 `list_subagent_models` 拿到**完整的授权模型名册**（无参数列 provider，再按 provider 列模型）；\n   - 从名册里**随机挑一个**模型当「侦察兵」（不挑「看起来最强」的）；\n   - 用 `subagent` 显式指定这个模型，并传 `run_in_background: false`（下一步依赖它的结果），把**完整名册**贴进委派提示，要求它**自己**用 `web_search` 逐个查「擅长什么、适合哪类任务、评测口碑如何」并附来源，按固定格式返回一张**能力表**（别让它再往下委派——它在深度上限，再派会被系统拒）；\n   - 名册拿不到时**不要瞎猜**：跳过侦察、省略 `provider`/`model` 交给默认路线。\n   - **顺序是代码强制的**：必须**先查名册**才准发第一条委派，而且那一条必须是**前台**（`run_in_background: false`）、那一刻**不许**同时派别的活——跳过名册、默认后台、或把侦查和干活并行发出，都会被当场拒绝并附上改法。\n   - **侦察结果由插件自动落盘**（见下方「能力表缓存」）：之后**所有会话都不再侦察**，这条流程只走一次。\n2. **之后每一轮——按能力表外包**：判任务难度**与类型** → 从能力表里选人（只能在表内选，绝不编造模型名）→ **选定的模型要显式传给 `subagent`**（`provider` + `model`，必要时带 `reasoning_effort`）**并按 `<provider>/<model>：<任务>` 的格式写进 `description`**（不写进调用参数就等于没选，卡片上也看不到）→ 失败可升级重试一次。\n   查不到的模型用名称启发式补上并标注「未核实」：`flash/lite/mini/small`=轻量快速，`standard/medium`=均衡，`coder/code`=代码专精，`pro/max/ultra/thinking/reasoner`=旗舰强推理，无法归类=均衡。"
+    },
+    {
+      "section": "3.5 能力表缓存（侦察一次，之后所有会话直接用）",
+      "text": "「这些模型各自擅长什么」是这台机器的属性，与会话、工作区无关，却要花一次联网搜索才能得到——所以侦察成功后插件就把表写下来，之后直接把表**内联进系统提示段**。"
+    },
+    {
+      "section": "3.5 能力表缓存（侦察一次，之后所有会话直接用）",
+      "text": "| 项 | 值 |\n| --- | --- |\n| 位置 | `<DSH_HOME>/outsourcing-expert/models.json`（`$DSH_HOME` 未设时即 `~/.dsh`；可用配置项 `storeDir` 改） |\n| 格式 | **JSON**（`models.json`）：`updatedAt` / `source`，正文要么是 `models`（按表头解析出的结构化数组：model / tier / 擅长 / 不适合 / 来源），要么是 `raw`（解析不出结构时的原文兜底）——两种都是 JSON，**手工编辑也没问题**。老 `models.md` 仍可读（只读兼容），下次写入自动转成 JSON 并删掉它 |\n| 写入时机 | **只在本机没有表时写**。已有表时永不自动覆盖——想换新表就 `/outsourcing-models-clear` 或直接删文件 |\n| 体检 | 侦察结果要「像一张能力表」（≥2 行含 `provider/model`，且出现能力档位词）才会被写；不像就不写，宁缺勿脏。**标记只在真的写进去时才消费**——第一条侦察翻车后，本会话后面那次合格的表照样能落盘（连续 3 次都不像才放弃本会话） |\n| 上限 | 正文约 6000 字符，超出按码点安全截断（它会进每次请求的系统提示） |\n| 命令 | `/outsourcing-models` 看（路径、更新时间、来源、正文）｜`/outsourcing-models-clear` 清空｜`/outsourcing-models-init` 清空**并让当前会话重新侦察一次** |"
+    },
+    {
+      "section": "3.5 能力表缓存（侦察一次，之后所有会话直接用）",
+      "text": "缓存存在时，提示段换成「直接用表」的版本（表正文附在末尾），并且**两道代码门一起取消**——它们只为保证侦察真的发生，没有侦察要做时就不该再要求前台与名册。两个 preset 共用同一份缓存（缓存的是一致的事实，不是用人规则）。"
+    },
+    {
+      "section": "4. 定目标必须先问下属",
+      "text": "`get_goal` / `create_goal` / `update_goal` **只属于领导**（子 Agent 调会被服务拒绝）。所以纪律段要求：先派一个 subagent 评估并给出建议的目标（objective + max_goal_rounds + 理由），拿到答复后才准 `create_goal`。"
+    },
+    {
+      "section": "5. 失败升级（`escalateOnFailure`，默认开）",
+      "text": "子任务失败或明显没做好时，允许**换更高一档的模型重试一次**；第二次仍失败就停下来向用户汇报，不无限重试。"
+    },
+    {
+      "section": "6. 领导模式（第三个 preset）：只加能力表，纪律保持原样",
+      "text": "「领导模式」**不搬外包高手那套纪律**：它自己是执行者也是委派者，`read` / `write` / `web_search` 等干活工具**不被拦截**；它的选模纪律（发现 → 判档 → 联网核实 → 内置启发式对照表）完整保留在 persona 里。插件只做两件事：\n\n- 本机有能力表缓存时，把表内联进提示段，并说明「判档优先照表，表里没覆盖的模型再按原有的发现 / 联网核实流程」；\n- 本机还没有缓存时，提示段给出建表流程（查名册 → 前台派一个侦察兵联网调研 → 结果自动缓存），建好之前选模仍按它自己的流程走。\n\n建表与缓存机制和外包高手**完全共用**：同一个 `<DSH_HOME>/outsourcing-expert/models.json`，三个 preset 共用一份。"
+    },
+    {
+      "section": "安装与启用",
+      "text": "从 npm 装（<https://www.npmjs.com/package/dsh-outsourcing-expert>）：\n\n```sh\ndsh plugin --profile <profile> add dsh-outsourcing-expert\n```\n\n从 GitHub 装也可以（包里没有 `prepare` / `build` 脚本，源码安装不需要 `allowBuilds` 授权）：\n\n```sh\ndsh plugin --profile <profile> add github:Funny1Potato/dsh-outsourcing-expert\n```\n\n或从本地 checkout 装：\n\n```sh\ndsh plugin --profile <profile> add link:<本目录绝对路径>\n```"
+    },
+    {
+      "section": "安装与启用",
+      "text": "Desktop 端走界面最省事（**插件 → 添加插件**，填包名 `dsh-outsourcing-expert`，或 GitHub 名、本地目录绝对路径、`link:<路径>`）；要用命令行管 `desktop` profile，得用桌面端**自带的那份** `dsh`（`where dsh` 里排第一的那个），别的 dsh 安装会被拒（`profile \"desktop\" is managed exclusively by the Electron application`）。装完后**新建会话**，在 preset 选择里选「外包高手」「外包高手（独具慧眼）」或「领导模式」。"
+    },
+    {
+      "section": "安装与启用",
+      "text": "插件面向 **DSH 0.2.x**。persona 文案里只出现宿主注册过的 `{{model}}` / `{{provider}}`：0.2.x 的 prompt 装配是严格解析的，引用未注册的变量会让整轮直接抛 `unknown prompt variable`（1.2.3 及更早的版本在这里留了一句 0.1.x 时代的 `{{cwd}}`，导致三份 preset 全部发不出消息，见 [issue #1](https://github.com/Funny1Potato/dsh-outsourcing-expert/issues/1)）。工作目录不需要自己写——persona 行默认 `includeRuntimeContext: true`，宿主会把「当前工作目录」等作为运行时上下文单独注入。"
+    },
+    {
+      "section": "文件",
+      "text": "| 文件 | 作用 |\n| --- | --- |\n| `cordis.patch.yml` | 唯一的 patch 层：插入三条 `@deepseek-ai/dsh-agent-preset` 声明。三份花名册都以官方 standard preset 为底（原样照抄），只差最后那行插件的 `config`（`reverseHiring` / `mode`）——**改花名册时三处一起改** |\n| `src/index.js` | 可执行半侧：拦截、顺序纪律、纪律段、能力表缓存的读写与三条 `/outsourcing-models*` 命令（三个 preset 共用同一份代码，按插件行 `config.mode` 分行为） |\n| `tests/contract.test.mjs` | 契约测试（记录型 ctx 桩，不依赖宿主） |\n| `LICENSE` | MIT |"
+    },
+    {
+      "section": "配置项（preset 里那行插件的 `config`）",
+      "text": "| 键 | 类型 | 说明 |\n| --- | --- | --- |\n| `allowTools` | `string[]` | **追加**到内置白名单的工具名（只能加，不能减） |\n| `reverseHiring` | `bool` | 外包高手用：`false`=按类型与难度挑最合适的，`true`=照「不适合什么」挑最不合适的。**外包高手两个 preset 唯一的差别** |\n| `mode` | `'outer' \\| 'leader'` | `outer`（缺省）=外包高手：硬拦截干活工具、搬全套纪律；`leader`=领导模式：不拦截，插件只注入能力表（纪律留在 persona） |\n| `escalateOnFailure` | `bool` | 失败后是否允许升级模型重试一次（提示层规则） |\n| `capabilityCache` | `bool` | 默认 `true`。`false` = 不读写能力表缓存，退回「每个会话各自侦察一次」（两道代码门仍在） |\n| `storeDir` | `string` | 缓存目录（放着 `models.json` 的那个目录）。默认 `<DSH_HOME>/outsourcing-expert` |"
+    },
+    {
+      "section": "开发与验证",
+      "text": "```sh\nnode --test        # 契约测试：导出形状、提示段字段、拒绝形状、白名单、子 Agent 判据、两个 preset 的规则差异、说话方式文案、能力表缓存的读写与两道门、persona 文案里的模板变量白名单\n```"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **硬拦截只作用于外包高手两个 preset**：领导模式（`mode: leader`）自己是执行者，干活工具不拦，插件只注入能力表。想让外包高手退化成纯提示词模式，把 `src/index.js` 里 `tools/pre-execute` 的 `return { kind: 'deny', ... }` 改成 `return next()` 即可。\n- **第一轮侦察只需一次**（本机没有缓存时），之后走缓存。但缓存的**质量取决于那一次侦察兵**：它是模型写的表，可能不准；而且换 provider / 加模型后表会过时——`/outsourcing-models-init` 清掉并当场重新侦察。\n- **缓存是机器级全局的一份**（`AssembleContext` 只给 `{ scope, signal }`，拿不到会话与工作区，所以也只能是全局）。同一台机器上的所有工作区、三个 preset 共用它。\n- **侦察结果格式不达标就不会被缓存**：体检要求「≥2 行含 `provider/model` 且出现能力档位词」。达不到就只是这一次会话没有表，下个会话还得重来（不会写坏缓存）。\n- **选人规则是提示层，不是运行时强制**。宿主的 `tools/pre-execute` **明确排除「改写参数」**（参数此刻已记入日志并展示给用户），插件无法在派发前替领导把 `provider` / `model` 改掉。要真正做到「插件接管选人」，得自己注册一个委派工具并用 `ctx.subagents.start({ agentOptions })` 固定路由——那是另一套实现。\n- **外包高手两个 preset 都是 native 工具模式**，不涉及 PTC。若拿这份花名册去搭 ptc preset，记得把 `run_code` 加进 `allowTools`（否则领导的唯一原生入口也被拦掉）。\n- **运行中的会话不会自动拿到新配置**：改代码或 `cordis.patch.yml` 后需重启 host（或在插件页停用再启用）；已存在的会话保持它创建时的 preset 组合，要**新建会话**才生效。"
+    },
+    {
+      "section": "已知限制",
+      "text": "---\n\n[](https://github.com/deepseek-ai/deepseek-harness)"
+    }
+  ],
+  "skipped": []
+}
