@@ -1,0 +1,200 @@
+{
+  "repo": "gaoyian7251/dsh-window-state",
+  "commit": "f301b3a9967877744e040a170a105fabfcf4cf5d",
+  "extracted_at": "2026-11-09T15:16:52.795258+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 71093,
+    "lines_by_language": {
+      "JSON": 69,
+      "JavaScript": 622,
+      "Markdown": 598,
+      "Other": 44,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "DEVELOPMENT.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-window-state",
+    "version": "0.1.1",
+    "description": "窗口启动状态：在 设置 → 通用设置 里选择 DSH 桌面窗口每次启动时以 默认 / 最大化 / 全屏 打开（Windows）。",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "DEVELOPMENT.md",
+      "LICENSE"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/gaoyian7251/dsh-window-state.git"
+    },
+    "homepage": "https://github.com/gaoyian7251/dsh-window-state#readme",
+    "bugs": {
+      "url": "https://github.com/gaoyian7251/dsh-window-state/issues"
+    },
+    "author": "gaoyian7251",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "window",
+      "maximize",
+      "fullscreen",
+      "startup",
+      "settings"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "peerDependencies": {
+      "react": "^18.2.0"
+    },
+    "peerDependenciesMeta": {
+      "react": {
+        "optional": true
+      }
+    },
+    "dsh": {
+      "engines": {
+        "dsh": ">=0.2.0-rc.1"
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-slots",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    },
+    "dependencies": {}
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch for dsh-window-state.\n#\n# The row below mounts the plugin as a profile layer; the package's `dsh.client`\n# block (package.json) serves and loads the browser half.\n- insert:\n    - id: dsh-window-state\n      name: dsh-window-state\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/gaoyian7251/dsh-window-state.git",
+      "where": "package.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/gaoyian7251/dsh-window-state#readme",
+      "where": "package.json:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/gaoyian7251/dsh-window-state/issues",
+      "where": "package.json:26"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-10-08T01:34:19Z",
+    "created_at": "2026-10-04T03:45:32Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-window-state",
+      "text": "在 DSH 桌面客户端的 **设置 → 通用设置** 里增加一行「启动窗口状态」，可选择每次启动时窗口以 **默认 / 最大化 / 全屏** 打开（Windows）。"
+    },
+    {
+      "section": "原理",
+      "text": "DSH 桌面主窗口由 Electron 主进程创建，插件运行时（Host / Client）没有任何 IPC 或服务能触达 `BrowserWindow` 的 maximize / fullscreen（已反编译 `app.asar` 验证：唯一的窗口状态通道 `dsh-desktop:window-fullscreen` 是主进程→渲染进程的单向通知，且 `main.js` 里没有任何全屏/最大化入口）。\n\n因此本插件走**越界机制**——通过 Win32 API（`user32.dll`）从子进程定位并控制窗口："
+    },
+    {
+      "section": "原理",
+      "text": "- 用 `EnumWindows` 按窗口类 `Chrome_WidgetWin_1` + 标题含 `DeepSeek Harness` 定位主窗口（不能用进程 pid，因为 Host Node 进程与 Electron 主进程是不同 pid）。\n- `ShowWindowAsync(hwnd, SW_MAXIMIZE / SW_RESTORE)` 实现最大化 / 还原。\n- 全屏：剥离 `WS_CAPTION | WS_THICKFRAME` 样式 + `SetWindowPos` 到全屏分辨率；退出时恢复样式并重新最大化。\n\n选择持久化在 `localStorage`（`dsh-window-state:startup`），两条路径生效：\n\n1. `webserver/index-inject` 注入一段同步脚本，在**启动最早时刻**读取并应用选择。\n2. `POST /dsh-window-state/apply` 在用户修改设置时**立即**应用。"
+    },
+    {
+      "section": "局限",
+      "text": "- 仅 Windows（依赖 PowerShell + Win32 API）。\n- 全屏是通过剥离窗口边框实现的「伪全屏」，等价于 `BrowserWindow.setFullScreen(true)` 的视觉效果（无系统标题栏、铺满整个显示器）。\n- 依赖 PowerShell（`powershell.exe` 或 `pwsh.exe`）与 `user32.dll`，均为 Windows 自带或可免费安装的组件。**不要求它们出现在 PATH 里**：插件会先探测各个绝对安装位置（含 `%SystemRoot%\\System32\\WindowsPowerShell\\v1.0`、PowerShell 7 / 7-preview、应用商店版 pwsh，以及两个 `C:\\` 字面量兜底），全都不可用才退回 PATH 查找。即便如此，PATH 被清理过的机器仍建议修回来——见下面「常见问题」。"
+    },
+    {
+      "section": "安装",
+      "text": "**从 GitHub 安装**（推荐，尚未发布到 npm）：\n\n```\ngithub:gaoyian7251/dsh-window-state\n```\n\n在 DSH 的 **设置 → 插件 → 安装** 里填入上面的标识，或通过 CLI 安装到 profile：\n\n```powershell\ndsh plugin install github:gaoyian7251/dsh-window-state\n```\n\n也可以直接把仓库克隆到 profile 的 `node_modules` 下。**安装后需重启桌面客户端才生效**（profile 的插件图在进程启动时构建）。"
+    },
+    {
+      "section": "使用",
+      "text": "重启后打开 **设置 → 通用设置**，找到「**启动窗口状态**」一行，选择 **默认 / 最大化 / 全屏**：\n\n- 选择会立刻应用到当前窗口，并持久化，下次启动自动生效；\n- **默认** = 保持 Electron 记住的上次窗口位置与大小。"
+    },
+    {
+      "section": "换台电脑后就不好使了：提示「未能立即应用（spawn powershell.exe ENOENT）」",
+      "text": "这台机器的 PATH 里没有 `powershell.exe`。它**不在** `C:\\Windows\\System32` 根目录，而在 `C:\\Windows\\System32\\WindowsPowerShell\\v1.0` —— 只有该子目录出现在 PATH 里时，`spawn('powershell.exe')` 才找得到它（Windows 的 `CreateProcess` / `SearchPathW` 不查 App Paths 注册表）。某些安装器或「PATH 优化 / 清理」工具会把系统 PATH 整段重置，连带丢掉 Windows 默认项，于是换台电脑就失效。\n\n先确认（30 秒）：\n\n```powershell\ncmd /c \"where powershell.exe\""
+    },
+    {
+      "section": "INFO: Could not find files for the given pattern(s).   ← 就是这个原因",
+      "text": "Test-Path \"$env:SystemRoot\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\""
+    },
+    {
+      "section": "True                                                  ← 文件在，只是不在 PATH",
+      "text": "```\n\n修法（二选一，**改完都必须重启 DSH 桌面客户端**，进程环境变量只在新进程里生效）：\n\n**1. 把目录加回 PATH**（推荐，顺便修好其他依赖 `powershell.exe` 的工具，例如 DSH Market 的「重启应用」）\n%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\n```\n\n顺手建议确认 `%SystemRoot%` 和 `%SystemRoot%\\System32\\Wbem` 也在。"
+    },
+    {
+      "section": "True                                                  ← 文件在，只是不在 PATH",
+      "text": "**2. 依赖插件自带的解释器探测与环境修正**（v0.1.1+ 起）\n1. <Windows>\\System32\\WindowsPowerShell\\v1.0\\powershell.exe   ← 5.1，正常位置\n2. <PF>\\PowerShell\\7\\pwsh.exe                                 ← PowerShell 7\n3. <PF>\\PowerShell\\7-preview\\pwsh.exe                         ← PowerShell 7 预览版\n4. %LOCALAPPDATA%\\Microsoft\\WindowsApps\\pwsh.exe              ← 应用商店版 pwsh 的执行别名\n5. C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe  ← 环境变量取不到时的字面兜底\n6. C:\\Program Files\\PowerShell\\7\\pwsh.exe                     ← 同上\n7. powershell.exe                                             ← 最后才退回 PATH 查找\n8. pwsh.exe"
+    },
+    {
+      "section": "True                                                  ← 文件在，只是不在 PATH",
+      "text": "<PF> 依次取 %ProgramW6432%、%ProgramFiles%、字面 C:\\Program Files\n```\n\n绝对路径候选会先用 `existsSync` 过滤、按大小写不敏感去重，所以上面这串在多数机器上实际只会保留 2～4 条。\n\n（`%SystemRoot%` 本身取不到时，会依次用 `%windir%`、`%SystemDrive%\\Windows`、`C:\\Windows`。）powershell\nwinget install --id Microsoft.PowerShell\n```\n\n另外，插件在起子进程前会**修正子进程的环境变量**，而不是原样透传："
+    },
+    {
+      "section": "True                                                  ← 文件在，只是不在 PATH",
+      "text": "- **PATH**：缺哪补哪，把 `%SystemRoot%\\System32`、`%SystemRoot%`、`%SystemRoot%\\System32\\Wbem`、`…\\WindowsPowerShell\\v1.0` 补到最前，**不删你原有的任何条目**；powershell\ncmd /c rmdir \"$env:USERPROFILE\\.dsh\\profiles\\desktop\\node_modules\\dsh-window-state\"\ndsh plugin install github:gaoyian7251/dsh-window-state\n```\n\n从 git 安装的是真实目录，之后卸载 / 升级都不会再有这个问题。\n\n> **⚠️ 只能用 `cmd /c rmdir` 删这个链接。** 不要用 PowerShell 的 `Remove-Item -Recurse`：它会穿透 Junction 去删链接指向的目录 —— 也就是你的插件源码（曾因此把源码仓库的 `.git` 删坏）。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\nlib/index.js    Host 半（Win32 helper + webServer 路由 + index-inject）\nlib/client.js   Client 半（settings.general.item 行 + 分段控件）\ncordis.patch.yml  挂载补丁\npackage.json      包清单（dsh.client / dsh.bundle.patch）"
+    }
+  ],
+  "skipped": []
+}
