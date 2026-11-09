@@ -1,0 +1,149 @@
+{
+  "repo": "simon300000/dsh-auto",
+  "commit": "d6f573e4851315baca5f7e83e0d52574e3b1d649",
+  "extracted_at": "2026-11-09T10:27:03.267987+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 2583081,
+    "lines_by_language": {
+      "JSON": 40,
+      "JavaScript": 1424,
+      "Markdown": 242,
+      "Other": 159,
+      "YAML": 41
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "docs/images/auto-approve-allowed.png",
+      "docs/images/auto-approve-denied.png",
+      "docs/images/auto-approve-permission.en.jpg",
+      "docs/images/auto-approve-permission.zh.jpg",
+      "package.json",
+      "prompts/policy-template.md",
+      "prompts/policy.md",
+      "src/index.js",
+      "tests/auto-approve.spec.js",
+      "vitest.config.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-auto",
+    "version": "0.1.0",
+    "description": "Model-reviewed Auto Approve permission preset for the DeepSeek Harness Web UI",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js"
+    },
+    "files": [
+      "src/index.js",
+      "prompts/*.md",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "vitest run"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin",
+      "approval",
+      "webui"
+    ],
+    "license": "MIT",
+    "packageManager": "pnpm@11.7.0",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "devDependencies": {
+      "vitest": "^4.1.8"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 此 bundle 必须安装在 dsh-web-app 之后。它覆盖权限预设表，并在 Web\n# 人工审批应答器之前插入模型审查器。\n\n- id: permission\n  config:\n    presets:\n      read-only:\n        sandbox: read-only\n        approval: ask\n      workspace-write:\n        sandbox: workspace-write\n        approval: ask\n      auto-approve:\n        sandbox: workspace-write\n        approval: ask\n        name: 🧐 Auto Approve\n        description: 在工作区写入沙箱内自动批准或拒绝需要高权限的操作。\n      danger-full-access:\n        sandbox: danger-full-access\n        approval: never\n\n- insert:\n    - id: dsh-auto-approve\n      name: dsh-auto\n      config:\n        language: auto\n        reviewerProvider: deepseek-official\n        reviewerModel: deepseek-v4-flash\n        reviewerReasoningEffort: high\n        timeoutMs: 90000\n        maxInvestigationSteps: 4\n        maxConsecutiveDenials: 3\n        maxMessageTranscriptTokens: 4000\n        maxToolTranscriptTokens: 3000\n        maxMessageEntryTokens: 1000\n        maxToolEntryTokens: 512\n        maxSystemInstructionTokens: 6000\n        maxAgentInstructionTokens: 6000\n        maxRecentNonUserEntries: 20\n        maxActionChars: 16000\n        maxOutputTokens: 8192\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "vitest": "^4.1.8"
+    }
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-09-10T14:17:56Z",
+    "created_at": "2026-08-13T17:08:31Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-auto",
+      "text": "English | [中文](README.zh.md)\n\n`dsh-auto` adds an `Auto Approve` permission preset to the DeepSeek Harness Web UI. Each action that requires approval is reviewed by a fresh, restricted DSH child Agent before the plugin allows or denies it.\n\nThe current release supports the Web UI only."
+    },
+    {
+      "section": "Screenshots",
+      "text": "Select the `🧐 Auto Approve` permission preset (DSH 0.1.5-rc.1, English UI):\n\nThe Reviewer allows a bounded read-only action:\n\nThe Reviewer denies a high-risk action without sufficient user authorization:"
+    },
+    {
+      "section": "How it works",
+      "text": "```mermaid\nflowchart TD\n    action[\"Action\"] --> sandbox{\"Allowed by<br/>workspace-write?\"}\n    sandbox -- Yes --> execute[\"Execute directly\"]\n    sandbox -- \"No: request escalation\" --> review[\"🧐 Auto Approve\"]\n\nWith `Auto Approve` selected, ordinary actions permitted by `workspace-write` run without a Reviewer call. The diagram shows the sandbox-escalation path; other tool approval rules can also trigger Auto Approve."
+    },
+    {
+      "section": "How it works",
+      "text": "- The plugin handles `approval/request` only when the session selects `Auto Approve`. Other permission presets continue through DSH's existing approval chain.\n- Each approval starts one `spawn` Reviewer session. DSH's own agent loop handles any bounded `read`, `glob`, or `grep` investigation and captures the final structured result; the plugin does not implement a separate model/tool loop.\n- The child is created with a read-only sandbox and `approval/policy = never`. An execution guard denies every tool except `read`, `glob`, `grep`, and the scoped structured-output tool, permits no further subagents, and allows at most four investigation steps plus the final response step. Sensitive files may be inspected only when a minimal read-only check can change the decision.\n- The Reviewer receives the exact pending action, approval reason, current permissions, bounded raw session events, the main Agent's assembled system instructions, and AGENTS.md or equivalent workspace instructions. Stable instructions are serialized in a separate cacheable prefix before session identifiers, transcripts, permissions, and action data. Direct user messages, human answers returned by `ask_user_question`, a"
+    },
+    {
+      "section": "How it works",
+      "text": "The parent session records the approval events and a compact plugin notice. The Reviewer child session uses an `_auto-approve:<callId>` label and contains its messages, investigation tool calls and results, final assessment, and turn end. Console logs contain identifiers, model route, step count, stop reason, risk, authorization, and outcome, but not full prompts or file contents."
+    },
+    {
+      "section": "Install",
+      "text": "Install [simon300000/dsh-auto](https://github.com/simon300000/dsh-auto) from GitHub:\n\n```sh\ndsh plugin --profile web add github:simon300000/dsh-auto\n```\n\nRestart the Web UI, then select `Auto Approve` in the session Permissions selector or as the default permission preset in General Settings."
+    },
+    {
+      "section": "Configuration",
+      "text": "The bundled defaults use `deepseek-official/deepseek-v4-flash` with `high` reasoning:\n\n```yaml\n- id: dsh-auto-approve\n  name: dsh-auto\n  config:\n    language: auto"
+    },
+    {
+      "section": "Configuration",
+      "text": "`language` accepts `auto` (default), `zh`, or `en`. An invalid value emits a warning and falls back to `auto`. In `auto` mode, the plugin counts Han characters across direct user messages in the session: four or more selects Chinese; otherwise it selects English. Agent instructions, assistant messages, and tool results do not affect detection. The Reviewer is instructed to write its rationale in the language of the direct user prompt. The security policy itself remains in Chinese in both modes to avoid changing review semantics through translation."
+    },
+    {
+      "section": "Configuration",
+      "text": "`reviewerProvider` and `reviewerModel` must be set together. If both are omitted, the Reviewer uses the parent session's current provider and model. A profile override replaces the complete matching bundle-row `config`, so repeat every value that should remain configured.\n\nThe Reviewer persona and the additional security rules live in `prompts/policy-template.md` and `prompts/policy.md`. Restart DSH after changing the configuration, policy, or plugin code."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}
