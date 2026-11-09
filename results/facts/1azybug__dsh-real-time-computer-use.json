@@ -1,0 +1,187 @@
+{
+  "repo": "1azybug/dsh-real-time-computer-use",
+  "commit": "93feea1e353daf5424a01ec43be5f7f2298b84da",
+  "extracted_at": "2026-11-09T16:52:41.524365+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 488755,
+    "lines_by_language": {
+      "JSON": 33,
+      "JavaScript": 2490,
+      "Markdown": 322,
+      "Other": 4217,
+      "YAML": 51
+    },
+    "outline": [
+      "README.md",
+      "cordis.patch.yml",
+      "helper/CuHelper.cs",
+      "helper/CuHelper.exe",
+      "helper/DesktopDuplication.cs",
+      "helper/MFFrameDecoder.cs",
+      "helper/MfH264.cs",
+      "helper/README.md",
+      "lib/index.js",
+      "package.json",
+      "skills/computer-use/SKILL.md",
+      "test/smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-real-time-computer-use",
+    "version": "0.1.0",
+    "description": "Real-time Computer Use for DeepSeek Harness on Windows: full-screen capture, timestamp replay, and mouse/keyboard injection",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "computer-use",
+      "windows",
+      "automation"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "files": [
+      "lib",
+      "helper",
+      "skills",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/1azybug/dsh-real-time-computer-use.git"
+    },
+    "author": "1azybug"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-real-time-computer-use —— DSH bundle patch\n#\n# 把 Computer Use 插进 profile 的 HOST 层（root scope）：采集与注入都要落在宿主进程里\n# （helper 是常驻的 Windows 进程），且每个会话都要能用同一套工具。\n# 改动需要重启 `dsh web` 才生效。\n- insert:\n    - id: dsh-real-time-computer-use\n      name: dsh-real-time-computer-use\n      config:\n        # 帧输出目录（Windows 侧）；留空则用 helper 自己的临时目录\n        captureDir: ''\n        # 采集后端：dxgi（GPU 侧拷贝，读帧 0.42ms/帧）| gdi（回退，读帧 28.9ms/帧）\n        backend: dxgi\n        # 持续采集的目标间隔（毫秒）：16 = 62.5 fps。目标帧率**只由本项决定**（工具已不暴露 fps 参数）。\n        # 为什么是 16 而非 25：验收判据是「任何一帧的间隔 ≤ 33.333 ms」这个**上界**——25 ms 只留 8.3 ms 余量，\n        # 而「片内第 100 帧预建编码器」与采集并发造成的抖动是 10–15 ms（必然顶穿）；16 ms 留 17.3 ms 余量，同一抖动不再越界。\n        # 实测（全屏动画 + 双 helper 陪跑，各万余帧）：25 ms 档 4/2408 违约（0.17%）；16 ms 档 1/11217（0.009%）。\n        # 代价：单核 CPU 52.2% → 79.1%，录像体积 ×1.5（20 分钟约 670 MB；内存环预算 900 MB，窗口余量 1.34×）。\n        frameIntervalMs: 16\n        # 环形缓冲保留的帧数（h264 路径的窗口由 retain_s 与字节预算决定；本项只在 jpeg 逐帧路径生效）\n        frameCapacity: 1800\n        # JPEG 质量\n        jpegQuality: 70\n        # 帧的存储编码：h264（内存切片）| jpeg（逐帧写盘）。\n        # 2026-09-22 由 jpeg 改为 h264：同一目标（2560×1440 @30fps、20 分钟）实测 JPEG 要 6–11 GB、\n        # 单核 44%，而 H.264 只要 445 MB、单核 27% —— 主人的评测要 20 分钟常驻，jpeg 装不下。\n        # 当初默认留 jpeg 是因为 h264 有\"未封片的最近 5 秒取不到\"的硬缺口；该缺口本代已解\n        # （取帧/问最新帧时采集端按需结算，最多等约 1 秒），所以现在切过来。\n        # 代价：取帧要现场解码（每帧几十毫秒），且 screen_frames 的 available 是\"按时间窗解出的张数\"\n        # 而不是窗口内的真实帧数。改这里要重启 dsh web；screen_watch 的 codec 参数可临时覆盖。\n        codec: h264\n        # 「**盯着画面等条件的自动触发**」类工具（wait_for_change / act_when）是否注册。\n        # **保持 false**：主人 2026-09-22 明确——本机这套 Computer Use 正用于他论文的 GUI 评测，\n        # 而该口径下\"程序化地等某个视觉条件达成再自动动作\"算作弊。允许的是「按已知信息定时等待 + 动作」\n        # （wait 与动作同批提交）与各种纯观察（截图/取帧/窗口查询）。改这里要重启 dsh web。\n        triggerTools: false\n        # 是否注册「**只返回一张图**」的观察工具（screen_observe / region_observe）。\n        # **保持 false**：主人 2026-09-22 23:23 定——单图形态要么被缩到像素预算内（小控件看不清）、\n        # 要么只覆盖一小块；看清屏幕的推荐形态只有 screen_grid（同一次抓帧给缩略图 + 1:1 分块，\n        # 要看哪块取哪块；回看某一帧用 screen_grid({atSeconds})）。改这里要重启 dsh web。\n        singleImageTools: false\n        # 是否整体停用 `read_image`（通用图像工具）。\n        # **置 true**：主人 2026-09-22 23:40——「read_image 必须得禁」，且注明不是评测期口径\n        # （「多图效果就是好」）。单图看不清：整图会被缩到像素预算内、裁一块又只见局部；\n        # 看画面统一走 screen_grid。想要保留读图能力可置 false。改这里要重启 dsh web。\n        denyReadImage: true\n        # 是否注册 `screen_diff`（相邻帧差分，回\"哪块变了\"的矩形序列）。\n        # **保持 false**：主人 2026-09-22 20:13 定——判断时机一律用**画面端点帧**，\n        # 而 screen_diff 只给\"网格单元 + 阈值\"算出的矩形、精度不足以当判据\n        # （可能静默漏检、也不给精确帧时刻）。改这里要重启 dsh web。\n        diffTool: false\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_CU_FRAMES_DIR",
+      "kind": "env",
+      "where": "lib/index.js:188"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:190"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:291"
+    },
+    {
+      "name": "DSH_CU_FRAMES_DIR",
+      "kind": "env",
+      "where": "test/smoke.mjs:14"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/1azybug/dsh-real-time-computer-use.git",
+      "where": "package.json:30"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-09-24T20:11:49Z",
+    "created_at": "2026-09-24T10:42:42Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-computer-use",
+      "text": "Computer Use for DeepSeek Harness on Windows: an agent can see the Windows desktop and operate it like a person —\nfull-screen capture, look back at any frame of the last ~20 minutes by timestamp, and mouse/keyboard injection."
+    },
+    {
+      "section": "Architecture",
+      "text": "Two halves talking over stdio, one JSON request per line:\n\n| Half | Where | What it does |\n|---|---|---|\n| Plugin (`lib/index.js`) | WSL, inside the DSH host process | registers the model-visible tools, owns the helper process, hands frames to the model |\n| Helper (`helper/CuHelper.exe`) | Windows | desktop capture (DXGI, GDI fallback), H.264 segment ring buffer, keyboard/mouse injection, window enumeration |"
+    },
+    {
+      "section": "Architecture",
+      "text": "The plugin starts the helper once and keeps it resident (a fresh process per frame would pay tens of milliseconds\nof GDI/DXGI initialization every time). Frame files land in the Windows temp directory and are read back through\n`/mnt/<drive>/...`."
+    },
+    {
+      "section": "Requirements",
+      "text": "- DSH running in **WSL**; the Windows helper is launched through WSL interop. A pure-Windows DSH install does not\n  work as written, because Windows paths are mapped as `/mnt/<drive>/...`.\n- Windows with **.NET Framework 4** (present on every supported Windows). No SDK, no ffmpeg, no third-party binary.\n- Screen resolution decides the tile geometry: tiles are sized to fit the harness image budget, so a 2560×1440\n  desktop yields 2×3 tiles of 1280×480 (614,400 px each, delivered unscaled)."
+    },
+    {
+      "section": "Install",
+      "text": "```sh"
+    },
+    {
+      "section": "1. clone the repository somewhere permanent, then link it into the profile",
+      "text": "git clone https://github.com/1azybug/dsh-real-time-computer-use.git\npnpm dsh plugin --profile web add link:\"$PWD/dsh-real-time-computer-use\""
+    },
+    {
+      "section": "2. restart dsh web — host-layer plugins are only read at startup",
+      "text": "```\n\nInstall the operating discipline as a skill (the package ships an English `SKILL.md`; nothing installs it for you):\n\n```sh\ncp -r skills/computer-use ~/.dsh/skills/      # or $DSH_HOME/skills/\n```"
+    },
+    {
+      "section": "Tools",
+      "text": "Capture and inspection: `screen_grid` (one capture → thumbnail + 1:1 tiles, optionally `atSeconds` for a frame from\nthe buffer), `screen_frames` (pull a time range out of the recording buffer; every image carries its capture time),\n`screen_watch` (start/stop/stats of the continuous capture), `screen_windows` (window under a point, foreground\nwindow, or full enumeration), `cursor_state`."
+    },
+    {
+      "section": "Tools",
+      "text": "Actions: `mouse_move_to`, `mouse_move_by`, `click`, `mouse_button`, `drag`, `scroll`, `type_text`, `press_key`,\n`key_state`, `hotkey`, `wait`.\n\nOptional tools stay unregistered unless enabled in configuration: `wait_for_change` / `act_when` (`triggerTools`),\n`screen_observe` / `region_observe` (`singleImageTools`), `screen_diff` (`diffTool`)."
+    },
+    {
+      "section": "Configuration",
+      "text": "Every knob lives in `cordis.patch.yml`, and **the shipped defaults are not a neutral baseline**: they are the\nconfiguration one GUI-evaluation setup runs with. Out of the box you get a **16-tool** surface; switching the four\noptional groups on widens it to **21 tools** and re-enables ordinary image reading.\n\nRead those four defaults as answers to four questions, not as arbitrary flags:"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Switch | Default | With the default | Turning it on adds |\n|---|---|---|---|\n| `triggerTools` | `false` | nothing watches the screen waiting for a condition | `wait_for_change`, `act_when` — poll a region until it changes, then act |\n| `singleImageTools` | `false` | screen reading only ever arrives as the same-frame thumbnail + tiles form | `screen_observe`, `region_observe` — hand back a single image |\n| `denyReadImage` | **`true`** | a tool guard rejects **every** `read_image` call — with or without `region`, for every session, not only screen captures | normal image reading works again |\n| `diffTool` | `false` | no frame differencing | `screen_diff` — report which grid cells changed |"
+    },
+    {
+      "section": "Configuration",
+      "text": "Why those defaults: on a 2560×1440 desktop a single full-screen image is either downscaled past legibility (a 46 px\ncontrol becomes 19 px) or covers one corner, so the plugin standardizes on one full-view form — `screen_grid`, one\ncapture turned into a same-frame thumbnail plus 1:1 tiles. Letting `read_image` back in would restore the\nsingle-image path for *any* image, not only screen captures. The `triggerTools` entry is an evaluation constraint\n(watching for a visual condition and then acting counts as cheating in that setting), not a technical limit. The\ncomments in the file record each decision."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `backend` | `dxgi` | capture backend: `dxgi` (GPU copy, ~0.42 ms/frame) or `gdi` (~28.9 ms/frame) |\n| `frameIntervalMs` | `16` | capture interval ≈ 62.5 fps — **the only place the capture rate is decided** (`screen_watch` has no `fps` argument). Deliberately far below the 33.333 ms per-frame bound: at 25 ms only 8.3 ms of headroom is left and the once-per-segment encoder pre-build (10–15 ms of concurrent work) crosses it; at 16 ms the headroom is 17.3 ms and the same jitter stays inside. Measured under a full-screen load with a second helper recording: 4/2408 misses at 25 ms vs 1/11217 at 16 ms. Costs ≈79% of one core (vs 52%) and 1.5× the recording size. |\n| `frameCapacity` | `1800` | frames retained by the ring buffer; only the `jpeg` codec uses it — `h264` windows are bounded by `retain_s` and the byte budget |\n| `jpegQuality` | `70` | JPEG quality |\n| `codec` | `h264` | frame storage: `h264` (in-memory segments, ~445 MB per 20 min) or `jpeg` (per-frame files, 6–11 GB) |\n| `captureDir` | `''` | frame output directory; empty means the helper's own temp directory |\n| `recordDir` | `''` | **recording** directory (Windows path). When set, "
+    },
+    {
+      "section": "Configuration",
+      "text": "The plugin's own code defaults differ for `frameIntervalMs` (`33`), `backend` (`gdi`) and `codec` (`jpeg`): the patch\nfile is where a deployment states its choice, and the code keeps the conservative value for deployments that mount the\nplugin without it. `denyReadImage` is `true` in both."
+    },
+    {
+      "section": "Host APIs used",
+      "text": "The plugin registers against the harness `ToolService` (`ctx.tools.register`, `ctx.tools.guard`, `ctx.tools.restrict`)\nand Cordis `ctx.effect` for ownership.\n\nVerified by a live run on a clean install: harness `@deepseek-ai/dsh@0.1.7-rc.1` (the newest published release at the\ntime of writing) in a fresh `DSH_HOME`, this repository cloned from GitHub and linked into the profile — the plugin\nloads and all 16 tools register. The same symbols are also present in `@deepseek-ai/dsh-tools@0.1.5-rc.3`."
+    },
+    {
+      "section": "Limits",
+      "text": "- **The desktop is a single shared resource.** Keyboard and mouse are global: two DSH instances on the same machine\n  must not act at the same time, or their actions interleave.\n- Capture runs at the rate fixed by `frameIntervalMs` (40 fps in the shipped patch) and costs roughly a quarter of\n  one core while active. The rate is a deployment choice, not a tool argument: `screen_watch` has no `fps` parameter.\n- **The per-frame interval bound is met at the shipped rate, with a rare exception.** The target is that no frame\n  interval exceeds **33.333 ms**; the shipped `frameIntervalMs: 16` (62.5 fps) leaves 17.3 ms of headroom, so the\n  once-per-segment encoder pre-build (~220 ms of Media Foundation work started concurrently with capture, costing the\n  capture thread 10–15 ms) no longer crosses the bound. Measured under a full-screen animation load with a second\n  helper recording alongside: **1 frame of 11217** at 16 ms, versus 4 of 2408 at 25 ms; that single miss was a\n  system-level spike (64.7 ms), not the pre-build. Sealing (`Finish`+`Dispose`, 176 ms under load) runs on its own\n  thread. **Zero misses are not guaranteed** — a system-level stall can still exceed the bound at any r"
+    }
+  ],
+  "skipped": []
+}
