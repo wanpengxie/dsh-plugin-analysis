@@ -1,0 +1,795 @@
+{
+  "repo": "Linjiangxian0203/dsh-remote-tunnel",
+  "commit": "1aa98d00cc496477815b85b0fab5eac7eafa6024",
+  "extracted_at": "2026-11-09T09:26:43.080627+00:00",
+  "tree": {
+    "files": 57,
+    "bytes": 433528,
+    "lines_by_language": {
+      "JSON": 245,
+      "JavaScript": 6571,
+      "Markdown": 1774,
+      "Other": 115,
+      "Shell": 121,
+      "YAML": 90
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/releases/README.md",
+      ".github/releases/v0.1.10.md",
+      ".github/releases/v0.1.11.md",
+      ".github/releases/v0.1.12.md",
+      ".github/releases/v0.1.2.md",
+      ".github/releases/v0.1.3.md",
+      ".github/releases/v0.1.4.md",
+      ".github/releases/v0.1.5.md",
+      ".github/releases/v0.1.6.md",
+      ".github/releases/v0.1.7.md",
+      ".github/releases/v0.1.8.md",
+      ".github/releases/v0.1.9.md",
+      ".github/releases/v0.2.0.md",
+      ".github/releases/v0.2.1.md",
+      ".github/releases/v0.2.2.md",
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "docs/.npmignore",
+      "docs/promo.svg",
+      "docs/registry-format.en.md",
+      "docs/registry-format.md",
+      "docs/upstream-report-config-default.md",
+      "locale/en.json",
+      "locale/zh.json",
+      "package-lock.json",
+      "package.json",
+      "scripts/bootstrap-remote.sh",
+      "src/cli-args.js",
+      "src/cli.js",
+      "src/client.js",
+      "src/config.js",
+      "src/errors.js",
+      "src/index.js",
+      "src/local/ports.js",
+      "src/local/state.js",
+      "src/local/tunnel.js",
+      "src/manager.js",
+      "src/probe.js",
+      "src/remote/bootstrap.js",
+      "src/remote/registry.js",
+      "src/remote/unit.js",
+      "src/service.js",
+      "src/ssh-config.js",
+      "src/ssh.js",
+      "src/web.js",
+      "test/integration.test.js",
+      "test/mock-remote/remote-server.js",
+      "test/mock-remote/ssh-shim.js",
+      "test/unit.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-remote-tunnel",
+    "description": "Remote Host Tunnel Manager for dsh: allocate and register remote ports, run dsh web on a remote Linux server via systemd, and keep a resilient SSH tunnel from this machine to it.",
+    "version": "0.2.2",
+    "license": "MIT",
+    "type": "module",
+    "main": "src/index.js",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "ssh",
+      "tunnel",
+      "remote"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Linjiangxian0203/dsh-remote-tunnel.git"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "exports": {
+      ".": "./src/index.js",
+      "./cli": "./src/cli.js",
+      "./client": "./src/client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "locale",
+      "cordis.patch.yml",
+      "scripts",
+      "docs",
+      "README.md",
+      "README.zh.md",
+      "CHANGELOG.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "dependencies": {
+      "commander": "^15.0.0",
+      "js-yaml": "^4.2.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-cmdline": "^0.1.2-alpha.3 || ^0.1.7-rc.1 || ^0.2.0-rc.2 || ^0.2.1-rc.1 || ^0.2.2-rc.1",
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-cmdline": "^0.1.2-alpha.3",
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "scripts": {
+      "test": "node --test test/unit.test.js test/integration.test.js"
+    },
+    "engines": {
+      "node": ">=22.19"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-remote-tunnel bundle patch: one row inserted over the composed profile.\n#\n# The row owns the command line ONLY on profiles where the web app does not.\n# The mode is chosen at apply time from `profileContext.name` (web/desktop ⇒\n# service mode), which the profile boot provides before any row mounts; the\n# web app's `webStartup` service is only a fallback, because rows initialise\n# concurrently and a wrong guess would let this row call appExit() on the host.\n# On web/desktop it stays in service mode and registers `/remote` commands.\n#\n# Install on a dedicated CLI profile:\n#   dsh plugin --profile remote add dsh-remote-tunnel\n#   dsh --profile remote up <host>\n# or on the web profile for the `/remote ...` commands.\n\n- insert:\n    - id: remote-tunnel\n      name: 'dsh-remote-tunnel'\n      inject: [cmdlineArgs]\n      # Every field the Config schema declares is spelled out here: a profile\n      # patch can only override keys the row already carries, so the defaults\n      # have to exist in the row itself for 设置 → 插件 to be able to change them.\n      config:\n        home: !!js dshHomePath('remote-tunnel')\n        openIn: ask\n        autoOpen: false\n        dock: true\n        auth: true\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "src/cli.js",
+    "src/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_DEBUG",
+      "kind": "env",
+      "where": "src/cli.js:15"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/index.js:66"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "src/ssh-config.js:14"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "src/ssh-config.js:15"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "src/ssh-config.js:68"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "src/ssh-config.js:69"
+    },
+    {
+      "name": "DSH_REMOTE_TUNNEL_SSH",
+      "kind": "env",
+      "where": "src/ssh.js:39"
+    },
+    {
+      "name": "DSH_MOCK_ROOT",
+      "kind": "env",
+      "where": "test/integration.test.js:28"
+    },
+    {
+      "name": "DSH_REMOTE_TUNNEL_SSH",
+      "kind": "env",
+      "where": "test/integration.test.js:29"
+    },
+    {
+      "name": "DSH_MOCK_NO_SUDO",
+      "kind": "env",
+      "where": "test/integration.test.js:30"
+    },
+    {
+      "name": "DSH_MOCK_EADDRINUSE_PORT",
+      "kind": "env",
+      "where": "test/integration.test.js:31"
+    },
+    {
+      "name": "DSH_MOCK_NO_NODE",
+      "kind": "env",
+      "where": "test/integration.test.js:32"
+    },
+    {
+      "name": "DSH_MOCK_NO_DSH",
+      "kind": "env",
+      "where": "test/integration.test.js:33"
+    },
+    {
+      "name": "DSH_MOCK_NO_SUDO",
+      "kind": "env",
+      "where": "test/integration.test.js:209"
+    },
+    {
+      "name": "DSH_MOCK_SHARED_WRITABLE",
+      "kind": "env",
+      "where": "test/integration.test.js:210"
+    },
+    {
+      "name": "DSH_MOCK_NO_SUDO",
+      "kind": "env",
+      "where": "test/integration.test.js:250"
+    },
+    {
+      "name": "DSH_MOCK_EADDRINUSE_PORT",
+      "kind": "env",
+      "where": "test/integration.test.js:258"
+    },
+    {
+      "name": "DSH_MOCK_EADDRINUSE_PORT",
+      "kind": "env",
+      "where": "test/integration.test.js:268"
+    },
+    {
+      "name": "DSH_MOCK_NO_SUDO",
+      "kind": "env",
+      "where": "test/integration.test.js:376"
+    },
+    {
+      "name": "DSH_MOCK_NO_SUDO",
+      "kind": "env",
+      "where": "test/integration.test.js:384"
+    },
+    {
+      "name": "DSH_MOCK_NO_NODE",
+      "kind": "env",
+      "where": "test/integration.test.js:391"
+    },
+    {
+      "name": "DSH_MOCK_NO_NODE",
+      "kind": "env",
+      "where": "test/integration.test.js:398"
+    },
+    {
+      "name": "DSH_MOCK_NO_SUDO",
+      "kind": "env",
+      "where": "test/integration.test.js:467"
+    },
+    {
+      "name": "DSH_MOCK_SHARED_WRITABLE",
+      "kind": "env",
+      "where": "test/integration.test.js:468"
+    },
+    {
+      "name": "DSH_MOCK_NO_SUDO",
+      "kind": "env",
+      "where": "test/integration.test.js:485"
+    },
+    {
+      "name": "DSH_MOCK_SHARED_WRITABLE",
+      "kind": "env",
+      "where": "test/integration.test.js:486"
+    },
+    {
+      "name": "DSH_MOCK_NO_NODE",
+      "kind": "env",
+      "where": "test/integration.test.js:541"
+    },
+    {
+      "name": "DSH_MOCK_NO_NODE",
+      "kind": "env",
+      "where": "test/integration.test.js:547"
+    },
+    {
+      "name": "DSH_MOCK_ROOT",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:18"
+    },
+    {
+      "name": "DSH_MOCK_EADDRINUSE_PORT",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:156"
+    },
+    {
+      "name": "DSH_MOCK_EADDRINUSE_PORT",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:157"
+    },
+    {
+      "name": "DSH_MOCK_NO_NODE",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:290"
+    },
+    {
+      "name": "DSH_MOCK_NO_DSH",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:291"
+    },
+    {
+      "name": "DSH_MOCK_NO_NODE",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:303"
+    },
+    {
+      "name": "DSH_MOCK_NODE_VERSION",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:304"
+    },
+    {
+      "name": "DSH_MOCK_NO_DSH",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:343"
+    },
+    {
+      "name": "DSH_MOCK_NO_SUDO",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:352"
+    },
+    {
+      "name": "DSH_MOCK_DEBUG",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:443"
+    },
+    {
+      "name": "DSH_MOCK_SHARED_WRITABLE",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:548"
+    },
+    {
+      "name": "DSH_MOCK_NO_NODE",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:603"
+    },
+    {
+      "name": "DSH_MOCK_NODE_VERSION",
+      "kind": "env",
+      "where": "test/mock-remote/ssh-shim.js:606"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Linjiangxian0203/dsh-remote-tunnel.git",
+      "where": "package.json:18"
+    },
+    {
+      "host": "deb.nodesource.com",
+      "url": "https://deb.nodesource.com/setup_24.x",
+      "where": "scripts/bootstrap-remote.sh:49"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh",
+      "where": "scripts/bootstrap-remote.sh:53"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "src/manager.js:374"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${localPort",
+      "where": "src/manager.js:593"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${localPort",
+      "where": "src/manager.js:604"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${localPort",
+      "where": "src/manager.js:608"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "src/web.js:99"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3208",
+      "where": "test/integration.test.js:114"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${result.localPort",
+      "where": "test/integration.test.js:118"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/mock-remote/remote-server.js:37"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/mock-remote/remote-server.js:38"
+    },
+    {
+      "host": "198.51.100.5",
+      "url": "http://198.51.100.5:${port",
+      "where": "test/mock-remote/remote-server.js:38"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3081",
+      "where": "test/unit.test.js:305"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3081/?token=t",
+      "where": "test/unit.test.js:335"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3091",
+      "where": "test/unit.test.js:646"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3081/?token=t",
+      "where": "test/unit.test.js:772"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3081/?token=t",
+      "where": "test/unit.test.js:790"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "command",
+      "name": "help",
+      "where": "src/cli.js:90"
+    },
+    {
+      "kind": "command",
+      "name": "hosts",
+      "where": "src/cli.js:95"
+    },
+    {
+      "kind": "command",
+      "name": "add <alias>",
+      "where": "src/cli.js:127"
+    },
+    {
+      "kind": "command",
+      "name": "rm <alias>",
+      "where": "src/cli.js:148"
+    },
+    {
+      "kind": "command",
+      "name": "bootstrap <host>",
+      "where": "src/cli.js:170"
+    },
+    {
+      "kind": "command",
+      "name": "provision <host>",
+      "where": "src/cli.js:185"
+    },
+    {
+      "kind": "command",
+      "name": "up <host>",
+      "where": "src/cli.js:201"
+    },
+    {
+      "kind": "command",
+      "name": "down [host]",
+      "where": "src/cli.js:235"
+    },
+    {
+      "kind": "command",
+      "name": "status [host]",
+      "where": "src/cli.js:262"
+    },
+    {
+      "kind": "command",
+      "name": "list",
+      "where": "src/cli.js:295"
+    },
+    {
+      "kind": "command",
+      "name": "logs <host>",
+      "where": "src/cli.js:314"
+    },
+    {
+      "kind": "command",
+      "name": "audit <host>",
+      "where": "src/cli.js:334"
+    },
+    {
+      "kind": "command",
+      "name": "config",
+      "where": "src/cli.js:369"
+    },
+    {
+      "kind": "command",
+      "name": "show",
+      "where": "src/cli.js:370"
+    },
+    {
+      "kind": "command",
+      "name": "path",
+      "where": "src/cli.js:375"
+    }
+  ],
+  "deps": {
+    "dependencies": {
+      "commander": "^15.0.0",
+      "js-yaml": "^4.2.0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-cmdline": "^0.1.2-alpha.3",
+      "@deepseek-ai/schemastery": "^3.18.2"
+    }
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 84,
+    "pushed_at": "2026-11-05T15:37:43Z",
+    "created_at": "2026-08-15T13:36:54Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/cli-args.js",
+    "src/cli.js",
+    "src/client.js",
+    "src/config.js",
+    "src/errors.js",
+    "src/index.js",
+    "src/local/ports.js",
+    "src/local/state.js",
+    "src/local/tunnel.js",
+    "src/manager.js",
+    "src/probe.js",
+    "src/remote/bootstrap.js",
+    "src/remote/registry.js",
+    "src/remote/unit.js",
+    "src/service.js",
+    "src/ssh-config.js",
+    "src/ssh.js",
+    "src/web.js",
+    "test/integration.test.js",
+    "test/unit.test.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-remote-tunnel",
+      "text": "[中文](README.zh.md) | English\n\n[](https://awesome-dsh-plugin.com)\n\n**Remote Host Tunnel Manager**: automates the \"local browser → dsh web on a remote Linux server\" link — remote port allocation with a registry, systemd supervision, resilient SSH tunneling, local URL output, and full lifecycle management. Built for single users and for teams sharing one server."
+    },
+    {
+      "section": "dsh-remote-tunnel",
+      "text": "- Sessions and files live **on the server** (the remote dsh web's workspace = server directories); the local machine only keeps a tunnel\n- Each user automatically gets a **dedicated remote port**, double-checked on the server (real occupancy + registry) before allocation — safe under concurrency\n- Every allocation is **recorded in a registry on the server** (`/etc/dsh-ports.tsv`, or a per-user fallback depending on permissions) — `audit` compares the registry against real occupancy at any time\n- The tunnel **auto-reconnects** after network drops (backoff respawn), and heartbeats keep the registry fresh\n- Occupied local ports shift automatically, with the occupying process reported"
+    },
+    {
+      "section": "If you're just a user (not developing)",
+      "text": "```powershell"
+    },
+    {
+      "section": "1. Install (published npm package)",
+      "text": "dsh plugin --profile remote add dsh-remote-tunnel"
+    },
+    {
+      "section": "also install into the web profile, then restart dsh web:",
+      "text": "dsh plugin --profile web add dsh-remote-tunnel"
+    },
+    {
+      "section": "2. Confirm your server is visible (Host aliases from ~/.ssh/config are auto-discovered)",
+      "text": "dsh --profile remote hosts"
+    },
+    {
+      "section": "not there? define one:",
+      "text": "dsh --profile remote hosts add lab --host 192.0.2.10 --user alice --workspace /home/alice/project"
+    },
+    {
+      "section": "(keys / Node / dsh / registry / systemd)",
+      "text": "dsh --profile remote check lab"
+    },
+    {
+      "section": "4. Bring the tunnel up; the browser opens the remote dsh web",
+      "text": "dsh --profile remote up lab --open"
+    },
+    {
+      "section": "Everyday: status / down / logs / audit",
+      "text": "dsh --profile remote down lab\n```\n\nThe remote server needs: Node ≥ 24.9, dsh, systemd, and key-based ssh login. **Every account** (each labmate's own user) prepares its own environment once — idempotent, runs as whoever the ssh alias logs in as:\n`dsh --profile remote bootstrap lab` (same script, manual: `ssh <host> 'sh -s' < scripts/bootstrap-remote.sh`). Everything else lives in `$DSH_HOME/remote-tunnel/config.yaml` — sensible defaults, no changes needed."
+    },
+    {
+      "section": "Everyday: status / down / logs / audit",
+      "text": "> The `remote` CLI profile is the main interface. Installing into the **web** profile is what makes the plugin appear under **Settings → Plugins** and enables the `/remote` slash commands in chat — restart `dsh web` once after adding it there."
+    },
+    {
+      "section": "Requirements",
+      "text": "- Local: Windows/macOS/Linux with the built-in OpenSSH client (Windows 10+ ships it), **Node ≥ 22.19**\n- Remote: Linux, Node ≥ 24.9 + dsh (installable per account via `dsh --profile remote bootstrap <host>` or `scripts/bootstrap-remote.sh` — each user runs it once for their own account; the floor tracks `@deepseek-ai/dsh@0.2.2`'s `engines.node`), systemd (user-level is enough — no root needed)\n- Recommended: passwordless ssh key login (`ssh <alias>` connects without prompts)"
+    },
+    {
+      "section": "Install (development)",
+      "text": "```powershell"
+    },
+    {
+      "section": "1. Install into a dedicated CLI profile (initializes the profile on first use)",
+      "text": "cd <plugin checkout>       # or the npm package name: dsh-remote-tunnel\ndsh plugin --profile remote add ."
+    },
+    {
+      "section": "restart dsh web afterwards",
+      "text": "dsh plugin --profile web add .\n```"
+    },
+    {
+      "section": "Quick start",
+      "text": "```powershell"
+    },
+    {
+      "section": "Hosts from ~/.ssh/config are auto-discovered",
+      "text": "dsh --profile remote hosts"
+    },
+    {
+      "section": "Or define one manually (when there is no ~/.ssh/config entry)",
+      "text": "dsh --profile remote hosts add lab --host 192.0.2.10 --user alice --workspace /home/alice/project"
+    },
+    {
+      "section": "Readiness diagnostics: keys / Node / dsh / registry / systemd, item by item",
+      "text": "dsh --profile remote check lab"
+    },
+    {
+      "section": "(idempotent; each labmate runs it once for their own user)",
+      "text": "dsh --profile remote bootstrap lab"
+    },
+    {
+      "section": "remote dsh web → open the local tunnel",
+      "text": "dsh --profile remote up lab --open"
+    },
+    {
+      "section": "Inspect / stop / review",
+      "text": "dsh --profile remote status lab\ndsh --profile remote logs lab            # remote dsh web logs (journalctl)\ndsh --profile remote audit lab           # registry vs. real occupancy\ndsh --profile remote down lab            # stop tunnel + registry released + stop unit + verify port freed\n```"
+    },
+    {
+      "section": "Inspect / stop / review",
+      "text": "The local URL opens the dsh web **on the server**: chat and read/write server files. Configure the API key in the remote web's Settings → Models (written to the server's `~/.dsh/.credentials.yaml` — this plugin and the tunnel never touch credentials)."
+    },
+    {
+      "section": "Desktop app panel",
+      "text": "Installed into the desktop profile, the remote dsh web opens **inside the right sidebar's Browser panel** — no trip to the system browser. The plugin adds four entry points:"
+    },
+    {
+      "section": "Desktop app panel",
+      "text": "| Entry point | Where | What it gives you |\n|---|---|---|\n| **Remote connections panel** | Right sidebar → guide → 远程连接 | Host list, tunnel state and every action — **the entry that works in a brand-new session** |\n| **Command card** | Type `/remote …` in a conversation | The command's output plus tunnel state, with \"Open in browser\", \"Open in sidebar\", \"Start tunnel / up\" and \"Disconnect / down\" |\n| **Status strip** | Above the composer | Always shows the tunnel state with one-click actions (hide it with `dock: false`) |\n| **Plugins page** | Left sidebar → 插件 | Enable/disable the plugin; its title and description follow the UI language |"
+    },
+    {
+      "section": "Desktop app panel",
+      "text": "<!-- Screenshots (added in the 0.2.1 docs pass): docs/images/desktop-plugins.png, desktop-card.png, desktop-dock.png, desktop-panel.png -->"
+    },
+    {
+      "section": "The sidebar「远程连接」panel",
+      "text": "The sidebar draws its tab strip and its guide in **every** session state, so this pane is the one entry\nthat survives a conversation with no history: the command card needs transcript history, and the status\nstrip is not rendered in the hero layout a new session shows."
+    },
+    {
+      "section": "The sidebar「远程连接」panel",
+      "text": "1. Open the right sidebar (the button in the conversation header, if it is collapsed).\n2. The guide lists **远程连接** (a monitor glyph) — click the capsule (or the `+` control in the tab strip).\n3. The pane manages the selected host and its tunnel:"
+    },
+    {
+      "section": "The sidebar「远程连接」panel",
+      "text": "| In the pane | What it does |\n|---|---|\n| **启动隧道 / up** · **断开连接 / down** | Starts the tunnel, or stops it (two-step confirmation: tunnel, remote unit and registry release) |\n| **在侧栏打开** · **在浏览器打开** | Opens the remote dsh web in the sidebar Browser tab, or in the system browser |\n| **刷新 / refresh** | Re-reads `/remote-tunnel/status` (the pane also polls every 15 s) |\n| **vX.Y.Z** (beside the title) | The version the host half reported — the desktop app's Plugins page renders no version for any plugin |\n| **已配置主机 / managed hosts** | `~/.ssh/config` entries (read-only, labelled, **hideable**) and the plugin's own `config.yaml` entries (removable, two-step). **+ 手动添加主机** opens an inline form (alias / host / port / user / workspace) — a host can be defined without the CLI |\n| **第一条主机从哪来** | With no host at all the pane walks you through it: ① add one (the form, or a discovered candidate) → ② 启动隧道 / up → ③ 在侧栏打开. It also names the one remote prerequisite: `dsh --profile remote bootstrap <别名>` |\n| **发现的主机 / discovered in ~/.ssh** | Plaintext `~/.ssh/known_hosts` entries — hosts this machine has connected to. **添加** writes one into the plugin's config, **忽略** puts it out of the way, and"
+    },
+    {
+      "section": "The sidebar「远程连接」panel",
+      "text": "Hashed `known_hosts` entries (`HashKnownHosts yes`, the OpenSSH default on many systems) cannot be\nreversed into a hostname; the pane reports how many were skipped instead of guessing. A candidate on a\nnon-default port is spelled `host:port` in `known_hosts`, which is display text rather than a legal\nalias — adding it stores a safe alias such as `host-port` together with the real port."
+    },
+    {
+      "section": "The sidebar「远程连接」panel",
+      "text": "Hiding writes the plugin's own `config.yaml` (`hiddenHosts`) and nothing else: the CLI keeps listing\nevery host, so an entry hidden in the pane is never lost.\n\n> The pane belongs to the **client** half. Changing `src/client.js` changes the bundle's revision, and a\n> running host refuses to serve a stale revision — **restart the desktop app** after updating the plugin."
+    },
+    {
+      "section": "Install it into the desktop app",
+      "text": "Use the GUI, exactly like any other plugin:\n\n**Plugins page → \"Add plugin\" → `dsh-remote-tunnel` → install → restart the desktop app**\n\nEquivalent on the command line:\n\n```powershell\ndsh plugin --profile desktop add dsh-remote-tunnel\n```\n\n> The desktop app reads its profile at startup, so **the app must be fully restarted** (close the window *and* quit the tray process)."
+    },
+    {
+      "section": "Two ways to open",
+      "text": "- **Open in sidebar** (recommended): the remote dsh web renders in the right sidebar's Browser panel; the plugin performs the token → cookie hand-off for you, so `dsh web authentication required` never appears;\n- **Open in browser**: the system browser opens the same local URL — handy when you want the page in its own window or need browser extensions.\n\n`openIn` picks the default (`ask` / `browser` / `panel`)."
+    },
+    {
+      "section": "Desktop settings (Settings → Plugins)",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `home` | `$DSH_HOME/remote-tunnel` | Where tunnel state, logs and `config.yaml` live |\n| `openIn` | `ask` | Preferred way to open |\n| `autoOpen` | `false` | Open the remote dsh web in the sidebar at app start |\n| `dock` | `true` | Show the always-on status strip above the composer |\n\nThe same values can be set directly on the `remote-tunnel` row's `config` in the profile patch layer (`$DSH_HOME/profiles/desktop/cordis.patch.yml`)."
+    },
+    {
+      "section": "Shell behaviours worth knowing (not bugs)",
+      "text": "- **A brand-new conversation shows no command card**: the chat view renders the welcome surface until the session has model history, and command lifecycles are deliberately not model history. After the first turn, every earlier `/remote` card appears at once — the commands had already run;\n- **The status strip only renders once a session has content**: it lives in the composer's dock seat, which the hero (empty-session) layout does not render. **0.2.1 ships the \"Remote connections\" sidebar panel instead, which is reachable in every session state**;\n- A third-party slash command's **description is not localized by the client** (only first-party definitions carry localizations), which is why the plugin ships bilingual command copy."
+    },
+    {
+      "section": "Commands",
+      "text": "```\nhosts / hosts add <alias> --host H [--port 22] [--user U] [--workspace DIR] / hosts rm <alias>\ncheck <host>                     readiness diagnostics (usable as a CI probe: nonzero exit = broken)\nbootstrap <host> [--upgrade]     prepare the ssh account: Node/dsh (~/.npm-global)/~/.dsh/linger (idempotent)\nprovision <host> [--port N]      remote side only: allocate + systemd unit + start + register (no tunnel)"
+    },
+    {
+      "section": "How it works",
+      "text": "1. **Remote port allocation (atomic)**: one remote script runs under a `flock` lock — read the registry's in-use set + probe every port in the range with a real bind → pick the first port free on both sides → append a TSV row → echo the port. Concurrent allocators can never hand out the same port.\n2. **Remote supervision**: writes a systemd unit and `enable --now`s it. With passwordless sudo it uses a **system** unit (`/etc/systemd/system/dsh-web-<user>.service`); without sudo it automatically falls back to a **user** unit (`~/.config/systemd/user/dsh-web.service`) plus `loginctl enable-linger` — no root required at all. Survives reboots and crashes.\n3. **TOCTOU fallback**: if dsh loses a bind race at startup (`EADDRINUSE` shows up in the unit journal), the port is added to the exclusion set and the next free port is retried (up to 5 rounds by default).\n4. **Local tunnel**: `ssh -N -L 127.0.0.1:<local>:127.0.0.1:<remote> <alias>`; the local port is checked first (shifts automatically when occupied, with `netstat`+`tasklist` naming the occupier). When the ssh process exits, it respawns with a backoff sequence (1s→2s→4s→8s→15s→30s cap), forever by default (`maxAttempts` configurable)"
+    },
+    {
+      "section": "Configuration",
+      "text": "`$DSH_HOME/remote-tunnel/config.yaml` (`dsh --profile remote config path` prints the path):\n\n```yaml\nhosts:\n  lab:                      # manually defined hosts (merged with ~/.ssh/config aliases; wins on name collision)\n    host: 192.0.2.10\n    port: 22"
+    },
+    {
+      "section": "Sharing one server (multi-user — do this first on a lab server)",
+      "text": "When several people use one server, **have root do the one-time registration first**. Without it the\nplugin silently falls back to a per-account registry: allocation still avoids real collisions (the\nbind probe and PID attribution keep everyone on their own service), but `audit` can only see your own\nrows — not who holds which port.\n\n**One-time registration (needs root; never repeated)** — the shared registry plus a shared group:"
+    },
+    {
+      "section": "Sharing one server (multi-user — do this first on a lab server)",
+      "text": "```bash\nsudo groupadd -f dshports\nsudo install -m 0664 -o root -g dshports /dev/null /etc/dsh-ports.tsv\nsudo install -m 0664 -o root -g dshports /dev/null /etc/dsh-ports.tsv.lock\nsudo usermod -aG dshports <user1> <user2> ...    # every account that will use the plugin"
+    },
+    {
+      "section": "Sharing one server (multi-user — do this first on a lab server)",
+      "text": "Both files are required up front: they sit in a root-only directory, so a\nmember cannot create the lock themselves and every operation takes it.\nOnly those two files carry the group-write bit (`0664`) — the directory stays\nroot-only, which is fine: each registry update stages through a per-user\n`mktemp` file and rewrites the registry in place, never touching the directory\nnor changing the file's owner/group."
+    },
+    {
+      "section": "Sharing one server (multi-user — do this first on a lab server)",
+      "text": "**Each member**: ① re-login over SSH once so the group applies; ② `dsh --profile remote bootstrap <host>`;\n③ `dsh --profile remote check <host>` should report `registry: /etc/dsh-ports.tsv (shared-direct)` —\n**no configuration change needed**, the plugin switches from its private registry automatically."
+    },
+    {
+      "section": "Sharing one server (multi-user — do this first on a lab server)",
+      "text": "From then on every `up` allocates under a server-side `flock` and writes the same table: remote ports\nare always distinct, and `audit` shows who holds which port and whether anything is stale. Clean up\nownerless rows with `dsh --profile remote audit <host> --clean-stale`."
+    },
+    {
+      "section": "Sharing one server (multi-user — do this first on a lab server)",
+      "text": "| Server setup | Registry | Supervision |\n|---|---|---|\n| Admin created `dshports` as above (recommended) | `/etc/dsh-ports.tsv` (group 0664, no sudo) | user unit + linger |\n| Every member has passwordless sudo | `/etc/dsh-ports.tsv` (sudo writes, 0644) | system unit, one port per user |\n| Nothing configured | falls back to `~/.dsh-ports.tsv` (own rows only; `check` points at the admin setup) | user unit + linger |"
+    },
+    {
+      "section": "Sharing one server (multi-user — do this first on a lab server)",
+      "text": "> The shared registry is **world-readable** (0644/0664) and holds only port, account, workspace,\n> source, timestamps and status — **no passwords, keys or tokens**. Writes are serialized by `flock`,\n> so accounts outside the group cannot tamper with it.\n\n**Each account prepares its own environment** (N users on one server = N idempotent runs):\n\n```powershell\ndsh --profile remote bootstrap <host>     # from each user's own machine\n```"
+    },
+    {
+      "section": "Sharing one server (multi-user — do this first on a lab server)",
+      "text": "This installs Node / dsh (into **that account's own** `~/.npm-global`) / `~/.dsh` / linger without touching any other account — session history is per-account too.\n\nEach user runs `up` independently and gets a different remote port; `audit` shows who holds which port and flags stale/conflicting rows."
+    },
+    {
+      "section": "Remote bootstrap (per account)",
+      "text": "`dsh --profile remote bootstrap <host>` prepares **the account the ssh alias logs in as**: Node ≥ 24.9 (when installable), dsh into that account's `~/.npm-global`, `~/.dsh`, systemd lingering and the npm-global PATH entries — idempotent, so each labmate runs it once for their own user. `--upgrade` forces dsh to the latest version."
+    },
+    {
+      "section": "Remote bootstrap (per account)",
+      "text": "```powershell\ndsh --profile remote bootstrap lab              # prepare the current account\ndsh --profile remote bootstrap lab --upgrade    # update remote dsh to the latest\n```\n\nThe same script ships as `scripts/bootstrap-remote.sh` for manual use (identical behavior):\n\n```bash\nssh <host> 'sh -s' < scripts/bootstrap-remote.sh\n```"
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Symptom | Cause and fix |\n|---|---|\n| `dsh not found` / `node not found` (check or up) | The ssh account has no Node/dsh yet — the plugin works per account. `dsh --profile remote bootstrap <host>` installs them for whoever you log in as (idempotent; `--upgrade` refreshes). Even when the ssh channel's PATH misses `~/.npm-global`, the plugin now probes that path directly. |\n| `Error: listen EADDRINUSE ... 127.0.0.1:3080` | Someone (or your previous instance) holds the port. This plugin double-checks before allocation and retries the next port automatically on a startup race; you only see this when starting dsh by hand. |\n| `Could not resolve hostname <alias>` | The alias is neither in `~/.ssh/config` nor in the plugin config. `hosts add` or add it to ssh config. |\n| `Connection refused` / `remote port forwarding failed` | The remote dsh web is down or on the wrong port. `check <host>` → \"web port listening\"; `logs <host>` for the remote journal; `ss -tln \\| grep <port>` on the server. |\n| `channel_setup_fwd_listener_tcpip: cannot listen to port` | The local port is taken (common: two dsh web instances). The plugin shifts automatically and names the occupying process; or pass `--loc"
+    },
+    {
+      "section": "Development and testing",
+      "text": "```bash\nnpm install             # plugin dependencies (package-lock.json is committed)\nnpm test                # unit tests + mock-ssh integration tests (no real server needed)\n```"
+    },
+    {
+      "section": "Development and testing",
+      "text": "The integration suite uses a fake `ssh` that interprets the plugin's remote commands against a temp \"server\" (with real TCP forwarding for the tunnel), covering: allocate/register/release, concurrent allocation by multiple users, TOCTOU retry, local port conflict shift, auto-reconnect, cross-process down cancellation, audit stale/orphan/clean."
+    },
+    {
+      "section": "Security notes",
+      "text": "- The tunnel and the remote dsh bind `127.0.0.1` only (dsh itself rejects `--host 0.0.0.0`)\n- The plugin never stores or transmits passwords, keys, or API keys; ssh always uses existing keys (BatchMode — no password prompts, no hangs)\n- The registry records no sensitive information (see [`docs/registry-format.en.md`](docs/registry-format.en.md) · [中文](docs/registry-format.md))\n- Remote scripts only append/rewrite the registry and the systemd unit under `flock`; no other writes\n- The desktop/web `/remote-tunnel/*` routes go through the runtime's own admission check (`ctx.connection.admit()` — the same Host/Origin fence plus browser-session cookie the `/api` channel uses) and answer 401/403 otherwise, because they hand out a URL carrying a one-time launch token. A carrier that genuinely cannot present a cookie can opt out with `auth: false` (not recommended)"
+    },
+    {
+      "section": "Non-goals",
+      "text": "- No SSH/SFTP/remote-mount implementation: the design is \"run dsh on the server\"; the tunnel only brings HTTP back locally\n- No new TUI: CLI subcommands + the web profile's `/remote` slash commands"
+    }
+  ],
+  "skipped": []
+}
