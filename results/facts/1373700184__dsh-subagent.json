@@ -1,0 +1,239 @@
+{
+  "repo": "1373700184/dsh-subagent",
+  "commit": "9b0b5acdce181a6a94dccbabbc2e53f08158d4e6",
+  "extracted_at": "2026-11-09T22:08:25.012297+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 231281,
+    "lines_by_language": {
+      "JSON": 66,
+      "JavaScript": 3704,
+      "Markdown": 191,
+      "Other": 32,
+      "YAML": 1127
+    },
+    "outline": [
+      ".gitignore",
+      "AGENTS.md",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/hidden-runner.cjs",
+      "lib/hidden-runner.ps1",
+      "lib/index.js",
+      "lib/shared-gate.js",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "scripts/build-client.mjs",
+      "src/client.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-subagent",
+    "version": "1.1.12",
+    "description": "把本机 Qoder、QoderCN、Codex、Claude、OpenCode、Pi、CodeBuddy 等外部 CLI 注册为 DSH 子代理后端,支持模型故障转移链、实时进度、额度显示、设置页与斜杠指令。",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/*.js",
+      "lib/*.cjs",
+      "lib/*.ps1",
+      "src/*.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "scripts": {
+      "build": "node scripts/build-client.mjs"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "dsh-subagent",
+      "deepseek-harness",
+      "subagent",
+      "qoder",
+      "qodercli",
+      "qodercn",
+      "codex",
+      "claude",
+      "subscription"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-session": ">=0.2.1-rc.2 <0.3.0",
+      "@deepseek-ai/dsh-subagent": ">=0.2.1-rc.2 <0.3.0",
+      "@deepseek-ai/dsh-tool-subagent": ">=0.2.1-rc.2 <0.3.0",
+      "@deepseek-ai/dsh-tools": ">=0.2.1-rc.2 <0.3.0",
+      "@deepseek-ai/schemastery": "^3.18.2",
+      "@deepseek-ai/dsh-llm": ">=0.2.1-rc.2 <0.3.0"
+    },
+    "devDependencies": {
+      "esbuild": "^0.25.0",
+      "puppeteer-core": "^25.14.0",
+      "react": "^18.2.0"
+    },
+    "pnpm": {
+      "onlyBuiltDependencies": [
+        "esbuild"
+      ]
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 注册 dsh-subagent 提供方插件;委派工具由插件按“已启用后端”动态挂载,\n# 预设与斜杠指令同样跟随启用项,因此这里只需插入插件本身。\n- insert:\n    - id: subagent-cli\n      name: 'dsh-subagent'\n\n    # Agent 预设:让 dsh 本地模型担任指挥,把任务委派给上面的外部 CLI 后端,\n    # 像一个小团队一样协调它们。\n    - id: preset-free-subagents\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: free-subagents\n        name: 自由子代理\n        description: dsh 本地模型做指挥,把任务分派给已启用的外部 CLI 子代理并行执行并验收结果。\n        order: 20\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                你是运行在 {{model}} 上的子代理指挥官。你的职责是规划、分派、监督与验收,而不是独揽执行。\n\n                可用后端(通过委派工具调用;只使用下面列出的,未启用的后端不会出现):\n                {{subagent_backends}}\n                - sub_agent_status:随时查询任意委派的进度,不必盲等。\n\n                工作方式:\n                1. 规划:把任务拆成可独立验收的子任务,标出依赖关系与验收标准。\n                2. 分派:独立子任务并行发出,有依赖的串行;调度与并发上限由插件自动处理,你直接调用合适的委派工具并让委派内容自带完整上下文。\n                3. 委派内容必须自带完整上下文:子代理看不到本对话,写清目标、路径、约束与验收标准。\n                4. 监督:分派后不要空转等待,用 sub_agent_status 查询进度;静默过久或失败时切换模型或改派。\n                5. 验收:汇总子代理产出并独立核验关键数字与结论,差异要说明来源。\n                6. 汇报:给出分工、各子代理产出摘要、核验结果、未完成项与风险。\n\n                原则:能并行就并行;绝不伪造子代理输出;子代理失败时如实报告并给出补救方案。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n                # `list_agents` 由本包自己注册;dsh 0.2.2 起不再导出\n                # `@deepseek-ai/dsh-tool-subagent-control/list-agents` 子路径,\n                # 单独列一行会让整份预设注册失败(never started)。\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n          - id: tool-plugin-market\n            name: '@deepseek-ai/dsh-plugin-market/tools'\n            disabled: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/index.js:90"
+    },
+    {
+      "name": "PATHEXT",
+      "kind": "env",
+      "where": "lib/index.js:97"
+    },
+    {
+      "name": "ComSpec",
+      "kind": "env",
+      "where": "lib/index.js:684"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:782"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/${NPM_PACKAGES[spec.name",
+      "where": "lib/index.js:1512"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "shell",
+      "where": "lib/index.js:585"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "where": "lib/index.js:587"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "esbuild": "^0.25.0",
+      "puppeteer-core": "^25.14.0",
+      "react": "^18.2.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 62,
+    "pushed_at": "2026-11-05T05:14:59Z",
+    "created_at": "2026-10-19T02:09:22Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/shared-gate.js",
+    "package.json",
+    "scripts/build-client.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-subagent",
+      "text": "把外部 CLI 子代理(Qoder、QoderCN、Codex、Claude、OpenCode、Pi、CodeBuddy,可继续扩展)注册成 dsh(DeepSeek Harness)的**子代理提供方**,让父 agent 通过委派工具把任务交给这些 CLI 跑,消耗各自的订阅/API 额度。\n\n每个后端都是**一次性执行**:插件 spawn CLI 子进程,提示词经 stdin 送入,读取各自的 JSON 事件流(`qoder-json` / `claude-json` / `codex-json` / `codebuddy-json` / `opencode-json` / `pi-json` 驱动),收敛到最终结果。子代理**看不到父会话上下文**,所以委派任务里要自带完整上下文。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile web add github:1373700184/dsh-subagent\n```\n\n装好后插件的 `cordis.patch.yml` 会向 profile 树插入提供方 `dsh-subagent` 和 Agent 预设;委派工具、斜杠指令随**已启用的后端**动态挂载(启用几个后端就有几个工具/指令)。重启 dsh 生效。"
+    },
+    {
+      "section": "安装",
+      "text": "前置条件:对应 CLI 已安装且已登录——`qodercli`(`~/.qoder/bin/qodercli/`)、`qoderclicn`(`~/.qoder-cn/bin/qoderclicn/`)、`codex`(npm 全局)、`claude`(npm 全局,沿用 `~/.claude/settings.json` 的模型/网关配置;设置页的模型列表也从这里读取)、`opencode`(`~/.opencode/bin/`)、`pi`(`~/.pi/agent/`,优先通过 node 直接启动受管安装的 CLI,避免 Windows 弹终端窗口)、`codebuddy`(npm 全局 `@tencent-ai/codebuddy-code`,通过 node 启动)。上述目录都找不到时,会按 PATH 搜索命令名(`qodercli` / `qoderclicn` / `opencode` / `pi` / `codebuddy` / `codex` / `claude`);CLI 路径里填裸命令名也会走 PATH。"
+    },
+    {
+      "section": "使用",
+      "text": "在 dsh 会话里让父 agent 调用工具即可,例如:\n\n```\n用 qoder 子代理:在这个仓库里找出所有 TODO 注释并汇总\n```\n\n父 agent 会调用 `qoder` 工具,插件 spawn `qodercli -p ...` 并返回子代理的最终文本。`qodercn` 工具走国内版 CLI。"
+    },
+    {
+      "section": "斜杠指令",
+      "text": "输入框里直接敲:\n\n```\n/sub_qoder 统计当前目录每个顶层目录的文件数并汇总\n/sub_qodercn 把 README 翻成英文\n/sub_codex 检查这个仓库最近的改动\n```\n\n所有委派指令统一使用 `sub_` 前缀(`/sub_<后端名>`),查进度用 `/sub_agent_status`。指令是**快捷方式**:把任务作为消息交给当前会话,由 agent 调用对应工具发起委派——所以实时进度面板、扣费显示、完成通知与普通工具调用完全一致。指令名跟随 `providers` 配置自动注册。"
+    },
+    {
+      "section": "模型故障转移(免费模型排队也不怕)",
+      "text": "设置页的\"模型顺序\"是一个**有序多选链**:按顺序尝试,某个模型超过\"单模型等待\"(默认 90 秒,0 关闭)没有任何输出就杀掉换下一个;整条链共用\"允许等待\"预算(默认 300 秒),全部模型都失败或预算耗尽时,插件直接把失败结论(含每个模型的尝试记录)通过完成通知上报主任务。工具行与事件流会记录每次切换,`sub_agent_status` 也能看到。"
+    },
+    {
+      "section": "崩溃恢复(重启后续上子代理)",
+      "text": "子代理进程以 **detached + 输出落盘** 方式启动,不依赖 dsh 的管道:\n\n- dsh 崩溃不会打断正在跑的 CLI,也不会丢日志(`$DSH_HOME/storages/dsh-subagent/runs/`)\n- Windows 下 CLI 通过隐藏控制台包装启动:子代理执行的 shell 命令不会弹黑框,同时保持 detached 的崩溃存活能力\n- dsh 重启后插件自动重新接管:恢复运行记录与完整过程;仍在跑的继续跟踪,已在停机期间完成的直接补全状态\n- 父会话在线时会收到迟到的完成通知(含结果摘要),同一结果只通知一次;用 `/sub_agent_status` 可随时查看"
+    },
+    {
+      "section": "进度随时可查(像本地子任务)",
+      "text": "- **对话内实时面板**:委派工具行显示状态徽章(运行中/已完成/出错)、计时、子代理动作流(思考 ◎、工具调用 ⚙、输出 ▸),点击展开完整过程,运行中每 2 秒刷新;结束后面板给出对应 CLI 的续接命令(如 `qodercli --resume <id>`、`codex resume <id>`、`claude --resume <id>`),可回看/继续该子会话。\n- **父 agent 查询工具 `sub_agent_status`**:随时可查任意委派的进度——省略 `run_id` 列出最近运行及最新动作,传 `run_id`(`started subagent <id>` 里的那个)返回事件转录。\n- **斜杠指令 `/sub_agent_status`**:直接在输入框查进度,结果立即回显(不经过模型)——`/sub_agent_status` 列出最近运行,`/sub_agent_status <run_id>` 查看某次运行的详细事件。\n- **卡住自动提醒**:子代理超过设定时间(默认 90 秒,设置页\"卡住提醒\"可调,0 关闭)没有任何输出时,插件会主动唤醒父 agent 并送去一条警戒通知(含运行 id 与建议动作),同时工具行显示红色的\"静默 Ns\"、事件流记录 `no output ... — warned the parent`。免费模型排队、网络断了、CLI 挂住都不会再让主任务无限干等。"
+    },
+    {
+      "section": "Agent 预设:自由子代理",
+      "text": "安装插件即注册一个 **\"自由子代理\"** Agent 预设(设置 → Agent 预设)。选它开会话后,dsh 本地模型扮演**子代理指挥官**:\n\n- 规划任务、拆成可独立验收的子任务\n- 按设置中的调度模式(优先启动 / 平均分配)把子任务分派给 `qoder` / `qodercn` / `codex` / `claude` / `opencode` / `pi` / `codebuddy`(独立任务并行、有依赖的串行),并遵守每个后端的并发上限\n- 用 `sub_agent_status` 随时查进度,静默/失败时换模型或改派\n- 汇总产出、独立核验关键结论,再向用户汇报分工与风险\n\n预设沿用标准模式的全部工具(fs/终端/todo/计划/压缩/网页等),只替换了 persona 与工作流。"
+    },
+    {
+      "section": "设置页",
+      "text": "- 检测每个后端 CLI 是否存在、版本号、模型列表(走 `/api/qoder-subagent/probe`,5 分钟缓存,可手动刷新)\n- 切换默认模型、思考程度、上下文大小、权限模式、超时、CLI 路径(插件按各 CLI 的参数差异自动转换)\n- 设置全局调度模式(优先启动 / 平均分配)、每个后端的并发上限,并用卡片上的 ↑↓ 调整优先顺序\n- 并发上限由插件强制执行,并在同一台机器的所有 dsh 任务/进程间共享(web、headless、并行任务共用一份槽位):优先模式下满了会自动转给下一个后端,全部满才等待;平均模式自动选择当前任务最少的后端。槽位以临时目录里的锁文件保存,宿主崩溃后按 pid 与心跳自动回收,遗留运行仍占位,状态/工具行会显示实际执行的后端\n- CLI 有新版本时卡片显示“更新 CLI vX”:Qoder/QoderCN 用 `update --check` 检测,Codex/Claude/CodeBuddy/Pi 查 npm 最新版;有运行中的子代理时会拒绝更新\n- 进入设置页会并行检测所有已启用后端,切换标签页复用检测结果,不再逐个等待\n- 模型额度倍率只展示能从本机读到的真实值:CodeBuddy 读 CLI 自己同步的模型目录(`~/.codebuddy/local_storage/*.info` 里的 `credits` 字段),与 CLI 选择器一致;Qoder/QoderCN 的倍率由服务端下发且本地缓存加密,插件不再展示内置快照"
+    },
+    {
+      "section": "设置页",
+      "text": "写回即生效(host 配置热更新),无需改 YAML。"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认 | 说明 |\n|---|---|---|\n| `name` | 必填 | 提供方名,须与 patch 里 `dsh-tool-subagent` 的 `provider` 一致 |\n| `driver` | `qoder-json` | 传输驱动:`qoder-json` / `claude-json` / `codex-json` / `codebuddy-json` / `opencode-json` / `pi-json` |\n| `binary` | 自动探测 | CLI 绝对路径或 PATH 中的命令名;内置后端可省略 |\n| `permissionMode` | `bypass_permissions` | headless 无法弹权限确认,故默认放行 |\n| `model` | 沿用 CLI 默认 | 强制模型 id;留空用 CLI 默认(如免费模型) |\n| `reasoningEffort` | `auto` | `auto/none/low/medium/high/xhigh/max/ultracode` |\n| `contextWindow` | CLI 默认 | 正整数 token 数 |\n| `timeoutSeconds` | 无上限 | 单次委派墙钟上限 |\n| `extraArgs` | `[]` | 追加的 CLI 参数 |\n| `maxConcurrency` | `2` | 同时最多执行几个该后端子代理;同一台机器的所有 dsh 任务共享该上限,超出后排队 |"
+    },
+    {
+      "section": "配置",
+      "text": "默认 `providers` 包含全部内置后端;实际启用哪些由 profile 的 `providers` 列表决定。全局字段 `scheduleMode` 控制调度:`priority`(从所调用的后端开始,按 `providers` 顺序自动溢出到下一个有空位的后端)或 `balanced`(插件自动选择当前任务最少者)。调度在插件层完成,工具名只是入口;状态与工具行会显示实际执行的后端。"
+    },
+    {
+      "section": "加更多后端",
+      "text": "1. 在设置页顶部的“选择要启用的后端…”下拉里选内置后端,或选“添加自定义后端…”填写名称 / 驱动 / CLI 路径。\n2. 工具的挂载、斜杠指令和 Agent 预设里的后端说明会自动跟随已启用列表,无需改 YAML。\n3. 若该 CLI 不是现有协议,再实现一个新 `driver` 并在 `DRIVERS` 里注册。\n4. Windows 下自定义后端优先指向原生 `.exe`;npm 的 `.cmd` 包装脚本在后台分离启动时可能没有输出。"
+    },
+    {
+      "section": "限制",
+      "text": "- 一次性执行:不支持续话、结构化输出、model-selection(外部后端能力全部关闭)。\n- 子代理不继承父上下文,委派任务需自带上下文。"
+    }
+  ],
+  "skipped": []
+}

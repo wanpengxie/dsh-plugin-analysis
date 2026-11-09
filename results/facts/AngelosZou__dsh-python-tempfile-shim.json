@@ -1,0 +1,192 @@
+{
+  "repo": "AngelosZou/dsh-python-tempfile-shim",
+  "commit": "20b84cdc91516fbf51a782214ba8d88a3f083d34",
+  "extracted_at": "2026-11-09T22:33:01.039423+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 37216,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 397,
+      "Markdown": 278,
+      "Other": 28,
+      "Python": 47,
+      "YAML": 8
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "SECURITY.md",
+      "assets/sitecustomize.py",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/shell-hook.js",
+      "lib/skill.js",
+      "package.json",
+      "test/smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-python-tempfile-shim",
+    "version": "0.2.0",
+    "description": "DeepSeek Harness plugin (temporary, pre-upstream-fix): automatically injects a CPython tempfile shim (PYTHONPATH -> sitecustomize) into every confined shell command on the Windows sandbox, so python/pytest tempfile use works with zero extra tools, zero model-context overhead, and zero escalation.",
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "deepseek-harness",
+      "python",
+      "tempfile",
+      "pytest",
+      "sandbox",
+      "windows"
+    ],
+    "license": "MIT",
+    "author": "Yutong Zou <yutong.zou.24@alumni.ucl.ac.uk> (https://github.com/AngelosZou)",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/AngelosZou/dsh-python-tempfile-shim.git"
+    },
+    "bugs": {
+      "url": "https://github.com/AngelosZou/dsh-python-tempfile-shim/issues"
+    },
+    "homepage": "https://github.com/AngelosZou/dsh-python-tempfile-shim#readme",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "assets",
+      "cordis.patch.yml",
+      "SECURITY.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "scripts": {
+      "test": "node test/smoke.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-python-tempfile-shim bundle patch.\n#\n# Applied as a profile patch layer after every in-box bundle. Inserts the\n# plugin row at the profile root; later layers (or the user's own\n# cordis.patch.yml) can address it by id with the last write winning.\n- insert:\n    - id: dsh-python-tempfile-shim\n      name: 'dsh-python-tempfile-shim'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/AngelosZou",
+      "where": "package.json:16"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AngelosZou/dsh-python-tempfile-shim.git",
+      "where": "package.json:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AngelosZou/dsh-python-tempfile-shim/issues",
+      "where": "package.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AngelosZou/dsh-python-tempfile-shim#readme",
+      "where": "package.json:24"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-08-16T14:13:49Z",
+    "created_at": "2026-08-16T06:57:58Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/shell-hook.js",
+    "lib/skill.js",
+    "package.json",
+    "test/smoke.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-python-tempfile-shim",
+      "text": "[简体中文](./README.zh.md)\n\nTemporary plugin that works around one Windows sandbox incompatibility until\nDeepSeek Harness ships an upstream fix. It is not published to npm; install it\nfrom a local clone. Read [SECURITY.md](./SECURITY.md) before installing."
+    },
+    {
+      "section": "dsh-python-tempfile-shim",
+      "text": "The plugin lets Python (including pytest) use temporary directories inside the\nDSH Windows sandbox. Background: CPython on Windows builds a directory DACL\nfrom `os.mkdir`'s mode argument; `0o700` produces an owner-only directory.\n`tempfile.mkdtemp` and pytest's basetemp chain both use `0o700`. The DSH\nWindows sandbox runs commands under a `WRITE_RESTRICTED` token whose\nrestricting-SID list excludes the user's own SID, so the confined process\ncannot read or write the directories it just created. pytest `tmp_path`/\n`tmpdir` tests fail with `[Errno 13]` / `WinError 5` and the\n`[sandbox: file access denied under workspace-write mode]` marker."
+    },
+    {
+      "section": "How it works — fully automatic, no extra tools",
+      "text": "The plugin patches the mounted shell executor's `resolve()` — the single\nchokepoint every shell consumer passes through (the pwsh tool, background\njobs, in-process plugin bridges) — so that **every confined command**\n(`workspace-write` / `read-only`) inherits `PYTHONPATH=<plugin assets dir>`.\nThe bundled `assets/sitecustomize.py` then makes `os.mkdir` ignore the mode\nargument, so new directories inherit the parent ACL (which carries the\nsandbox's workspace/temp write ACEs) instead of CPython's owner-only DACL."
+    },
+    {
+      "section": "How it works — fully automatic, no extra tools",
+      "text": "- **No extra tools to remember** — `python`, `pytest`, `pip`, `tox`, `nox`,\n  venvs, and any child Python process all get the fix automatically.\n- **No extra model context** — the agent just runs Python normally through\n  pwsh. A compact always-on system-prompt section tells it the fix is\n  automatic so it never reaches for workarounds.\n- **Zero escalation** — the sandbox boundary is untouched: token, ACEs,\n  policy, and escalation surface are all left alone."
+    },
+    {
+      "section": "How it works — fully automatic, no extra tools",
+      "text": "`PYTHONPATH` is inert for non-Python commands, so adding it to every confined\ncommand is safe; a command that sets `$env:PYTHONPATH` itself still overrides\nit. The shim is deliberately **not** injected for unsandboxed compositions or\n`danger-full-access` runs (the bug does not exist there, and `0o700` is\nCPython's privacy hardening that unconfined runs should keep)."
+    },
+    {
+      "section": "How it works — fully automatic, no extra tools",
+      "text": "A `python-tempfile-shim` skill is also registered for humans and for the rare\ncase where a failure still appears (diagnose + report)."
+    },
+    {
+      "section": "Scope",
+      "text": "- All `0o700` directory creation routes through `os.mkdir`: `tempfile.mkdtemp`,\n  `tempfile.TemporaryDirectory`, `os.makedirs(mode=0o700)`,\n  `pathlib.Path.mkdir(mode=0o700)`, pytest, tox/nox (the shim propagates to\n  subprocesses via `PYTHONPATH`).\n- Windows only; on other platforms `apply()` registers nothing.\n- File creation (`os.open`/`mkstemp` modes) is not affected and needs no patch."
+    },
+    {
+      "section": "Install",
+      "text": "```powershell\ngit clone https://github.com/AngelosZou/dsh-python-tempfile-shim.git\ndsh plugin --profile web add link:<local repository path>\n```\n\nRestart DSH afterwards.\n\nUninstall: remove the plugin from the DSH settings page, then restart DSH."
+    },
+    {
+      "section": "Verification",
+      "text": "- Environment: Windows, DSH workspace-write sandbox, Python 3.11.15 / 3.13.14,\n  pytest 9.1.1.\n  - Without the plugin: `tmp_path` test fails with `PermissionError: [WinError 5]`.\n  - With the plugin: `1 passed`; `mkdtemp`, `TemporaryDirectory`, `mkstemp`,\n    and basetemp cleanup work — run through the ordinary pwsh tool, no\n    special arguments.\n- Subprocess propagation: parent Python process to child Python process\n  (inherited `PYTHONPATH`) works.\n- Smoke test: `npm test` covers the resolve-patch contract (confined modes\n  injected, `danger-full-access`/unsandboxed left alone, idempotency,\n  disposal, no spec mutation) plus prompt-section and skill registration."
+    },
+    {
+      "section": "Security",
+      "text": "See [SECURITY.md](./SECURITY.md). Note: do not install\n`assets/sitecustomize.py` into global site-packages or a machine-wide\nPYTHONPATH; `0o700` is CPython's privacy hardening and unsandboxed runs should\nkeep it."
+    },
+    {
+      "section": "Upstream status",
+      "text": "Uninstall this plugin once an upstream fix ships."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

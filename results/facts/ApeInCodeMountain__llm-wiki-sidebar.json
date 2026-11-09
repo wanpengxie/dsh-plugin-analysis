@@ -1,0 +1,345 @@
+{
+  "repo": "ApeInCodeMountain/llm-wiki-sidebar",
+  "commit": "4aeb61c16cff8717d1810402f238f6d556bcff9c",
+  "extracted_at": "2026-11-09T22:34:06.666382+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 381287,
+    "lines_by_language": {
+      "JSON": 60,
+      "JavaScript": 3530,
+      "Markdown": 1392,
+      "Other": 25,
+      "Python": 345,
+      "YAML": 57
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "cordis.patch.yml",
+      "docs/design-source-link-navigation-v2.md",
+      "lib/client.js",
+      "lib/client.src.js",
+      "lib/index.js",
+      "lib/wiki-root.js",
+      "package.json",
+      "scripts/build-client.mjs",
+      "skills/llm-wiki/SKILL.md",
+      "test/host.test.mjs",
+      "test/impl.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "llm-wiki-sidebar",
+    "version": "2.0.0",
+    "description": "LLM Wiki workbench for the DeepSeek Harness sidebar: browse and lint one or several Karpathy-style interlinked markdown wikis per workspace, render wiki pages with clickable [[wikilinks]], relative .md links and backlinks, and ship the llm-wiki agent skill.",
+    "type": "module",
+    "license": "MIT",
+    "author": "ApeInCodeMountain",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ApeInCodeMountain/llm-wiki-sidebar.git"
+    },
+    "homepage": "https://github.com/ApeInCodeMountain/llm-wiki-sidebar#readme",
+    "bugs": {
+      "url": "https://github.com/ApeInCodeMountain/llm-wiki-sidebar/issues"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh-sidebar",
+      "llm-wiki",
+      "knowledge-base",
+      "markdown",
+      "wikilinks"
+    ],
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js"
+    },
+    "files": [
+      "lib",
+      "skills",
+      "scripts",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh-CN.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "build:client": "node scripts/build-client.mjs",
+      "test": "node --check lib/client.js && node --check lib/index.js && node test/impl.test.mjs && node test/host.test.mjs"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-sidebar-right",
+          "@deepseek-ai/dsh-api-workspace-files"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# llm-wiki-sidebar bundle patch\n#\n# Declares the composition rows this package contributes when installed through\n# the official CLI (`dsh plugin --profile <name> add …`). For a manual local\n# install, the same rows are added to the profile's own cordis.patch.yml:\n#\n#   - insert:\n#       - id: llm-wiki-sidebar\n#         name: 'llm-wiki-sidebar'\n#       - id: llm-wiki-sidebar-skills\n#         name: '@deepseek-ai/dsh-skill-filesystem'\n#         config:\n#           providerName: 'llm-wiki-sidebar-skills'\n#           includeDefaultRoots: false\n#           customSkillDirs:\n#             - !!js \"<resolver for this package's skills/ directory>\"\n#\n# Row 1 is the plugin itself: host half (webServer routes over the sandbox-aware\n# fs service) + client half (browse tab + a wiki-page tab type registered in the\n# sidebar shipped with DeepSeek Harness itself).\n# Row 2 mounts the SKILL that ships inside this package\n# (`skills/llm-wiki/SKILL.md` + `scripts/wiki_lint.py`) through a dedicated\n# skill-filesystem instance: `providerName` keeps it distinct from any other\n# provider, and `includeDefaultRoots: false` limits it to exactly this\n# package's skills directory. The `!!js` resolver tries the plausible baseUrls\n# (profile root for a manual patch row, the package directory for a bundle\n# patch) and picks the first one where the skill actually exists: a linked\n# dependency (`node_modules/llm-wiki-sidebar`), an in-profile copy\n# (`llm-wiki-sidebar/`), then the package directory itself.\n#\n# The plugin's client half targets @deepseek-ai/dsh-client-ui-sidebar-right\n# (`ctx.sidebarRightTabs` / `ctx.slots`) and reads page text through the\n# product's `workspaceFiles` Remote. Its host half consumes `fs` and\n# `webServer`.\n#\n# Optional multi-wiki config (see README \"Multiple wikis\"). The rows above ship\n# without config — the default `<workspace>/wiki` plus auto-discovery of\n# wiki-like sibling directories covers most setups. To register extra roots\n# (e.g. outside the discovery heuristic or not yet created), add `config:` to\n# row 1:\n#\n#   - insert:\n#       - id: llm-wiki-sidebar\n#         name: 'llm-wiki-sidebar'\n#         config:\n#           wikiRoots: ['wiki-game', 'kb/research']   # workspace-relative or absolute inside the workspace\n#           exclude: ['node_modules', 'archive']      # basenames skipped during discovery\n- insert:\n    - id: llm-wiki-sidebar\n      name: 'llm-wiki-sidebar'\n    - id: llm-wiki-sidebar-skills\n      name: '@deepseek-ai/dsh-skill-filesystem'\n      config:\n        providerName: 'llm-wiki-sidebar-skills'\n        includeDefaultRoots: false\n        customSkillDirs:\n          - !!js \"(() => { const u = process.getBuiltinModule('node:url'); const fsp = process.getBuiltinModule('node:fs'); const candidates = [new URL('node_modules/llm-wiki-sidebar/skills/', baseUrl), new URL('llm-wiki-sidebar/skills/', baseUrl), new URL('skills/', baseUrl)]; for (const c of candidates) { try { const dir = u.fileURLToPath(c); if (fsp.existsSync(dir + 'llm-wiki/SKILL.md')) return dir; } catch (e) {} } throw new Error('llm-wiki-sidebar: skills/llm-wiki/SKILL.md not found relative to baseUrl ' + String(baseUrl)); })()\"\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/markdown-it/markdown-it",
+      "where": "lib/client.js:4"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/markdown-it/markdown-it",
+      "where": "lib/client.js:36"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ApeInCodeMountain/llm-wiki-sidebar.git",
+      "where": "package.json:10"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ApeInCodeMountain/llm-wiki-sidebar#readme",
+      "where": "package.json:12"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ApeInCodeMountain/llm-wiki-sidebar/issues",
+      "where": "package.json:14"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/markdown-it/markdown-it",
+      "where": "scripts/build-client.mjs:41"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x.md",
+      "where": "test/impl.test.mjs:63"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a.png",
+      "where": "test/impl.test.mjs:120"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a.png",
+      "where": "test/impl.test.mjs:129"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/",
+      "where": "test/impl.test.mjs:265"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-28T12:17:50Z",
+    "created_at": "2026-09-05T15:44:30Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/wiki-root.js"
+  ],
+  "readme": [
+    {
+      "section": "llm-wiki-sidebar",
+      "text": "English | [简体中文](README.zh-CN.md)\n\n[](LICENSE)\n\n[LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) workbench for the\n**sidebar shipped with DeepSeek Harness itself**: browse and lint a Karpathy-style interlinked\nmarkdown wiki directly in the right Sidebar, render pages with clickable `[[wikilinks]]`,\nrelative `.md` / provenance links and backlinks, and ship the `llm-wiki` agent skill — packaged as\none DSH plugin."
+    },
+    {
+      "section": "llm-wiki-sidebar",
+      "text": "> **v2.0.0 is the built-in-sidebar rewrite.** v1.x targeted the third-party\n> [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar) plugin and registered a\n> `betterSidebar` tab + file viewer. DeepSeek Harness now ships its own right Sidebar\n> (`@deepseek-ai/dsh-client-ui-sidebar-right`), which conflicts with that plugin. v2 talks to the\n> built-in sidebar instead: no third-party sidebar plugin is required or supported."
+    },
+    {
+      "section": "Features",
+      "text": "- **📚 LLM Wiki sidebar tab** — sectioned page catalog (entities / concepts / comparisons /\n  queries), search by slug/title/tag, quality markers (`conf: low`, `contested`), one-click open as\n  a file resource, a refresh button, and the page-refresh shortcut bound to the product command.\n- **Wiki page rendering** — `.md` files that live inside a wiki root are claimed by this plugin's\n  own resource tab type and rendered with [markdown-it](https://github.com/markdown-it/markdown-it)\n  (GFM tables, fenced code, blockquotes, lists, images). Files outside a wiki root keep the\n  product's native document preview untouched.\n- **Clickable `[[wikilinks]]`** — `[[target]]` / `[[target|label]]` resolve against the wiki map;\n  unresolved links render struck-through with a tooltip. Rendered from the source text, so nothing\n  is written back and the file on disk is never modified.\n- **Heading anchors** — `[[page#section]]` opens the page and scrolls to the matching heading, and\n  `[[#section]]` jumps within the current page. Matching accepts the heading text or its slug\n  (GitHub-style, Unicode-aware, so CJK headings work too).\n- **Clickable provenance & relative `.md` links** — provenance marke"
+    },
+    {
+      "section": "Requirements",
+      "text": "- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) with the built-in right\n  Sidebar (`@deepseek-ai/dsh-client-ui-sidebar-right`, 0.1.7-rc.2 or newer)\n- Node.js ≥ 20\n\nNo third-party sidebar plugin is needed. `dsh-better-sidebar` must **not** be installed: it\nprovides its own sidebar and conflicts with the built-in one."
+    },
+    {
+      "section": "Install",
+      "text": "The default wiki lives at `<session workspace>/wiki` (the sidebar file routes enforce the workspace\nfence, so workspace-relative is the supported location). Additional wikis may live in any directory\ninside the workspace — see [Multiple wikis](#multiple-wikis)."
+    },
+    {
+      "section": "From GitHub (official bundle CLI)",
+      "text": "```sh\ndsh plugin --profile web add \"github:ApeInCodeMountain/llm-wiki-sidebar\"\n```\n\nThen restart `dsh --profile web` and hard-refresh the browser."
+    },
+    {
+      "section": "From npm",
+      "text": "```sh\ndsh plugin --profile web add llm-wiki-sidebar\n```"
+    },
+    {
+      "section": "Local development install",
+      "text": "The served browser bundle `lib/client.js` is generated (it inlines the vendored markdown-it), so\nbuild it once after cloning:\n\n```sh\ngit clone https://github.com/ApeInCodeMountain/llm-wiki-sidebar\ncd llm-wiki-sidebar && node scripts/build-client.mjs\ncp -r . ~/.dsh/profiles/web/llm-wiki-sidebar\nln -sfn ../llm-wiki-sidebar ~/.dsh/profiles/web/node_modules/llm-wiki-sidebar"
+    },
+    {
+      "section": "register as a link: dependency so pnpm keeps the symlink",
+      "text": "node -e \"const fs=require('fs');const f=process.env.HOME+'/.dsh/profiles/web/package.json';const j=JSON.parse(fs.readFileSync(f));j.dependencies['llm-wiki-sidebar']='link:llm-wiki-sidebar';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\\n')\"\n```\n\nThen restart `dsh --profile web` and hard-refresh the browser (Cmd/Ctrl+Shift+R)."
+    },
+    {
+      "section": "Uninstall",
+      "text": "Remove the package via `dsh plugin --profile web remove llm-wiki-sidebar` (or delete both rows\nfrom `~/.dsh/profiles/web/cordis.patch.yml`, the profile `package.json` entry, the\n`node_modules/llm-wiki-sidebar` symlink and the `~/.dsh/profiles/web/llm-wiki-sidebar`\ndirectory); restart DSH. Uninstalling also withdraws the packaged `llm-wiki` skill (it lives\ninside the plugin directory)."
+    },
+    {
+      "section": "Usage",
+      "text": "1. Tell the agent: “帮我在这个工作区初始化一个 wiki” (or \"create a wiki here\") — the packaged\n   `llm-wiki` skill creates `wiki/` with `SCHEMA.md`, `index.md`, `log.md` and the layered\n   directories, then ingests sources.\n2. Open the right Sidebar: the **📚 LLM Wiki** entry on the guide page (or its tab) shows the\n   catalog, search, and the **Lint** button.\n3. Click a page: it opens as a wiki page tab with clickable `[[wikilinks]]`, provenance links and\n   backlinks. Use **Source** to read the raw markdown.\n4. A second knowledge base? Create it as a sibling directory (convention: `wiki-<topic>/`) with the\n   same layered layout — the sidebar discovers it automatically and the tab header gains a wiki\n   switcher. Each wiki keeps its own slug namespace; cross-wiki references use relative `.md` links."
+    },
+    {
+      "section": "Multiple wikis",
+      "text": "A workspace can hold several independent knowledge bases. The host unions three sources (dedupli-\ncated by root, in this order):"
+    },
+    {
+      "section": "Multiple wikis",
+      "text": "1. **Default** — `<workspace>/wiki`, always listed; a workspace with only it renders without a\n   switcher.\n2. **Plugin config** — `wikiRoots` in the plugin row's `config:` (workspace-relative or absolute\n   inside the workspace). Registered roots are listed even before they exist (`exists: false`) and\n   are never subject to `exclude`.\n3. **Auto-discovery** — depth-1 directories under the workspace that look like a wiki: contain\n   `SCHEMA.md` or `index.md` **and** at least one of `entities/ concepts/ comparisons/ queries/\n   raw/`, so ordinary project folders are never misreported. `exclude` (basenames) skips noisy\n   directories."
+    },
+    {
+      "section": "Multiple wikis",
+      "text": "A file belongs to the longest matching registered root, so wikilinks, provenance links and\nbacklinks work in every wiki. Wiki roots are always validated to stay inside the session workspace\n(`lib/wiki-root.js`) — paths escaping the workspace are refused. `wiki_lint.py` takes the wiki root\nas its argument, so each wiki lints separately.\n\nExample config in `~/.dsh/profiles/web/cordis.patch.yml`:\n\n```yaml\n- insert:\n    - id: llm-wiki-sidebar\n      name: 'llm-wiki-sidebar'\n      config:"
+    },
+    {
+      "section": "How it plugs into the built-in sidebar",
+      "text": "| Piece | Extension point |\n|---|---|\n| Browse + lint tab | page type `llm-wiki` via `ctx.sidebarRightTabs.register`, body in the keyed `sidebar.right.pane.tab` seat |\n| Wiki page rendering | resource type `llm-wiki-page` via `ctx.sidebarRightTabs.register` (`dsh-resource://file/**` + `canOpen` for wiki `.md`), same body seat |\n| Opening a page | `tab.actions.openResource(dsh-resource://file/session/<sessionId>/<path>)` |\n| Page text | `ctx.remote.workspaceFiles.read` (paged line reads, sandbox-aware) |\n| Catalog / lint / map / registries | this plugin's own host routes (below) |"
+    },
+    {
+      "section": "How it plugs into the built-in sidebar",
+      "text": "Only wiki `.md` files are claimed; every other address keeps the product's native document\npreview. The plugin never reads or patches another plugin's DOM."
+    },
+    {
+      "section": "Routes (host half)",
+      "text": "| Route | Body | Purpose |\n|---|---|---|\n| `POST /llm-wiki/api/wikis` | `{ cwd }` | wiki roots exposed by the workspace (default + config + discovery) |\n| `POST /llm-wiki/api/scan` | `{ cwd, wiki? }` | wiki page catalog |\n| `POST /llm-wiki/api/lint` | `{ cwd, wiki? }` | lint report |\n| `POST /llm-wiki/api/map` | `{ cwd, wiki? }` | slug→page map + backlink graph + raw index |"
+    },
+    {
+      "section": "Routes (host half)",
+      "text": "`wiki` is optional on scan/lint/map: omitted selects the default `<cwd>/wiki`; otherwise it is a\nworkspace-relative or workspace-absolute root resolved by `resolveWikiRoot()`.\n\nAll routes enforce the same browser-trust fence as the `/api` gateway\n(loopback/trusted Host + same-origin markers) and read only through the\nsandbox-aware `fs` service. The plugin never writes to disk."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode scripts/build-client.mjs                              # regenerate lib/client.js from lib/client.src.js\nnode --check lib/client.js && node --check lib/index.js && node --check lib/wiki-root.js\nnode test/impl.test.mjs                                    # unit + regression (no browser required)\n```\n\n`lib/client.js` is **generated**: edit `lib/client.src.js`, then run the build. The vendored\nmarkdown-it build and its MIT license text live in `lib/vendor/`."
+    },
+    {
+      "section": "Development",
+      "text": "The v1 design notes for the old DOM-text-pairing pipeline are kept in the repository for history\nand no longer describe the implementation: v2 renders instead of patching another plugin's DOM, so\nthat pipeline was removed together with the better-sidebar dependency."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    },
+    {
+      "section": "Acknowledgments",
+      "text": "- [Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)\n  and the MIT-licensed `llm-wiki` skill from the hermes-agent project — the packaged\n  `skills/llm-wiki` skill is a DSH edition of that pattern.\n- [markdown-it](https://github.com/markdown-it/markdown-it) (MIT) — vendored into the browser\n  bundle for wiki page rendering; its license ships at `lib/vendor/markdown-it.LICENSE`.\n- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (MIT) — the host\n  runtime; the browser-trust fence in `lib/index.js` is a behavioral port of the\n  `/api` gateway's fence from `@deepseek-ai/dsh-client-connection` (MIT).\n- [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) (MIT) — the sidebar plugin\n  v1.x extended; v2 no longer depends on it because DSH ships its own sidebar."
+    },
+    {
+      "section": "llm-wiki-sidebar",
+      "text": "[English](README.md) | 简体中文\n\n[](LICENSE)\n\n面向 **DeepSeek Harness 自带侧边栏**的\n[LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 工作台：直接在\n右侧边栏浏览并体检 Karpathy 式互联 markdown wiki，页面渲染时提供可点击的 `[[wikilinks]]`、\n相对 `.md`/溯源链接与背链，并内置 `llm-wiki` agent skill——打包为同一个 DSH 插件。"
+    },
+    {
+      "section": "llm-wiki-sidebar",
+      "text": "> **v2.0.0 是「改用内置侧边栏」的重写版。** v1.x 面向第三方插件\n> [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar)，注册的是\n> `betterSidebar` 页签与文件查看器。DSH 现在自带右侧边栏\n> （`@deepseek-ai/dsh-client-ui-sidebar-right`），与该插件冲突。v2 直接对接内置侧边栏：\n> 不再需要、也不支持第三方侧边栏插件。"
+    },
+    {
+      "section": "功能",
+      "text": "- **📚 LLM Wiki 侧边栏页签** — 分区页面目录（entities / concepts / comparisons / queries），\n  按 slug/标题/标签搜索，质量标记（`conf: low`、`contested` 争议），一键以文件资源形式打开，\n  刷新按钮，并把产品自带的「刷新页面」快捷键绑定到本页签。\n- **wiki 页面渲染** — 位于 wiki 根内的 `.md` 由本插件自己的资源页签类型接管，使用\n  [markdown-it](https://github.com/markdown-it/markdown-it) 渲染（GFM 表格、代码围栏、引用、\n  列表、图片）。wiki 根之外的文件仍走产品原生文档预览，完全不受影响。\n- **可点击的 `[[wikilinks]]`** — `[[目标]]` / `[[目标|别名]]` 对 wiki map 解析；无法解析的\n  链接以删除线渲染并带提示。渲染源自源文本，不回写文件，磁盘内容永不被修改。\n- **标题锚点** — `[[页面#小节]]` 打开该页并滚动到对应标题，`[[#小节]]` 在当前页内跳转。\n  匹配同时接受标题原文与 slug（GitHub 风格、Unicode 感知，中文标题同样可用）。\n- **可点击的溯源与站内相对 `.md` 链接** — 溯源标记（`^([来源](raw/...))`）与任何相对\n  markdown 链接都经与目录页相同的资源通路打开。\n- **背链** — 每页底部 \"🔗 Linked here (N)\" 栏。\n- **源码 / 预览切换** — 不离开侧边栏即可查看原始 markdown（含 frontmatter）；frontmatter\n  字段在预览上方以紧凑标签行显示。\n- **Lint 报告** — 完整 12 项检查（断链、孤儿页、index 完整性、frontmatter 校验、过期页面、\n  争议标记、质量信号、sha256 源漂移、页面体积、标签分类、log 轮转），按严重级别分组。同样\n  检查可通过打包的 `scripts/wiki_lint.py` 在 CLI 使用。\n- **一个工作区多个 wiki** — 除默认 `wiki/` 外，页签自动发现形似 wiki 的同级目录（含\n  `SCHEMA.md`/`index.md` 且有分区或 `raw/` 目录），并在页签头部提供切换器；页面渲染按\n  「最长前缀匹配」跟随文件所属的 wiki 根。额外位置可用插件的 `wikiRoots` 配置显式注册\n  （见下方「多 wiki」）。\n- **内置 `llm-wiki` skill** — `skills/llm-wiki/SKILL.md` + `scripts/wiki_li"
+    },
+    {
+      "section": "环境要求",
+      "text": "- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，需带内置右侧边栏\n  （`@deepseek-ai/dsh-client-ui-sidebar-right`，0.1.7-rc.2 或更新）\n- Node.js ≥ 20\n\n无需任何第三方侧边栏插件。`dsh-better-sidebar` 必须**不要**安装：它自带侧边栏，会与内置\n侧边栏冲突。"
+    },
+    {
+      "section": "安装",
+      "text": "默认 wiki 位于 `<会话工作区>/wiki`（侧边栏文件路由强制工作区围栏，工作区内为受支持位置）。\n其他 wiki 可放在工作区内任意目录——见[多 wiki](#多-wiki)。"
+    },
+    {
+      "section": "从 GitHub（官方 bundle CLI）",
+      "text": "```sh\ndsh plugin --profile web add \"github:ApeInCodeMountain/llm-wiki-sidebar\"\n```\n\n然后重启 `dsh --profile web` 并硬刷新浏览器。"
+    },
+    {
+      "section": "从 npm",
+      "text": "```sh\ndsh plugin --profile web add llm-wiki-sidebar\n```"
+    },
+    {
+      "section": "本地开发安装",
+      "text": "浏览器端实际加载的 `lib/client.js` 是生成产物（内联了 vendored 的 markdown-it），clone\n之后先生成一次：\n\n```sh\ngit clone https://github.com/ApeInCodeMountain/llm-wiki-sidebar\ncd llm-wiki-sidebar && node scripts/build-client.mjs\ncp -r . ~/.dsh/profiles/web/llm-wiki-sidebar\nln -sfn ../llm-wiki-sidebar ~/.dsh/profiles/web/node_modules/llm-wiki-sidebar"
+    },
+    {
+      "section": "注册为 link: 依赖，让 pnpm 保留该软链",
+      "text": "node -e \"const fs=require('fs');const f=process.env.HOME+'/.dsh/profiles/web/package.json';const j=JSON.parse(fs.readFileSync(f));j.dependencies['llm-wiki-sidebar']='link:llm-wiki-sidebar';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\\n')\"\n```\n\n然后重启 `dsh --profile web` 并硬刷新浏览器（Cmd/Ctrl+Shift+R）。"
+    },
+    {
+      "section": "卸载",
+      "text": "用 `dsh plugin --profile web remove llm-wiki-sidebar` 移除（或手动删除\n`~/.dsh/profiles/web/cordis.patch.yml` 中的两行、profile `package.json` 中的依赖项、\n`node_modules/llm-wiki-sidebar` 软链以及 `~/.dsh/profiles/web/llm-wiki-sidebar` 目录）；\n重启 DSH。卸载会一并撤下打包的 `llm-wiki` skill（它就在插件目录内）。"
+    },
+    {
+      "section": "使用",
+      "text": "1. 对 agent 说：“帮我在这个工作区初始化一个 wiki”——内置的 `llm-wiki` skill 会创建\n   `wiki/`（`SCHEMA.md`、`index.md`、`log.md` 与分层目录）并开始 ingest 源材料。\n2. 打开右侧边栏：引导页上的 **📚 LLM Wiki** 入口（或其页签）显示目录、搜索与 **体检** 按钮。\n3. 点击某个页面：它以 wiki 页面页签打开，`[[wikilinks]]`、溯源链接与背链均可点击。用\n   **源码** 查看原始 markdown。\n4. 想要第二个知识库？用相同的分层结构建一个同级目录（惯例：`wiki-<主题>/`）——侧边栏会自动\n   发现它，页签头部出现 wiki 切换器。每个 wiki 有独立的 slug 命名空间；跨 wiki 引用请用\n   相对 `.md` 链接。"
+    },
+    {
+      "section": "多 wiki",
+      "text": "一个工作区可以放多个互相独立的知识库。宿主按以下顺序合并三类来源（按根去重）：\n\n1. **默认** — `<工作区>/wiki`，始终列出；只存在它时界面不显示切换器。\n2. **插件配置** — 插件行 `config:` 中的 `wikiRoots`（工作区相对路径，或工作区内绝对路径）。\n   显式注册的根即使尚未创建也会列出（`exists: false`），且不受 `exclude` 影响。\n3. **自动发现** — 工作区下深度 1 的、形似 wiki 的目录：含 `SCHEMA.md` 或 `index.md`，**且**\n   含 `entities/ concepts/ comparisons/ queries/ raw/` 中至少一个，因此普通项目目录不会被\n   误报。`exclude`（basename 列表）可跳过嘈杂目录。"
+    },
+    {
+      "section": "多 wiki",
+      "text": "文件归属于「最长匹配」的已注册根，因此 wikilink、溯源链接与背链在每个 wiki 中都可用。所有\nwiki 根都会被校验必须留在会话工作区内（`lib/wiki-root.js`）——越界路径一律拒绝。\n`wiki_lint.py` 以 wiki 根为参数，因此每个 wiki 各自体检。\n\n在 `~/.dsh/profiles/web/cordis.patch.yml` 中配置示例：\n\n```yaml\n- insert:\n    - id: llm-wiki-sidebar\n      name: 'llm-wiki-sidebar'\n      config:"
+    },
+    {
+      "section": "如何接入内置侧边栏",
+      "text": "| 组成 | 扩展点 |\n|---|---|\n| 浏览 + 体检页签 | page 类型 `llm-wiki`，经 `ctx.sidebarRightTabs.register` 注册，body 注册进 keyed `sidebar.right.pane.tab` 座位 |\n| wiki 页面渲染 | 资源类型 `llm-wiki-page`，经 `ctx.sidebarRightTabs.register`（`dsh-resource://file/**` + `canOpen` 限定 wiki `.md`），同一个 body 座位 |\n| 打开页面 | `tab.actions.openResource(dsh-resource://file/session/<sessionId>/<path>)` |\n| 页面文本 | `ctx.remote.workspaceFiles.read`（分页行读取，受沙箱约束） |\n| 目录 / Lint / map / wiki 注册表 | 本插件自己的宿主路由（见下） |"
+    },
+    {
+      "section": "如何接入内置侧边栏",
+      "text": "只接管 wiki `.md`；其他地址一律保留产品原生文档预览。插件从不读取或改写其它插件的 DOM。"
+    },
+    {
+      "section": "路由（宿主半边）",
+      "text": "| 路由 | 请求体 | 用途 |\n|---|---|---|\n| `POST /llm-wiki/api/wikis` | `{ cwd }` | 工作区暴露的 wiki 根（默认 + 配置 + 发现） |\n| `POST /llm-wiki/api/scan` | `{ cwd, wiki? }` | wiki 页面目录 |\n| `POST /llm-wiki/api/lint` | `{ cwd, wiki? }` | 体检报告 |\n| `POST /llm-wiki/api/map` | `{ cwd, wiki? }` | slug→页面映射 + 背链图 + raw 索引 |\n\nscan/lint/map 的 `wiki` 可省略：省略时选默认 `<cwd>/wiki`；否则为经 `resolveWikiRoot()`\n解析的工作区相对或工作区绝对根。\n\n所有路由都强制与 `/api` 网关相同的浏览器信任围栏（loopback/受信 Host + 同源标记），并且\n只通过沙箱感知的 `fs` 服务读取。插件从不写盘。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\nnode scripts/build-client.mjs                              # 由 lib/client.src.js 重新生成 lib/client.js\nnode --check lib/client.js && node --check lib/index.js && node --check lib/wiki-root.js\nnode test/impl.test.mjs                                    # 单元 + 回归（无需浏览器）\n```\n\n`lib/client.js` 是**生成产物**：请改 `lib/client.src.js`，然后跑构建。vendored 的\nmarkdown-it 构建产物与其 MIT 许可证文本在 `lib/vendor/`。\n\nv1 那套 DOM 文本配对流水线的设计文档仅作为历史保留在仓库里，已不再描述当前实现：v2 改为\n「渲染而非给别的插件打 DOM 补丁」，该流水线已随 better-sidebar 依赖一并移除。"
+    },
+    {
+      "section": "许可证",
+      "text": "[MIT](LICENSE)"
+    },
+    {
+      "section": "致谢",
+      "text": "- [Karpathy 的 LLM Wiki 模式](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)\n  与 hermes-agent 项目中 MIT 许可的 `llm-wiki` skill——本包内置的 `skills/llm-wiki`\n  是该模式的 DSH 版本。\n- [markdown-it](https://github.com/markdown-it/markdown-it)（MIT）——用于 wiki 页面渲染，\n  已 vendored 进浏览器 bundle；许可证随包提供于 `lib/vendor/markdown-it.LICENSE`。\n- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（MIT）——宿主运行时；\n  `lib/index.js` 中的浏览器信任围栏是对 `@deepseek-ai/dsh-client-connection`（MIT）中\n  `/api` 网关围栏的行为级移植。\n- [dsh-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)（MIT）——v1.x 扩展的\n  侧边栏插件；因 DSH 已自带侧边栏，v2 不再依赖它。"
+    }
+  ],
+  "skipped": []
+}
