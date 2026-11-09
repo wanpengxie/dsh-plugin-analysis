@@ -41,6 +41,14 @@ def valid(repo):
                        cwd=ROOT, text=True, capture_output=True)
     return p.returncode == 0
 
+def required_result_paths(repo):
+    slug = repo.replace("/", "__")
+    return {
+        f"results/facts/{slug}.json",
+        f"results/cards/{slug}.json",
+        f"results/units/{slug}.jsonl",
+    }
+
 def event(db, event_name, repo=None, worker=None, detail=None):
     db.execute("INSERT INTO events(at,repo,worker,event,detail) VALUES(?,?,?,?,?)",
                (now(), repo, worker, event_name, detail))
@@ -154,10 +162,28 @@ def audit():
                                 GROUP BY worker HAVING n>1""").fetchall()
     for x in dup_workers:
         errors.append(f"worker {x['worker']} owns {x['n']} tasks")
+    tracked = set(subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", "HEAD", "--",
+         "results/facts", "results/cards", "results/units"],
+        cwd=ROOT, text=True, capture_output=True, check=True,
+    ).stdout.splitlines())
+    dirty = {
+        line[3:] for line in subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all", "--",
+             "results/facts", "results/cards", "results/units"],
+            cwd=ROOT, text=True, capture_output=True, check=True,
+        ).stdout.splitlines() if len(line) >= 4
+    }
     done = db.execute("SELECT repo FROM tasks WHERE state='done'").fetchall()
     for x in done:
-        if not valid(x["repo"]):
-            errors.append(f"done task fails validation: {x['repo']}")
+        repo = x["repo"]
+        source = ROOT / "work" / repo.replace("/", "__")
+        required = required_result_paths(repo)
+        if source.is_dir():
+            if not valid(repo):
+                errors.append(f"done task fails validation: {repo}")
+        elif not required.issubset(tracked) or required.intersection(dirty):
+            errors.append(f"done task source cleaned before validated checkpoint: {repo}")
     known = {x["repo"] for x in db.execute("SELECT repo FROM tasks")}
     loaded_tiers = {x["tier"] for x in db.execute("SELECT DISTINCT tier FROM tasks")}
     expected = {x["repo"] for x in rows(None) if x["tier"] in loaded_tiers}
