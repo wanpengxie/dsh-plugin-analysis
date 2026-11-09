@@ -1,0 +1,185 @@
+{
+  "repo": "azwosile/dsh-highres-vision",
+  "commit": "9638230e59d6c997814946d9523532713f650b0d",
+  "extracted_at": "2026-11-09T06:54:02.237326+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 146055,
+    "lines_by_language": {
+      "JSON": 857,
+      "JavaScript": 1795,
+      "Markdown": 449,
+      "Other": 25,
+      "YAML": 103
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/model-budget.js",
+      "lib/model-detect.js",
+      "lib/tile.js",
+      "package-lock.json",
+      "package.json",
+      "verify-kernel.mjs",
+      "verify.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-highres-vision",
+    "version": "0.3.2",
+    "description": "DeepSeek Harness vision enhancer: raises image limits to the official DeepSeek values, raises the per-model request image budget for DeepSeek-V4.1-Flash, and provides high-resolution tiled image reading via a dedicated tool.",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./tile": "./lib/tile.js",
+      "./model-budget": "./lib/model-budget.js",
+      "./model-detect": "./lib/model-detect.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "verify.mjs",
+      "verify-kernel.mjs"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": ">=18",
+      "dsh": ">=0.1.2-rc.1"
+    },
+    "dependencies": {
+      "jimp": "^1.6.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "compatibility": {
+        "dsh": ">=0.1.2-rc.1",
+        "dshReleases": {
+          "0.1.2-rc.1": "compatible",
+          "0.1.5-rc.1": "compatible",
+          "0.1.5-rc.2": "compatible"
+        }
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-highres-vision  v0.3.2\n#\n# 把 DSH 本地的图片准入上限提高到 DeepSeek 官方 API 文档限制，\n# 并挂载高清分块识图插件（highres_read 工具 + pre-step 提醒）。\n#\n# 官方限制表（api-docs.deepseek.com/guides/vision，2026-09-10 复核）：\n#   支持格式 JPEG / PNG / GIF / WebP\n#   外链长度 8192 字符\n#   请求体 48 MiB\n#   单图（base64 / 外链）32 MiB\n#   单图（Files API file_id）64 MiB\n#   单请求最大图片数 600\n#   单请求图片总量 不含 file_id 64 MiB；含 file_id 200 MiB\n#   单边像素 8192px；单请求 >=15 张图时降为 4096px\n\n# 1) 挂载本插件\n- insert:\n    - id: dsh-highres-vision\n      name: dsh-highres-vision\n\n# 2) 放宽本地附件限制（对齐上面的官方限制表）\n#\n# ⚠ 这里有两套**独立**预算，只设一套等于没设（v0.3.0 就栽在这）：\n#\n#   A. 源准入（max* 那组）：图片**收不收**，超标直接拒收。\n#   B. 规范化（normalized* 那组）：收下后**存进附件库的那份**长什么样 ——\n#      provider 无关的确定性副本，read_image / highres_read 读的就是它。\n#\n# v0.3.0 只设了 A。后果实测：3840x2160 通过 A，却在 B 被\n#   normalizedImageMaxPixels 的默认值 2048*2048 = 4,194,304 缩成 2730x1536\n# （requestImageDimensions(3840,2160,4194304) === 2730x1536，逐位吻合），\n# 进附件库时已丢 49.4% 像素，后面 1300 的分块是在降质源上做的。\n#\n# 约束（dsh-tool-fs 文档）：规范化字节预算不能高于 maxImageBytes，\n# 否则 read_image 读规范化对象路径会被拒。此处 16 MiB < 32 MiB ✓\n- id: attachment-local\n  config:\n    # ── A. 源准入 ──\n    maxImageBytes: 33554432          # 32 MiB，官方单图（base64 / 外链）上限\n    maxImageDimension: 8192          # 8192px，官方单图单边上限\n    maxImagePixels: 67108864         # 8192 x 8192 像素\n    maxImagesPerMessage: 600         # 官方单请求最大图片数\n    maxMessageImageBytes: 67108864   # 64 MiB，inline 单请求图片总量\n    # ── B. 规范化（v0.3.1 新增）──\n    normalizedImageMaxPixels: 67108864    # 与 maxImagePixels 同值：已准入的图不再降采样\n    normalizedImageMaxDimension: 8192     # 与 maxImageDimension 同值\n    normalizedImageMaxBytes: 16777216     # 16 MiB（默认 4 MiB）；只影响质量阶梯余量\n\n# 3) 提高 DeepSeek 适配器累计 base64 图片负载上限\n#\n# ⚠ v0.2.0 及更早版本这里写的是 maxRequestImageBytes —— 该键在\n#   harness 0.1.2-rc.1 的 dsh-llm-deepseek 里已不存在，写了也不会被读取\n#   （实测 Schemastery 3.18.2 不剥离未知键也不报错，所以是静默 no-op）。\n#   现行键名是 maxInlineRequestImageBytes（默认 20 MiB）。\n#\n# 约束（dsh-llm-deepseek 的 resolveAdapterOptions 会强校验）：\n#   inlineImageOffloadByteQuantum（默认 10 MiB）必须 <= maxInlineRequestImageBytes\n#   其它相关键：maxRequestFilesBytes（默认 128 MiB）、imageOffloadByteQuantum（64 MiB）、\n#               maxImagesPerRequest（默认 600，已等于官方值，无需覆盖）\n- id: llm-deepseek\n  config:\n    maxInlineRequestImageBytes: 46137344   # 44 MiB，给 48 MiB 请求体保留约 4 MiB 余量\n\n# 4) 每个视觉模型的请求投影像素预算 —— v0.3.0 起由插件自动处理，不在这里写\n#\n# 宿主适配器在发请求前还会按「每个模型」的 imagePixelBudget / imageMaxBytes\n# 再投影一次（dsh-llm-deepseek 的 resolveRequestImagePolicy）。模型条目没有\n# 显式声明时，内核默认是 640000（≈800x800）/ 1 MiB —— V4-Flash-Vision-Exp 时代\n# 的基线。不改它，lib/tile.js 的 1300 分块会在请求前被压回 800x800。\n#\n# v0.3.0 改为在运行时通过 settings 服务写入（lib/model-budget.js）：\n#   settings.update('llm-deepseek', { models: [...] })\n# 走内核给配置界面用的正规路径，带 schema 校验与 revision 冲突检测，\n# 落盘后适配器立刻换源，**无需重启**。\n#\n# ⚠ 为什么不能写在这个补丁文件里（两条硬约束）：\n#   1. 补丁对目标行的 `config` 是「整块替换」而不是合并 —— 见\n#      @deepseek-ai/dsh-base 的 cordis.patch.yml 头部注释。写 `models` 会把\n#      用户已有的模型条目整批冲掉。\n#   2. `models` 是数组，settings 的 mergeLayers 对非普通对象是「覆盖」语义；\n#      并且 dsh-llm-deepseek 通过 settings.installSection 把配置源指向 settings\n#      的解析结果（apply() 内 setSource((source) => current = source)），\n#      所以补丁层的 `models` 会被用户层 settings.yaml 永久压过。\n#\n# 插件默认行为（可用 config 关闭/覆盖）：\n#   autoRaiseModelBudget: true        # false = 完全不做预算抬升\n#   modelImagePixelBudget: 1690000    # 1300 x 1300\n#   modelImageMaxBytes: 8388608       # 8 MiB\n#\n# 规则：只处理已声明 `image` 模态的条目；只加字段、只抬不降；跳过显式\n# `imagePixelBudget: \"low\"`；只在真的需要改时才写盘。\n#\n# 若宿主的 settings provider 是只读的（写入会被拒绝），插件只会记一条 warn、\n# 其余功能照常，此时请手工在 settings.yaml 的 llm-deepseek.models 里加：\n#\n#       - id: deepseek-flash                     # V4.1-Flash 的正式名（2026-09-10 起）\n#         name: DeepSeek-V4.1-Flash\n#         inputModalities: [text, image]\n#         imagePixelBudget: 1690000\n#         imageMaxBytes: 8388608\n#\n# 说明：imagePixelBudget / imageMaxBytes 必须与 lib/tile.js 的 TILE_SIZE 同批调整；\n# 只抬一边等于白改。纯文本模型声明这两项会被 resolveModels 直接判错。\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/tile.js",
+    "lib/model-budget.js",
+    "lib/model-detect.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:422"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:441"
+    },
+    {
+      "name": "HRV_SAMPLES",
+      "kind": "env",
+      "where": "verify.mjs:396"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "jimp": "^1.6.1"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 20,
+    "pushed_at": "2026-09-11T09:51:41Z",
+    "created_at": "2026-08-24T17:18:41Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/model-budget.js",
+    "lib/model-detect.js",
+    "lib/tile.js",
+    "package.json",
+    "verify-kernel.mjs",
+    "verify.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-highres-vision",
+      "text": "> 大肥鱼出来卖个萌\n> 🐳 鲸鱼娘登场喵～ 如果这个小插件帮到了你，记得给仓库点个 ⭐ Star 喵！\n> 星星越多，鲸鱼娘越开心，也会更有动力继续维护这个插件喵～ 💙\n> （求求啦喵～）\n\n> ⚠️ **只给 DeepSeek 的视觉模型用。**\n> 2026-09-10 起视觉模型是 **DeepSeek-V4.1-Flash**（正式名 `deepseek-flash`）；\n> 旧名 `deepseek-v4-flash-vision-exp` / `deepseek-v4-flash` 仍被接受，请求同样转由 V4.1-Flash 承接。\n> `deepseek-v4-pro` 官方不支持视觉。\n\nDeepSeek Harness 高清识图增强插件 **v0.3.2**（本身也是由 deepseek v4 flash vision exp 开发()）"
+    },
+    {
+      "section": "适配内核",
+      "text": "| 内核版本 | 状态 |\n|---|---|\n| 0.1.2-rc.1（DSH Desktop 0.8.1 内置） | ✅ 已实测 |\n| 0.1.5-rc.1（npm `latest`） | ✅ 已实测 |\n| 0.1.5-rc.2（npm `next`） | ✅ 已实测 |\n| ≤ 0.1.1-rc.x | ⚠ 未实测 |\n\n`package.json` 声明：`engines.dsh: \">=0.1.2-rc.1\"`，另附 `dsh.compatibility.dshReleases` 逐版本表。\n\n自验：`node verify-kernel.mjs <内核树A> [内核树B] ...` —— 26 项宿主契约逐条对比，退出码 `0` 表示不用改代码。"
+    },
+    {
+      "section": "功能",
+      "text": "**1. 仅在 DeepSeek 系列模型下启用**\n按会话判定当前 provider / model，非 DeepSeek 时对**那个 agent** 屏蔽 `highres_read`，\n也不注入 pre-step 提醒（不影响其它会话）。中途切换模型即时生效。\n判定：provider 为 `deepseek-official`，或模型名含 `deepseek`（兜住第三方中转）。\n判定不出时按 `unknownModelPolicy` 处理，默认 `allow`。\n\n**2. 自动抬升每模型图片预算**\n宿主适配器（官方 `dsh-llm-deepseek`）会按每个模型的 `imagePixelBudget` 把图片二次投影，\n官方默认值只有 640000 像素（≈800×800）/ 1 MiB。\n插件加载时**逐条**判定，只给 **DeepSeek 系列**且已声明 `image` 模态的条目补上\n`imagePixelBudget: 1690000`（1300×1300）与 `imageMaxBytes: 8388608`（8 MiB），\n**立即生效，无需重启**。"
+    },
+    {
+      "section": "功能",
+      "text": "- 写入目标只有 `llm-deepseek` 这一个 settings 命名空间（官方 DeepSeek 适配器自己的模型目录）；\n  `ginka-*` / `amd` 等 `llm-pi-ai` provider **结构上不会被碰**\n- 逐条白名单：id 或 name 不含 `deepseek` 的条目一律跳过\n- 只抬不降、不动纯文本模型、不动显式 `low` 档、只在需要时才写盘\n\n**3. 放宽图片限制**\n**源准入 + 规范化是两套独立预算，这里一起放宽**，图片进附件库时不再被降采样。\n\n- **源准入**（超标直接拒收）：单图 32 MiB / 单边 8192px / 单请求 600 张 / inline 总量 64 MiB\n- **规范化**（存进附件库的那份）：像素上限 8192×8192（DSH 默认 **2048×2048**）/\n  长边 8192px / 编码字节 16 MiB（DSH 默认 4 MiB）\n- **适配器**：base64 累计 44 MiB"
+    },
+    {
+      "section": "功能",
+      "text": "> ⚠️ 只改源准入是不够的 —— v0.3.0 就栽在这：3840×2160 通过准入后，\n> 被规范化默认值砍成 2730×1536（**丢 49.4% 像素**），后面 1300 的分块是在降质源上做的。\n> v0.3.1 补上规范化预算后原样入库。\n\n**4. 高清分块识图**\n注册 `highres_read` 工具，自动定位当前会话最近一张用户图片，生成\n**整图 + ≤1300×1300 高清分块**（overlap 自动 65 / 130 / 195px）后通过宿主 `read_image` 注入模型。\n不覆盖宿主 `read_image`。用户发大图且模型未调用该工具时，`agent/pre-step` 会提醒。\n工具参数：`tile` / `overlap` / `skipWhole` / `maxTiles`。"
+    },
+    {
+      "section": "相对 v0.2.0 的改动",
+      "text": "| # | 改动 | 说明 |\n|---|---|---|\n| 1 | **分块基线 800 → 1300** | V4.1-Flash 的等效像素从 ≈800×800 / 384 token 提到 ≈1300×1300 / 1024 token。沿用 800 白丢约 62% 分辨率 |\n| 2 | **新增「仅 DeepSeek 系列启用」** | 非 DeepSeek 会话下对该 agent 屏蔽 `highres_read`，切模型即时生效；不碰别的会话 |\n| 3 | **新增自动抬升每模型图片预算** | 新增 `lib/model-budget.js`。不抬这段，1300 的分块会在发请求前被压回 800×800 |\n| 4 | **修复失效配置键** | `cordis.patch.yml` 里 `maxRequestImageBytes` 在 harness 0.1.2-rc.1 已不存在（静默 no-op），改为 `maxInlineRequestImageBytes` |\n| 5 | **修复漏掉的规范化预算**（0.3.1） | 只抬源准入不够：DSH 规范化默认把图压到 2048×2048 以内，3840×2160 入库即丢 49.4% 像素。补上 `normalizedImageMax*` 三个键 |\n| 6 | **新增可配置项** | `deepseekOnly` / `unknownModelPolicy` / `modelBudgetScope` / `tile` / `overlap` / `remind` / `remindThreshold` / `autoRaiseModelBudget` / `modelImagePixelBudget` / `modelImageMaxBytes` |\n| 7 | **新增离线自检** | `verify.mjs`，不装插件也能跑 |\n| 8 | **移除 router-standard 兼容说明** | 上游那套预设已不适配 V4.1-Flash |"
+    },
+    {
+      "section": "相对 v0.2.0 的改动",
+      "text": "> 没变的部分：纯 Node 实现（依赖 `jimp`，不需要 Python / Pillow）、不覆盖宿主 `read_image`、\n> 识别后清理本次临时目录而不动附件库。"
+    },
+    {
+      "section": "相对 v0.3.1 的改动",
+      "text": "| # | 改动 | 说明 |\n|---|---|---|\n| 1 | **修复「不传参数自动取会话最近一张图」恒失败** | `findLatestSessionImage()` 读的 `session.events` 在 harness 0.1.2-rc.1 的 `Session` 上**不存在**（只有 `snapshotEvents()` / `ownEvents()` / `eventAt()` / `seq`），判定恒为 `undefined` → 不传参数的调用一律返回 `file_path/image/attachmentId is required`。改用 `session.snapshotEvents()`，保留 `events` 作更旧内核回退 |\n| 2 | **`verify.mjs` 补上该路径的回归用例** | 之前只测 tile / model-budget / model-detect 三块纯函数，所以这个缺陷从 v0.2.0 一路带到 v0.3.1。现在导出 `sessionEvents` / `findLatestSessionImage` 并直接断言 |\n| 3 | **声明适配内核** | `package.json` 加 `engines.dsh: \">=0.1.2-rc.1\"` 与 `dsh.compatibility.dshReleases` 逐版本表 |\n| 4 | **新增 `verify-kernel.mjs`** | 26 项宿主契约在任意几棵内核树上逐条对比，判断「换内核要不要改代码」 |"
+    },
+    {
+      "section": "相对 v0.3.1 的改动",
+      "text": "> 影响面：带 `file_path` 或 `attachmentId` 的显式调用一直是好的，\n> 坏的只有「让插件自己去会话里找最近一张用户附图」这条最省事的路径。"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml\n- id: dsh-highres-vision\n  name: dsh-highres-vision\n  config:\n    deepseekOnly: true               # 只在 DeepSeek 系列模型下启用\n\n`modelImagePixelBudget` 需要与 `tile` 同批调整。\n\n> 边界：插件**只抬预算，不改模型名与模态**。模型没写 `inputModalities: [text, image]`\n> 时按内核规则视为纯文本而跳过，需要你自行添加。"
+    },
+    {
+      "section": "安装",
+      "text": "```powershell\ngit clone https://github.com/azwosile/dsh-highres-vision.git\ndsh plugin --profile web add ./dsh-highres-vision\n```\n\n装配后重启 DSH Desktop 一次（放宽准入限制的 bundle 补丁只在启动时组合）。\nNode >= 18，依赖 `jimp` 安装时自动装好，不需要 Python / Pillow。\n\n自检（不装插件也能跑）：\n\n```powershell\nnode verify.mjs            # 自包含合成图，预期 112 通过 / 0 失败\nnode verify.mjs <样本目录>  # 额外跑本地真实图片\nnode verify-kernel.mjs <内核树A> [内核树B] [...]   # 内核契约对比，退出码 0 = 全部一致\n```"
+    },
+    {
+      "section": "回滚",
+      "text": "```text\ndsh plugin --profile web remove dsh-highres-vision\n```\n\n（装了超级注入器的话也可以用 `dev_uninject_plugin dsh-highres-vision`）\n\n> 预算抬升写进 `settings.yaml` 后不会随卸载自动撤销，需手动删掉那两个字段或走 Models 页重置。\n\ndsv4fv开发"
+    }
+  ],
+  "skipped": []
+}
