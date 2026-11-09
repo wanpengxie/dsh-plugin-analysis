@@ -1,0 +1,237 @@
+{
+  "repo": "Letter2025/dsh-model-failover",
+  "commit": "9f8290cdf354dc86762dce6f388553036e0e2d0b",
+  "extracted_at": "2026-11-09T11:12:39.118921+00:00",
+  "tree": {
+    "files": 18,
+    "bytes": 173900,
+    "lines_by_language": {
+      "JSON": 3245,
+      "Markdown": 272,
+      "Other": 24,
+      "TypeScript": 1052,
+      "YAML": 44
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "skills/configure-model-failover/SKILL.md",
+      "src/circuit.ts",
+      "src/index.ts",
+      "src/types.ts",
+      "tests/circuit.spec.ts",
+      "tests/failover.spec.ts",
+      "tests/loop-integration.spec.ts",
+      "tests/support/mock-adapter.ts",
+      "tsconfig.build.json",
+      "tsconfig.json",
+      "vitest.config.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-model-failover",
+    "version": "0.1.10",
+    "description": "Two-level model circuit breaker with failover for DeepSeek Harness: trip a model or a whole provider after repeated request failures and route the next request to a configured fallback",
+    "author": "Letter2025",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Letter2025/dsh-model-failover.git"
+    },
+    "bugs": {
+      "url": "https://github.com/Letter2025/dsh-model-failover/issues"
+    },
+    "homepage": "https://github.com/Letter2025/dsh-model-failover",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "circuit-breaker",
+      "failover",
+      "high-availability",
+      "model-routing",
+      "plugin"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./src/*": "./src/*",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "skills"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "~4.0.5 || ~4.0.6-alpha.1 || ~4.1.0",
+      "@deepseek-ai/dsh-agent": "^0.2.1-rc.4 || ^0.2.2-alpha.2 || ^0.2.2-rc.1",
+      "@deepseek-ai/dsh-llm": "^0.2.1-rc.4 || ^0.2.2-alpha.2 || ^0.2.2-rc.1",
+      "@deepseek-ai/dsh-session": "^0.2.1-rc.4 || ^0.2.2-alpha.2 || ^0.2.2-rc.1",
+      "@deepseek-ai/dsh-skill": "^0.2.1-rc.4 || ^0.2.2-alpha.2 || ^0.2.2-rc.1",
+      "@deepseek-ai/schemastery": "^3.18.0 || ~3.18.6-alpha.1 || ~3.19.0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "~4.1.0",
+      "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-agent-loop-testkit": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-fs-local": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-scope": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-sandbox": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-session-persistence": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-session-projection": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-settings": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+      "@deepseek-ai/schemastery": "~3.19.0",
+      "@types/node": "^22.10.0",
+      "typescript": "^5.7.2",
+      "vitest": "^3.2.4",
+      "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-fs": "0.2.2-rc.1"
+    },
+    "scripts": {
+      "typecheck": "tsc --noEmit",
+      "test": "vitest run",
+      "build": "tsc -p tsconfig.build.json"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-model-failover bundle patch: one plugin row over the profile root.\n#\n# The plugin decorates the agent loop's request routing:\n# - `agent/request-error` records failures whose code is in `tripCodes` into a\n#   two-level circuit breaker (a model circuit opens after\n#   `modelCircuitThreshold` failures inside `burstWindowMs`; a platform circuit\n#   opens when `platformCircuitThreshold` distinct models under one provider\n#   are open), then delegates through `next()` so the bundled `llm-retry`\n#   policy still owns per-request retries.\n# - `agent/request` routes the next request to the first healthy fallback when\n#   the primary route's circuit is open.\n#\n# Open model circuits are probed after `modelCooldownMs` with a tiny real\n# call; a successful probe closes the circuit, a failed one extends it.\n#\n# `fallbacks` is the field you must configure for real — point it at routes\n# your account can actually reach (a provider with a registered adapter). Every\n# other field has a safe default. Omit `fallbacks` to install the plugin inert:\n# it records failures but never switches routes.\n\n- insert:\n    - id: model-failover\n      name: 'dsh-model-failover'\n      config:\n        enabled: true\n        fallbacks:\n          - provider: deepseek\n            model: deepseek-chat\n        tripCodes:\n          - RATE_LIMIT\n          - SERVER\n          - TIMEOUT\n          - TRANSPORT\n          - QUOTA\n          - EMPTY_RESPONSE\n        modelCircuitThreshold: 2\n        modelCooldownMs: 60000\n        platformCircuitThreshold: 2\n        platformCooldownMs: 120000\n        burstWindowMs: 300000\n        enableProbe: true\n        probeMaxTokens: 8\n        stripReasoningEffort: true\n        notifyUser: true\n"
+    }
+  ],
+  "entries": [
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Letter2025/dsh-model-failover.git",
+      "where": "package.json:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Letter2025/dsh-model-failover/issues",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Letter2025/dsh-model-failover",
+      "where": "package.json:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/cordis": "~4.1.0",
+      "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-agent-loop": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-agent-loop-testkit": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-fs-local": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-scope": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-sandbox": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-session-persistence": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-session-projection": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-settings": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+      "@deepseek-ai/schemastery": "~3.19.0",
+      "@types/node": "^22.10.0",
+      "typescript": "^5.7.2",
+      "vitest": "^3.2.4",
+      "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1",
+      "@deepseek-ai/dsh-fs": "0.2.2-rc.1"
+    }
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 16,
+    "pushed_at": "2026-11-05T05:44:35Z",
+    "created_at": "2026-08-14T09:24:54Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/circuit.ts",
+    "src/index.ts",
+    "src/types.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-model-failover",
+      "text": "[](https://www.npmjs.com/package/dsh-model-failover)\n[](https://www.npmjs.com/package/dsh-model-failover)\n[](https://github.com/Letter2025/dsh-model-failover)\n[](LICENSE)\n[](https://github.com/Letter2025/dsh-model-failover/blob/main/README.zh.md)\n[](https://awesome-dsh-plugin.com)"
+    },
+    {
+      "section": "dsh-model-failover",
+      "text": "Two-level model circuit breaker with failover for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). When a model (or a whole provider) starts failing repeatedly, the plugin opens a circuit and routes the next model request to a configured fallback — no core changes, installable with `dsh plugin`."
+    },
+    {
+      "section": "What it does",
+      "text": "- **Model circuit** — a `provider/model` route opens after `modelCircuitThreshold` failures inside `burstWindowMs`.\n- **Platform circuit** — a provider opens when `platformCircuitThreshold` distinct models under it are open at once (a platform outage usually takes down every model on it).\n- **Failover** — the next request goes to the first healthy fallback in `fallbacks`; the switch is recorded by the loop itself (`request/header` change) and optionally announced as a user-visible message.\n- **Recovery probes** — an open model circuit is probed after `modelCooldownMs` with a tiny real call; a successful probe closes the circuit, a failed one extends the cooldown.\n- **Composes with `llm-retry`** — per-request backoff retries stay owned by the bundled `llm-retry` policy; the breaker observes the failures that escape it, so transient blips that recover after a retry never trip a circuit."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add dsh-model-failover\n```\n\nThen configure `fallbacks` (the only field you must set) and, if needed, the thresholds in your profile `cordis.patch.yml` — see the [plugin row in cordis.patch.yml](cordis.patch.yml) for the full default config."
+    },
+    {
+      "section": "Install",
+      "text": "A companion skill, `configure-model-failover`, walks the agent through setting the fallback models (AI probes the current model config, writes the fallback override, then asks you to confirm). It is **installed automatically with the plugin**: the package ships `skills/configure-model-failover/SKILL.md` and the plugin registers it as a bundled skill whenever the `skills` service is present — no copy step needed. For a standalone install (profile without the plugin), copy it into `~/.dsh/skills/configure-model-failover/` (user-level skills are picked up live)."
+    },
+    {
+      "section": "How it works",
+      "text": "The plugin decorates two agent-loop waterfalls (both official extension points, no core changes):\n\n| Waterfall | Role |\n| --- | --- |\n| `agent/request-error` | Records failures whose `code` is in `tripCodes` into the circuit breaker, then delegates through `next()` so `llm-retry` still owns retries. |\n| `agent/request` | `await next()` for the resolved config, then returns the healthy primary route, or the first healthy fallback when the primary's circuit is open. |"
+    },
+    {
+      "section": "How it works",
+      "text": "```text\nrequest ──> agent/request ──> primary (mock/m1) ──> fail ×2 ──> circuit open\n                                                                │\nnext request ──> agent/request ──> primary open ──> fallback (mock2/m2) ✔\n                                                                │"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Meaning |\n| --- | --- | --- |\n| `enabled` | `true` | Master switch. |\n| `fallbacks` | `[]` | Ordered fallback routes `{provider, model}`; must point at providers with a registered adapter. |\n| `tripCodes` | `RATE_LIMIT, SERVER, TIMEOUT, TRANSPORT, QUOTA, EMPTY_RESPONSE` | Failure codes that count toward a circuit; e.g. `AUTH`/`INVALID_CREDENTIAL` stay terminal. |\n| `modelCircuitThreshold` | `2` | Failures inside the burst window that open a model circuit. |\n| `modelCooldownMs` | `60000` | Cooldown before an open model circuit is probed. |\n| `platformCircuitThreshold` | `2` | Distinct open models that open the whole provider. |\n| `platformCooldownMs` | `120000` | Provider-wide cooldown. |\n| `burstWindowMs` | `300000` | Failures older than this start a fresh burst. |\n| `enableProbe` | `true` | Probe open models after cooldown to recover circuits. |\n| `probeMaxTokens` | `8` | Output cap for probe calls. |\n| `stripReasoningEffort` | `true` | Drop the primary's reasoning effort when failing over (fallbacks may not support it). |\n| `notifyUser` | `true` | Append a user-visible message when a route switches. |"
+    },
+    {
+      "section": "Events",
+      "text": "Plugin-defined (emit) events, typed via the `@deepseek-ai/cordis` augmentation in `src/types.ts`:\n\n- `model-failover/circuit-opened` — `{provider, model, level: 'model' | 'platform'}`\n- `model-failover/circuit-closed` — `{provider, model, level: 'model'}`\n- `model-failover/failover` — `{from, to, agentId}`\n- `model-failover/probe` — `{provider, model, ok, message?}`"
+    },
+    {
+      "section": "Known Limitations and Deferred Work",
+      "text": "- **Process-local state** — circuit state lives in memory and resets on plugin reload (like every harness registry). Cross-instance sharing is deferred.\n- **Agent-loop calls only** — `agent/request` covers the main conversation loop. Auxiliary calls (`session-title`, `compaction`, hand-built `ctx.llm.stream`) are not routed.\n- **`retryPolicy.mode: 'always'`** — the bundled `llm-retry` never delegates a failure to this breaker in that mode, so failover stays idle by design (the operator chose unbounded retries).\n- **No context-window adaptation** — a fallback with a smaller context window may hit `CONTEXT_WINDOW_EXCEEDED`; set `stripReasoningEffort` and pick compatible fallbacks.\n- **No platform probe** — the platform circuit recovers by cooldown expiry; only model circuits are probed."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
