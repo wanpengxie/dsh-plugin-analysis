@@ -1,0 +1,338 @@
+{
+  "repo": "Mcd0LUO/dsh-guard-repeat-output",
+  "commit": "01041b6f4d4ce183016701ecaed62a7dd6aec7f8",
+  "extracted_at": "2026-11-09T07:49:36.402389+00:00",
+  "tree": {
+    "files": 30,
+    "bytes": 261637,
+    "lines_by_language": {
+      "JSON": 49,
+      "JavaScript": 4981,
+      "Markdown": 667,
+      "Other": 28,
+      "YAML": 121
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/cleanup.js",
+      "lib/sanitize.js",
+      "package.json",
+      "verify/answer-two-questions.mjs",
+      "verify/audit-hits.mjs",
+      "verify/bench.mjs",
+      "verify/build-corpus.mjs",
+      "verify/calibrate.mjs",
+      "verify/chunk-acceptance.mjs",
+      "verify/compare-context.mjs",
+      "verify/config.mjs",
+      "verify/cross-platform.mjs",
+      "verify/density-before.mjs",
+      "verify/effort-necessity.mjs",
+      "verify/integration.mjs",
+      "verify/maintenance.mjs",
+      "verify/measure-pruning-gap.mjs",
+      "verify/measure-pruning.mjs",
+      "verify/mutations.mjs",
+      "verify/perturbation.mjs",
+      "verify/pruning-control.mjs",
+      "verify/scan-corpus.mjs",
+      "verify/v2-control.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-guard-repeat-output",
+    "version": "2.1.7",
+    "description": "Host-side degeneration guard for DSH: strips garbage code points from the stream, detects repetition collapse and discards the attempt before any of it enters history, and can retroactively decontaminate a session that was already poisoned.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh-CN.md",
+      "LICENSE",
+      "CHANGELOG.md"
+    ],
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "guard",
+      "repetition",
+      "cordis-plugin"
+    ],
+    "license": "MIT",
+    "author": "Mcd0LUO",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Mcd0LUO/dsh-guard-repeat-output.git"
+    },
+    "homepage": "https://github.com/Mcd0LUO/dsh-guard-repeat-output#readme",
+    "bugs": {
+      "url": "https://github.com/Mcd0LUO/dsh-guard-repeat-output/issues"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh": ">=0.1.6-alpha.2 <0.3.0-0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: guard-repeat-output\n      name: 'dsh-guard-repeat-output'\n      config:\n        # Detection thresholds. Every default below is calibrated against real\n        # traffic (see the package header in index.js): 4 real degenerate\n        # samples all convicted, 1708 real legitimate reasoning parts plus 205\n        # real long answers all clean.\n        windowChars: 2400\n        minWindowChars: 1200\n        minSegments: 24\n        # NOTE: there is deliberately no minimum segment LENGTH. A segment is kept\n        # whenever it carries a letter or digit, however short, because a collapse\n        # repeating `OK.` / `Let me run.` lives entirely below any useful length\n        # floor — and because `duplicateShare` is computed over the segments that\n        # survive, dropping the repeaters made the collapse look VARIED (a live\n        # `OK.` x44 loop scored 0.60 and never convicted).\n        phraseRun: 8\n        phraseTopCount: 10\n        lowInfoDupShare: 0.80\n        maxUniqueGramRatio: 0.30\n        gramK: 5\n        evalEveryChars: 200\n        # Consecutive non-repeated segments tolerated inside a degenerate run\n        # before the onset walk declares the repetition over.\n        onsetGapSegments: 2\n\n        # Precise pruning, used ONLY on the fallback path (retry budget spent).\n        # On the primary path a collapse discards the whole attempt, so there is\n        # no boundary to find. Text is held back this many characters before\n        # release, so the cut can land where the degeneration actually began\n        # rather than at the later, provable conviction point.\n        #\n        # Measured on the frozen corpus (62 real degenerate blocks):\n        #   0    -> 117,894 chars of degenerate text released (13.35% pollution)\n        #   2400 ->  10,520 (1.37%), 36/62 blocks cut exactly at the onset\n        #   4096 ->   5,083 (0.67%), 48/62 exact   <- default\n        #   6144 ->   4,668 (0.61%), 49/62 exact\n        # 4096 keeps ~96% of the pollution out; 6144 buys only 415 more chars for\n        # 2048 more characters of output delay. 0 disables holdback entirely.\n        holdbackChars: 4096\n\n        # Scope: the incident this guard exists for is DeepSeek-family output.\n        # An empty list means \"every model\".\n        modelIncludes: ['deepseek']\n\n        # Which channels the guard acts on. Everything else is observe-only:\n        # convictions are still logged and copied, but the stream passes through.\n        # `text` is deliberately absent — across 1546 real sessions, 59\n        # convictions landed in `reasoning` and ZERO in `text`, while `text` is\n        # the only channel the user reads, so cutting it has no evidence behind it\n        # and risks truncating a genuine answer.\n        truncateChannels: ['reasoning']\n\n        # Primary path: a collapsed attempt is DISCARDED and re-issued. The\n        # attempt is settled as `assistant/attempt`, never `assistant/message`,\n        # so none of the collapsed text enters the context — which is what v1\n        # could not achieve (11 of 111 surviving blocks still convicted).\n        #\n        # The retry deliberately does NOT change the reasoning effort. That was\n        # tried and measured: of 16 real convictions, 6 of the 9 sessions that\n        # were successfully lowered collapsed again anyway (67%), so the lowering\n        # conferred no immunity — the discard-and-regenerate is what works. It\n        # also cost 8 dead turns, each an adapter rejecting a rung the model does\n        # not declare (\"does not support reasoning effort \\\"medium\\\"\").\n        maxDegenerationRetries: 2\n\n        # Sidecar copies of collapsed text. This is the ONLY surviving record of\n        # what was discarded: without it a false positive is unrecoverable and\n        # the corpus cannot grow from live traffic. Never read back into a\n        # request, so it cannot pollute context.\n        #\n        # Portable by default: a relative path resolves under the harness home\n        # ($DSH_HOME, else ~/.dsh) on every platform, so this package does not\n        # assume a Linux layout. '~', '~/x' and '$DSH_HOME/x' are also accepted,\n        # as is any platform's own absolute path. Set null to disable.\n        copyDir: 'logs/guard-repeat-output-pruned'\n        copyMaxChars: 262144\n\n        # Fallback path (retry budget spent): stop cleanly and ask the model to\n        # wrap up, rather than emitting another error finish — which would make\n        # the turn fail with an LlmError.\n        truncate: true\n        continueOnTruncate: true\n        maxTruncationsPerTurn: 1\n        # Same portable resolution as copyDir; null disables the log.\n        logPath: 'logs/dsh-guard-repeat-output.log'\n        # Layer 1: blacklist filtering. Control characters, U+FFFD, zero-width\n        # filler and lone surrogates never belong in a reply, so they are stripped\n        # from every delta before it is forwarded and can never reach the log.\n        # Unlike repetition this needs no statistical judgement — a blacklist\n        # decides it exactly — so it is always safe. A DENSE burst (a long\n        # unbroken run, or a high share of the accumulated window) is collapse\n        # evidence in its own right: a model that emits 200 NUL bytes in a row is\n        # gone, whether or not it also loops. One stray U+FFFD is a decoding\n        # hiccup, not a collapse — and the ratio leg now needs a window big enough\n        # for a ratio to mean anything, so a delta of one code unit can no longer\n        # score 1.0 and discard the attempt.\n        sanitizeGarbage: true\n        garbageRunChars: 32\n        garbageRatio: 0.5\n        # The garbage ratio is measured over this much accumulated RAW text, not\n        # over one delta. Measuring over a window rather than over a single delta\n        # also closes the blind spot a per-delta length floor would open: a burst\n        # split across many small deltas still reaches the floor.\n        garbageWindowChars: 2400\n        # Below this window size the RATIO leg stays silent. The RUN leg is\n        # deliberately not gated: 32 NUL bytes in a row is a collapse whether or\n        # not the window has filled.\n        garbageMinChars: 600\n\n        # Register the /guard-cleanup command, which shadows already-persisted\n        # degenerate reasoning so it stops being replayed. The live guard prevents\n        # NEW pollution; this repairs a session poisoned before it was installed.\n        # Measured on a real incident after the guard went live: the active\n        # context still carried 205,942 characters of degenerate reasoning that\n        # every later request replayed — exactly the priming that makes a\n        # collapse recur. Nothing is deleted: the append-only log keeps the\n        # original bytes, and a message owning tool calls is skipped (shadowing it\n        # would orphan its tool results).\n        cleanupCommand: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Mcd0LUO/dsh-guard-repeat-output.git",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Mcd0LUO/dsh-guard-repeat-output#readme",
+      "where": "package.json:34"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Mcd0LUO/dsh-guard-repeat-output/issues",
+      "where": "package.json:36"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-10-11T12:54:56Z",
+    "created_at": "2026-09-26T13:46:22Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/cleanup.js",
+    "lib/sanitize.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-guard-repeat-output",
+      "text": "**Stops a model's repetition collapse before it burns your context.**\n\nA host-side guard for [DSH](https://github.com/deepseek-ai) that watches the model's output\nstream and cuts off degenerate repetition the moment it starts.\n\n**Language:** English | [简体中文](./README.zh-CN.md)\n\n---"
+    },
+    {
+      "section": "The problem",
+      "text": "Sometimes a model gets stuck. Instead of finishing its thought, it starts emitting the same\nphrase over and over:\n\n```\nlet me write the call let me write the call let me write the call let me write ...\n```\n\nThis is not a rare edge case. Two real incidents captured on a production server:\n\n| Length | Shape |\n|---|---|\n| 1,371,962 chars | `\"Let me produce.\"` × 27,269 — pure repetition |\n| 250,506 chars | `\"Let me write.\"` × 1,958 alternating with `\"Let me write the call.\"` × 1,952 |"
+    },
+    {
+      "section": "The problem",
+      "text": "Nothing in the loop noticed. The turn kept generating — and billing — until the model happened\nto stop on its own, or a human pressed cancel. Every one of those tokens then sits in the\ncontext window, crowding out the work that actually mattered."
+    },
+    {
+      "section": "What it does",
+      "text": "In about two days on a production server it caught **12 real collapses**: all 12 recovered,\nnone failed, and **none of the discarded text ever reached the session history**.\n\nThe guard evaluates a sliding window of the stream as it arrives, and acts on three levels.\n\n**While the stream is live:**"
+    },
+    {
+      "section": "What it does",
+      "text": "1. **Sanitize** — blacklisted code points (control characters, U+FFFD, zero-width filler, lone\n   surrogates) are stripped from every delta before it is forwarded, so they can never reach the\n   log. Unlike repetition this needs no statistical judgement. A *dense* burst — a long unbroken\n   run, or a high share of one delta — is collapse evidence in its own right: a model that emits\n   200 NUL bytes in a row is gone, whether or not it also loops.\n2. **Detect** — a sliding window over the reasoning channel, checking phrase repetition,\n   low-information density, and segment structure.\n3. **Discard** — the collapsed attempt is settled as a log-only event instead of a surfaced\n   message, so none of the degenerate text enters derived history.\n4. **Retry** — the request is re-issued unchanged, as a clean regeneration. The route is never\n   rewritten: see [Why the retry does not lower the effort](#why-the-retry-does-not-lower-the-effort).\n5. **Wrap up** — once the retry budget is spent, the stream is cut at the estimated onset and\n   the model is asked to conclude, so the turn still finishes instead of failing."
+    },
+    {
+      "section": "What it does",
+      "text": "**Retroactively, for a session that was already poisoned:**\n\n6. **Clean up** — the `/guard-cleanup` command scans the session log for degenerate reasoning\n   that is already persisted and shadows it with a short note, using the same surface-replacement\n   mechanism compaction uses. Those blocks leave the model-visible surface, so the next request no\n   longer replays them — while the append-only log keeps the original bytes for audit. Nothing is\n   deleted."
+    },
+    {
+      "section": "What it does",
+      "text": "This exists because the live guard cannot repair damage done before it was installed. Measured\n   on a real incident *after* the guard went live: the active context still carried **205,942\n   characters** of degenerate reasoning (a 113,586-char and a 92,356-char block) that every\n   subsequent request replayed — exactly the priming that makes a collapse recur."
+    },
+    {
+      "section": "What it does",
+      "text": "**Safety rule:** an assistant message that owns tool-call blocks is *skipped*, not shadowed.\n   Shadowing it would orphan its `tool/result` replies, and providers reject a tool result with\n   no matching call — and the real surface fold accepts that orphan silently, so the danger is not\n   caught downstream. Runaway reasoning is tool-call free by nature (the incident's 725KB block\n   produced zero calls), so the rule costs almost nothing."
+    },
+    {
+      "section": "Why the retry does not lower the effort",
+      "text": "An earlier version stepped the reasoning effort down one rung on the retry, on the theory that an\nidentical request reproduces an identical collapse. It was removed after being measured against\nreal traffic:\n\n| Observation | Result |\n|---|---|\n| Convictions lowered, which then resolved | 9 of 9 |\n| Of those, sessions that collapsed **again** later | **6 of 9 (67%)** |\n| Convictions where the adapter **rejected** the proposed rung | 7, of which **3 killed the turn** |"
+    },
+    {
+      "section": "Why the retry does not lower the effort",
+      "text": "The 67% recurrence is the decisive number: the lowered rung conferred no immunity, so the\ndiscard-and-regenerate is what does the work and the lowering was not earning its place. Meanwhile\nevery rejection was the same class of failure — an adapter refusing an effort the model does not\ndeclare (`does not support reasoning effort \"medium\"`) — turning a caught collapse into a dead\nturn. A guard whose recovery can kill the turn is worse than one that only discards."
+    },
+    {
+      "section": "Why the retry does not lower the effort",
+      "text": "[`verify/effort-necessity.mjs`](./verify/effort-necessity.mjs) is kept so the claim stays\nfalsifiable rather than becoming folklore."
+    },
+    {
+      "section": "Compatibility",
+      "text": "**Supported DSH range: `>=0.1.6-alpha.2 <0.3.0-0`.**\n\n| DSH | Status |\n| --- | --- |\n| `0.2.1-alpha.2` | verified — boots, guard active, config resolves |\n| `0.2.0-rc.2` | verified — live traffic (the convictions recorded in [`CHANGELOG.md`](./CHANGELOG.md) were captured on it) |\n| `0.1.6-alpha.2` … `0.2.0-rc.1` | declared floor, matching the sibling plugins; not machine-verified |\n| `>=0.3.0-0` | **not supported** |"
+    },
+    {
+      "section": "Compatibility",
+      "text": "The plugin imports nothing from `@deepseek-ai/*` — only Node built-ins and its own\nmodules — so it carries no package-level version coupling. What it does couple to\nis four host seams:"
+    },
+    {
+      "section": "Compatibility",
+      "text": "| Seam | Used for |\n| --- | --- |\n| `llm/stream` | wrapping the delta stream — the whole live guard hangs off this |\n| `agent/request-error` | re-issuing a discarded attempt |\n| `agent/pre-step` | the per-step retry budget and the continuation message |\n| `commands`, via `ctx.inject` | registering `/guard-cleanup` |"
+    },
+    {
+      "section": "Compatibility",
+      "text": "`agents` and `sessionQuery` are read through `ctx.get(...)`, which returns\n`undefined` rather than throwing, so a missing service degrades one feature instead\nof breaking the boot. A host that renames or removes one of the four seams above is\na breaking change for this plugin."
+    },
+    {
+      "section": "Compatibility",
+      "text": "The package declares this range as a `peerDependencies` entry on\n`@deepseek-ai/dsh`, so DSH's plugin-manager compatibility gate **enforces** it:\ninstalling or activating outside the range is refused up front rather than failing\nlater at runtime. The gate compares the range against the running DSH version with\n**prereleases included**, so the alpha and rc versions listed above are matched\nrather than skipped. Refusal is not permanent — the plugin manager can grant an\nexact-version exemption (`dsh plugin allow-version`, or the Plugin Manager UI) once\nyou accept the risk, which is the right move only after checking that the host\nseams above are unchanged."
+    },
+    {
+      "section": "Install",
+      "text": "**Through the DSH Web UI (recommended).** Open **Plugins** in the sidebar, install\n`dsh-guard-repeat-output`, and enable it. The manager reads the package's\n`dsh.bundle` declaration and registers it as a profile layer — there is nothing to\nwrite by hand.\n\n**By hand.** Installing the package and registering it as a layer are two separate\nsteps, and skipping the second one leaves the plugin installed but never loaded:\n\n```bash\ndsh plugin --profile web add dsh-guard-repeat-output\n```"
+    },
+    {
+      "section": "Install",
+      "text": "```jsonc\n// <profile>/package.json — add the package NAME to the bundle list\n\"dsh\": { \"profile\": { \"bundles\": [\n  \"@deepseek-ai/dsh-base\",\n  \"@deepseek-ai/dsh-web-app\",\n\nDo **not** copy a config block in. The package ships its own patch\n([`cordis.patch.yml`](./cordis.patch.yml)) holding every default, and that patch is\nwhat inserts the row."
+    },
+    {
+      "section": "Changing the defaults",
+      "text": "Every default is already applied by the package's own patch. To override one, add an\nid-targeted patch to your profile's `cordis.patch.yml` — the user layer is applied\nafter every bundle layer:\n\n```yaml\n- id: guard-repeat-output\n  config:\n    maxDegenerationRetries: 3\n    modelIncludes: ['deepseek', 'glm']"
+    },
+    {
+      "section": "Configuration",
+      "text": "Every option is documented inline in [`cordis.patch.yml`](./cordis.patch.yml), including the\nmeasured basis for each default. The ones that matter most:"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Option | Default | Meaning |\n|---|---|---|\n| `truncateChannels` | `['reasoning']` | Channels the guard may act on. Everything else is observe-only. |\n| `modelIncludes` | `['deepseek']` | Substring scope for model ids; empty list means every model. |\n| `maxDegenerationRetries` | `2` | Discard-and-retry attempts before falling back to truncation. The retry does not alter the route. |\n| `sanitizeGarbage` | `true` | Strip blacklisted code points from every delta before it is forwarded. |\n| `garbageRunChars` | `32` | An unbroken garbage run this long counts as collapse evidence. |\n| `garbageRatio` | `0.5` | A garbage share this high within one delta counts as collapse evidence. |\n| `cleanupCommand` | `true` | Register `/guard-cleanup` for retroactive decontamination. |\n| `holdbackChars` | `4096` | How far before release text is held, so the cut can land at the true onset. |\n| `copyDir` | `null` | Optional sidecar copies of discarded text, for after-the-fact false-positive analysis. Never read back into a request. |\n| `logPath` | `null` | Optional JSONL log of every conviction, for after-the-fact diagnosis. |"
+    },
+    {
+      "section": "Portable paths",
+      "text": "`copyDir` and `logPath` are resolved identically on every platform, so the package makes no\nassumption about a Linux layout:\n\n| Configured value | Resolves to |\n|---|---|\n| `logs/guard.log` (relative) | `$DSH_HOME/logs/guard.log`, else `~/.dsh/logs/guard.log` |\n| `$DSH_HOME/logs/guard.log` | the harness home |\n| `~/logs/guard.log` | the OS home directory |\n| `/var/log/guard.log` | used as-is (POSIX absolute) |\n| `C:\\logs\\guard.log` | used as-is (Windows absolute) |\n| `null` | feature disabled |"
+    },
+    {
+      "section": "Portable paths",
+      "text": "Relative paths resolve under the harness home rather than the process CWD, which differs per\nlaunch. Paths are never assembled by string concatenation, so a Windows path is not given mixed\nseparators, and sidecar file names are sanitized of characters that are illegal on some\nplatforms (including reserved device names), so the sidecar cannot fail silently on one OS only."
+    },
+    {
+      "section": "Design notes",
+      "text": "- **The retry never touches the route.** A guard's recovery must not be able to fail the turn it\n  is rescuing; proposing a reasoning effort the model does not declare does exactly that.\n- **Detection is scoped by model id**, so the guard stays out of the way of models it was not\n  calibrated for.\n- **Logging and sidecar copies are diagnostics, never control paths.** If the filesystem is\n  unwritable the guard keeps working and stays silent."
+    },
+    {
+      "section": "Extension points",
+      "text": "- `llm/stream` — sanitization, detection and stream intervention.\n- `agent/request-error` — re-issue a request terminated for degeneration.\n- `agent/pre-step` — fallback re-injection when the instruction is not already pending.\n- `commands` (via `ctx.inject`) — register `/guard-cleanup` when the service is available.\n\nThe guard registers no `agent/request` listener: the re-issued request is deliberately identical\nto the one that collapsed."
+    },
+    {
+      "section": "Tests",
+      "text": "```bash"
+    },
+    {
+      "section": "argument at any tree containing legit/L00001.txt and unreg/deg1-seq2608.txt.",
+      "text": "node verify/integration.mjs <corpusRoot>   # end-to-end detection and intervention\nnode verify/mutations.mjs                  # detector controls: each leg must be able to fail\nnode verify/cross-platform.mjs             # path resolution and filename safety\nnode verify/maintenance.mjs                # sanitization and retroactive cleanup (self-contained)\n```"
+    },
+    {
+      "section": "argument at any tree containing legit/L00001.txt and unreg/deg1-seq2608.txt.",
+      "text": "`verify/effort-necessity.mjs` is an operational diagnostic rather than a self-contained test: it\nreads a live guard log and a DSH sessions root to re-derive the measurement above."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-guard-repeat-output",
+      "text": "**在模型陷入重复循环、把上下文烧光之前拦住它。**\n\n[DSH](https://github.com/deepseek-ai) 的插件。它盯着模型的输出流，一旦发现车轱辘话，立刻掐掉。\n\n**语言：** [English](./README.md) | 简体中文\n\n---"
+    },
+    {
+      "section": "三十秒了解",
+      "text": "模型偶尔会卡住。本该把话说完，它却开始一遍遍重复同一句：\n\n```\nlet me write the call let me write the call let me write the call ...\n```\n\n没人拦着的话，它会一直重复下去——也一直烧 token——直到自己停下，或者被人手动取消。这些废话全部留在上下文里，把真正有用的内容挤走。\n\n这个插件做两件事：\n\n- **输出过程中管**：实时检测，发现循环就丢弃这一次的回复，重新问一遍。\n- **事后也能救**：如果某个会话早就被污染了（比如插件装上之前就出过问题），`/guard-cleanup` 能把历史里那些废话块遮掉，让它不再被反复重放。\n\n实际效果（生产环境跑了约两天）：拦下 **12 次**真实重复崩塌，**全部恢复成功，0 次失败**；被丢弃的文本**一次都没有混进会话历史**。"
+    },
+    {
+      "section": "问题有多严重",
+      "text": "不是罕见情况。生产服务器上抓到的两次真实事故：\n\n| 长度 | 内容 |\n|---|---|\n| 137 万字符 | `\"Let me produce.\"` 重复 27,269 次 |\n| 25 万字符 | `\"Let me write.\"` 重复 1,958 次，与 `\"Let me write the call.\"` 重复 1,952 次交替出现 |\n\n过程中没有任何机制察觉。这一轮继续跑、继续计费，直到模型自己停下或有人取消。这些 token 之后全部堆在上下文窗口里。"
+    },
+    {
+      "section": "输出进行中",
+      "text": "1. **清洗乱码** —— 控制字符、替换符、零宽字符这类东西本来就不该出现在回复里，在转发前直接删掉，不让它们进日志。这一步不需要判断，见到就删。如果乱码特别密集（比如连着一长串 NUL 字节），说明模型已经崩了，直接当异常处理。\n\n2. **检测重复** —— 在模型的思考内容里滚动检查，看短语重复程度、信息量、段落结构。\n\n3. **丢弃** —— 判定异常后，这一次的回复不算数，不会被当成正常消息存下来，所以那些废话不会进入对话历史。\n\n4. **重试** —— 原样重新问一遍，不改任何参数。为什么不改？见下一节。\n\n5. **收尾** —— 重试次数用完后，在估计的起点处切断，并让模型收个尾，保证这一轮正常结束而不是报错失败。"
+    },
+    {
+      "section": "事后清理",
+      "text": "6. **`/guard-cleanup`** —— 扫描会话历史，找出已经存进去的重复内容，用一小段说明把它遮住。这样下次请求就不会再重放它。**不会删除任何数据**，原始内容仍保留在日志里供审计。\n\n为什么需要这个：实时检测救不了它装上之前就已经发生的问题。有一次真实事故，插件上线后发现上下文里仍然塞着 **20 万字符**的废话（两个块，分别 11 万和 9 万字符），每次请求都在重放——正是这些内容在诱导模型再次进入循环。\n\n**一条安全规则**：如果某条消息里带着工具调用，就跳过它、不遮。因为遮掉它会让它调用的工具结果变成孤儿，服务方会因此拒绝整个请求。真正失控的思考过程不会带工具调用（那次事故里 72 万字符的块，工具调用是 0 次），所以这条规则基本不影响效果。"
+    },
+    {
+      "section": "为什么重试时不调整推理档位",
+      "text": "早期版本会在重试时把推理档位降一档，想法是「换个参数也许就不重复了」。实测之后删掉了：\n\n| 观察 | 结果 |\n|---|---|\n| 降档后恢复的次数 | 9 / 9 |\n| 但其中之后又再次崩塌的 | **6 / 9（67%）** |\n| 降档被服务方拒绝的次数 | 7 次，其中 **3 次直接把这一轮搞失败** |\n\n**67% 这个数字是关键**：降档并没有让模型免疫，真正起作用的是「重新生成一遍」。而每次被拒绝都是同一个原因——服务方不接受模型没有声明的档位（比如 `does not support reasoning effort \"medium\"`）——本来已经拦下的问题，反而变成了整轮失败。**一个补救措施如果能把正在抢救的那一轮弄死，那还不如不做。**\n\n测量脚本保留在 [`verify/effort-necessity.mjs`](./verify/effort-necessity.mjs)，你可以自己复现这个结论。"
+    },
+    {
+      "section": "兼容性",
+      "text": "**支持的 DSH 版本范围：`>=0.1.6-alpha.2 <0.3.0-0`。**\n\n| DSH | 状态 |\n| --- | --- |\n| `0.2.1-alpha.2` | 已验证——能启动、guard 处于 active、配置可解析 |\n| `0.2.0-rc.2` | 已验证——真实流量（[`CHANGELOG.md`](./CHANGELOG.md) 里记的那些定罪就是它跑出来的） |\n| `0.1.6-alpha.2` … `0.2.0-rc.1` | 声明的下界，与同作者另两个插件一致；未做机器验证 |\n| `>=0.3.0-0` | **不支持** |\n\n这个插件不从 `@deepseek-ai/*` 里 import 任何东西——只依赖 Node 内置模块和自身文件——所以没有包层面的版本耦合。它真正耦合的是四个宿主接缝："
+    },
+    {
+      "section": "兼容性",
+      "text": "| 接缝 | 用途 |\n| --- | --- |\n| `llm/stream` | 包住 delta 流——整个实时防护就挂在这里 |\n| `agent/request-error` | 重新发起被丢弃的那次尝试 |\n| `agent/pre-step` | 每步的重试预算与续写消息 |\n| `commands`（经 `ctx.inject`） | 注册 `/guard-cleanup` |\n\n`agents` 和 `sessionQuery` 都通过 `ctx.get(...)` 读取，取不到只会返回 `undefined` 而不会抛错，所以某个服务缺失只会让对应功能退化，不会让插件起不来。但宿主一旦改名或移除上面这四个接缝，对本插件就是破坏性变更。"
+    },
+    {
+      "section": "兼容性",
+      "text": "包里把这个范围声明成了对 `@deepseek-ai/dsh` 的 `peerDependencies`，所以 DSH 插件管理器的兼容闸门会**强制**它：在范围外的版本上安装或启用会被直接拒绝，而不是等到运行时才失败。闸门比较时**包含预发布版本**，所以上面列的 alpha / rc 版本能正常匹配，不会被跳过。拒绝并非永久——确认风险后可以用插件管理器授予「精确版本豁免」（`dsh plugin allow-version`，或插件管理器界面）。只有在核对过上面那几个宿主接缝确实没变之后，才该这么做。"
+    },
+    {
+      "section": "安装",
+      "text": "**推荐：在 DSH 网页界面里装。** 打开侧边栏的「插件」，安装 `dsh-guard-repeat-output` 并启用。管理器会读取包里的 `dsh.bundle` 声明，自动把它注册成一个 profile 层——**不需要你写任何配置**。\n\n**手动安装。** 装包和注册成插件层是**两件独立的事**，只做前一件的话，包装上了但永远不会被加载：\n\n```bash\ndsh plugin --profile web add dsh-guard-repeat-output\n```\n\n```jsonc\n// <profile>/package.json —— 把包名加进 bundle 列表\n\"dsh\": { \"profile\": { \"bundles\": [\n  \"@deepseek-ai/dsh-base\",\n  \"@deepseek-ai/dsh-web-app\",\n\n**不要**把配置块抄进去。包内已经自带一份完整的 patch（[`cordis.patch.yml`](./cordis.patch.yml)），包含所有默认值，插件行就是它插入的。"
+    },
+    {
+      "section": "改默认值",
+      "text": "所有默认值都由包内的 patch 生效了。要改某一项，往你 profile 的 `cordis.patch.yml` 里加一段按 id 定位的 patch 即可——用户层会在所有 bundle 层之后应用：\n\n```yaml\n- id: guard-repeat-output\n  config:\n    maxDegenerationRetries: 3\n    modelIncludes: ['deepseek', 'glm']"
+    },
+    {
+      "section": "配置",
+      "text": "| 选项 | 默认值 | 作用 |\n|---|---|---|\n| `modelIncludes` | `['deepseek']` | 只对这些模型生效，按 id 子串匹配。**空数组 = 所有模型**。 |\n| `truncateChannels` | `['reasoning']` | 允许拦截哪些内容。其它内容只观察、不干预。 |\n| `maxDegenerationRetries` | `2` | 重试几次后放弃重试，改为截断收尾。 |\n| `holdbackChars` | `4096` | 提前扣留多少字符，好让切断点落在真正的起点。 |\n| `sanitizeGarbage` | `true` | 是否清洗乱码字符。 |\n| `cleanupCommand` | `true` | 是否注册 `/guard-cleanup` 命令。 |\n| `copyDir` | `null` | 把丢弃的内容另存一份，方便事后分析误报。**绝不会被读回请求**。 |\n| `logPath` | `null` | 记录每次判定的日志文件，方便事后排查。 |"
+    },
+    {
+      "section": "配置",
+      "text": "> **关于 `modelIncludes` 的两种「空」**：`[]` 是有意表示「所有模型」。但如果你写的是 `['   ']`（有内容但全是空格），会被**拒绝并报错**——因为它看起来是你想限定范围、只是写错了。如果静默当成「所有模型」，结果和你的意图正好相反；而所有阈值都只在 DeepSeek 上验证过，贸然放开风险更大。"
+    },
+    {
+      "section": "路径写法",
+      "text": "`copyDir` 和 `logPath` 在各平台上写法一致，不假设你在用 Linux：\n\n| 写法 | 解析结果 |\n|---|---|\n| `logs/guard.log` | `$DSH_HOME/logs/guard.log`（没有则 `~/.dsh/logs/guard.log`） |\n| `~/logs/guard.log` | 用户主目录下 |\n| `/var/log/guard.log` | 原样使用（Linux / macOS 绝对路径） |\n| `C:\\logs\\guard.log` | 原样使用（Windows 绝对路径） |\n| `null` | 关闭该功能 |\n\n相对路径是相对 DSH 主目录，不是相对当前工作目录（后者每次启动都可能不同）。路径不会用字符串拼接，所以 Windows 下不会出现混用的分隔符。"
+    },
+    {
+      "section": "它挂载在哪",
+      "text": "- `llm/stream` —— 清洗、检测、拦截。\n- `agent/request-error` —— 重新发起被判定为退化的请求。\n- `agent/pre-step` —— 兜底：确保重试时提示语一定送到。\n- `commands` —— 注册 `/guard-cleanup`（服务可用时）。\n\n注意它**没有**挂 `agent/request`：重试时的请求和原来完全一样，这是刻意的。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash"
+    },
+    {
+      "section": "把第一个参数指向任何包含 legit/L00001.txt 和 unreg/deg1-seq2608.txt 的目录。",
+      "text": "node verify/integration.mjs <corpusRoot>   # 端到端检测与干预\nnode verify/mutations.mjs                  # 检测器对照测试\nnode verify/cross-platform.mjs             # 路径解析与文件名安全\nnode verify/maintenance.mjs                # 清洗与事后清理\nnode verify/config.mjs                     # 配置校验\n```\n\n`verify/effort-necessity.mjs` 是运维诊断脚本，不是自包含测试：它读取实际运行的守卫日志和会话目录，用来复现上面的测量结论。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
