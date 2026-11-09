@@ -1,0 +1,123 @@
+{
+  "repo": "sleepinginsummer/dsh-rtk-optimizer",
+  "commit": "63ad61daa9e78852eb739cdd11d66196ea6ace96",
+  "extracted_at": "2026-11-09T21:06:16.518006+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 46511,
+    "lines_by_language": {
+      "JSON": 22,
+      "JavaScript": 795,
+      "Markdown": 157,
+      "Other": 25,
+      "YAML": 150
+    },
+    "outline": [
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "LICENSE",
+      "PUBLISHING.md",
+      "README.md",
+      "RELEASE_NOTES.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "src/host.js",
+      "test/core.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-rtk-optimizer",
+    "version": "0.1.0",
+    "description": "RTK command rewriting suggestions + tool output compaction for DSH. Suggests rtk-rewritten bash commands (deny-mode under rewrite) and compacts noisy tool output (bash/grep/read) to reduce context usage. Port of pi-rtk-optimizer for the Pi coding agent.",
+    "license": "MIT",
+    "type": "commonjs",
+    "main": "index.js",
+    "files": [
+      "index.js",
+      "src/host.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node --test test/"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-rtk-optimizer — bundle layer (npm install form).\n# Install with: dsh plugin --profile <name> add dsh-rtk-optimizer\n# The row references the package by name so Node resolution finds the\n# installed code. Source checkout users mount it via the profile's own\n# cordis.patch.yml with `name: ./plugins/dsh-rtk-optimizer/index.js` instead.\n- insert:\n    - id: dsh-rtk-optimizer\n      name: dsh-rtk-optimizer\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:41"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${GITHUB_REPOSITORY",
+      "where": ".github/workflows/publish.yml:122"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 12,
+    "pushed_at": "2026-10-19T02:03:03Z",
+    "created_at": "2026-08-14T05:28:07Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-rtk-optimizer",
+      "text": "[](https://www.npmjs.com/package/dsh-rtk-optimizer)\n\nRTK 命令改写建议 + 工具输出压缩——DSH 插件（Host 拦截器），移植自 Pi Coding Agent 生态的 [pi-rtk-optimizer](https://github.com/MasuRii/pi-rtk-optimizer)。\n\n不注册模型工具：它挂在两个工具事件上，全局生效（对所有会话的 `bash`/`grep`/`read` 调用），并提供 `/rtk` 命令查看状态。"
+    },
+    {
+      "section": "1. RTK 命令改写（`tools/pre-execute`）",
+      "text": "模型调用 `bash` 时，若本机装有 `rtk` 二进制（`rtk rewrite <command>`），插件：\n\n- **`mode: rewrite`（默认关闭，需 /rtk 切换）**——deny 一次该调用，并在错误反馈中给出改写后的命令；模型重试时用新命令（rtk 幂等，不会循环；同一命令 30s 内只 deny 一次）。\n- **`mode: suggest`（默认）**——不打断调用，在结果末尾附注 `[rtk-optimizer] rtk suggests: ...`。\n\n> DSH 工具参数在分发管道中不可变（`tools/execute` 只能改 `exec.signal`），所以\"自动改写\"以 deny+反馈的形式实现——这是架构允许下最接近自动改写的语义。\n> `rtk` 未安装时：原命令原样执行（`guardWhenRtkMissing: true`），探测结果缓存 60s，不重复 probe。"
+    },
+    {
+      "section": "2. 输出压缩（`tools/post-execute`）",
+      "text": "对成功返回的 `bash`/`grep`/`read` 文本输出按配置走压缩管线（可单独开关）：\n\n| 阶段 | 说明 |\n|---|---|\n| ANSI 剥离 | 移除 CSI/OSC 颜色控制序列 |\n| Git 压缩 | `git status --short` 行汇总为一行统计；40 位 commit hash 缩短为 7 位 |\n| 测试聚合 | 保留 `Tests: N passed, M failed` 总结与失败行，折叠其余（jest/mocha/vitest/go test/pytest 命令触发） |\n| 构建过滤 | 只保留 error/warning 行 + 汇总统计（build/tsc/make/npm 等命令触发） |\n| 搜索分组 | `path:line:content` 行按文件分组（`grep` 工具输出） |\n| 智能截断 | 超 `maxOutputChars`（默认 30000）时保留头 + 尾，中间打截断标记 |\n\n统计每个调用的节省字符数，`/rtk stats` 可查。"
+    },
+    {
+      "section": "3. `/rtk` 命令",
+      "text": "`/rtk [show|verify|stats|clear-stats|reset|set|help]`——配置与运行状态、rtk 二进制探测、压缩节省量统计。\n\n| 子命令 | 说明 |\n|---|---|\n| `show` | 当前配置 + rtk 二进制状态 + 统计 |\n| `verify` | 检查 rtk 二进制是否可用（探测结果缓存 60s） |\n| `stats` / `clear-stats` | 查看 / 重置压缩节省量统计 |\n| `set <key> <value>` | 运行时切换：`mode`（suggest\\|rewrite）、`enabled`、`guardWhenRtkMissing`、`readCompaction` |\n| `reset` | 恢复默认配置 |\n\n> 实现适配：rtk 0.43 对成功改写返回**退出码 3**（非文档所述 0），插件同时接受 0 与 3；不支持的命令退出 1 且无输出，命令原样放行。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile <name> add dsh-rtk-optimizer\n```\n\n安装后重启 DSH，压缩与改写对全部会话的 `bash`/`grep`/`read` 调用生效（`/rtk` 命令可查状态与统计）。"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\nnpm test   # 20 用例：ANSI、git 压缩、搜索分组、测试聚合、构建过滤、截断、总管线、静态求值\n```"
+    },
+    {
+      "section": "参考",
+      "text": "- [pi-rtk-optimizer (GitHub)](https://github.com/MasuRii/pi-rtk-optimizer)\n- [pi-rtk-optimizer (npm)](https://www.npmjs.com/package/pi-rtk-optimizer)"
+    }
+  ],
+  "skipped": []
+}

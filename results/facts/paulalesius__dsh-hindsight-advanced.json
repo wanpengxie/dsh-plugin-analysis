@@ -1,0 +1,217 @@
+{
+  "repo": "paulalesius/dsh-hindsight-advanced",
+  "commit": "efedc48db900a5facfdc3ced14e6edae167f8e2c",
+  "extracted_at": "2026-11-09T20:49:37.039696+00:00",
+  "tree": {
+    "files": 23,
+    "bytes": 637830,
+    "lines_by_language": {
+      "JSON": 16,
+      "JavaScript": 3219,
+      "Markdown": 683,
+      "Other": 3,
+      "TypeScript": 3321,
+      "YAML": 163
+    },
+    "outline": [
+      ".gitignore",
+      "AGENTS.md",
+      "README.md",
+      "cordis.patch.yml",
+      "hindsight-advanced.ts",
+      "misc/banner.jpg",
+      "package.json",
+      "src/autorecall.ts",
+      "src/bank.ts",
+      "src/client.ts",
+      "src/config.ts",
+      "src/mounts.ts",
+      "src/snapshot.ts",
+      "src/source.ts",
+      "src/tiers.ts",
+      "src/tool.ts",
+      "src/types.ts",
+      "test/hooks.mjs",
+      "test/live.mjs",
+      "test/register.mjs",
+      "test/stub-server.mjs",
+      "test/test.mjs",
+      "test/verify-preset.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-hindsight-advanced",
+    "version": "0.1.0",
+    "description": "Long-term memory for DeepSeek Harness agents: automatic recall each turn, a retain/recall/reflect tool, standing rules, and visibility you scope to the whole bank, a preset, or a session.",
+    "type": "module",
+    "main": "hindsight-advanced.ts",
+    "exports": {
+      ".": "./hindsight-advanced.ts"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plugin-hindsight-advanced bundle patch: the profile layer that mounts this\n# package. `dsh plugin add` joins it into `dsh.profile.bundles` (the CLI\n# reconciles the layer list against installed state).\n#\n# The row ships DISABLED — the install is inert. Two opt-in scopes (README):\n# - per preset: a row in the preset's own agent.cordis.yml\n#   (`name: dsh-plugin-hindsight-advanced`, its own `config` — that preset's bank).\n#   Presets without the row are mount-less: no tool, no auto-recall.\n# - for every preset: the user's profile patch layer\n#   (~/.dsh/profiles/web/cordis.patch.yml) enables this row:\n#     - id: hindsight\n#       disabled: false\n#   An id-targeted `config` in that layer replaces the row's config block\n#   whole (no deep merge).\n#\n# Never combine both: the host row and a preset row are two mounts, and the\n# per-step auto-recall listeners then collide (see the README).\n- insert:\n    - id: hindsight\n      name: dsh-plugin-hindsight-advanced\n      disabled: true\n      config:\n        # REQUIRED — the only key with no default. Bank id (case-sensitive; the\n        # server auto-creates it on first use). The bank is the OUTER isolation\n        # boundary; inside it, memories live in three visibility tiers (see\n        # retainScope below) that recall always sees together.\n        bank: dsh\n\n        # Hindsight REST base. Default: http://127.0.0.1:8888\n        baseUrl: http://127.0.0.1:9177\n\n        # Optional; a CREDENTIAL REFERENCE, not the key — the value is\n        # resolved per call through the credentials seam (process env,\n        # ~/.dsh/.credentials.yaml, .env files), so the secret lives in the\n        # 0600 store, never in this file. Add, e.g.:\n        #   refs:\n        #     HINDSIGHT_API_KEY: <the server's Bearer token>\n        # to ~/.dsh/.credentials.yaml (or export it in the environment).\n        apiKeyRef: HINDSIGHT_API_KEY\n\n        # true — automatic recall on the first step of each turn. false — the\n        # hindsight tool stays, the automatic recall goes.\n        autoContext: true\n\n        # true — the recall starts as the previous turn ends (in your think\n        # time); from the second turn on it targets the previous message.\n        # false — every turn queries the message you just sent and waits on\n        # the server for it (up to autoContextTimeoutMs).\n        prefetch: true\n\n        # 5 — how many prior human turns ride along in the automatic\n        # recall's query under a `Prior context:` block (one line per\n        # user/assistant message; capped at 1000 chars, oldest lines drop\n        # first). 1 — the single-message query the reference integrations\n        # ship.\n        recallContextTurns: 5\n\n        # false - off. true - a LATER step of a running turn whose claim\n        # carries no human message recalls, anchored on the previous step's\n        # committed assistant message's visible TEXT blocks (the collapsed\n        # row is labeled `recall:text - <ms>ms`); the step passes through\n        # when the previous step has no text.\n        # recallAfterText: false\n\n        # false - off. true - the same mid-step recall, anchored on the\n        # previous step's REASONING blocks instead (row label\n        # `recall:think - <ms>ms`). Both keys on: a step carrying both\n        # kinds gets ONE recall on one composed anchor (reasoning first,\n        # then text; row label `recall:think+text - <ms>ms`), never two\n        # lookups. A steering claim always wins the precedence.\n        # recallAfterReasoning: false\n\n        # false - off. true - the failure-lesson pass: a LATER step of a\n        # running turn whose claim carries no human message matches the\n        # previous step's committed TOOL CALLS against the bank'\n        # experience-type memories (failure lessons); a match commits a\n        # collapsed notice row (no label - just its summary) listing\n        # up to actionLessonCandidates lessons, de-duplicated per turn by\n        # memory id. A previous step without tool calls anchors nothing\n        # (no bank call); subagent sessions stay silent.\n        # actionLessons: false\n\n        # The cap on how many lesson lines the notice row renders (the\n        # recall is unbounded by this key; the row keeps the first N).\n        # actionLessonCandidates: 10\n\n        # false - off. true - right after a SUCCESSFUL context compaction\n        # the bank is queried for the conversation's last human message\n        # (the same composition as the prefetch: recallContextTurns\n        # lines under `Prior context:`) and the snapshot lands on the\n        # surface directly (row label `recall:compact - <ms>ms`): a\n        # compaction fires outside any step (turn boundary, mid-step\n        # under pressure, request retry), so there is no step to hang\n        # the recall on. A failed compaction (an error) recalls nothing;\n        # subagent sessions stay silent; the lookup is detached and\n        # bounded by recallCompactTimeoutMs (its own bound - the composed\n        # query is served slower than the single-message lookups, and the\n        # shared autoContextTimeoutMs would time it out deterministically).\n        # recallAfterCompaction: false\n\n        # false - off. true - the pre-execution lesson gate: before a\n        # call to a tool named in lessonGateTools is executed, the\n        # PENDING call itself anchors a bounded recall on the bank's\n        # experience-type memories (failure lessons); a hit whose match\n        # score is at or above lessonGateMinScore DENIES the call\n        # before the tool body runs - the rendered lessons travel as\n        # the tool's error result, so the model learns from the recall\n        # before the action acts. A sub-threshold hit, a timeout, an\n        # aborted call, or a bank failure allows the call (no bank,\n        # no gate); subagent sessions stay silent; the gate commits\n        # nothing and is never de-duplicated (the denial is the\n        # model's only feedback channel).\n        # lessonGate: false\n\n        # 0.3 - the minimum match score at which the gate denies a\n        # gated call (a hit under the threshold, or a hit without any\n        # score, allows the call).\n        # lessonGateMinScore: 0.3\n\n        # bash, run_code - the tool names the gate covers (only these\n        # calls pay the pre-execution lookup; the default is the\n        # side-effect-capable executors).\n        # lessonGateTools: [bash, run_code]\n\n        # true — the model surface is append-only: every committed recall\n        # snapshot stays in the model context. false — the surface carries\n        # only the LATEST full snapshot: each new one retires the\n        # previously retained full card in place (a one-line tombstone\n        # marker in the old slot, shadow-priced out of the metering) and\n        # lands fresh at its own turn, while the durable log keeps every\n        # full snapshot for replay and audit. Matches the llama-server\n        # --no-reasoning-preserve naming: with it off, a turn's snapshot,\n        # like its reasoning, lives for that turn only.\n        recallPreserve: true\n\n        # false — retain waits for the bank to process the memory, so the very\n        # next recall already sees it. true — fast ack, background extraction.\n        retainAsync: false\n\n        # 4096 — token budget for recall responses.\n        maxRecallTokens: 4096\n\n        # 2500 — bound for the automatic lookup; a stopped/slow server never\n        # blocks a turn.\n        autoContextTimeoutMs: 2500\n\n        # 8000 - bound for the DETACHED post-compaction lookup\n        # (recallAfterCompaction). Its query is the full multi-turn\n        # composition (anchor + `Prior context:` block), which the bank\n        # serves slower than the single-message lookups, so it rides its\n        # own bound; the event is fire-and-forget, so it never blocks a\n        # turn.\n        # recallCompactTimeoutMs: 8000\n\n        # The visibility tier `retain` uses when the model omits the `scope`\n        # parameter: 'global' (visible to every session of the bank),\n        # 'preset' (this agent preset's sessions), or 'session' (this session\n        # only). recall and reflect always see the session's own tier, its\n        # preset's tier, and the global tier — never another session's or\n        # preset's tier.\n        retainScope: preset\n        bankConfig:\n          retain_mission: \"Focus on the user's DSH workflow: durable decisions, project facts, and preferences worth recalling later. Ignore transient status and raw code.\"\n"
+    }
+  ],
+  "entries": [
+    "hindsight-advanced.ts",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "HINDSIGHT_BASE_URL",
+      "kind": "env",
+      "where": "test/live.mjs:23"
+    },
+    {
+      "name": "HINDSIGHT_ENV_FALLBACK_KEY",
+      "kind": "env",
+      "where": "test/test.mjs:413"
+    },
+    {
+      "name": "HINDSIGHT_ENV_FALLBACK_KEY",
+      "kind": "env",
+      "where": "test/test.mjs:420"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "cordis.patch.yml:29"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9177",
+      "where": "cordis.patch.yml:30"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888`",
+      "where": "hindsight-advanced.ts:155"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "src/config.ts:154"
+    },
+    {
+      "host": "…",
+      "url": "http://…",
+      "where": "test/live.mjs:19"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9177",
+      "where": "test/live.mjs:23"
+    },
+    {
+      "host": "stub",
+      "url": "http://stub",
+      "where": "test/stub-server.mjs:26"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${stub.port",
+      "where": "test/test.mjs:80"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "test/test.mjs:100"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888///",
+      "where": "test/test.mjs:236"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8888",
+      "where": "test/test.mjs:238"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "test/test.mjs:2341"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 37,
+    "pushed_at": "2026-10-15T21:41:23Z",
+    "created_at": "2026-08-23T07:01:23Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "hindsight-advanced.ts",
+    "src/autorecall.ts",
+    "src/bank.ts",
+    "src/client.ts",
+    "src/config.ts",
+    "src/mounts.ts",
+    "src/snapshot.ts",
+    "src/tiers.ts",
+    "src/tool.ts",
+    "src/types.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-hindsight-advanced",
+      "text": "<p align=\"center\"><span style=\"color: red;\">🔴 Compatibility: this plugin tracks DeepSeek Harness commit <code>0d1f50007f9bca3f52b06e1c3074fa14d5fb0720</code> verbatim. It is NOT compatible with later DeepSeek Harness versions - they are too buggy to use.</span></p>\n\n<p align=\"center\"><img src=\"./misc/banner.jpg\" alt=\"dsh-plugin-hindsight-advanced banner\"/></p>"
+    },
+    {
+      "section": "dsh-plugin-hindsight-advanced",
+      "text": "A plugin for DeepSeek Harness (dsh) that integrates the Hindsight memory\nsystem: your agent stores memories in your own Hindsight server and brings\nthe relevant ones back into the conversation."
+    },
+    {
+      "section": "Installation",
+      "text": "With the `dsh` command:\n\n```bash\ndsh plugin --profile web add /path/to/hindsight-advanced\n```\n\nWhen running dsh from source:\n\n```bash\npnpm dsh plugin --profile web add /path/to/hindsight-advanced\n```\n\nThen restart the server."
+    },
+    {
+      "section": "Configuration",
+      "text": "The configuration is one `hindsight` row in your own DSH config — never an\nedit to the plugin's files. You place it in one of two spots - or both,\nwhen the rows serve different banks (the profile-wide bank plus a\npreset-specific bank; see Mounting the plugin twice below):\n\n**Every session.** In your profile's patch layer\n(`~/.dsh/profiles/web/cordis.patch.yml`, append to your existing file):\n\n```yaml\n- id: hindsight\n  disabled: false\n  config:\n    bank: my-bank"
+    },
+    {
+      "section": "Configuration",
+      "text": "**One preset only.** In that preset's own file\n(`~/.dsh/.agent-presets/<preset>/agent.cordis.yml`, append):\n\n```yaml\n- id: hindsight\n  name: dsh-plugin-hindsight-advanced\n  config:\n    bank: my-bank\n\nPresets that point at the same bank don't need separate banks — the\n`preset` scope already keeps each preset's memories apart.\n\nTwo things to know about the row:"
+    },
+    {
+      "section": "Configuration",
+      "text": "- the `config` block **replaces** the plugin's defaults wholesale — list\n  every key you want; only `bank` is strictly required, the rest fall back\n  to the defaults in the table below (but `baseUrl` and `apiKeyRef` are\n  worth repeating, since their defaults point at port 8888 and carry no\n  key);\n- to switch the plugin off again, set `disabled: true` on the row (or\n  remove the preset row) and restart."
+    },
+    {
+      "section": "Mounting the plugin twice",
+      "text": "Two rows can reach one session: the profile-wide row plus an agent-preset\nrow, against DIFFERENT banks. The session's PRESET mount then owns its\nautomatic recall: every automatic surface (the turn-start snapshot, the\nmid-step recalls, the post-compaction recall, the lesson gate) commits ONE\nsnapshot - the preset bank's card - with the profile-wide bank's standing\ndirectives merged in as their own section (headered by that bank), so the\nprofile-wide bank's rules keep reaching the model without a second block\nper turn. The profile-wide row stays silent on every automatic surface for\nthat session: no second snapshot, no prefetch, no mid-step or\npost-compaction recall, no gate lookup (its `hindsight` tool stays\nregistered, shadowed by the preset row's for that session's agents). A\nsession no preset row covers is served by the profile-wide row exactly as\nusual. The merge is failure-isolated per bank: a profile-wide bank whose\ndirective listing fails is simply left out of the merge, the preset bank's\ncard still lands with its own rules. Mounting twice against the SAME bank\nis redundant: the second mount's refreshes retire the first mount's cards,\nso the surface converges on one bank's ca"
+    },
+    {
+      "section": "The configuration keys",
+      "text": "| key | default | what it does |\n| --- | --- | --- |\n| `bank` | — | **Required.** The name of the Hindsight bank to use (the server creates it on first use). |\n| `baseUrl` | `http://127.0.0.1:8888` | Your Hindsight server's address. |\n| `apiKeyRef` | — | **The way to give the plugin its key** — a *name* for the secret, not the secret itself. The value is looked up on every call (environment → `~/.dsh/.credentials.yaml` → `.env` files), so rotating the key needs no restart and the key never sits in a config file. See below. |\n| `apiKey` | — | A plain key in the config, instead of a reference. Prefer `apiKeyRef`. |\n| `autoContext` | `true` | Set `false` to turn off the automatic recall (each turn's first step, any human intervention claimed mid-turn, the mid-step agent-output recall, the post-compaction recall, and the opt-in pre-execution lesson gate; the `hindsight` tool stays). |\n| `prefetch` | `true` | `true` (default): the recall starts as the *previous* turn ends, so from the second turn on it targets the previous message. `false`: every turn queries the message you just sent and waits on the server for it — the memory is always relevant to what you just said, at the cost of th"
+    },
+    {
+      "section": "How the automatic recall works",
+      "text": "At the start of each turn the agent gets a small note: the memories that\nmatch your latest message, plus any standing rules you stored. The lookup\nstarts in the background as soon as the *previous* turn ends — while you\nare reading or typing — so by the time the agent starts the next turn the\nmemory is usually already there and the turn does not wait on the memory\nserver at all. The first turn of a conversation has nothing to read ahead\nof, so it waits on the server normally (up to `autoContextTimeoutMs`).\nSet `prefetch: false` to query the message you just sent instead — at the\ncost of that wait on every turn.\nIf you send a message while the agent is already working, the recall\nfollows it: when the agent picks the intervention up at its next step it\nrecalls the bank on the spot (bounded by `autoContextTimeoutMs`),\nanchored on the intervention itself, so a mid-turn correction arrives\nwith the memories about what it corrects. A step that only carries\nplugin-injected context recalls nothing.\nBy default, that last sentence is the whole story: a step without a\nhuman message recalls nothing. Set `recallAfterText: true` and/or\n`recallAfterReasoning: true` to change it - at a step past th"
+    },
+    {
+      "section": "Giving the plugin its key",
+      "text": "`apiKeyRef: HINDSIGHT_API_KEY` is only a name — the plugin looks up the\nvalue by that name on every call, in this order: the environment, then\n`~/.dsh/.credentials.yaml`, then `.env` files. The usual way is one line in\n`~/.dsh/.credentials.yaml`, **added alongside your existing entries**\n(like the LLM key — don't replace them):\n\n```yaml\nversion: 1\nrefs:\n  HINDSIGHT_API_KEY: <the Hindsight server's token>\n```"
+    }
+  ],
+  "skipped": []
+}

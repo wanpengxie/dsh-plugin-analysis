@@ -1,0 +1,277 @@
+{
+  "repo": "r600a-code/dsh-swarm-router",
+  "commit": "fc051ea2ad05fc27ad7271630b7e0bd7ebb24bb9",
+  "extracted_at": "2026-11-09T20:54:48.140422+00:00",
+  "tree": {
+    "files": 24,
+    "bytes": 143300,
+    "lines_by_language": {
+      "JSON": 877,
+      "JavaScript": 992,
+      "Markdown": 833,
+      "Other": 59,
+      "YAML": 68
+    },
+    "outline": [
+      ".gitignore",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "benchmark/benchmark.json",
+      "benchmark/benchmark_RESULT.json",
+      "benchmark/benchmark_direct_RESULT.json",
+      "benchmark/benchmark_direct_prompt.txt",
+      "benchmark/benchmark_prompt.txt",
+      "benchmark/benchmark_subagent_RESULT.json",
+      "benchmark/verify_benchmark.mjs",
+      "catalog.js",
+      "cordis.patch.yml",
+      "docs/CASE-STUDY.zh.md",
+      "docs/PAPER.md",
+      "docs/PAPER.zh.md",
+      "index.js",
+      "models/registry.json",
+      "package.json",
+      "ranking.js",
+      "router.js",
+      "scripts/validate-registry.mjs",
+      "store.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-swarm-router",
+    "version": "0.2.0",
+    "description": "DSH plugin platform: sub-agent matrix swarm + model aggregation registry (PR flow) + plugin extension point (ctx.swarmRouter) + real-task feedback/ranking + token-consumption stats (cfgpu highlighted). Routes heterogeneous tasks to the most suitable model (OpenRouter-like + cfgpu.com/llm/square), dispatches via in-process subagents or direct ctx.llm calls.",
+    "type": "module",
+    "main": "index.js",
+    "license": "MIT",
+    "author": "AIAD",
+    "homepage": "https://github.com/r600a-code/dsh-swarm-router#readme",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/r600a-code/dsh-swarm-router.git"
+    },
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "subagent",
+      "swarm",
+      "model-router",
+      "cfgpu",
+      "openrouter",
+      "llm-routing"
+    ],
+    "files": [
+      "index.js",
+      "catalog.js",
+      "router.js",
+      "ranking.js",
+      "store.js",
+      "models/registry.json",
+      "cordis.patch.yml",
+      "benchmark/benchmark.json",
+      "scripts/validate-registry.mjs",
+      "CONTRIBUTING.md",
+      "README.md",
+      "README.zh.md",
+      "docs/PAPER.md",
+      "docs/PAPER.zh.md"
+    ],
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*",
+      "@deepseek-ai/dsh-tools": "*",
+      "@deepseek-ai/dsh-agent": "*",
+      "@deepseek-ai/dsh-llm": "*",
+      "@deepseek-ai/dsh-subagent": "*"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": false
+      },
+      "@deepseek-ai/dsh-tools": {
+        "optional": false
+      },
+      "@deepseek-ai/dsh-agent": {
+        "optional": false
+      },
+      "@deepseek-ai/dsh-llm": {
+        "optional": false
+      },
+      "@deepseek-ai/dsh-subagent": {
+        "optional": false
+      }
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-swarm-router bundle patch.\n#\n# Two coordinated overrides of dsh-base:\n#\n# 1. llm-pi-ai — give the (otherwise dormant) pi-ai twin its OWN routes for the\n#    swarm's model catalog. These keys are chosen DISTINCT from the machine's\n#    settings-driven `cfgpu` route on purpose: llm-pi-ai merges provider routes\n#    by key (composition base ∪ settings), so `cfgpu-swarm` and `openrouter`\n#    coexist with `cfgpu` rather than fighting it. The orchestrator model keeps\n#    using the settings `cfgpu` route; the swarm children use `cfgpu-swarm`.\n#    A patch replaces a row's whole config, so the dormant base row gains exactly\n#    these providers and no others from this layer.\n#\n# 2. swarm-router — the plugin that turns routing decisions into real in-process\n#    subagents bound per task to the chosen provider+model.\n\n- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      cfgpu-swarm:\n        displayName: cfgpu (swarm)\n        apiKeyEnv: CFGPU_API_KEY\n        api: openai-completions\n        baseURL: https://www.cfgpu.com/userapi/v1/model/v1\n        defaultContextWindow: 128000\n        defaultMaxTokens: 32000\n        models:\n          - { id: deepseek/deepseek-v4-pro,  name: DeepSeek V4 Pro,        contextWindow: 128000, maxTokens: 32000 }\n          - { id: z-ai/glm-5.2,              name: GLM-5.2,                contextWindow: 1000000, maxTokens: 32000 }\n          - { id: qwen3-max-preview,         name: Qwen3 Max Preview,      contextWindow: 128000, maxTokens: 32000 }\n          - { id: qwen3.6-plus,              name: Qwen3.6 Plus,           contextWindow: 128000, maxTokens: 32000 }\n          - { id: deepseek/deepseek-v3.2-251201, name: DeepSeek V3.2,      contextWindow: 128000, maxTokens: 32000 }\n          - { id: moonshotai/kimi-k2.6,      name: Kimi K2.6,             contextWindow: 256000, maxTokens: 32000 }\n          - { id: moonshotai/kimi-k2.5,      name: Kimi K2.5,             contextWindow: 256000, maxTokens: 32000 }\n          - { id: z-ai/glm-5.1,              name: GLM-5.1,               contextWindow: 1000000, maxTokens: 32000 }\n          - { id: deepseek-v3,               name: DeepSeek V3,           contextWindow: 128000, maxTokens: 32000 }\n          - { id: minimax/minimax-m2.5,      name: Minimax M2.5,          contextWindow: 200000, maxTokens: 32000 }\n          - { id: doubao-seed-2.0-pro,       name: Doubao Seed 2.0 Pro,   contextWindow: 128000, maxTokens: 32000 }\n          - { id: z-ai/glm-5,               name: GLM-5,                  contextWindow: 128000, maxTokens: 32000 }\n          - { id: MiniMax-M1,               name: Minimax M1,            contextWindow: 1000000, maxTokens: 32000 }\n          - { id: deepseek/deepseek-v4-flash, name: DeepSeek V4 Flash,    contextWindow: 128000, maxTokens: 32000 }\n          - { id: qwen3-next-80b-a3b-thinking, name: Qwen3 Next Thinking, contextWindow: 256000, maxTokens: 32000 }\n          - { id: qwen3-32b,                name: Qwen3-32B (thinking),   contextWindow: 128000, maxTokens: 32000 }\n          - { id: deepseek/deepseek-v3.1-terminus-thinking, name: DeepSeek V3.1 Terminus Thinking, contextWindow: 128000, maxTokens: 32000 }\n          - { id: qwen3-30b-a3b-thinking-2507, name: Qwen3 30B Thinking, contextWindow: 128000, maxTokens: 32000 }\n\n      # An OpenRouter-LIKE OpenAI-compatible gateway. Needs OPENROUTER_API_KEY.\n      # The router reports it as unavailable when that env var is unset and never\n      # dispatches to it, so a profile without the key still boots and runs.\n      openrouter:\n        displayName: OpenRouter\n        apiKeyEnv: OPENROUTER_API_KEY\n        api: openai-completions\n        baseURL: https://openrouter.ai/api/v1\n        defaultContextWindow: 128000\n        defaultMaxTokens: 32000\n        models:\n          - { id: qwen/qwen3.8-27b,            name: Qwen3.8 27B (OpenRouter),  contextWindow: 262144, maxTokens: 32000 }\n          - { id: deepseek/deepseek-chat-v3.1, name: DeepSeek V3.1 (OpenRouter), contextWindow: 128000, maxTokens: 32000 }\n          - { id: z-ai/glm-4.6,                name: GLM-4.6 (OpenRouter),      contextWindow: 128000, maxTokens: 32000 }\n\n- insert:\n    - id: swarm-router\n      name: dsh-swarm-router\n      config:\n        subagentProvider: spawn\n        defaultChildMaxTokens: 1024"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "OPENROUTER_API_KEY",
+      "kind": "env",
+      "where": "catalog.js:47"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "www.cfgpu.com",
+      "url": "https://www.cfgpu.com/userapi/v1/model/v1",
+      "where": "catalog.js:42"
+    },
+    {
+      "host": "www.cfgpu.com",
+      "url": "https://www.cfgpu.com/userapi/v1/model/v1",
+      "where": "cordis.patch.yml:25"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "cordis.patch.yml:55"
+    },
+    {
+      "host": "www.cfgpu.com",
+      "url": "https://www.cfgpu.com/userapi/v1/model/v1",
+      "where": "index.js:127"
+    },
+    {
+      "host": "www.cfgpu.com",
+      "url": "https://www.cfgpu.com/userapi/v1/model/v1",
+      "where": "models/registry.json:8"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "models/registry.json:36"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/r600a-code/dsh-swarm-router#readme",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/r600a-code/dsh-swarm-router.git",
+      "where": "package.json:12"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-08-16T09:28:07Z",
+    "created_at": "2026-08-15T18:32:27Z"
+  },
+  "runtime_files": [
+    "catalog.js",
+    "cordis.patch.yml",
+    "index.js",
+    "ranking.js",
+    "router.js",
+    "store.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-swarm-router",
+      "text": "A DeepSeek Harness **bundle** that turns a batch of heterogeneous tasks into a **sub-agent matrix swarm**: it routes each task to the most suitable model from an OpenRouter-like gateway plus the `cfgpu.com/llm/square` catalog, then dispatches each assignment in parallel as a real in-process subagent (or a direct `ctx.llm` call) pinned to that model — quick tasks land on fast/cheap models, hard tasks on strong reasoning models. A formal design write-up lives in [`docs/PAPER.md`](docs/PAPER.md)."
+    },
+    {
+      "section": "dsh-swarm-router",
+      "text": "> **子智能体矩阵蜂群**：任务是行、候选模型是列，路由器为每一行选中一格，再通过 DSH 的 `ctx.subagents` 把每格变成一个绑定到所选模型的子智能体并行下放，按任务难度匹配模型、省时提效。论文见 [`docs/PAPER.zh.md`](docs/PAPER.zh.md)。"
+    },
+    {
+      "section": "The four contributions",
+      "text": "| | Contribution | What |\n|---|---|---|\n| ① | **Model aggregation registry + PR flow** | `models/registry.json` is the canonical catalog; `scripts/validate-registry.mjs` enforces structure (CI-ready); `CONTRIBUTING.md` documents the add-a-model PR flow. |\n| ② | **Plugin extension point** | `ctx.provide('swarmRouter', api)` — other plugins `inject: ['swarmRouter']` to register runtime models, custom task kinds, subscribe to feedback, read rankings/usage. |\n| ③ | **Real-task feedback + ranking** | `swarm_feedback` records `{correct, quality 1-5}`, persisted to `rankings.json`; `swarm_ranking` shows per-model/per-kind success rate & quality; proven models are **boosted** in routing, failing ones **demoted**. |\n| ④ | **Token-consumption statistics (cfgpu highlighted)** | `direct` mode captures exact per-call `prompt/completion/total` from `ctx.llm.stream`; `subagent` mode captures via a **global `llm/stream` listener attributed by `sessionId`**; persisted to `usage.json`; `swarm_stats` shows totals/byProvider/byModel/byKind + `cfgpuHighlight`. |"
+    },
+    {
+      "section": "Tools",
+      "text": "| Tool | Mode | Calls models? |\n|---|---|---|\n| `swarm_route_preview` | — | No (pure routing plan) |\n| `swarm_dispatch` | `subagent` (default) \\| `direct` | Yes (parallel) |\n| `swarm_models` | — | No (list registry) |\n| `swarm_feedback` | — | No (records an outcome) |\n| `swarm_ranking` | — | No (reads accumulated feedback) |\n| `swarm_stats` | — | No (reads accumulated usage) |"
+    },
+    {
+      "section": "The router rules (how a task becomes a model)",
+      "text": "A task is `{ id, kind, prompt, maxTokens? }` where `kind ∈ {reasoning, coding, longcontext, fast, general}`. The router is **pure and O(1) per task** — it spends *zero* model-time deciding *which* model; the saving goes into parallel dispatch.\n\n**Step 1 — infer the kind.** An explicit `kind` wins; otherwise the first truthy hint among `{reasoning, coding, longContext, fast}` is used, defaulting to `general`."
+    },
+    {
+      "section": "The router rules (how a task becomes a model)",
+      "text": "**Step 2 — capability gate (hard filter).** Each kind requires a capability tag; a model lacking it scores `-∞` and is dropped:\n- `reasoning` requires `reasoning`; `coding` requires `coding`; `longcontext` requires `longContext`; `fast`/`general` require nothing.\n\n**Step 3 — effort-matched weighted score.** For the surviving models, a kind-specific linear score is computed from the catalog's 1–10 ranks (`strength`, `speed`, `cost`) and capacities (`contextWindow`, `maxTokens`):"
+    },
+    {
+      "section": "The router rules (how a task becomes a model)",
+      "text": "| kind | weight vector |\n|---|---|\n| `reasoning` | `reasoning×3 + strength×2 + coding×0.3 + contextWindow×0.000004` |\n| `coding` | `coding×3 + strength×2.5 + longContext×0.3` |\n| `longcontext` | `contextWindow×0.00002 + strength×0.5 + coding×0.3` |\n| `fast` | `speed×3 + cost×1.5 + strength×0.3` |\n| `general` | `strength×2 + speed×0.6 + cost×0.3 + coding×0.3` |"
+    },
+    {
+      "section": "The router rules (how a task becomes a model)",
+      "text": "**Step 4 — penalties (the effort-matching core).**\n- `kind ≠ fast` and `model.fast` → **−2.0** (a fast/cheap tier is under-powered for quality work).\n- `kind = general` and `model.reasoning` → **−2.0** (a reasoning flagship is *overkill* — slower, pricier — for general work).\n- `kind = coding` and `model.reasoning` → **−0.5** (reasoning helps code but is not required; slight demotion vs. a pure coding-strong peer).\n- `model.unstable` → **−4** (route was flaky during catalog capture).\n- `model.available = false` → **−1000** (e.g. OpenRouter without a key).\n- **Ranking feedback boost** (when `useRankings: true`): `successRate ≥ 0.9` over ≥ 3 trials → **+1.5**; `successRate ≤ 0.4` → **−3.0**. Real outcomes override the static catalog."
+    },
+    {
+      "section": "The router rules (how a task becomes a model)",
+      "text": "**Step 5 — pick & explain.** Highest score wins; ties broken by `strength`, then lexicographic `id` (deterministic). The tool returns the winner plus top-5 candidates with scores and a human-readable rationale."
+    },
+    {
+      "section": "The router rules (how a task becomes a model)",
+      "text": "**Why these numbers.** The penalties are asymmetric on purpose: rewarding cheapness on quality tasks is the failure mode this design exists to avoid, so the fast-model penalty (−2.0) and the reasoning-overkill penalty (−2.0) are large enough to flip a tie but small enough that a genuinely-strong cheap model can still win `general` when it earns it. The ranking boost (±1.5/−3.0) is smaller than the static penalties so a model must clear a real quality bar before feedback can override the catalog."
+    },
+    {
+      "section": "Why the design",
+      "text": "- **Matrix, not a single pipeline.** A diverse batch fans out across several models — the `distinctModels` summary is the signal that routing is *doing something* rather than collapsing to one model.\n- **Distinct LLM routes (`cfgpu-swarm`, `openrouter`), not the machine's `cfgpu`.** `llm-pi-ai` merges provider routes by key (composition base ∪ settings); distinct keys union without clash, so the swarm's catalog never disturbs the orchestrator's own model. A patch replaces a row's whole `config`, so we add routes rather than editing settings.\n- **Pure router, then dispatch.** Separating \"decide\" from \"do\" makes routing free, testable, and preview-able (`swarm_route_preview`), and lets dispatch (`direct` vs `subagent`) be chosen per task.\n- **`direct` mode for token truth.** A one-shot `ctx.llm.stream` reads the `usage` chunk directly — exact per-call accounting including cfgpu's `reasoning_tokens` (when the adapter emits it). `subagent` mode is for tasks needing the agent loop; its usage is captured via a global `llm/stream` listener attributed by `sessionId == child run.id` (the only mechanism that catches child calls without scope filtering — confirmed by source research).\n- **Fee"
+    },
+    {
+      "section": "Install & run",
+      "text": "```sh"
+    },
+    {
+      "section": "against the default DSH_HOME (~/.dsh — needs the cfgpu credential there)",
+      "text": "dsh plugin --profile headless add github:r600a-code/dsh-swarm-router\ndsh --profile headless --dump-config | grep -E 'cfgpu-swarm|swarm-router'"
+    },
+    {
+      "section": "sandboxed away from ~/.dsh: a workspace-local DSH_HOME seeded with the credential",
+      "text": "export DSH_HOME=/path/to/.dsh-home   # put .credentials.yaml (CFGPU_API_KEY) + settings.yaml there\ndsh plugin --profile headless add /path/to/dsh-swarm-router\n```\n\nThe cfgpu route needs `CFGPU_API_KEY` in `$DSH_HOME/.credentials.yaml` (or env). The OpenRouter route needs `OPENROUTER_API_KEY`; without it the router reports it unavailable and never dispatches to it, so the profile still boots."
+    },
+    {
+      "section": "Benchmark",
+      "text": "`benchmark/benchmark.json` is the minimal subset: 5 cheap, heterogeneous tasks across `fast`/`reasoning`/`coding`/`general`. Success is judged by **content** (expected answer substring / CJK), not by the run merely completing."
+    },
+    {
+      "section": "Benchmark",
+      "text": "```sh\ndsh --profile headless \"$(cat benchmark/benchmark_prompt.txt)\"          # subagent mode, 5 tasks\nnode benchmark/verify_benchmark.mjs                                     # 27/27 green\ndsh --profile headless \"$(cat benchmark/benchmark_direct_prompt.txt)\"   # direct mode, 3 tasks\nnode benchmark/verify_benchmark.mjs benchmark_direct_RESULT.json        # 31/31 green"
+    },
+    {
+      "section": "Benchmark",
+      "text": "Recorded: subagent 5 tasks → 4 distinct real cfgpu models, all correct (17×23=391, bat-ball=0.05, real `is_prime`, CJK translation, widgets=5). Direct 3 tasks → exact token capture per task."
+    },
+    {
+      "section": "Files",
+      "text": "- `package.json` — `dsh.bundle` manifest.\n- `cordis.patch.yml` — `cfgpu-swarm` + `openrouter` routes, `swarm-router` plugin row.\n- `index.js` — the plugin: service + 6 tools.\n- `catalog.js` — registry loader + catalog builder.\n- `router.js` — the pure, effort-matched router.\n- `ranking.js` — feedback → ranking + routing boost.\n- `store.js` — `rankings.json` + `usage.json` persistence.\n- `models/registry.json` — the model aggregation registry.\n- `scripts/validate-registry.mjs` — registry validator (CI).\n- `CONTRIBUTING.md` — add-a-model PR flow.\n- `benchmark/` — tasks, prompts, recorded results, verifier.\n- `docs/PAPER.md` / `docs/PAPER.zh.md` — formal design write-up."
+    },
+    {
+      "section": "Marketplace",
+      "text": "- Official discoverability: the [`dsh-plugin`](https://github.com/topics/dsh-plugin) GitHub topic (applied).\n- Community curated list: PR to [`awesome-dsh-plugin`](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin); the `dsh-market` plugin pulls from it automatically."
+    },
+    {
+      "section": "License",
+      "text": "MIT."
+    }
+  ],
+  "skipped": []
+}
