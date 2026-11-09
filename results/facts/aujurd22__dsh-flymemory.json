@@ -1,0 +1,896 @@
+{
+  "repo": "aujurd22/dsh-flymemory",
+  "commit": "90362fc10c07f65fab6e182fb2d1a07f1b0d83f1",
+  "extracted_at": "2026-11-09T19:11:58.582849+00:00",
+  "tree": {
+    "files": 47,
+    "bytes": 462872,
+    "lines_by_language": {
+      "JSON": 76,
+      "JavaScript": 3337,
+      "Markdown": 1719,
+      "Other": 74,
+      "Python": 4806,
+      "YAML": 271
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "THIRD_PARTY_NOTICES.md",
+      "bin/flymemory.mjs",
+      "cordis.patch.yml",
+      "docs/COMPARISON.md",
+      "docs/PUBLISH.md",
+      "docs/ROADMAP.md",
+      "examples/early-band.patch.yml",
+      "icon.svg",
+      "lib/context.js",
+      "lib/index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "python/dream.py",
+      "python/flymemory/__init__.py",
+      "python/flymemory/clusters.py",
+      "python/flymemory/encoder.py",
+      "python/flymemory/hopfield.py",
+      "python/flymemory/maintenance.py",
+      "python/flymemory/memory_store.py",
+      "python/flymemory/v3.py",
+      "python/flymemory_server.py",
+      "python/hook_auto.py",
+      "python/hook_compact.py",
+      "python/hook_filters.py",
+      "python/recall_block.py",
+      "python/save_debouncer.py",
+      "scripts/bench_three_arms.py",
+      "scripts/release.mjs",
+      "scripts/scan-secrets.mjs",
+      "scripts/ua_proxy.py",
+      "tests/context.test.mjs",
+      "tests/engine_smoke.mjs",
+      "tests/hook_filter_test.py",
+      "tests/http_smoke.py",
+      "tests/recall_block_test.py",
+      "tests/recall_parents_test.py",
+      "tests/run.mjs",
+      "tests/save_debounce_test.py",
+      "tests/unit.test.mjs",
+      "tests/version.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-flymemory",
+    "version": "1.8.3",
+    "description": "Long-term memory for DeepSeek Harness: 16 FlyMemory MCP tools, automatic recall and capture hooks, and a supervised local engine.",
+    "type": "module",
+    "main": "lib/index.js",
+    "bin": {
+      "dsh-flymemory": "bin/flymemory.mjs"
+    },
+    "icon": "./icon.svg",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "lib",
+      "bin",
+      "python",
+      "locale",
+      "examples",
+      "cordis.patch.yml",
+      "icon.svg",
+      "README.md",
+      "README.zh.md",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "dsh-bundle",
+      "memory",
+      "long-term-memory",
+      "agent-memory",
+      "mcp",
+      "flymemory"
+    ],
+    "author": "Junrong Du",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/aujurd22/dsh-flymemory.git"
+    },
+    "homepage": "https://github.com/aujurd22/dsh-flymemory#readme",
+    "bugs": {
+      "url": "https://github.com/aujurd22/dsh-flymemory/issues"
+    },
+    "scripts": {
+      "test": "node tests/run.mjs",
+      "check": "node --check lib/index.js && node --check bin/flymemory.mjs",
+      "smoke": "node tests/engine_smoke.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-flymemory bundle patch — two rows, applied on top of the shipped\n# composition when this bundle is selected in the profile.\n#\n#   1. flymemory         starts (or reuses) this plugin's FlyMemory MCP service,\n#                        writes the resolved settings, and registers the\n#                        recall/capture hooks on `agent/pre-step`.\n#   2. flymemory-mcp     bridges the service's 15 tools into the tool registry\n#                        as `mcp__flymemory__<tool>`.\n#\n# The hooks used to ride the Claude-Code hook bridge (`dsh-hooks-claude-code`).\n# Newer DSH builds dropped that package, so the same logic now runs inside the\n# `flymemory` row itself and this bundle declares no hook-bridge dependency.\n#\n# The plugin keeps its memory to itself:\n#   * its own service port (8791 by default);\n#   * its own library at $DSH_HOME/flymemory-data/flymemory_v3.pkl;\n#   * nothing imported from anywhere unless `upstreamLibrary` is set on the\n#     `flymemory` row (seedFromUpstream stays false).\n#\n# Override any of it before starting the harness (both rows follow these):\n#   FLYMEMORY_MCP_PORT   service port                 (default 8791)\n#   FLYMEMORY_MCP_URL    full endpoint URL            (default http://127.0.0.1:<port>/mcp?app=dsh)\n#   FLYMEMORY_APP        source tag for this client    (default dsh)\n#   FLYMEMORY_DATA_DIR   library/log directory        (default $DSH_HOME/flymemory-data)\n#   FLYMEMORY_PYTHON     interpreter with torch + sentence-transformers\n\n- insert:\n    - id: flymemory\n      name: 'dsh-flymemory'\n      config:\n        port: !!js \"Number(process.env.FLYMEMORY_MCP_PORT || 8791)\"\n        # Explicit even though it is the default: this plugin owns its store.\n        seedFromUpstream: false\n\n    - id: flymemory-mcp\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: flymemory\n        transport: streamable-http\n        url: !!js \"process.env.FLYMEMORY_MCP_URL || `http://127.0.0.1:${process.env.FLYMEMORY_MCP_PORT || 8791}/mcp?app=${process.env.FLYMEMORY_APP || 'dsh'}`\"\n        toolCallTimeoutMs: 120000\n        reconnect:\n          enabled: true\n          initialDelayMs: 1000\n          maxDelayMs: 15000\n          maxAttempts: 60\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "bin/flymemory.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "bin/flymemory.mjs:59"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "bin/flymemory.mjs:60"
+    },
+    {
+      "name": "DSH_PROFILE",
+      "kind": "env",
+      "where": "bin/flymemory.mjs:60"
+    },
+    {
+      "name": "FLYMEMORY_MCP_PORT",
+      "kind": "env",
+      "where": "cordis.patch.yml:31"
+    },
+    {
+      "name": "FLYMEMORY_MCP_URL",
+      "kind": "env",
+      "where": "cordis.patch.yml:40"
+    },
+    {
+      "name": "FLYMEMORY_MCP_PORT",
+      "kind": "env",
+      "where": "cordis.patch.yml:40"
+    },
+    {
+      "name": "FLYMEMORY_APP",
+      "kind": "env",
+      "where": "cordis.patch.yml:40"
+    },
+    {
+      "name": "FLYMEMORY_DREAM_API_KEY",
+      "kind": "env",
+      "where": "python/dream.py:75"
+    },
+    {
+      "name": "AMDRADEON_API_KEY",
+      "kind": "env",
+      "where": "python/dream.py:76"
+    },
+    {
+      "name": "FLYMEMORY_DREAM_PROVIDERS",
+      "kind": "env",
+      "where": "python/dream.py:99"
+    },
+    {
+      "name": "FLYMEMORY_DREAM_PROVIDER",
+      "kind": "env",
+      "where": "python/dream.py:100"
+    },
+    {
+      "name": "FLYMEMORY_DREAM_BASE_URL",
+      "kind": "env",
+      "where": "python/dream.py:103"
+    },
+    {
+      "name": "FLYMEMORY_DREAM_BASE_URL",
+      "kind": "env",
+      "where": "python/dream.py:105"
+    },
+    {
+      "name": "FLYMEMORY_DREAM_MODEL",
+      "kind": "env",
+      "where": "python/dream.py:106"
+    },
+    {
+      "name": "FLYMEMORY_MCP_URL",
+      "kind": "env",
+      "where": "python/dream.py:283"
+    },
+    {
+      "name": "FLYMEMORY_PORT",
+      "kind": "env",
+      "where": "python/flymemory/maintenance.py:48"
+    },
+    {
+      "name": "FLYMEMORY_MODEL",
+      "kind": "env",
+      "where": "python/flymemory/v3.py:38"
+    },
+    {
+      "name": "FLYMEMORY_DEVICE",
+      "kind": "env",
+      "where": "python/flymemory/v3.py:49"
+    },
+    {
+      "name": "FLYMEMORY_DATA_DIR",
+      "kind": "env",
+      "where": "python/flymemory_server.py:58"
+    },
+    {
+      "name": "FLYMEMORY_DB",
+      "kind": "env",
+      "where": "python/flymemory_server.py:61"
+    },
+    {
+      "name": "FLYMEMORY_HOST",
+      "kind": "env",
+      "where": "python/flymemory_server.py:63"
+    },
+    {
+      "name": "FLYMEMORY_PORT",
+      "kind": "env",
+      "where": "python/flymemory_server.py:65"
+    },
+    {
+      "name": "HF_HUB_OFFLINE",
+      "kind": "env",
+      "where": "python/flymemory_server.py:84"
+    },
+    {
+      "name": "HF_HUB_OFFLINE",
+      "kind": "env",
+      "where": "python/flymemory_server.py:87"
+    },
+    {
+      "name": "FLYMEMORY_SAVE_DEBOUNCE",
+      "kind": "env",
+      "where": "python/flymemory_server.py:133"
+    },
+    {
+      "name": "FLYMEMORY_APP",
+      "kind": "env",
+      "where": "python/flymemory_server.py:166"
+    },
+    {
+      "name": "FLYMEMORY_RECENT_MINUTES",
+      "kind": "env",
+      "where": "python/flymemory_server.py:708"
+    },
+    {
+      "name": "FLYMEMORY_HYBRID_FULL",
+      "kind": "env",
+      "where": "python/hook_auto.py:77"
+    },
+    {
+      "name": "FLYMEMORY_HYBRID_SIM",
+      "kind": "env",
+      "where": "python/hook_auto.py:83"
+    },
+    {
+      "name": "FLYMEMORY_MCP_URL",
+      "kind": "env",
+      "where": "python/hook_auto.py:110"
+    },
+    {
+      "name": "QODER_SESSION_ID",
+      "kind": "env",
+      "where": "python/hook_auto.py:122"
+    },
+    {
+      "name": "FLYMEMORY_INJECT_CHARS",
+      "kind": "env",
+      "where": "python/hook_auto.py:201"
+    },
+    {
+      "name": "FLYMEMORY_MCP_URL",
+      "kind": "env",
+      "where": "python/hook_compact.py:28"
+    },
+    {
+      "name": "FLYMEMORY_RECENT_MINUTES",
+      "kind": "env",
+      "where": "python/hook_filters.py:22"
+    },
+    {
+      "name": "CMMODEL",
+      "kind": "env",
+      "where": "scripts/bench_three_arms.py:223"
+    },
+    {
+      "name": "CMKEY",
+      "kind": "env",
+      "where": "scripts/bench_three_arms.py:225"
+    },
+    {
+      "name": "CMDBASE",
+      "kind": "env",
+      "where": "scripts/bench_three_arms.py:804"
+    },
+    {
+      "name": "CMKEY",
+      "kind": "env",
+      "where": "scripts/bench_three_arms.py:805"
+    },
+    {
+      "name": "COMMANDGOAT_API_KEY",
+      "kind": "env",
+      "where": "scripts/bench_three_arms.py:805"
+    },
+    {
+      "name": "CMMODEL",
+      "kind": "env",
+      "where": "scripts/bench_three_arms.py:806"
+    },
+    {
+      "name": "UA_PROXY_COUNT_FILE",
+      "kind": "env",
+      "where": "scripts/ua_proxy.py:26"
+    },
+    {
+      "name": "FLYMEMORY_RECENT_MINUTES",
+      "kind": "env",
+      "where": "tests/hook_filter_test.py:32"
+    },
+    {
+      "name": "FLYMEMORY_MCP_URL",
+      "kind": "env",
+      "where": "tests/http_smoke.py:23"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/mcp",
+      "where": ".github/workflows/ci.yml:63"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/${PACKAGE_NAME",
+      "where": "bin/flymemory.mjs:304"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "cordis.patch.yml:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${process.env.FLYMEMORY_MCP_PORT",
+      "where": "cordis.patch.yml:40"
+    },
+    {
+      "host": "${options.host",
+      "url": "http://${options.host",
+      "where": "lib/index.js:184"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/aujurd22/dsh-flymemory.git",
+      "where": "package.json:48"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/aujurd22/dsh-flymemory#readme",
+      "where": "package.json:50"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/aujurd22/dsh-flymemory/issues",
+      "where": "package.json:52"
+    },
+    {
+      "host": "developer.amd.com.cn",
+      "url": "https://developer.amd.com.cn/radeon/api/v1",
+      "where": "python/dream.py:38"
+    },
+    {
+      "host": "api.groq.com",
+      "url": "https://api.groq.com/openai/v1",
+      "where": "python/dream.py:39"
+    },
+    {
+      "host": "api.cerebras.ai",
+      "url": "https://api.cerebras.ai/v1",
+      "where": "python/dream.py:40"
+    },
+    {
+      "host": "integrate.api.nvidia.com",
+      "url": "https://integrate.api.nvidia.com/v1",
+      "where": "python/dream.py:41"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "python/dream.py:42"
+    },
+    {
+      "host": "text.pollinations.ai",
+      "url": "https://text.pollinations.ai/openai",
+      "where": "python/dream.py:43"
+    },
+    {
+      "host": "developer.amd.com.cn",
+      "url": "https://developer.amd.com.cn/radeon/api/v1",
+      "where": "python/dream.py:50"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791/mcp",
+      "where": "python/dream.py:57"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:{SERVICE_PORT",
+      "where": "python/flymemory/maintenance.py:49"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791/mcp",
+      "where": "python/hook_auto.py:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791/mcp",
+      "where": "python/hook_compact.py:17"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "scripts/bench_three_arms.py:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8799/v1",
+      "where": "scripts/bench_three_arms.py:226"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "scripts/bench_three_arms.py:804"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/${pkg.name",
+      "where": "scripts/release.mjs:112"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8799/v1",
+      "where": "scripts/ua_proxy.py:11"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "scripts/ua_proxy.py:23"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:{args.port",
+      "where": "scripts/ua_proxy.py:83"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "tests/engine_smoke.mjs:39"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791/mcp",
+      "where": "tests/http_smoke.py:5"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791/mcp",
+      "where": "tests/http_smoke.py:23"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${DEFAULT_PORT",
+      "where": "tests/unit.test.mjs:68"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9123/mcp",
+      "where": "tests/unit.test.mjs:75"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9123/mcp?app=dsh",
+      "where": "tests/unit.test.mjs:82"
+    },
+    {
+      "host": "h",
+      "url": "http://h:1/x",
+      "where": "tests/unit.test.mjs:104"
+    },
+    {
+      "host": "z",
+      "url": "http://z/mcp",
+      "where": "tests/unit.test.mjs:105"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${DEFAULT_PORT",
+      "where": "tests/unit.test.mjs:113"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${DEFAULT_PORT",
+      "where": "tests/unit.test.mjs:114"
+    },
+    {
+      "host": "h",
+      "url": "http://h/mcp?app=zcode",
+      "where": "tests/unit.test.mjs:116"
+    },
+    {
+      "host": "h",
+      "url": "http://h/mcp?x=1",
+      "where": "tests/unit.test.mjs:117"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${DEFAULT_PORT",
+      "where": "tests/unit.test.mjs:118"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9999/other",
+      "where": "tests/unit.test.mjs:158"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8765/mcp",
+      "where": "tests/unit.test.mjs:179"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8765/mcp?app=dsh",
+      "where": "tests/unit.test.mjs:181"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8899/mcp?app=dsh",
+      "where": "tests/unit.test.mjs:199"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "tests/unit.test.mjs:293"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/mcp",
+      "where": "tests/unit.test.mjs:312"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "tests/unit.test.mjs:420"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/mcp",
+      "where": "tests/unit.test.mjs:426"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "tests/unit.test.mjs:468"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "tests/unit.test.mjs:499"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "flymemory_stats",
+      "where": "tests/http_smoke.py:50"
+    },
+    {
+      "kind": "tool",
+      "name": "flymemory_remember",
+      "where": "tests/http_smoke.py:56"
+    },
+    {
+      "kind": "tool",
+      "name": "flymemory_recall",
+      "where": "tests/http_smoke.py:61"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 10,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 63,
+    "pushed_at": "2026-10-31T17:29:32Z",
+    "created_at": "2026-09-30T05:37:15Z"
+  },
+  "runtime_files": [
+    "bin/flymemory.mjs",
+    "cordis.patch.yml",
+    "lib/context.js",
+    "lib/index.js",
+    "package.json",
+    "tests/engine_smoke.mjs",
+    "tests/run.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-flymemory",
+      "text": "English | [中文](README.zh.md)\n\n[](https://www.npmjs.com/package/dsh-flymemory)\n[](https://dsh-plugin.org/plugins/aujurd22/dsh-flymemory)\n\nLong-term memory for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)."
+    },
+    {
+      "section": "dsh-flymemory",
+      "text": "This is a plugin (a DSH *bundle*) that runs [FlyMemory](https://github.com/aujurd22/flymemory)\nas a local MCP service and plugs it into the harness. You end up with 16 memory\ntools, plus a pair of hooks that quietly record what you've been working on and\npull the relevant bits back when they matter — so you stop re-explaining the same\ncontext every session."
+    },
+    {
+      "section": "dsh-flymemory",
+      "text": "Everything stays on your machine. The service listens on `127.0.0.1:8791`, the\nlibrary is a single file under your DSH home, and nothing is sent anywhere.\n\n```\nDSH session ──┬── mcp__flymemory__*   15 tools the model can call\n              └── hooks               recall before a turn, store after it\n                        │\n                        ▼"
+    },
+    {
+      "section": "Why not just a vector store",
+      "text": "Most agent \"memory\" plugins are a note table plus cosine search. This is a full\nstore, and the differences show up in ordinary work:"
+    },
+    {
+      "section": "Why not just a vector store",
+      "text": "| | a note table + cosine search | dsh-flymemory |\n|---|---|---|\n| A fact changed | old and new both come back | `supersede` retires the old one; recall hides it unless you ask for history |\n| The same thing said twice | piles up | length-tiered dedup merges or strengthens instead |\n| \"What is X *now*\" | you write the query yourself | `state_key`/`state_value` keep a current value plus its chain of previous ones |\n| Age | everything looks equally fresh | power-law decay weights results by retention |\n| Where an entry came from | lost | `source` (model-judged vs mechanically captured) and `app:<name>` |\n| Several clients | one store each | ZCode, Qoder and DSH can share one store; `app=` tags say who wrote what |\n| Per-turn cost | full text or nothing | a bounded pointer index (≤1.2 KB), and the model pulls what it needs |\n| Did anyone use it | unknown | `usegate.jsonl`: every injected pointer accounted as expanded / recalled / superseded |"
+    },
+    {
+      "section": "Why not just a vector store",
+      "text": "- aggregation questions: one-shot top-5 scored **6% strict**, the \"collect wide,\n  then read each entry verbatim\" protocol **16%** (P-ANSWER);\n- two-hop questions: letting a retriever filter candidates first cut the evidence\n  from **100% to 75%** (P-COMBO);\n- pointer injection lifted evidence-in-pool **63.9% → 74.4%** but at **12.15×**\n  pool tokens (P-USEGATE, verdict PARTIAL) — which is exactly why this plugin\n  points at entries and never expands one by itself."
+    },
+    {
+      "section": "Why not just a vector store",
+      "text": "What this page does **not** claim: that a memory store makes a model smarter, or\nthat this recall wins on every metric. The honest summary of the upstream record\nis that *structured* memory reproduces across runs, while adaptive read policies\nhave not (yet) survived independent replication."
+    },
+    {
+      "section": "The notebook, and who does the thinking",
+      "text": "Every sentence you send gets written on its own line, so topics don't blur\ntogether. Say something nearly identical and the old line is underlined harder\ninstead of copied twice. *Correct* something (\"actually I moved to Hangzhou\") and\nthe old line is crossed out, not torn out — you can still read crossed-out lines\nwhen you ask about history. Short scribbles condense into summary notes; anything\nuntouched for months fades (power law: the true half-life is 3τ, 90 days by\ndefault). Finding a line works two ways at once: by meaning, and by the exact\nkeywords embeddings cannot see — part numbers, file paths, ids."
+    },
+    {
+      "section": "The notebook, and who does the thinking",
+      "text": "The division of labour is the design bet: **the server never runs an LLM.** It owns\nthe mechanical part — chunking, dedup, fusion, decay math, lineage hygiene,\npersistence; the calling model owns every judgment — what matters, what is\noutdated, what is worth forgetting. A wrong judgment is therefore a *recorded*\nwrong judgment: `supersede` leaves a tombstone with `valid_from`/`valid_to`\ninstead of a hole.\n\nAn entry's life:"
+    },
+    {
+      "section": "The notebook, and who does the thinking",
+      "text": "1. **write** — a hook captures it, or the model stores it deliberately (`source`\n   keeps the two apart);\n2. **strengthen** — a near-duplicate updates the existing entry rather than\n   adding a second copy; dedup is length-tiered and prefers *not* merging;\n3. **supersede** — `supersede(old, new)` retires an outdated state; it stays\n   queryable via `include_superseded` while normal recall skips it;\n4. **consolidate** — `consolidate(ids, conclusion)` builds a higher-level entry\n   that keeps `evidence_ids` back-links, so abstraction never destroys the raw\n   material;\n5. **fade or forget** — power-law decay prunes what nothing touches; `forget`\n   removes something that was simply wrong."
+    },
+    {
+      "section": "The notebook, and who does the thinking",
+      "text": "The ablated versions of these rules, including the ones that measured *worse* than\ndoing nothing, stay in the engine repo:\n[source](https://github.com/aujurd22/flymemory) ·\n[research ledger](https://github.com/aujurd22/flymemory/blob/main/research/RESEARCH.md)."
+    },
+    {
+      "section": "The notebook, and who does the thinking",
+      "text": "*Two of the engine's laws. Left: replace-style abstraction scores 10 points below\nstoring nothing, so consolidation overlays instead. Right: the same 48 turns\nthrough two collection strategies — anchored judgment is near-mechanical,\npre-registered paired experiment, discordant 13:0.*"
+    },
+    {
+      "section": "What you get",
+      "text": "| Tool | What it's for |\n|---|---|\n| `flymemory_remember` | Store a decision or finding. Near-duplicates are merged automatically. `compartment` groups entries by topic; `state_key`/`state_value` track \"the current value of X\" and retire the old one. |\n| `flymemory_recall` | Search. Dense embeddings and keyword matching are fused, older entries fade, and results come back with id, age and where they came from. `include_superseded` digs into history. |\n| `flymemory_auto` | Recall and store in one call. This is what the hooks use. |\n| `flymemory_recall_index` / `flymemory_get_memory` | Look first, read later: a one-line index, then the full text of whatever looks interesting. |\n| `flymemory_supersede` | Say \"this old entry is out of date, that one replaces it\". |\n| `flymemory_state_lookup` / `flymemory_state_history` | Current value for an entity key, or the whole history of it. |\n| `flymemory_consolidate` | Fold several entries into one conclusion; the originals stay as evidence. |\n| `flymemory_find_conflicts` / `flymemory_insights` | Pairs that look contradictory; valuable entries that are fading. |\n| `flymemory_forget` / `flymemory_cleanup` | Delete one entry, or sweep everything "
+    },
+    {
+      "section": "What you get",
+      "text": "And two hooks that work on their own:\n\n- **On every prompt** — the prompt is stored, and memories that match it get\n  appended to the turn. No model call, just local search.\n- **On session start** — a recovery pack of recent activity, so a fresh session\n  isn't starting from nothing.\n\nBoth hooks are silent when the service is down, and neither can block a turn."
+    },
+    {
+      "section": "Requirements",
+      "text": "- DeepSeek Harness with `@deepseek-ai/dsh-mcp-client` available. Built and\n  tested against `0.2.0-rc.2` and `44.7.0`.\n- Node 20+ (the add-on and its CLI).\n- Python 3.10+ with the engine's dependencies:\n\n```bash\n  pip install torch sentence-transformers \"mcp>=1.30,<2\" numpy\n  ```"
+    },
+    {
+      "section": "Requirements",
+      "text": "The plugin finds the interpreter for you: it checks `FLYMEMORY_PYTHON`, the\n  usual install locations, then `PATH`, and it verifies that\n  `sentence_transformers` actually imports before picking one. On a machine with\n  several Pythons that saves you the \"why won't it start\" half hour.\n\nThe first run downloads the multilingual embedding model (~470 MB) into the\n  HuggingFace cache. After that it works offline."
+    },
+    {
+      "section": "Install",
+      "text": "```bash"
+    },
+    {
+      "section": "from npm (published 2026-10-26)",
+      "text": "dsh plugin --profile desktop add dsh-flymemory"
+    },
+    {
+      "section": "from GitHub (use your own profile name)",
+      "text": "dsh plugin --profile desktop add github:aujurd22/dsh-flymemory"
+    },
+    {
+      "section": "from a local checkout (absolute path)",
+      "text": "dsh plugin --profile desktop add /absolute/path/to/dsh-flymemory\n```\n\nOr, from inside an agent session, point the `plugin_manager` tool at the same\nspec:\n\nplugin_manager(action: \"install_bundle\", target: \"dsh-flymemory\")\nplugin_manager(action: \"install_bundle\", target: \"github:aujurd22/dsh-flymemory\")\nplugin_manager(action: \"install_bundle\", target: \"/absolute/path/to/dsh-flymemory\")\n```"
+    },
+    {
+      "section": "from a local checkout (absolute path)",
+      "text": "Or use the **Plugins** page in the Web sidebar and pick the folder. The harness\nreloads, two rows come up (`flymemory`, `flymemory-mcp`), and the tools appear.\nbash\nnode bin/flymemory.mjs status     # what it resolved, and what's live\nnode bin/flymemory.mjs doctor     # interpreter, dependencies, endpoint\n```\n\nThen ask the model to remember something and search for it. If the tools don't\nshow up, `doctor` usually says why.\n\nplugin_manager(action: \"remove_bundle\", target: \"dsh-flymemory\")\n```"
+    },
+    {
+      "section": "from a local checkout (absolute path)",
+      "text": "Your memory file is not deleted — remove it by hand if you want it gone."
+    },
+    {
+      "section": "How it runs",
+      "text": "The bundle inserts two rows:\n\n| Row | Module | Job |\n|---|---|---|\n| `flymemory` | this package | Probes the port, starts the engine if nothing is there, records the resolved settings, registers the recall/capture hooks |\n| `flymemory-mcp` | `@deepseek-ai/dsh-mcp-client` | Turns the service's tools into `mcp__flymemory__<tool>` |"
+    },
+    {
+      "section": "How it runs",
+      "text": "The hooks used to ride DSH's Claude-Code hook bridge. Builds from 44.7 onwards no\nlonger ship that package, so the same logic now runs on the plugin's own\n`agent/pre-step` listener and the bundle declares no hook-bridge dependency."
+    },
+    {
+      "section": "How it runs",
+      "text": "When the harness starts, the first row checks `127.0.0.1:8791`. If a FlyMemory\nservice is already answering there, it's reused — two harness windows share one\nengine and one library. If the port is free, the bundled engine starts in the\nbackground and the row waits for it before letting the next row connect. If\nsomething else owns the port, the plugin says so and leaves it alone; it never\nkills a process it didn't start."
+    },
+    {
+      "section": "How it runs",
+      "text": "Cold starts are slow: the engine imports torch before it can listen, which takes\n15–20 seconds. The row waits up to 25 seconds by default, and the mcp-client\nreconnects on its own if it has to.\n\nIf the engine can't start at all — no interpreter, missing dependency, port\nconflict — the harness still boots. You just don't get the tools, and the reason\nis in the log."
+    },
+    {
+      "section": "Settings",
+      "text": "| Variable | Default | |\n|---|---|---|\n| `FLYMEMORY_MCP_PORT` | `8791` | Service port |\n| `FLYMEMORY_MCP_URL` | `http://127.0.0.1:<port>/mcp?app=dsh` | Full endpoint (an `?app=` already present is kept) |\n| `FLYMEMORY_APP` | `dsh` | Source tag written on every entry this plugin stores |\n| `FLYMEMORY_DATA_DIR` | `$DSH_HOME/flymemory-data` | Library, logs, settings record, pid file |\n| `FLYMEMORY_PYTHON` | auto-detected | Interpreter for the engine |\n| `FLYMEMORY_DEVICE` / `FLYMEMORY_MODEL` | `cpu` / multilingual MiniLM | Passed to the engine |"
+    },
+    {
+      "section": "Settings",
+      "text": "A FlyMemory service can be shared by several clients, and each write carries an\n`app:<name>` tag saying which one produced it. This plugin connects with\n`?app=dsh`, so its entries are marked `app=dsh` in recall output and counted under\n`Apps:` in `flymemory_stats` — next to ZCode's `app=zcode` and older untagged\n`app=legacy` entries. Change the tag with `FLYMEMORY_APP` if you run several DSH\nprofiles against one store."
+    },
+    {
+      "section": "Settings",
+      "text": "Anything else goes on the row itself, in your profile's `cordis.patch.yml`. A\npatch entry replaces the whole `config`, so write out everything you need:\n\n```yaml\n- id: flymemory\n  name: 'dsh-flymemory'\n  config:\n    port: 8791\n\nThe rest of the options are documented in `resolveOptions()` in\n[lib/index.js](lib/index.js). Unknown keys are ignored."
+    },
+    {
+      "section": "Where your memory lives",
+      "text": "`$DSH_HOME/flymemory-data/flymemory_v3.pkl` — one file, plain data, easy to back\nup or delete. Alongside it:"
+    },
+    {
+      "section": "Where your memory lives",
+      "text": "- `hooks.json` — regenerated on every activation; describes the two hooks\n- `state.json` — what the last activation resolved (endpoint, library,\n  interpreter, how the service was obtained); `status` and `doctor` read it, so\n  they report an override instead of the defaults\n- `engine.log` — stdout/stderr of the engine process\n- `server.log` — the engine's own log\n- `server.pid` — so `flymemory stop` knows what to kill\n\nTo run the service on its own, without the harness:"
+    },
+    {
+      "section": "Where your memory lives",
+      "text": "```bash\nnode bin/flymemory.mjs start\nnode bin/flymemory.mjs stop\nnode bin/flymemory.mjs log -n 40\nnode bin/flymemory.mjs mute 30m     # silence the per-request digest (tools keep working)\n\nNothing auto-updates: DSH never polls the registry, so `dsh plugin --profile\n<profile> add dsh-flymemory` again is the upgrade. `version` tells you whether\none exists.\n\nAfter installing the bundle, the same CLI is linked into the profile at\n`<profile>/node_modules/.bin/dsh-flymemory`."
+    },
+    {
+      "section": "About the hooks",
+      "text": "They're on by default, because automatic memory is the whole point of the thing.\n\n**The recipe, and what it is worth.** Two changes were measured separately and\nthen stacked, on LongMemEval with the reader held fixed (120 questions):"
+    },
+    {
+      "section": "About the hooks",
+      "text": "| what | strict | prompt tokens / answer |\n|---|---|---|\n| RAG top-20 | 50.8% | ~545 |\n| two-level block (sentence hits + the capture batches they came from) | 57.5% | ~1,728 |\n| extract-then-compute answering | 56.7% | ~1,272 |\n| **both, which is what this plugin now does** | **69.2%** | ~1,947 |\n| the entire history in one prompt | 76.7% | ~6,230 |"
+    },
+    {
+      "section": "About the hooks",
+      "text": "The parent blocks come from `flymemory_recall_block(include_parents=True)`, which\ngroups entries by app and an activity window (`parent_window_s`, default 300s,\ncapped at `parent_max_entries`, default 20). That is the production stand-in for\nthe \"session\" the benchmark used; it is coarser, so the measured +13.4pp is a\ndirection, not a promise for this store."
+    },
+    {
+      "section": "About the hooks",
+      "text": "Both halves are independently significant (paired p=0.007 and p=0.001 against\neither half alone). The block comes from `flymemory_recall_block` with\n`include_parents`; the answer half is a short prompt section that says: for\ncounting / ordering / comparison questions, copy the facts out verbatim first,\nthen compute. `answerProtocol: false` removes that section."
+    },
+    {
+      "section": "About the hooks",
+      "text": "**Dreaming (idle consolidation).** `dsh-flymemory dream [--window 90] [--min-turns 6]\n[--dry-run]` distils the recent window into durable entries and stores them through\nthe running service. Every entry is judged against the source turns first and\ndropped if unsupported, so the pass cannot invent history. It needs an\nOpenAI-compatible key in `FLYMEMORY_DREAM_API_KEY` (or `AMDRADEON_API_KEY`); the\ndefault endpoint is AMD's free one and the default model is `Qwen3.8-Flash-Next`\n-- measured on that endpoint 2026-10-31: clean JSON in ~13s, where GLM-5.3-Flash\ntakes ~27s, MiMo 61s, and DeepSeek-V4.1-Flash answers 429 under load. Without a key the command exits without touching anything."
+    },
+    {
+      "section": "About the hooks",
+      "text": "Providers are additive, so a chain is one command each:\n\ndsh-flymemory dream --set-key <key> --provider groq      # 30 RPM / 1,000 RPD, fastest\n    dsh-flymemory dream --set-key <key> --provider cerebras  # highest daily allowance\n    dsh-flymemory dream --set-key <key> --provider nvidia    # 40 RPM, no credit card\n    dsh-flymemory dream --set-key <key> --provider amd       # free but congested"
+    },
+    {
+      "section": "About the hooks",
+      "text": "Known endpoints live in `PROVIDERS` inside `python/dream.py`; if a provider\nrenames a model, the pass asks that provider's `/models` and retries once, so a\nstale name degrades instead of failing. Keys land in `<dataDir>/dream.json`, never\nin the package."
+    },
+    {
+      "section": "About the hooks",
+      "text": "**Injection is a character budget, not an entry count.** A k-sweep on the same\ndata (top-5 40.0%, top-10 44.2%, top-20 49.2%, top-50 56.7%) showed the score is\nmonotone in how much history reaches the reader, so the hook now asks the service\nfor `flymemory_recall_block`: the best entries' **full text**, packed until a\ncharacter budget (`FLYMEMORY_INJECT_CHARS`, default 6000) is spent. Servers older\nthan 1.6.0 do not expose that tool and the hook falls back to one-line recall, so\nmixing this plugin with an older FlyMemory build still works."
+    },
+    {
+      "section": "About the hooks",
+      "text": "**A measured comparison, and what it changed.** LongMemEval oracle, 200 questions,\none reader (2026-10-30): no memory 3.5%, top-5 full text 41.0%, pointer lines only\n36.0%, pointers plus the top two hits inlined 37.0%, and the agentic protocol --\nthe model searches and reads what it needs -- **54.0%** (McNemar against top-5:\np<0.001). Two conclusions: the gain lives in *letting the model pull*, not in\nprettier injection; and inlining the closest hits changes nothing (37.0 vs 36.0,\np=0.815), which is why `FLYMEMORY_HYBRID_FULL` defaults to off and exists only as\nan experiment switch."
+    },
+    {
+      "section": "About the hooks",
+      "text": "One thing they do **not** inject: upstream`s `RECENT CONTEXT (last ~90 min)` block. It is\na clock window over the whole library, and entries carry no session id — with several\nconversations sharing one store, it pulls another conversation's work into this one.\nRecall is scoped by the text you just typed instead. If you want the old behaviour,\nstart the engine with `FLYMEMORY_RECENT_MINUTES=90`.\nThey run inside this plugin on `agent/pre-step` — no hook bridge package needed.\nWorth knowing exactly what that means:"
+    },
+    {
+      "section": "About the hooks",
+      "text": "- **Only messages you actually typed are stored and recalled.** The harness tags\n  a typed prompt `source.kind === \"user\"`; peer deliveries, system reminders,\n  automation prompts and model-change notices carry other kinds and are ignored.\n  A delegated agent gets one recall at task start, then nothing more.\n- Credential-shaped text never gets stored, and automation/heartbeat prompts are\n  skipped before they reach the service.\n- Recalled memories are appended to the turn, capped at about 2.5 KB, with a\n  header saying they are data rather than instructions.\n- A second request pulls the top two entries of `compartment=\"lessons\"` and\n  injects them on their own, so pitfalls come back every turn instead of\n  competing with ordinary recall. Store one with `flymemory_remember` and\n  `compartment=\"lessons\"`, starting the text with the tool or environment names\n  that should bring it back — the keyword channel is what finds it."
+    },
+    {
+      "section": "About the hooks",
+      "text": "If you'd rather have the tools and no automation, turn the hooks off on the row\n(a patch entry replaces the whole `config`, so restate what you need):\n\n```yaml\n- id: flymemory\n  name: 'dsh-flymemory'\n  config:\n    port: 8791"
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "A session should not have to fill the window before anything happens. Four\npieces keep each request small and keep what matters available.\n\n**1. The working context is an index, not a memory dump.** On every request the\nplugin publishes `<working-context source=\"flymemory\" type=\"index\">`: at most\n1.2 KB of pointers (`#id | age | app | one line`), with the header saying to call\n`flymemory_get_memory(id)` before acting on one."
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "The pointers are **retrieved against the text entering this step**\n(`flymemory_recall_index`), not against a clock. That matters more than it\nsounds: the store has no session id, so any time-windowed digest is store-wide —\nit shows whatever any host wrote last, and that is exactly how another\nconversation's task leaks into this one. `workingContextSource: pack` restores\nthe old clock-windowed behaviour if you want it."
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "**A short memory protocol rides along.** Because the measured gain comes from the\nmodel *choosing* to pull (54.0% vs 41.0%, see below), the plugin adds one system\nsection: when an answer depends on an earlier session, call\n`flymemory_recall_index` first, `flymemory_get_memory` for the pointers the answer\nhinges on, then answer with the id cited. `recallProtocol: false` removes it."
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "The model pulls the full text; the plugin never expands a pointer itself. That split is deliberate — upstream\nmeasured the pointer form at +10.5pp evidence coverage **only when the pointer\nwas followed by an expansion**, and that expansion cost 12.15× pool tokens\n(P-USEGATE, 2026-10-26), so expansion stays a model decision. The context is\noptional: a runtime suppressor can drop it, `dsh-flymemory mute` silences it for\na while, and a memory outage just leaves the previous digest in place."
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "**2. use_gate accounting.** Every pointer id that reaches the prompt is stamped\ninto a per-session ledger (`<dataDir>/usegate.jsonl`, one JSON line per event,\nshaped like upstream's `injected id -> uses`). A later `flymemory_get_memory`,\nrecall or `flymemory_supersede` is attributed to it as `expanded`, `recalled` or\n`superseded`. `dsh-flymemory ledger` reports the injection→use rate and the\nhottest ids — the measurement upstream adopted (it closes the \"injected, but\nnobody records whether it was ever used\" gap)."
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "**3. Condensation goes back to memory.** When the session logs a\n`compaction/summary`, its text is stored as a `checkpoint,compaction` entry in\nthe `context` compartment. The condensed history stays recallable, and the store\nremains the authority rather than the checkpoint being the only copy."
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "**4. Early compaction (opt-in).** DSH's `compaction-basic` row lives inside the\nagent preset, so its threshold can only be changed by restating the preset.\n[`examples/early-band.patch.yml`](examples/early-band.patch.yml) does that with\nthree numbers: compact at **45%** of the window instead of 80%, keep **12%**\nverbatim instead of 16%, and a smaller headroom so small windows are valid. Paste\nit into your profile patch. It pins a copy of the preset declaration — regenerate\nit after a DSH upgrade instead of letting it go stale."
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "What this deliberately does *not* do: it does not replace DSH's compaction\nbackend, and cannot — a zero-dependency plugin cannot import\n`@deepseek-ai/dsh-compaction`. So the condensing itself stays DSH's, driven\nearlier by the preset change, while FlyMemory owns what the model sees every turn\nand keeps whatever was condensed.\n\nPrior art this borrows from:"
+    },
+    {
+      "section": "Keeping context in a band",
+      "text": "- [MemGPT / Letta (arXiv 2310.08560)](https://arxiv.org/abs/2310.08560) — treat\n  the context window as RAM and an external store as disk, paging explicitly\n  between them.\n- InfiAgent ([ACL Anthology](https://aclanthology.org/people/li-ming/)) — keep the\n  reasoning context bounded by rebuilding it from a state snapshot plus a fixed\n  recent window, instead of compressing only on overflow.\n- [Chroma's \"context rot\" measurements](https://research.trychroma.com/context-rot)\n  — long contexts degrade; prefer fewer, higher-signal tokens over a bigger\n  window."
+    },
+    {
+      "section": "Importing a library you already have",
+      "text": "Nothing is imported unless you ask. If you have a FlyMemory library from\nsomewhere else and want to move it in, point the plugin at it once:\n\n```yaml\n- id: flymemory\n  name: 'dsh-flymemory'\n  config:\n    port: 8791\n\nOn the next activation the file is copied into place if the target doesn't exist\nyet. The original is left alone. The format is the same in both directions, so\nyou can move it back out later."
+    },
+    {
+      "section": "Sharing a service you already run",
+      "text": "If a FlyMemory service is already running on this machine and you want DSH to\nshare its memory rather than keep its own, override both rows in your profile\npatch:\n\n```yaml\n- id: flymemory\n  name: 'dsh-flymemory'\n  config:\n    port: 8765"
+    },
+    {
+      "section": "Sharing a service you already run",
+      "text": "`port` is where the plugin looks for the existing service; `libraryPath` is the\nfile it serves if it ever has to start the engine itself, so both routes lead to\nthe same memory. Leave the hooks row alone — it follows the endpoint the plugin\nresolved. `node bin/flymemory.mjs status` prints \"from hooks.json\" when an\noverride like this is in effect, so you can tell it apart from the defaults.\n\n<details>\n<summary>Why the hooks row needs no override</summary>"
+    },
+    {
+      "section": "Sharing a service you already run",
+      "text": "The supervisor writes `<dataDir>/hooks.json` on every activation from the config\nit resolved, so the hook scripts always post to whatever endpoint the plugin\nactually uses. That file is also how `status` and `doctor` discover an override.\n\n</details>"
+    },
+    {
+      "section": "Working on it",
+      "text": "```bash\nnode --check lib/index.js    # syntax\nnpm test                     # unit tests, no Python needed, ~0.3 s\nnode tests/engine_smoke.mjs  # end-to-end against the real engine (needs torch)\npython tests/http_smoke.py   # protocol check against a running service"
+    },
+    {
+      "section": "Working on it",
+      "text": "`npm test` covers the parts that are easy to get wrong: port and library\ndefaults, config precedence, the generated hook file, endpoint probing. The\nengine smoke test runs `apply()` in a throwaway directory against a real Python\nengine — it needs torch and sentence-transformers, and prints SKIP if they aren't\nthere. CI runs the syntax check and the unit tests on Linux, macOS and Windows\nacross Node 20, 22 and 24."
+    },
+    {
+      "section": "Working on it",
+      "text": "```\nlib/index.js        Host half: port probing, engine supervision, hook config\nbin/flymemory.mjs   CLI built on the same helpers\ncordis.patch.yml    the two rows this bundle inserts\npython/             vendored FlyMemory engine (server, hooks, engine package)"
+    },
+    {
+      "section": "Rough edges",
+      "text": "- **The first start takes 15–20 seconds.** That's torch loading. Set\n  `readinessTimeoutMs: 0` if you'd rather the harness start immediately and have\n  the tools appear a few seconds later.\n- **The Python dependencies are heavy.** The plugin won't install them for you;\n  `doctor` tells you what's missing.\n- **DSH has no `PreCompact` hook**, so the recovery pack runs at session start\n  rather than right after a compaction.\n- **Tool names are long.** `mcp__flymemory__flymemory_recall` is what the\n  mcp-client naming rule produces — `mcp__<server>__<tool>` — and it's stable,\n  just not pretty.\n- **One engine per port.** Two harnesses share it; a third instance needs its own\n  port and its own library, set explicitly.\n- **Recall gets slower as the library grows.** Upstream measured ~11 ms per query\n  at about 1,400 entries on CPU."
+    },
+    {
+      "section": "License",
+      "text": "MIT. See [LICENSE](LICENSE).\n\nThe bundled FlyMemory engine is MIT as well, Copyright (c) 2026 Junrong Du.\n[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists exactly which files were\ncopied, which were adapted, and why."
+    }
+  ],
+  "skipped": []
+}

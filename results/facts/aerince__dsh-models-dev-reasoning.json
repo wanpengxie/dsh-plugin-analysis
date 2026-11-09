@@ -1,0 +1,187 @@
+{
+  "repo": "aerince/dsh-models-dev-reasoning",
+  "commit": "c25d97cfe9cf8f2f26d5ec864d867d4e864689b5",
+  "extracted_at": "2026-11-09T19:06:56.961706+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 35354,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 739,
+      "Markdown": 108,
+      "Other": 24,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-models-dev-reasoning",
+    "version": "0.2.0",
+    "description": "Discover models from OpenAI-compatible routes and add models.dev reasoning levels plus context metadata to DeepSeek Harness.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "scripts": {
+      "test": "node test.mjs"
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0",
+      "dsh": ">=0.2.1-rc.2 <0.3.0"
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/aerince/dsh-models-dev-reasoning.git"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "cordis",
+      "models.dev",
+      "reasoning",
+      "model-discovery"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: models-dev-reasoning\n      name: dsh-models-dev-reasoning\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:87"
+    },
+    {
+      "name": "TEMP",
+      "kind": "env",
+      "where": "test.mjs:9"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "index.js:35"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/aerince/dsh-models-dev-reasoning.git",
+      "where": "package.json:26"
+    },
+    {
+      "host": "catalog.test",
+      "url": "https://catalog.test/api.json",
+      "where": "test.mjs:10"
+    },
+    {
+      "host": "provider.test",
+      "url": "https://provider.test/v1",
+      "where": "test.mjs:11"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-10-22T06:32:18Z",
+    "created_at": "2026-08-15T12:42:12Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-models-dev-reasoning",
+      "text": "从 [models.dev](https://models.dev) 为 DeepSeek Harness 补齐第三方模型的**模型发现**、**思考档位**和**上下文元数据**。\n\n本插件是 OpenChamber / OpenCode 两个插件的 DSH 移植版：\n\n- `openai-model-discovery.ts` — 调 `${baseURL}/models` 发现模型\n- `openai-compatible-hermes-variants.ts` — 从 models.dev 匹配模型并生成推理档位"
+    },
+    {
+      "section": "功能",
+      "text": "1. **模型发现**：对每个在 `llm-pi-ai` 中手工声明、带 `baseURL` 的 OpenAI 兼容路由请求 `/models`，过滤 embedding / 语音 / 图像 / 已下线模型后合并进该路由的 `models` 列表。\n2. **推理档位**：按模型 ID 匹配 models.dev 目录，把 `reasoning_options` 映射成 DSH 的 `reasoningEfforts`（`off: null`、`low: \"low\"`……），模型选择器即可显示思考档位。\n3. **上下文元数据**：补齐 `contextWindow`、`maxTokens`，以及目录声明的图片输入能力。\n4. **自动更新**：目录缓存 24 小时；每次启动、设置变更、配置重载时重新对齐；运行时每 6 小时做一次检查。\n5. **不覆盖已有配置**：模型行已声明的字段一律保留，只填空缺字段。"
+    },
+    {
+      "section": "工作方式",
+      "text": "1. 插件注入 `settings`，DSH 启动后等待 `llm-pi-ai` 命名空间可用，再延迟约 1.5 秒开始第一轮。\n2. 读 `https://models.dev/api.json`；失败时退回磁盘上的旧缓存，两者都没有则跳过推理档位。\n3. 逐路由请求 `/models`；`apiKeyEnv` 通过 `ctx.credentials` 解析，解析不到就跳过该路由的发现（不影响档位补齐）。\n4. 用 `ctx.settings.mutate(\"llm-pi-ai\", ops, revision)` 写入；遇到 `SETTINGS_CONFLICT` 自动重试。\n5. 缓存文件：`$DSH_HOME/cache/models-dev-reasoning.json`（`DSH_HOME` 未设置时用 `~/.dsh`）。\n\n触发时机：启动、`settings/document-updated`（`llm-pi-ai`）、`loader/volatile-update`、`app-boot/config-reload`、6 小时定时器。"
+    },
+    {
+      "section": "可选配置",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `discovery` | `true` | 是否请求 `/models` |\n| `reasoning` | `true` | 是否从 models.dev 补档位/元数据 |\n| `ttlHours` | `24` | 目录缓存有效期 |\n| `refreshIntervalHours` | `6` | 运行期检查间隔 |\n| `catalogUrl` | `https://models.dev/api.json` | 目录地址，可换镜像 |\n| `timeoutMs` | `20000` | 单个 `/models` 请求超时 |\n| `catalogTimeoutMs` | `30000` | 目录请求超时 |\n| `cacheFile` | 空 | 自定义缓存路径 |\n| `providers` | `[]` | 只处理这些 provider id；空表示全部 |\n| `transport` | `auto` | `/models` 的传输层：`auto`（先 HTTP/2，失败回退 fetch）、`http2`、`fetch` |\n| `minIntervalMs` | `60000` | 两次完整 reconcile 的最小间隔，避免事件风暴重复请求 |\n| `debounceMs` | `2000` | 设置事件防抖 |\n| `bootDelayMs` | `1500` | 启动后首轮延迟 |"
+    },
+    {
+      "section": "可选配置",
+      "text": "> 部分 OpenAI 兼容网关会重置 Node `fetch` 的 HTTP/1.1 连接（curl 或 ALPN h2 正常），因此 `auto` 默认先走 Node 的 HTTP/2，再回退 `fetch`。"
+    },
+    {
+      "section": "安装",
+      "text": "命令行安装（需要可用的 `dsh` 与 `pnpm`）：\n\n```sh\ndsh plugin --profile web add github:aerince/dsh-models-dev-reasoning"
+    },
+    {
+      "section": "可复现安装：固定 release",
+      "text": "dsh plugin --profile web add github:aerince/dsh-models-dev-reasoning#v0.2.0"
+    },
+    {
+      "section": "不可变 commit pin",
+      "text": "dsh plugin --profile web add github:aerince/dsh-models-dev-reasoning#8a1a18a6b2ed76bea464f45871dbf5fb0d4a635a\n```\n\n本包是零构建 JavaScript，没有 `prepare`，不需要 pnpm `allowBuilds`。兼容 DSH `>=0.2.1-rc.2 <0.3.0`；不满足该范围的版本会被当前 DSH 兼容性检查拒绝。"
+    },
+    {
+      "section": "本地开发安装（无 `dsh` CLI）",
+      "text": "把插件行写进用户级 patch 层 `$DSH_HOME/cordis.patch.yml`（不存在就新建；该层在 profile 补丁之后加载）：\n\n```yaml\n- insert:\n    - id: models-dev-reasoning\n      name: '/path/to/dsh-models-dev-reasoning/index.js'\n```\n\n`name` 用绝对路径指向本目录的 `index.js`，然后重启 DSH。"
+    },
+    {
+      "section": "验证",
+      "text": "1. 启动后日志出现 `models-dev-reasoning: refreshed models.dev catalog (...)` 或 `evaluated ...`，写入时出现 `updated N provider model list(s)`。\n2. 设置 → 模型页：手写路由下出现 `/models` 返回的新模型；models.dev 标记为 reasoner 的模型出现思考档位。\n3. 缓存文件已生成：`$DSH_HOME/cache/models-dev-reasoning.json`。\n4. 已有 `reasoningEfforts` 或 `contextWindow` 的模型保持不变。\n\n离线自测（不依赖 DSH）：\n\n```sh\nnode test.mjs\n```"
+    },
+    {
+      "section": "边界",
+      "text": "- 声明了 `modelOverrides` 的路由会被跳过（`models` 与 `modelOverrides` 不能同时存在）。\n- 只有 toggle 型推理（如部分 Qwen 的 `enable_thinking`）的模型不会映射成档位，因为 DSH `reasoningEfforts` 只接受档位。\n- `/models` 列表很大的路由会把返回的文本模型全部加进配置，可用 `providers` 限制范围。\n- 发现需要能解析出 `apiKeyEnv`；凭据缺失时只跳过发现，档位仍会补齐。"
+    },
+    {
+      "section": "卸载",
+      "text": "```sh\ndsh plugin --profile web remove dsh-models-dev-reasoning\n```\n\n本地开发安装则删除 `$DSH_HOME/cordis.patch.yml` 中的对应行并重启。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

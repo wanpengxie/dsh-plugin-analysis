@@ -1,0 +1,137 @@
+{
+  "repo": "Yuuichu/dsh-remote-picker",
+  "commit": "68f729e4dc62dd654eab95c6cf3574d056bf72ec",
+  "extracted_at": "2026-11-09T19:00:36.711897+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 10294,
+    "lines_by_language": {
+      "JSON": 36,
+      "JavaScript": 46,
+      "Markdown": 82,
+      "Other": 23,
+      "YAML": 24
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-remote-picker",
+    "version": "0.1.1",
+    "description": "Remote-access directory-picker fix for DeepSeek Harness: forces the in-browser browse interaction when the web GUI is served to remote browsers (tailscale serve, cloudflared, reverse proxy with --trusted-host). Native OS chooser dialogs cannot be driven from a phone or remote laptop.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "remote-access",
+      "directory-picker",
+      "tailscale",
+      "browse"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": ">=20"
+    },
+    "publishConfig": {
+      "access": "public"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-remote-picker bundle patch\n#\n# Remote deployments (tailscale serve / cloudflared / any reverse proxy with\n# `--trusted-host`) serve browsers that cannot drive the host OS chooser, but\n# the shipped `directory-picker-auto` row resolves the NATIVE backend for any\n# loopback bind on darwin/win32 - the dialog opens on the unattended host and\n# workspace picking fails from a phone or remote laptop.\n#\n# This patch pins the IN-BROWSER browse interaction instead: it disables the\n# auto row and mounts the browse backend + client surface pair directly (the\n# seam's documented swap point). The mounted rows live in the in-memory root\n# tree; the `remote-picker` row below runs a boot-time self-check.\n- id: directory-picker\n  disabled: true\n\n- insert:\n    - id: remote-picker\n      name: 'dsh-remote-picker'\n\n    - id: directory-picker-browse\n      name: '@deepseek-ai/dsh-host-directory-picker-browse'\n\n    - id: ui-directory-picker-browse\n      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-08-17T17:43:16Z",
+    "created_at": "2026-08-17T17:19:43Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-remote-picker",
+      "text": "[](https://www.npmjs.com/package/dsh-remote-picker)\n[](https://www.npmjs.com/package/dsh-remote-picker)\n[](LICENSE)\n[](https://github.com/topics/dsh-plugin)\n\n远程访问场景下 DeepSeek Harness 目录选择器的修复插件：当 Web GUI 服务于远程浏览器（tailscale serve / cloudflared / 反向代理 + `--trusted-host`）时，强制使用**浏览器内 browse** 交互，而不是会在无人值守主机上弹出、远程浏览器无法驱动的 **native OS 对话框**。"
+    },
+    {
+      "section": "dsh-remote-picker",
+      "text": "> 关联上游讨论：[deepseek-ai/deepseek-harness#discussions/2713](https://github.com/deepseek-ai/deepseek-harness/discussions/2713)\n> 官方 `directory-picker-auto` 组件自身也承认该缺陷（Playwright smoke 用 overlay 绕过：`apps/web/tests/pin-browse-picker.overlay.yml`）。"
+    },
+    {
+      "section": "本插件服务的远程流程",
+      "text": "这个插件只在一个特定的远程访问流程中有意义。先看清这条链路，再决定是否需要安装：\n\n```\n手机 / 笔记本浏览器（任意网络：4G、公司网、家里 WiFi）\n        │  https://<你的主机名>.ts.net  （或 cloudflared 公网域名）\n        ▼\ntailscale serve / cloudflared  ──  HTTPS 反向代理（TLS 终结，仅网内可达）\n\n**流程各环节与责任**："
+    },
+    {
+      "section": "本插件服务的远程流程",
+      "text": "| 环节 | 做什么 | 与本插件的关系 |\n|---|---|---|\n| ① `dsh web --trusted-host <主机名>` | 保持回环绑定（安全），并把远程域名加入 `/api` 白名单（防 DNS rebinding 围栏） | 前提：没有它远程页面能开但 API 全 403 |\n| ② `tailscale serve --bg 3080`（或 cloudflared） | 把 `https://<主机名>.ts.net` 反代到本机 3080；HTTPS 是必须的（明文 HTTP 下浏览器没有 `crypto.randomUUID`，DSH 的 RPC 全挂） | 前提：提供远程入口 |\n| ③ 手机浏览器打开远程地址 | 日常对话、查看任务、发消息 | 正常，无需本插件 |\n| ④ 设置 → 工作区 → 选择目录 | 远程用户挑选/创建工作区文件夹 | **本插件接管的位置**：原生对话框在电脑上弹出，手机看不到；插件强制浏览器内目录树 |\n| ⑤ 设置页/API Key 管理 | 官方设计仅回环可用（403） | 与本插件无关，请在本机浏览器操作 |"
+    },
+    {
+      "section": "本插件服务的远程流程",
+      "text": "**一句话**：如果你的使用方式符合\"①+②+③\"（通过 tailscale serve 或 cloudflared 从手机/远程浏览器使用 DSH），那你**一定会**在④遇到目录选择器故障——这个插件就是为④准备的。如果只在电脑本机用（`http://127.0.0.1:3080`），不需要装。"
+    },
+    {
+      "section": "问题",
+      "text": "`dsh web` 默认绑定 `127.0.0.1`，通过 tailscale serve / cloudflared 等反代对外提供 HTTPS 入口。`@deepseek-ai/dsh-host-directory-picker-auto` 的启动判定是：**回环绑定 + darwin/win32 → native 后端**。反代场景下浏览器是远程的（手机/笔记本），native 对话框会弹在电脑屏幕上——远程用户看不到、无法操作，工作区目录选择直接失败。"
+    },
+    {
+      "section": "修复方式",
+      "text": "本插件的 bundle patch（`dsh.bundle.patch` 机制）在启动组合中：\n\n1. **禁用** 官方 `directory-picker`（auto）行；\n2. **挂载** browse 后端 + 客户端界面（`@deepseek-ai/dsh-host-directory-picker-browse` + `@deepseek-ai/dsh-client-ui-directory-picker-browse`）——即 seam 文档化的切换点；\n3. 附带 `remote-picker` 自检行：启动后验证 browse 能力已装载，异常时输出警告（fail loud）。\n\n浏览器内 browse 选择器通过 `/api` 目录树浏览工作区文件夹，远程可用、本地可用，全平台一致。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile web add dsh-remote-picker\n```\n\n或手动（profile 是 pnpm workspace）：\n\n```sh\ncd ~/.dsh/profiles/web\nnpx -y pnpm@11 add -w dsh-remote-picker\n```\n\n安装后重启 `dsh web` 生效。\n\n> ⚠️ 若你的 `cordis.patch.yml` 已手工加过同款 disable+insert（远程访问排查期的常见做法），先移除那段，避免重复装载。"
+    },
+    {
+      "section": "验证",
+      "text": "- 启动日志出现 `dsh-remote-picker: in-browser browse directory picker active`\n- 远程浏览器（手机/另一台电脑）：设置 → 工作区 → 选择目录 → 出现可浏览的目录树\n- 本地浏览器 `http://127.0.0.1:3080` 同样可用（browse 是处处可用的交互）"
+    },
+    {
+      "section": "与本包相关的上游补丁",
+      "text": "完整的 `trustedHosts` 信号修复（auto 组件自动判定 browse）已整理为补丁提交到上游讨论区，等待官方采纳；本插件是其插件形态的等价物，无需等待上游。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

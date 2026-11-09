@@ -1,0 +1,343 @@
+{
+  "repo": "Zhen-WushuiLingchun/dsh-wolfram-bundle",
+  "commit": "61443060103ccddbb6dba421afd224e07095250b",
+  "extracted_at": "2026-11-09T19:03:35.209635+00:00",
+  "tree": {
+    "files": 39,
+    "bytes": 215463,
+    "lines_by_language": {
+      "JSON": 208,
+      "JavaScript": 3990,
+      "Markdown": 530,
+      "Other": 36,
+      "TypeScript": 56,
+      "YAML": 48
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      ".npmrc",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "bin/dsh-wolfram-supervisor.js",
+      "compat/dsh-host.test.js",
+      "cordis.patch.yml",
+      "docs/design.md",
+      "docs/offline-dependencies.json",
+      "docs/plans/2026-08-24-dsh-0.1.1-rc2-compatibility-design.md",
+      "fixtures/fake-server.js",
+      "fixtures/sleeper.js",
+      "live/orphan-reclaim.test.js",
+      "live/wolfram.test.js",
+      "package-lock.json",
+      "package.json",
+      "src/classify.js",
+      "src/config.js",
+      "src/discovery.js",
+      "src/harness-module.js",
+      "src/index.js",
+      "src/orphans.js",
+      "src/policy.js",
+      "src/process-tree.js",
+      "src/supervisor-main.js",
+      "src/supervisor.js",
+      "test/bundle.test.js",
+      "test/classify.test.js",
+      "test/compatibility.test.js",
+      "test/config.test.js",
+      "test/discovery.test.js",
+      "test/orphans.test.js",
+      "test/policy.test.js",
+      "test/process-tree.test.js",
+      "test/supervisor.test.js",
+      "tsconfig.json",
+      "types/harness.d.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-wolfram",
+    "version": "0.2.1",
+    "description": "DeepSeek Harness bundle for the official Wolfram/AgentTools MCP server: kernel discovery, a transparent stdio supervisor that owns only its own Wolfram process tree, and a native DSH permission policy over the Wolfram tools.",
+    "license": "MIT",
+    "type": "module",
+    "main": "src/index.js",
+    "bin": {
+      "dsh-wolfram-supervisor": "bin/dsh-wolfram-supervisor.js"
+    },
+    "exports": {
+      ".": "./src/index.js",
+      "./policy": "./src/policy.js",
+      "./supervisor": "./src/supervisor-main.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "bin",
+      "cordis.patch.yml",
+      "docs/design.md",
+      "docs/offline-dependencies.json",
+      "CHANGELOG.md",
+      "README.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": "^22.19.0 || >=24"
+    },
+    "scripts": {
+      "test": "node --test test/*.test.js",
+      "test:host": "node --test compat/*.test.js",
+      "test:live": "node --test live/*.test.js",
+      "typecheck": "tsc -p tsconfig.json",
+      "check": "npm run typecheck && npm run test"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*",
+      "@deepseek-ai/dsh-mcp-client": "*",
+      "@deepseek-ai/dsh-tools": "*"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-mcp-client": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-tools": {
+        "optional": true
+      }
+    },
+    "devDependencies": {
+      "@types/node": "22.20.1",
+      "typescript": "6.0.3",
+      "yaml": "2.9.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The dsh-wolfram bundle patch: the Wolfram/AgentTools MCP surface over the\n# dsh-base layer. Applied after every earlier bundle's patch; the profile's own\n# cordis.patch.yml, the home-level one, and any --patch overlay still come\n# after this file and can override either row by id.\n#\n# Two rows, deliberately separate: the connection and the permission policy\n# have different reasons to change. Disabling `wolfram-permission` leaves the\n# Wolfram tools connected but unguarded; disabling `wolfram` removes the tools\n# entirely.\n\n- insert:\n    # The integration plugin. It discovers the Wolfram kernel, starts it behind\n    # this package's stdio supervisor, and mounts @deepseek-ai/dsh-mcp-client\n    # with the resolved configuration. Every field below is optional and shown\n    # at its default; see README.md for the full table.\n    - id: wolfram\n      name: 'dsh-wolfram'\n      config:\n        # Namespace for the model-facing tool names: mcp__wolfram__<rawName>.\n        serverName: wolfram\n        # Which built-in AgentTools server to start (MCP_SERVER_NAME). The\n        # \"WolframLanguage\" server publishes WolframLanguageContext,\n        # WolframLanguageEvaluator, ReadNotebook, WriteNotebook,\n        # SymbolDefinition, CodeInspector, and TestReport.\n        mcpServerName: WolframLanguage\n        # Milliseconds between closing the kernel's stdin and terminating its\n        # process tree. Must stay under the MCP SDK's 2000ms force-kill\n        # deadline or tree cleanup would never run.\n        graceMs: 1000\n        # Wolfram evaluations outlive the 60s mcp-client default; this leaves\n        # room for the kernel's own TimeConstraint message to come back.\n        toolCallTimeoutMs: 120000\n        # Reclaim a Wolfram tree left behind by a hard-killed supervisor, after\n        # verifying the live process really is the recorded child.\n        reclaimOrphans: true\n        # Set `command` (or `installationDirectory`) to pin a specific Wolfram\n        # installation instead of auto-discovering one.\n        # command: 'C:\\Program Files\\Wolfram Research\\Wolfram\\15.0\\wolfram.exe'\n\n    # The permission policy over those tools. It must name the same serverName\n    # as the row above, since that is how it recognizes the tools it guards.\n    - id: wolfram-permission\n      name: 'dsh-wolfram/policy'\n      config:\n        serverName: wolfram\n        # Decision for a Wolfram tool this deployment has not classified —\n        # a newer paclet may publish tools this table has never seen.\n        unknown: ask\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "bin/dsh-wolfram-supervisor.js",
+    "src/policy.js",
+    "src/supervisor-main.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_SOURCE_ROOT",
+      "kind": "env",
+      "where": "compat/dsh-host.test.js:17"
+    },
+    {
+      "name": "DSH_EXPECTED_VERSION",
+      "kind": "env",
+      "where": "compat/dsh-host.test.js:28"
+    },
+    {
+      "name": "DSH_EXPECTED_VERSION",
+      "kind": "env",
+      "where": "compat/dsh-host.test.js:29"
+    },
+    {
+      "name": "WSL_INTEROP",
+      "kind": "env",
+      "where": "live/wolfram.test.js:56"
+    },
+    {
+      "name": "DSH_WOLFRAM_HOST_POWERSHELL",
+      "kind": "env",
+      "where": "live/wolfram.test.js:67"
+    },
+    {
+      "name": "WSLENV",
+      "kind": "env",
+      "where": "live/wolfram.test.js:134"
+    },
+    {
+      "name": "npm_execpath",
+      "kind": "env",
+      "where": "test/bundle.test.js:99"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/@types/node/-/node-22.20.1.tgz",
+      "where": "docs/offline-dependencies.json:9"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz",
+      "where": "docs/offline-dependencies.json:16"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/undici-types/-/undici-types-6.21.0.tgz",
+      "where": "docs/offline-dependencies.json:23"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/yaml/-/yaml-2.9.0.tgz",
+      "where": "docs/offline-dependencies.json:30"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@types/node": "22.20.1",
+      "typescript": "6.0.3",
+      "yaml": "2.9.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 12,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 4,
+    "pushed_at": "2026-08-24T11:42:03Z",
+    "created_at": "2026-08-15T23:50:02Z"
+  },
+  "runtime_files": [
+    "bin/dsh-wolfram-supervisor.js",
+    "cordis.patch.yml",
+    "package.json",
+    "src/classify.js",
+    "src/config.js",
+    "src/discovery.js",
+    "src/harness-module.js",
+    "src/index.js",
+    "src/orphans.js",
+    "src/policy.js",
+    "src/process-tree.js",
+    "src/supervisor-main.js",
+    "src/supervisor.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-wolfram",
+      "text": "把 **Wolfram 官方 `Wolfram/AgentTools` MCP Server** 接进 **DeepSeek Harness (DSH)** 的专用集成 bundle。\n\n它是一层薄集成，不重写任何一方：MCP 协议交给 DSH 通用的 `@deepseek-ai/dsh-mcp-client`，Wolfram 工具由官方 Paclet 提供。本包只补三件中间缺口："
+    },
+    {
+      "section": "dsh-wolfram",
+      "text": "1. **内核发现** —— 自动找到本机的 Wolfram 可执行文件（注册表 / 标准安装根目录 / `wolframscript`），也支持显式覆盖。\n2. **Windows 透明 stdio supervisor** —— 保证连接关闭、HMR 重载、DSH 退出后，**只有本插件自己启动的那棵 Wolfram 进程树**被终止，绝不碰你已经开着的 Mathematica 前端、笔记本内核，或别的客户端启动的 AgentTools server。\n3. **DSH 原生权限策略** —— 求值、跑测试、读写 notebook 这类有副作用的工具执行前先经 DSH 的审批链；未知的新工具默认也要问。\n\n```\nDSH 工具注册表\n   ├── dsh-wolfram/policy   ← tools/pre-execute：分级 → ask / 交给后续策略\n   └── dsh-wolfram          ← 发现内核，挂载子插件 ↓\n         └── @deepseek-ai/dsh-mcp-client  (DSH 通用，未修改)\n\n---"
+    },
+    {
+      "section": "前置条件",
+      "text": "- DeepSeek Harness（提供 `dsh` 命令）。当前主验证目标是官方 `0.1.1-rc.2`；`0.1.0-rc.5` 继续兼容。\n- Node.js `^22.19 || >=24`、`pnpm`（`dsh plugin` 转发给 pnpm）。\n- 已安装 Wolfram 桌面产品或 Wolfram Engine，且已安装 `Wolfram/AgentTools` Paclet：\n\n```wolfram\n  PacletInstall[\"Wolfram/AgentTools\"]\n  ```\n\n验证：`PacletObject[\"Wolfram/AgentTools\"][\"Version\"]` 应返回 `2.2.0` 或更高。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile <你的 profile> add D:\\dsh-dev\\dsh-wolfram\n```\n\n`add` 后面可以是本地目录、tarball、git URL 或已发布的包名。`dsh plugin` 会在\n`$DSH_HOME/profiles/<profile>/` 里初始化 profile（如果还没有）、调用 pnpm 安装，然后检测到本包声明了\n`dsh.bundle` 并把它追加进 `dsh.profile.bundles` 层列表。\n\n确认它进了组合树：\n\n```sh\ndsh --profile <你的 profile> --dump-config\n```"
+    },
+    {
+      "section": "WSL 中复用 Windows Mathematica",
+      "text": "`0.2.0` 起，bundle 在 WSL 中使用 POSIX state path，并只把\n`WSL_INTEROP`、`WSLENV`、`LANG`、`LC_ALL`、`TERM` 这五类非秘密变量接入\nsupervisor。`MCP_SERVER_NAME` 会通过 `WSLENV` 的 `/w` 方向标记传入 Windows，\n因此不会再静默启动错误的默认 server。请使用显式 WSL 路径并关闭自动探测：\n\n```yaml\n- id: wolfram\n  config:\n    serverName: wolfram\n    mcpServerName: WolframLanguage\n\n此模式已在 WSL2/Node 24.19.0 上实测 POSIX 单元套件自然退出，并由真实\nAgentTools 2.2.0 完成 initialize、七工具 `tools/list`、精确只读求值和退出后\nprocess-tree quiescence。它仍不是任意求值沙箱；部署时应把 `unknown` 设为\n`deny`，高风险工具留在审批链中。"
+    },
+    {
+      "section": "WSL 中复用 Windows Mathematica",
+      "text": "开发依赖的精确 tarball URL、integrity 与 license 在\n`docs/offline-dependencies.json`；可在一次受控 registry bootstrap 后通过\n`npm ci --offline --ignore-scripts` 重建，无需 Corepack、pnpm、npx 或全局安装。\n\n输出里应该出现 `id: wolfram` 与 `id: wolfram-permission` 两行。\n\n启动后日志里会打印实际选中的内核，例如：\n\n```\nwolfram: kernel D:\\mathematica\\Mathematica 15.0\\wolfram.exe (via windows-registry), server WolframLanguage, tools under mcp__wolfram__*\n```"
+    },
+    {
+      "section": "想先在隔离环境里试",
+      "text": "profile 完全由 `$DSH_HOME` 决定，所以换一个 `DSH_HOME` 就是一个干净的沙盒，不会碰你现有的 profile：\n\n```powershell\n$env:DSH_HOME = 'D:\\tmp\\dsh-home-试用'\ndsh plugin --profile wolfram-试用 add D:\\dsh-dev\\dsh-wolfram\ndsh --profile wolfram-试用 --dump-config\n```\n\n---"
+    },
+    {
+      "section": "装上之后有什么",
+      "text": "| 工具 | 作用 | 默认权限 |\n|---|---|---|\n| `WolframLanguageEvaluator` | 求值任意 Wolfram 代码 | **ask** —— 无沙箱，可写文件、起进程、访问网络 |\n| `TestReport` | 运行 `.wlt` 测试文件 | **ask** —— 在新内核里执行任意代码 |\n| `WriteNotebook` | Markdown 转 `.nb` 并写盘 | **ask** —— 写任意路径 |\n| `ReadNotebook` | 读 `.nb` 为 markdown | **ask** —— 读任意路径 |\n| `CodeInspector` | 静态检查代码/文件/目录 | **ask** —— 可递归读整个目录 |\n| `WolframLanguageContext` | 文档语义检索 | 交给后续策略（只读元数据） |\n| `SymbolDefinition` | 取符号定义 | 交给后续策略（只读元数据） |"
+    },
+    {
+      "section": "装上之后有什么",
+      "text": "`ask` 走 DSH 自己的审批链（`ctx.approval`）。会话审批策略是 `never` 时，这些调用会被直接拒绝——这是 DSH 的既有语义，本插件不另开后门。\n\n**未列出的 Wolfram 工具默认也是 `ask`。** 官方 Paclet 升级后可能新增工具，没有分级信息之前先问人，而不是先放行。\n\n> 官方 server 的 `tools/list` 只在 `annotations` 里给 `title`，没有 `readOnlyHint` / `destructiveHint`，所以分级只能按工具名做，未知即 ask。"
+    },
+    {
+      "section": "DSH 0.1.1-rc.2 图像结果",
+      "text": "rc.2 的官方 `dsh-mcp-client` 能把 MCP `image` block 经当前模型的图像能力检查和 DSH attachment store 转成持久化的模型上下文；不支持图像的模型会得到明确的文本诊断，原始 MCP 值仍保留给程序调用方。本 bundle 的 supervisor 逐字节转发协议，不解析或改写该结果，因此这项能力直接来自运行中的官方 DSH，不需要在 Mathematica 适配层复制一套。\n\n本机 AgentTools 2.2.0 的 `WolframLanguage` 实测返回路径仍以文本为主；这里保证的是 MCP 图像 block 若由服务器返回，不会被适配层丢弃，不承诺把任意 `Graphics` 表达式自动渲染成图片。\n\n---"
+    },
+    {
+      "section": "配置项",
+      "text": "两行都可以在 profile 的 `cordis.patch.yml` 里按 id 覆盖。**一次 patch 会替换该行的整个 `config`**，所以要把想保留的字段一起写上。"
+    },
+    {
+      "section": "`wolfram` 行",
+      "text": "| 字段 | 默认值 | 说明 |\n|---|---|---|\n| `serverName` | `wolfram` | 工具名命名空间，模型看到 `mcp__<serverName>__<工具名>` |\n| `mcpServerName` | `WolframLanguage` | 启动哪个内置 AgentTools server（`MCP_SERVER_NAME`）。可选 `Wolfram`、`WolframAlpha`、`WolframPacletDevelopment` |\n| `command` | 自动发现 | 显式指定 Wolfram 可执行文件，原样使用，跳过全部探测 |\n| `installationDirectory` | 自动发现 | 显式指定安装目录，按平台拼可执行文件 |\n| `args` | 官方启动参数 | 覆盖传给 Wolfram 的参数（高级用法） |\n| `env` | `{}` | 额外环境变量，合并在 `MCP_SERVER_NAME` 之上 |\n| `cwd` | 继承 | Wolfram 进程的工作目录 |\n| `graceMs` | `1000` | 关闭内核 stdin 后等多久再强杀进程树。必须 < 2000（见下） |\n| `recordDirectory` | `$DSH_HOME/.dsh-wolfram` | supervisor 记录自己子进程的位置 |\n| `reclaimOrphans` | `true` | 装载/卸载时回收被强杀的 supervisor 遗留的 Wolfram 进程树 |\n| `probeWolframScript` | `true` | 允许用 `wolframscript` 探测安装目录（最后一步，要启内核，慢） |\n| `probeTimeoutMs` | `30000` | 上述探测的超时 |\n| `toolCallTimeoutMs` | `120000` | 单次工具调用的传输超时 |\n| `failOnStartupError` | `false` | 首次连接失败时是否让插件装载失败 |\n| `reconnect` | mcp-client 默认 | 断线重连策略，原样透传给 mcp-client |"
+    },
+    {
+      "section": "`wolfram-permission` 行",
+      "text": "| 字段 | 默认值 | 说明 |\n|---|---|---|\n| `serverName` | `wolfram` | 必须和 `wolfram` 行一致，策略靠它认出自己要守的工具 |\n| `unknown` | `ask` | 未分级 Wolfram 工具的决策，可改成 `deny` |\n| `ask` | 见上表 | 整表替换：工具名 → 审批理由 |\n| `additionalAsk` | `{}` | 在生效表之上追加条目，不丢默认值 |\n| `delegate` | `[WolframLanguageContext, WolframAlphaContext, SymbolDefinition]` | 整表替换：交给后续策略的只读工具 |"
+    },
+    {
+      "section": "覆盖示例",
+      "text": "写在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`：\n\n```yaml"
+    },
+    {
+      "section": "指定内核、加长求值超时、把只读元数据工具也纳入审批",
+      "text": "- id: wolfram\n  config:\n    serverName: wolfram\n    mcpServerName: WolframLanguage\n    command: 'D:\\mathematica\\Mathematica 15.0\\wolfram.exe'\n    graceMs: 1000\n    toolCallTimeoutMs: 300000\n    reclaimOrphans: true\n\n- id: wolfram-permission\n  config:\n    serverName: wolfram\n    unknown: deny\n    delegate: []\n```\n\n只想临时关掉权限策略（不推荐）：\n\n```yaml\n- id: wolfram-permission\n  disabled: true\n```\n\n---"
+    },
+    {
+      "section": "卸载",
+      "text": "```sh\ndsh plugin --profile <你的 profile> remove dsh-wolfram\n```\n\n`dsh plugin` 会在 pnpm 成功后把它从 `dsh.profile.bundles` 里摘掉。确认：\n\n```sh\ndsh --profile <你的 profile> --dump-config\n```\n\n不再出现 `id: wolfram` 即可。\n\n残留清理（可选）：删除 `$DSH_HOME/.dsh-wolfram/`。里面只有 supervisor 的子进程记录文件，正常退出时会自己删掉。\n\n---"
+    },
+    {
+      "section": "找不到内核",
+      "text": "启动时抛出 `dsh-wolfram: no Wolfram kernel found. Tried: …`，错误里会逐条列出试过的路径。按顺序确认：\n\n1. Wolfram 是否真的装了：`wolframscript -code '$InstallationDirectory'`；\n2. 用返回的目录直接指定：\n\n```yaml\n   - id: wolfram\n     config:\n       serverName: wolfram\n       installationDirectory: 'D:\\mathematica\\Mathematica 15.0'\n3. 或者用环境变量临时覆盖，不改配置：`DSH_WOLFRAM_COMMAND=…\\wolfram.exe`。"
+    },
+    {
+      "section": "找不到内核",
+      "text": "发现顺序是：`config.command` → `DSH_WOLFRAM_COMMAND` → `config.installationDirectory` → `WOLFRAM_INSTALLATION_DIRECTORY` → Windows 注册表 → 平台标准安装根目录 → `PATH` → `wolframscript` 探测。"
+    },
+    {
+      "section": "连上了但工具是空的",
+      "text": "多半是 Paclet 没装或版本太老。先手工跑一遍 server，看它有没有正常应答：\n\n```powershell\nnode D:\\dsh-dev\\dsh-wolfram\\src\\supervisor-main.js `\n  --command 'D:\\mathematica\\Mathematica 15.0\\wolfram.exe' `\n  --arg -run --arg 'PacletSymbol[\"Wolfram/AgentTools\",\"Wolfram`AgentTools`StartMCPServer\"][]' `\n  --arg -noinit --arg -noprompt\n\n（需要设 `MCP_SERVER_NAME=WolframLanguage`。）然后往 stdin 粘一行 `initialize` 请求。stdout 只会有协议字节，supervisor 自己的日志都在 stderr，带 `[dsh-wolfram-supervisor]` 前缀。\n\n更省事的做法是跑本仓库的实测用例，它会完成真实握手、列工具、做一次无副作用求值，并检查退出后没有进程残留："
+    },
+    {
+      "section": "连上了但工具是空的",
+      "text": "```sh\nnpm run test:live\n```"
+    },
+    {
+      "section": "工具每次都要点确认",
+      "text": "这是设计如此。要放宽某个工具，把它从 `ask` 表移到 `delegate`：\n\n```yaml\n- id: wolfram-permission\n  config:\n    serverName: wolfram\n    unknown: ask\n\n注意 `delegate` 是**整表替换**，写全你要放行的名字。"
+    },
+    {
+      "section": "怀疑有 Wolfram 进程残留",
+      "text": "先看基线，再对比。**永远不要按进程名批量杀**——你自己的 Mathematica 前端和别的 MCP 客户端的 server 长得一模一样：\n\n```powershell\nGet-CimInstance Win32_Process |\n  Where-Object { $_.Name -match 'wolfram' } |\n  Select-Object ProcessId, ParentProcessId, Name, CreationDate, CommandLine | Format-List\n```\n\n本插件启动的 Wolfram 进程，其父进程是一个跑 `supervisor-main.js` 的 `node.exe`。正常关闭后两者都会消失。"
+    },
+    {
+      "section": "怀疑有 Wolfram 进程残留",
+      "text": "即使 supervisor 被强杀（来不及运行任何清理代码），内核多半也会跟着退出：supervisor 一死，内核 stdin 的写端就关了，AgentTools 把 EOF 当关机信号，实测约 1 秒内自行 `Exit[0]`。万一没退，下一次插件装载或卸载时会自动回收——前提是那个进程通过身份三重校验（映像名、命令行、创建时间窗口）确实是记录里的那一个；有任何一项对不上，就只删记录、不动进程。"
+    },
+    {
+      "section": "`graceMs` 为什么不能调大",
+      "text": "MCP SDK 的 `StdioClientTransport.close()` 在关闭 stdin 后 2000ms 就会对 supervisor 发 `SIGTERM`；Windows 上那等于 `TerminateProcess`，没有任何 JavaScript 能执行。`graceMs` 一旦 ≥ 2000，进程树清理这一步永远轮不到运行。所以配置校验会直接拒绝，并把原因写在错误里。\n\n---"
+    },
+    {
+      "section": "安全边界",
+      "text": "- **只终止自己的进程树。** 代码里没有任何按进程名或命令行模糊匹配的终止路径。终止只发生在 supervisor 仍持有未回收的子进程句柄时（此时 PID 不可能被系统复用），或孤儿回收通过三重身份校验之后。\n- **`WolframLanguageEvaluator` 没有沙箱。** 它能读写文件、启动进程、访问网络。本插件的边界是「执行前必须有人点头」，不是「执行被限制」。真要限制，用 DSH 自己的 sandbox / approval 组合。\n- **stdout 只走协议。** supervisor 的所有诊断都在 stderr，任何写进 stdout 的东西都会破坏 JSON-RPC 流。\n- **不注入 system prompt。** 模型可见文本会进每一次请求前缀，属于产品决策，交给使用者自己的 patch 层。\n- **凭据清洗沿用 DSH。** 子进程环境由 `dsh-mcp-client` 的 `scrubbedParentEnv()` 过滤（丢弃 `*KEY*` / `*SECRET*` / `*TOKEN*` / `*PASSWORD*` 与 `DSH_*`），本包只在其上叠加 `MCP_SERVER_NAME` 和你显式配置的 `env`。"
+    },
+    {
+      "section": "安全边界",
+      "text": "设计取舍与证据来源见 [docs/design.md](docs/design.md)。\n\n---"
+    },
+    {
+      "section": "开发",
+      "text": "```powershell\nnpm install        # 只装 typescript / yaml / @types/node，零运行时依赖\nnpm run typecheck  # tsc --checkJs，严格模式\nnpm test           # 单元 + 真实子进程集成用例（不需要 Wolfram）\nnpm run test:live  # 真实 Wolfram MCP 握手（需要本机装了 Wolfram + AgentTools）\n\n`npm test` 里的进程用例会真的拉起进程树、强杀、并断言一个无关的对照进程还活着——那条断言才是这套清理逻辑的意义所在。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **Windows 强杀窗口无法完全消除。** supervisor 被 `SIGKILL` / `TerminateProcess` 时不会运行任何 JavaScript，这一瞬间无法保证子进程立即死亡；孤儿回收是事后补救，不是实时保证。彻底消除需要 Windows Job Object（`KILL_ON_JOB_CLOSE`），那要原生模块。\n- **孤儿回收的身份校验只在 Windows 上完整。** POSIX 分支退化为 `ps` 命令行比对，没有创建时间，尚未在真实 macOS / Linux 上验证；这些平台上 supervisor 自己的进程组终止仍然生效。\n- **只桥接 MCP Tools。** rc.2 的 DSH 通用 mcp-client 可以把 Tool 返回的 text/image 投影进模型上下文，但仍不桥接 MCP Resources 与 Prompts；本包不在其上另开旁路，所以 AgentTools 的 `WolframLanguageSearch` / `Notebook` 等 prompt 用不到。\n- **审批没有「记住选择」。** DSH 审批语义只有一次性授权，会话级策略只有 `ask` / `never`；本插件不自建第二套授权存储。\n- **`toolCallTimeoutMs` 与内核的 `TimeConstraint` 是两个预算。** 前者是传输超时，后者是 Wolfram 自己的求值上限（默认 60s），改一个不会改另一个。\n- **工具自身的失败属于上游。** 实测本机 `WolframLanguageContext` 会返回 `AgentTools::Internal::Path@@Kernel/Tools/Context.wl` 内部错误；调用链本身是通的（请求送达、错误原样回传并映射成 `isError`），但那条工具的实现问题要报给 [WolframResearch/AgentTools](https://github.com/WolframResearch/AgentTools/issues)，本插件不做补丁。"
+    }
+  ],
+  "skipped": []
+}
