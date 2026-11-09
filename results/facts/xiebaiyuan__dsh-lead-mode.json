@@ -1,0 +1,449 @@
+{
+  "repo": "xiebaiyuan/dsh-lead-mode",
+  "commit": "a7914e8679f30d737c4ac48b30fe30f696923586",
+  "extracted_at": "2026-11-09T21:37:25.547735+00:00",
+  "tree": {
+    "files": 25,
+    "bytes": 184563,
+    "lines_by_language": {
+      "JSON": 214,
+      "JavaScript": 1881,
+      "Markdown": 1488,
+      "Other": 27,
+      "YAML": 478
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "GLOSSARY.md",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "cordis.patch.yml",
+      "docs/why.md",
+      "dsh-plugin.naming.json",
+      "lib/index.js",
+      "package.json",
+      "references/naming-policy.v1.json",
+      "reports/2026-10-29-team-digest.md",
+      "scripts/check-patch.mjs",
+      "scripts/sync-naming-validator.mjs",
+      "scripts/validate-names.mjs",
+      "skills/lead-mode/SKILL.md",
+      "skills/team-digest/SKILL.md",
+      "test/fixtures/standard-preset.yml",
+      "test/preset.test.mjs",
+      "test/smoke.test.mjs",
+      "test/support/yaml-lite.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-lead-mode",
+    "version": "0.2.3",
+    "description": "Lead mode for DSH: an agent preset, a working-method skill, a dependency self-check, and two reminders that tell you to enable the official Agent Teams. | 给 DSH 加 Lead 模式：预设、skill、依赖自检、两条前置提醒。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "skills",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh-CN.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --test test/*.test.mjs",
+      "check": "node --check lib/index.js && node scripts/validate-names.mjs --manifest ./dsh-plugin.naming.json && node scripts/check-patch.mjs",
+      "pack:dry": "npm pack --dry-run"
+    },
+    "engines": {
+      "node": ">=20",
+      "dsh": ">=0.2.2-rc.1"
+    },
+    "dshTarget": "0.2.2-rc.1",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "dshtag",
+      "agent-teams",
+      "agent-preset",
+      "lead-mode"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/xiebaiyuan/dsh-lead-mode.git"
+    },
+    "license": "MIT",
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.5",
+      "@deepseek-ai/dsh": ">=0.2.2-rc.1",
+      "@deepseek-ai/schemastery": "^3.18.5",
+      "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.2-rc.1",
+      "@deepseek-ai/dsh-skill": ">=0.2.2-rc.1",
+      "@deepseek-ai/dsh-commands": ">=0.2.2-rc.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-lead-mode bundle patch\n#\n# Two inserts.\n#\n# 1. `dsh-lead-mode` — this plugin's own host half. It registers the `lead-mode`\n#    runtime skill, the `/lead-mode` slash command, and the startup check that\n#    warns when the Team runtime is missing. The loader id equals the package\n#    name, matching `dsh-plugin.naming.json` (`names.loaderIds`).\n# 2. `preset-lead-mode` — the `lead-mode` agent preset. Its `config.plugins`\n#    mirrors the official `standard` preset row for row; the only difference is\n#    the persona prefix, which switches the session into Lead mode and states\n#    the Agent Teams prerequisite up front.\n#\n# This plugin does NOT mount the Team runtime. `@deepseek-ai/dsh-experimental-tool-agent-team`\n# listens on the global `agent/created` event and installs Team tools on every\n# agent, so it belongs to the host plane, not to a preset row. Users turn it on\n# with the official profile package:\n#\n#   dsh plugin --profile <name> add @deepseek-ai/dsh-experimental-agent-team-profile@0.2.2-rc.1\n#\n# The version pin matters: bare `npm i` resolves `latest`, which is 0.1.5-alpha.2\n# and does not mount on a 0.2.2 host. `next` points at 0.2.2-rc.1. The pin must\n# equal the host version (`dsh --version`): the team packages pin exact `dsh-*`\n# peers, so a profile built for an older rc installs peers this host does not\n# satisfy.\n- insert:\n    - id: dsh-lead-mode\n      name: 'dsh-lead-mode'\n    - id: preset-lead-mode\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: lead-mode\n        name: Lead 模式\n        description: 拆活、派活、验收。需要先开 dsh 官方 Agent Teams。\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                你是 Lead，负责拆活、派活、验收。动手的活尽量派出去。\n\n                开工第一件事：检查本会话有没有 spawn_teammate、send_message、team_task_create、team_task_update 这些工具。\n\n                没有的话，停下。只做一件事：告诉用户去开 dsh 官方的 Agent Teams，命令是\n\n                    dsh plugin --profile <你的 profile 名> add @deepseek-ai/dsh-experimental-agent-team-profile@0.2.2-rc.1\n\n                不带版本号会装到 0.1.5-alpha.2，和 0.2.2 宿主对不上。版本号要跟 `dsh --version` 的输出一致。装完重启 dsh。\n\n                这是本插件存在的主要理由。没有这些工具，你派不了活。不要自己硬干，不要假装能派活，也不要拿 subagent 凑数顶替 teammate。\n\n                有这些工具，就按 Lead 工作法干活：\n\n                - 派活自包含。teammate 看不到你的上下文，把目标、约束、验收标准、已知失败、绝对路径都写进 prompt。\n                - 要求它收尾那条消息写清交付物。它收工时那条消息会随通知回到你手上。\n                - 派活时要求它第一步建工作日志（.scratch/<effort>/worklog-<mate>.md），收尾前补完最后一轮。\n                - 写作用域不重叠。一人一块文件。分不开的活排成依赖。\n                - 共享任务走 list、get、claim（带 revision）、干、complete。task 只是账本，不是唤醒通道。\n                - 等活就结束回合等通知：teammate 收工、或给你发消息，都会唤醒你。task 变更只唤醒正在 wait_agent 的调用方，不会唤醒空闲的你。\n                - 不要用 wait_agent 套循环，也不要反复 list_agents 轮询。只有本回合内就必须拿到结果时才等一次。\n                - 等齐必需的 teammate 再给最终答复。\n                - teammate 继承你的模型，spawn_teammate 没法单独指定模型。\n                - 最终验证自己做：跑测试、看 diff、核数字。不要只信回报。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n            config:\n              # 0.2.2 起 apply_patch 默认开启。standard 显式关掉，这里跟着关。\n              applyPatch: false\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelection: true\n                  modelDiscovery: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: !!js \"!ctx.get('profileContext')\"\n          - id: tool-plugin-market\n            name: '@deepseek-ai/dsh-plugin-market/tools'\n            disabled: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/release.yml:38"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xiebaiyuan/dsh-lead-mode.git",
+      "where": "package.json:45"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "where": "references/naming-policy.v1.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/oh-my-dsh/dsh-plugin-registry",
+      "where": "references/naming-policy.v1.json:15"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/oh-my-dsh/dsh-plugin-registry/main/registry/schema/plugin-index.schema.json",
+      "where": "references/naming-policy.v1.json:17"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/oh-my-dsh/dsh-plugin-registry/main/registry/index.json",
+      "where": "references/naming-policy.v1.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/bowenliang123/dsh-context",
+      "where": "test/smoke.test.mjs:449"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 21,
+    "pushed_at": "2026-11-06T04:18:11Z",
+    "created_at": "2026-10-26T13:27:25Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json",
+    "scripts/check-patch.mjs",
+    "scripts/validate-names.mjs",
+    "test/support/yaml-lite.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-lead-mode",
+      "text": "English | [中文](README.zh-CN.md)\n\nAdds a Lead mode to DSH. One preset, two skills, one self-check command, two reminders.\n\nThe official Team runtime ships tools: `spawn_teammate`, `send_message`, `team_task_*`. When to delegate, whom to delegate to, how to wait for a result, how to write the closing message, how to merge several members' output: none of that is in the tools. This plugin adds that layer. It does not replace the official Team mode; it sits on top of it."
+    },
+    {
+      "section": "dsh-lead-mode",
+      "text": "Once installed, the model works the way a Lead does: split the work, delegate it, accept the result. It delegates hands-on work instead of doing everything alone."
+    },
+    {
+      "section": "What you get",
+      "text": "Five things. None of them touch dsh itself.\n\n| Capability | Entry point | What you do |\n|---|---|---|\n| Lead mode preset | \"Lead 模式\" in the preset list | Switch to it |\n| Lead working method skill | `/skill lead-mode`; the model also loads it on its own | Nothing |\n| Team digest skill | `/skill team-digest`; the model decides at wrap-up whether to write one | Nothing |\n| Dependency self-check | `/lead-mode` | Run it when dependencies look wrong |\n| Two upfront reminders | Automatic | Nothing |"
+    },
+    {
+      "section": "What you get",
+      "text": "Additive only. `cordis.patch.yml` holds exactly two `insert` rows: this plugin, and a new `lead-mode` preset. The official `standard` preset is untouched; the new one copies 21 of its rows field for field and swaps only the persona."
+    },
+    {
+      "section": "What you get",
+      "text": "It registers no tools, listens to no agent lifecycle events, and intercepts no requests. `lib/index.js` writes to two registries only: `skills` (two entries) and `commands` (one), plus a single warn at startup. Uninstall the plugin and those entries are gone; official behaviour goes back to what it was."
+    },
+    {
+      "section": "What you get",
+      "text": "The one place it can collide is a skill or command with the same name. If you already have `lead-mode` or `team-digest`, the host takes the first one it sees, warns, and ignores ours; a collision means we step aside."
+    },
+    {
+      "section": "1. The Lead mode preset",
+      "text": "Switch to it and the session's model becomes a Lead.\n\nThe preset is the official `standard` preset row for row, all 22 of them, with only the persona replaced. No tool is dropped: bash, file read/write, search, web, todo, skill, goal, plan, compaction, subagent and workflow are all there.\n\nSo switching to Lead mode costs you no capability. It changes how the model works, not what it can do."
+    },
+    {
+      "section": "2. The Lead working method skill",
+      "text": "A working method for splitting, delegating and accepting work, shipped inside the package.\n\nIt is not tied to the preset. Any session can load it, two ways:\n\n- The model loads it when it judges the task needs it (the skill is marked model-invocable)\n- You run `/skill lead-mode` yourself"
+    },
+    {
+      "section": "2. The Lead working method skill",
+      "text": "It covers: agreeing on the goal before starting, making a delegation self-contained, keeping write scopes disjoint, the list/get/claim/complete flow for shared tasks, how to wait on teammates, where a teammate's model comes from, and doing the final verification yourself.\n\nTwo of those facts only show up when you read the runtime source:"
+    },
+    {
+      "section": "2. The Lead working method skill",
+      "text": "| Fact | Why it matters |\n|---|---|\n| A teammate settling notifies you automatically, carrying its closing message | Finish your turn after delegating; you do not need to sit and watch |\n| A task change does not wake an idle Lead | Do not count on \"it marked the task complete, so I know\"; that path only wakes a caller currently inside `wait_agent` |"
+    },
+    {
+      "section": "2. The Lead working method skill",
+      "text": "So the skill's default is: finish your turn after delegating and let the notification wake you (the user sees progress immediately), and use one `wait_agent` only when the current turn cannot continue without the result. Never loop `wait_agent`, and never poll with repeated `list_agents`.\n\nTell the teammate to put the **deliverable in its closing message** — that message is what comes back to you with the notification."
+    },
+    {
+      "section": "3. The team digest skill",
+      "text": "At wrap-up the team's output sits in N closing messages and N worklogs, with nothing merging them. This skill writes it into one `reports/<YYYY-MM-DD>-<effort>.md`."
+    },
+    {
+      "section": "3. The team digest skill",
+      "text": "| Item | Rule |\n|---|---|\n| When | Before the final answer, when the effort had 2 or more members, or ran 2 or more rounds |\n| Where | `reports/<YYYY-MM-DD>-<effort>.md`, one path, written once at wrap-up |\n| Six blocks | 结论 / 谁干了什么 / 验收证据 / 偏离与未验证 / 死路与决策 / 未决与下一步 (conclusion, who did what, acceptance evidence, deviations and unverified, dead ends and decisions, open items and next steps) |\n| Source layers | Closing messages build the skeleton, worklogs add process detail, session logs as the fallback |"
+    },
+    {
+      "section": "3. The team digest skill",
+      "text": "The six headings are fixed Chinese strings; an empty block says 无. Take the layers in order and stop at the first one that is enough. Details are in the `team-digest` skill."
+    },
+    {
+      "section": "4. The dependency self-check command",
+      "text": "`/lead-mode` reports the current dependency state.\n\n| Reported | Content |\n|---|---|\n| Team runtime | Mounted or not; its `maxMembers` when mounted |\n| lead-mode preset | Registered or not |\n| Missing pieces | The version-pinned install command |\n\nEverything in place returns success. Anything missing returns error. Nothing is skipped silently."
+    },
+    {
+      "section": "5. Two upfront reminders",
+      "text": "**When the session has no Team tools, it tells you to enable the official Agent Teams instead of letting the model work alone.**\n\nTwo channels:\n\n| Channel | Who sees it | When it appears |\n|---|---|---|\n| First persona section | The model | As soon as you switch to Lead mode. It is section 0 of the system prompt |\n| Startup warn and `/lead-mode` | You | When the Team runtime is detected missing |"
+    },
+    {
+      "section": "5. Two upfront reminders",
+      "text": "Both say the same thing: without the `spawn_teammate` tool set, stop and tell the user what to install.\n\nThe model will not pretend it can delegate, and it will not pass `subagent` off as a teammate."
+    },
+    {
+      "section": "Enable the Team runtime first",
+      "text": "Lead mode delegates through `spawn_teammate`, `send_message`, and `team_task_*`. Those come from the official dsh Team runtime, which this plugin does not ship.\n\n```bash\ndsh plugin --profile <your profile name> add @deepseek-ai/dsh-experimental-agent-team-profile@0.2.2-rc.1\n```"
+    },
+    {
+      "section": "Enable the Team runtime first",
+      "text": "**The version pin is required.** Without it npm resolves `latest`, which is 0.1.5-alpha.2 — built for 0.1.x hosts and it will not mount on a 0.2.2 host. `next` points at 0.2.2-rc.1, which is the correct one. The pin also has to equal your host version (`dsh --version`): the team packages pin exact `dsh-*` peers, so an older rc installs a peer set the newer host does not satisfy. Restart dsh afterwards.\n\nNot sure whether it is installed? Run `/lead-mode` in dsh; it reports dependency state."
+    },
+    {
+      "section": "Install this plugin",
+      "text": "Two routes, pick one.\n\nFrom npm:\n\n```bash\ndsh plugin --profile <your profile name> add dsh-lead-mode\n```\n\nFrom GitHub:\n\n```bash\ndsh plugin --profile <your profile name> add https://github.com/xiebaiyuan/dsh-lead-mode\n```\n\nRestart dsh afterwards, then pick \"Lead 模式\" in the preset list."
+    },
+    {
+      "section": "Usage",
+      "text": "Three steps.\n\n**1. Switch to Lead mode.** Pick \"Lead 模式\" in a new session's preset list. The first system-prompt section becomes the Lead persona, and the reminder at its top goes in with it.\n\n**2. Run `/lead-mode` to check dependencies.** This command delegates nothing; it only reports state. When something is missing it prints the version-pinned install command."
+    },
+    {
+      "section": "Usage",
+      "text": "**3. Let the model work.** With the delegation tools in place, the model splits the work, delegates to teammates, and waits for all of them before wrapping up. Without them, its first move is to tell you to enable the Team runtime."
+    },
+    {
+      "section": "Using the skills without switching presets",
+      "text": "You do not have to touch your preset. Install the plugin, keep `standard` or whatever you already use, and run `/skill lead-mode` in any session to load the method; the model also loads it when it judges the task needs it.\n\nOne thing is missing: the upfront reminder lives in the persona, so it appears only under the `lead-mode` preset. Run `/lead-mode` once before you start to check the dependencies; it prints the version-pinned install command when the Team runtime is absent."
+    },
+    {
+      "section": "Using the skills without switching presets",
+      "text": "`team-digest` works the same way. It is not tied to a preset, any session can use it, and the model decides at wrap-up whether a digest is worth writing."
+    },
+    {
+      "section": "Friendly link: dsh-context",
+      "text": "This plugin only does Lead mode. Visualising Team state and comms is **dsh-context**'s job, and that is a separate project:\n\n| Item | Value |\n|---|---|\n| Repository | https://github.com/bowenliang123/dsh-context |\n| Author | bowenliang123 |\n| License | Apache-2.0 |\n| Install | `dsh plugin --profile <your profile name> add dsh-context` |\n\nIt does not ship with this plugin, and it is not a dependency of it. This plugin only points at it from the docs and the skill."
+    },
+    {
+      "section": "Why point there at all",
+      "text": "Tool calls read one at a time. `list_agents` gives one line of status; `team_task_list` gives task ownership. Seeing who is doing what, and who said what to whom, takes a page.\n\ndsh-context adds a **Fleet / 编队** tab to every session (right of **Context**), and the right sidebar's **Context** panel carries the same card."
+    },
+    {
+      "section": "Why point there at all",
+      "text": "| Surface | Shows |\n|---|---|\n| Summary | Member status, live context, estimated cost, task progress |\n| Agent Network | The current agent, its parents, every subagent, one card each |\n| Fleet Members | Each member's role, model, latest reply, run time, steps, active task count |\n| Tasks | Team tasks and subagent delegations together, grouped by owner, with blocked-by chains |\n| Agent Comms | Who said what to whom. Team relays, mailbox deliveries, and the runtime's settlement notices |"
+    },
+    {
+      "section": "Why point there at all",
+      "text": "Picking a member on the graph or the member board narrows Tasks and Agent Comms to that one agent. Opening a message in Agent Comms shows the full record: which session log it came from, its sequence, whether the runtime wrote the settlement notice or the child sent it, and the complete closing report.\n\nThe Lead mode skill names this entry point too, so the model points you here instead of restating progress itself."
+    },
+    {
+      "section": "Required official bundles and versions",
+      "text": "This plugin ships none of the packages below. The host or an official bundle provides them; this plugin only declares version requirements in `peerDependencies`."
+    },
+    {
+      "section": "Required official bundles and versions",
+      "text": "| Package | Requirement | Provided by | When missing |\n|---|---|---|---|\n| `@deepseek-ai/dsh-experimental-agent-team-profile` | `0.2.2-rc.1` | You install it explicitly | Cannot delegate; `/lead-mode` returns error; startup warn |\n| `@deepseek-ai/dsh` | `>=0.2.2-rc.1` | Host | Will not install |\n| `@deepseek-ai/cordis` | `^4.0.5` | Host | Will not install |\n| `@deepseek-ai/schemastery` | `^3.18.5` | Host | Will not install |\n| `@deepseek-ai/dsh-agent-preset-registry` | `>=0.2.2-rc.1` | Host | Preset row does not take effect; `/lead-mode` reports unknown |\n| `@deepseek-ai/dsh-skill` | `>=0.2.2-rc.1` | Host | Skill not registered; startup warn |\n| `@deepseek-ai/dsh-commands` | `>=0.2.2-rc.1` | Host | `/lead-mode` not registered; startup warn |"
+    },
+    {
+      "section": "Required official bundles and versions",
+      "text": "The target host version is `dshTarget` in `package.json`: `0.2.2-rc.1`."
+    },
+    {
+      "section": "Why the install command pins a version",
+      "text": "`@deepseek-ai/dsh-experimental-agent-team-profile` has three dist-tags on npm:\n\n| dist-tag | Version | Host it fits |\n|---|---|---|\n| `latest` | 0.1.5-alpha.2 | 0.1.x |\n| `alpha` | 0.2.2-alpha.3 | an earlier preview of the 0.2.2 line |\n| `next` | 0.2.2-rc.1 | 0.2.2 |\n\nBare package name resolves `latest`, which installs 0.1.5-alpha.2. That build targets 0.1.x hosts and does not mount on a 0.2.2 host. After installing it, no Team tools appear in dsh and `/lead-mode` still reports \"not mounted\"."
+    },
+    {
+      "section": "Why the install command pins a version",
+      "text": "Measured on 2026-10-26 with npm 11.20.0:\n\n```\n$ npm view @deepseek-ai/dsh-experimental-agent-team-profile version\n0.1.5-alpha.2\n```\n\nSo every install command in this plugin carries `@0.2.2-rc.1`: the persona prefix, the `/lead-mode` output, the startup warn, and SKILL.md. `test/preset.test.mjs` and `test/smoke.test.mjs` both assert that string, so a future edit cannot quietly drop back to the bare name."
+    },
+    {
+      "section": "Why the install command pins a version",
+      "text": "`next` now points at `0.2.2-rc.1`, the build this plugin pins; `alpha` (`0.2.2-alpha.3`) is an earlier preview of the same line."
+    },
+    {
+      "section": "Difference from the official standard preset",
+      "text": "One place only: the persona. The other 21 rows are copied field for field from `standard`.\n\n| Item | standard | lead-mode |\n|---|---|---|\n| persona prefix | `You are a coding agent powered by the {{model}} model.` | Chinese Lead persona plus an Agent Teams precondition check |\n| other 21 rows | — | identical to standard, field for field |"
+    },
+    {
+      "section": "Difference from the official standard preset",
+      "text": "The three classic subagent rows (`tool-subagent-control`, `tool-subagent`, `tool-subagent-fork`) stay enabled. `list_agents` now comes from `tool-subagent-control` itself, so there is no separate row for it. Nothing is disabled. The Team tools are a host decision, not a preset decision."
+    },
+    {
+      "section": "Why the preset does not carry the Team runtime",
+      "text": "`apply()` in `@deepseek-ai/dsh-experimental-tool-agent-team` listens on the global `agent/created` event and installs Team tools on every agent. It is a host-plane plugin; putting it in a preset would leak it into every session.\n\nSo this plugin stays at: preset, two skills, reminder. Whether the Team runtime is on is decided by the user through the official profile package."
+    },
+    {
+      "section": "Layout",
+      "text": "```\npackage.json            package metadata; dsh.bundle.patch points at cordis.patch.yml\ncordis.patch.yml        two insert rows: this plugin and the lead-mode preset\nlib/index.js            host half: scan skills/, register each one, register the command, startup check\nskills/lead-mode/       the Lead working method"
+    },
+    {
+      "section": "Development",
+      "text": "```bash\nnode --check lib/index.js\nnode --test test/*.test.mjs\nnode scripts/check-patch.mjs\n```\n\nTests are zero-dependency. No `npm install` needed. The directory form of `node --test` is accepted only on Node 22+; on Node 20 the shell expands the glob."
+    },
+    {
+      "section": "Releasing",
+      "text": "Push a tag to trigger `.github/workflows/release.yml`. Publishing goes through npm Trusted Publishing (OIDC). No token is stored and no 2FA prompt appears.\n\nConfigure the Trusted Publisher once on npmjs.com:\n\n| Field | Value |\n|---|---|\n| Organization or user | `xiebaiyuan` |\n| Repository | `dsh-lead-mode` |\n| Workflow filename | `release.yml` |\n| Allowed actions | Tick `npm publish` |"
+    },
+    {
+      "section": "Releasing",
+      "text": "`npm stage publish` is allowed by default. With only that ticked, CI can stage but a human still has to approve before the version goes live.\n\nOnce configured:\n\n```bash\nnpm version patch --no-git-tag-version\ngit commit -am \"chore: bump to 0.1.3\"\ngit tag v0.1.3\ngit push origin main --tags\n\nThe tag version must equal `package.json`'s version, or the workflow exits without publishing. npm rejects a second publish of the same version, so bump the version every time."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-lead-mode",
+      "text": "中文 | [English](README.md)\n\n给 DSH 加一个 Lead 模式。一个预设、两个 skill、一个自检命令、两条前置提醒。\n\n官方 Team 运行时只给工具：`spawn_teammate`、`send_message`、`team_task_*`。什么时候派活、派给谁、怎么等结果、收尾怎么写、多成员的产出怎么合并，这些方法它不管。本插件补的就是这一层。它不替代官方 Team 模式，是配套。\n\n装好后模型能按 Lead 的方式干活：拆活、派活、验收。动手的活尽量派出去。"
+    },
+    {
+      "section": "提供的能力",
+      "text": "五样东西，都不碰 dsh 本体。\n\n| 能力 | 入口 | 你要做什么 |\n|---|---|---|\n| Lead 模式预设 | 预设下拉里的「Lead 模式」 | 切过去 |\n| Lead 工作法 skill | `/skill lead-mode`，模型也会自己加载 | 不用管 |\n| 团队汇总 skill | `/skill team-digest`，模型收尾前自己判断写不写 | 不用管 |\n| 依赖自检 | `/lead-mode` | 依赖不对时敲一下 |\n| 两层前置提醒 | 自动 | 不用管 |\n\n只新增，不修改。`cordis.patch.yml` 全文只有两行 `insert`：一行本插件，一行新建的 `lead-mode` 预设。官方 `standard` 预设一个字没动，新预设的 21 行逐字段照抄它，只换 persona。"
+    },
+    {
+      "section": "提供的能力",
+      "text": "不注册任何工具，不监听 agent 生命周期，不拦截任何请求。`lib/index.js` 只往两个注册表写：`skills`（两个 skill）与 `commands`（一个命令）；启动时另打一条 warn。卸载后这些条目全部消失，官方行为回到原样。\n\n唯一可能撞的地方是同名 skill 或命令。你已经装了 `lead-mode` 或 `team-digest` 时，宿主按先到先得处理，打一条 warn，忽略本插件那条；撞了也只是我们让位。"
+    },
+    {
+      "section": "一、Lead 模式预设",
+      "text": "切过去，这个会话的模型就换成 Lead 人设。\n\n预设内容等于官方 `standard` 预设的全部 22 行，只把 persona 换掉。工具一个不少：bash、文件读写、搜索、web、todo、skill、goal、plan、compaction、subagent、workflow 全在。\n\n也就是说，切到 Lead 模式不会让你少任何能力，只是换了工作方式。"
+    },
+    {
+      "section": "二、Lead 工作法 skill",
+      "text": "一套拆活、派活、验收的方法，随包分发。\n\n它不绑预设。任何会话都能加载，两条路：\n\n- 模型判断需要时自己加载（skill 标记为模型可调用）\n- 你直接敲 `/skill lead-mode`\n\n覆盖这些内容：开工前对齐目标、派活必须自包含、写作用域不重叠、共享任务的 list/get/claim/complete 流程、怎么等 teammate、teammate 的模型从哪来、最终验证自己做。\n\n其中两条是读源码才确认的，容易踩：\n\n| 事实 | 为什么重要 |\n|---|---|\n| teammate 收工会自动通知你，通知里带它收尾那条消息 | 派完活结束回合就够，不用盯着等 |\n| task 变更不会唤醒空闲的 Lead | 别指望「它把 task 标 complete 了我就知道了」，那条路只唤醒正在 `wait_agent` 的调用方 |\n\n所以 skill 的默认建议是：派完活就结束回合等通知（用户立刻看到进展），只有本回合内就必须拿到结果时才用一次 `wait_agent`。不要 `wait_agent` 套循环，也不要反复 `list_agents` 轮询。"
+    },
+    {
+      "section": "二、Lead 工作法 skill",
+      "text": "派活 prompt 里要要求 teammate **把交付物写进收尾那条消息**——那条消息会随通知回到你手上。"
+    },
+    {
+      "section": "三、团队汇总 skill",
+      "text": "收尾时全队产出散在 N 条收尾消息和 N 份工作日志里，没人合并，过一周想回看就得重新查一遍。这个 skill 把它们合成一份 `reports/<YYYY-MM-DD>-<effort>.md`。\n\n| 项 | 规则 |\n|---|---|\n| 什么时候写 | 给最终答复前，本 effort 有 2 个以上成员，或跨 2 轮以上 |\n| 写到哪 | `reports/<YYYY-MM-DD>-<effort>.md`，单一路径，收尾一次成型 |\n| 六块骨架 | 结论 / 谁干了什么 / 验收证据 / 偏离与未验证 / 死路与决策 / 未决与下一步 |\n| 原料分层 | 收尾消息做骨架，工作日志补过程细节，会话日志兜底 |\n\n六块标题写死，某块没内容就写「无」。原料按顺序取，上层够用就不下钻。细节看 `team-digest` skill。"
+    },
+    {
+      "section": "四、依赖自检命令",
+      "text": "`/lead-mode` 报告当前依赖状态。\n\n| 报什么 | 内容 |\n|---|---|\n| Team 运行时 | 挂没挂；挂了报 `maxMembers` |\n| lead-mode 预设 | 注册没注册 |\n| 缺东西时 | 给带版本号的安装命令 |\n\n依赖齐全返回 success，缺东西返回 error。不会静默跳过。"
+    },
+    {
+      "section": "五、两层前置提醒",
+      "text": "**本会话没有 Team 工具时，提醒你去开官方 Agent Teams，而不是让模型硬干。**\n\n走两条路：\n\n| 通道 | 谁看得见 | 什么时候出现 |\n|---|---|---|\n| persona 第一段 | 模型 | 一切到 Lead 模式就在。system prompt 的第 0 段 |\n| 启动 warn 与 `/lead-mode` | 用户 | 检测到 Team 运行时缺失时 |\n\n两条讲同一件事：没有 `spawn_teammate` 这套工具就先停下来，告诉你装什么、怎么装。\n\n模型不会假装能派活，也不会拿 `subagent` 顶替 teammate。"
+    },
+    {
+      "section": "装之前先开 Team 运行时",
+      "text": "Lead 模式靠 `spawn_teammate`、`send_message`、`team_task_*` 这些工具派活。它们由 dsh 官方的 Team 运行时提供，本插件不带。\n\n```bash\ndsh plugin --profile <你的 profile 名> add @deepseek-ai/dsh-experimental-agent-team-profile@0.2.2-rc.1\n```\n\n**必须带版本号。** 不带会装到 `latest` 上的 0.1.5-alpha.2，那是给 0.1.x 宿主用的，在 0.2.2 宿主上挂不上。`next` 指向的 0.2.2-rc.1 才对。版本号还要等于你的宿主版本（`dsh --version`）：团队包把 `dsh-*` 的 peer 钉死到具体版本，老 rc 装到新宿主上，peer 对不上。装完重启 dsh。\n\n不确定装没装？进 dsh 敲 `/lead-mode`，它会报依赖状态。"
+    },
+    {
+      "section": "装本插件",
+      "text": "两条路，选一条。\n\n从 npm：\n\n```bash\ndsh plugin --profile <你的 profile 名> add dsh-lead-mode\n```\n\n从 GitHub：\n\n```bash\ndsh plugin --profile <你的 profile 名> add https://github.com/xiebaiyuan/dsh-lead-mode\n```\n\n装完重启 dsh。在预设列表里选「Lead 模式」。"
+    },
+    {
+      "section": "用法",
+      "text": "三步。\n\n**1. 切到 Lead 模式。** 新会话的预设列表里选「Lead 模式」。切过去之后，模型 system prompt 的第一段就换成 Lead 人设，开头那段提醒跟着进去。\n\n**2. 敲 `/lead-mode` 查依赖。** 这条命令不派活，只报状态。缺东西时它给出带版本号的安装命令。\n\n**3. 让模型干活。** 派活工具齐了，模型会自己拆活、派给 teammate、等齐再收尾。工具不齐，它第一句就是让你去开 Team 运行时。"
+    },
+    {
+      "section": "只用 skill，不换预设",
+      "text": "预设不动也能用。插件装好，预设保持 `standard` 或你自己的，任何会话敲 `/skill lead-mode` 就加载那套方法；模型判断任务需要时也会自己加载。\n\n少了一样东西：persona 里那段前置提醒只在 `lead-mode` 预设里，不切过去就看不到。所以第一次先敲 `/lead-mode` 看依赖，缺 Team 运行时会给出带版本号的安装命令。\n\n`team-digest` 同理。它不绑预设，任何会话可用，收尾时模型自己判断要不要写汇总。"
+    },
+    {
+      "section": "友链：dsh-context",
+      "text": "本插件只做 Lead 模式。团队状态与通信的可视化是 **dsh-context** 的活，那是另一个项目：\n\n| 项 | 值 |\n|---|---|\n| 仓库 | https://github.com/bowenliang123/dsh-context |\n| 作者 | bowenliang123 |\n| 许可 | Apache-2.0 |\n| 装法 | `dsh plugin --profile <你的 profile 名> add dsh-context` |\n\n它不随本插件安装，也不是本插件的依赖。本插件只在文档和 skill 里指个路。"
+    },
+    {
+      "section": "为什么指到这里",
+      "text": "工具调用只能一条条读。`list_agents` 给一行状态，`team_task_list` 给任务归属。要看整队谁在干什么、谁跟谁说了什么，得开一页。\n\ndsh-context 在每个会话里加一个 **编队 / Fleet** 标签页（在 **Context** 右边），右栏的 **Context** 面板里有同一张卡。\n\n| 区块 | 看什么 |\n|---|---|\n| 概要 | 成员状态、实时上下文、预估花费、任务进度 |\n| Agent Network | 当前 agent、它的父级、全部子代理，一人一张卡 |\n| Fleet Members | 每个成员的角色、模型、最新回复、运行时长、步数、在办任务数 |\n| Tasks | 团队任务与子代理派活放一起，按 owner 分组，带 blocked-by 链 |\n| Agent Comms | 谁跟谁说了什么。团队消息、邮箱投递、运行时的结算通知都在这里 |"
+    },
+    {
+      "section": "为什么指到这里",
+      "text": "点图上的成员或成员卡，Tasks 与 Agent Comms 会收窄到那一个人。Agent Comms 里点开一条能看到完整记录：来自哪个会话日志、第几号事件、是运行时写的结算通知还是子代理自己发的、完整收尾报告。\n\nLead 模式 skill 里也写了这个入口，所以派活时模型会直接让你去这儿看进度。"
+    },
+    {
+      "section": "依赖的官方 bundle 与版本",
+      "text": "| 包 | 版本要求 | 谁提供 | 缺了会怎样 |\n|---|---|---|---|\n| `@deepseek-ai/dsh-experimental-agent-team-profile` | `0.2.2-rc.1` | 用户显式安装 | 派不了活，`/lead-mode` 报 error，启动 warn |\n| `@deepseek-ai/dsh` | `>=0.2.2-rc.1` | 宿主 | 装不上 |\n| `@deepseek-ai/cordis` | `^4.0.5` | 宿主 | 装不上 |\n| `@deepseek-ai/schemastery` | `^3.18.5` | 宿主 | 装不上 |\n| `@deepseek-ai/dsh-agent-preset-registry` | `>=0.2.2-rc.1` | 宿主 | 预设行不生效，`/lead-mode` 报「查不到」 |\n| `@deepseek-ai/dsh-skill` | `>=0.2.2-rc.1` | 宿主 | skill 不注册，启动 warn |\n| `@deepseek-ai/dsh-commands` | `>=0.2.2-rc.1` | 宿主 | `/lead-mode` 不注册，启动 warn |"
+    },
+    {
+      "section": "依赖的官方 bundle 与版本",
+      "text": "目标宿主版本写在 `package.json` 的 `dshTarget` 字段：`0.2.2-rc.1`。"
+    },
+    {
+      "section": "为什么安装命令要带版本号",
+      "text": "`@deepseek-ai/dsh-experimental-agent-team-profile` 在 npm 上有三个 dist-tag：\n\n| dist-tag | 版本 | 配哪个宿主 |\n|---|---|---|\n| `latest` | 0.1.5-alpha.2 | 0.1.x |\n| `alpha` | 0.2.2-alpha.3 | 0.2.2 线早期预览 |\n| `next` | 0.2.2-rc.1 | 0.2.2 |\n\n裸写包名，npm 解析 `latest`，装到 0.1.5-alpha.2。这个版本是给 0.1.x 宿主用的，在 0.2.2 宿主上挂不上。装完 dsh 里看不到 Team 工具，`/lead-mode` 还是报「未挂载」。\n\n实测（2026-10-26，npm 11.20.0）：\n\n```\n$ npm view @deepseek-ai/dsh-experimental-agent-team-profile version\n0.1.5-alpha.2\n```"
+    },
+    {
+      "section": "为什么安装命令要带版本号",
+      "text": "所以本插件里所有出现安装命令的地方都带 `@0.2.2-rc.1`：persona prefix、`/lead-mode` 输出、启动 warn、SKILL.md。`test/preset.test.mjs` 与 `test/smoke.test.mjs` 都断言这个字符串在，防止以后被改回裸包名。\n\n`next` 现在指向 `0.2.2-rc.1`，就是本插件钉的版本；`alpha`（`0.2.2-alpha.3`）是同一条线的早期预览。"
+    },
+    {
+      "section": "与官方 standard 预设的差异",
+      "text": "只有 persona 一处。其余 21 行逐字段照抄 `standard`。\n\n| 项 | standard | lead-mode |\n|---|---|---|\n| persona prefix | `You are a coding agent powered by the {{model}} model.` | 中文 Lead 人设 + Agent Teams 前置检查 |\n| 其余 21 行 | — | 与 standard 逐字段相同 |\n\nclassic subagent 三行（`tool-subagent-control`、`tool-subagent`、`tool-subagent-fork`）保持启用，没有禁用。`list_agents` 现在由 `tool-subagent-control` 自己注册，不再单列一行。Team 工具由 host 决定，不由预设决定。"
+    },
+    {
+      "section": "为什么预设里不塞 Team 运行时",
+      "text": "`@deepseek-ai/dsh-experimental-tool-agent-team` 的 `apply()` 监听全局 `agent/created`，给每一个 agent 装 Team 工具。它是 host 平面的插件，放进预设会漏到所有会话。\n\n所以本插件的定位是：预设 + 两个 skill + 提醒。开不开 Team 运行时，用户用官方 profile 包决定。"
+    },
+    {
+      "section": "目录",
+      "text": "```\npackage.json          包元数据，dsh.bundle.patch 指向 cordis.patch.yml\ncordis.patch.yml      两行 insert：本插件 + lead-mode 预设\nlib/index.js          host 半边：扫 skills/ 逐个注册、注册命令、启动自检\nskills/lead-mode/     Lead 工作法正文"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\nnode --check lib/index.js\nnode --test test/*.test.mjs\nnode scripts/check-patch.mjs\n```\n\n测试零依赖，不用 `npm install`。`test/` 目录形式只在 Node 22+ 被接受，Node 20 会用 glob 展开。"
+    },
+    {
+      "section": "发新版本",
+      "text": "推 tag 触发 `.github/workflows/release.yml`，发布走 npm 的 Trusted Publishing（OIDC）。不存 token，也不弹 2FA。\n\n发之前先在 npmjs.com 配一次 Trusted Publisher：\n\n| 字段 | 填什么 |\n|---|---|\n| Organization or user | `xiebaiyuan` |\n| Repository | `dsh-lead-mode` |\n| Workflow filename | `release.yml` |\n| Allowed actions | 勾上 `npm publish` |\n\n`npm stage publish` 是默认就允许的，只勾它的话 CI 只能暂存，还得人工 approve 才上线。\n\n配好后："
+    },
+    {
+      "section": "发新版本",
+      "text": "```bash\nnpm version patch --no-git-tag-version\ngit commit -am \"chore: bump to 0.1.3\"\ngit tag v0.1.3\ngit push origin main --tags\n\ntag 的版本必须和 `package.json` 一致，否则 workflow 直接退出，不发。同一个版本发第二次会被 npm 拒掉，所以每次发都要先提版本号。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
