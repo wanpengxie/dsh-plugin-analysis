@@ -1,0 +1,298 @@
+{
+  "repo": "wwwwwwwwwwwwwwy/dsh-thinking-breaker",
+  "commit": "509520b82a0e45089bba7e3034fd2a5586dbb9be",
+  "extracted_at": "2026-11-09T08:50:12.484040+00:00",
+  "tree": {
+    "files": 23,
+    "bytes": 205285,
+    "lines_by_language": {
+      "JSON": 79,
+      "JavaScript": 3625,
+      "Markdown": 666,
+      "Other": 35,
+      "Shell": 5,
+      "YAML": 150
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "INSTALL.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "check.cmd",
+      "check.sh",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "lib/degeneracy.js",
+      "lib/detector.js",
+      "lib/index.js",
+      "lib/schema-fallback.js",
+      "package.json",
+      "test/degeneracy.test.mjs",
+      "test/detector.test.mjs",
+      "test/plugin.test.mjs",
+      "tools/calibrate.mjs",
+      "tools/check.mjs",
+      "tools/debug-cjk.mjs",
+      "tools/verify-cordis-contract.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-thinking-breaker",
+    "version": "1.2.0",
+    "description": "DSH host plugin: three circuit breakers — abort a runaway reasoning (thinking) loop, abort a reasoning stream that has degenerated into *** or emoji with no words left, and stop/steer repeated tool failures before they are re-run.",
+    "type": "module",
+    "main": "lib/index.js",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/wwwwwwwwwwwwwwy/dsh-thinking-breaker.git"
+    },
+    "homepage": "https://github.com/wwwwwwwwwwwwwwy/dsh-thinking-breaker#readme",
+    "bugs": {
+      "url": "https://github.com/wwwwwwwwwwwwwwy/dsh-thinking-breaker/issues"
+    },
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./detector": {
+        "default": "./lib/detector.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "test",
+      "tools",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "README.md",
+      "README.zh.md",
+      "INSTALL.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=22.19.0 || >=24.0.0"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.4"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node --test test/detector.test.mjs test/degeneracy.test.mjs test/plugin.test.mjs",
+      "calibrate": "node tools/calibrate.mjs",
+      "verify": "node tools/verify-cordis-contract.mjs",
+      "check": "node tools/check.mjs"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "circuit-breaker",
+      "reasoning-loop",
+      "thinking-loop",
+      "degenerate-output",
+      "emoji-flood",
+      "agent"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle layer: insert the thinking-breaker host plugin into the profile roster.\n#\n# The `config:` block below is the RECOMMENDED starting point. Every key is\n# optional — the plugin's own defaults are the same as the values shown here, so\n# uncommenting the block changes nothing except making the knobs visible.\n#\n# One host row, no client row: the plugin ships no UI of its own.\n- insert:\n    - id: dsh-thinking-breaker\n      name: dsh-thinking-breaker\n      config:\n        enabled: true\n\n        # ---- A. reasoning-loop breaker ----\n        # Hard ceiling on one response's reasoning characters (0 = no ceiling).\n        maxReasoningChars: 120000\n        # After a trip, retry the step once with thinking forced off.\n        retryWithoutThinking: true\n        # Loop aborts allowed to be retried per turn; 0 = let the turn stop.\n        maxLoopRetriesPerTurn: 1\n        # Tell the model on its next tool result not to resume the aborted line.\n        postTripHint: true\n        # Hard output ceiling applied while armed (0 = leave the value alone).\n        maxTokens: 0\n        # Skip auxiliary calls (title generation) — never loop-prone.\n        skipAuxCalls: true\n\n        # ---- B. repeated-tool-failure breaker ----\n        toolFailureGuard: true\n        # Inject change-approach guidance from this many failures in a turn.\n        toolFailureSteerAfter: 2\n        # Deny the identical call before dispatch from this many failures.\n        toolFailureDenyAfter: 3\n        # Failures remembered per turn.\n        toolFailureHistory: 64\n        # 'text' = tool + args + code + normalized error text; 'code' = code only.\n        toolFailureSignatures: text\n\n        # ---- A2. degenerate output (a wall of *** / emoji) ----\n        # Answers \"has this stopped meaning anything\", where the loop rule above\n        # answers \"has this been said before\". Either one aborts the request.\n        degeneracyGuard: true\n        # Also watch the ANSWER stream. Off by default: aborting a thought is\n        # cheap, aborting output the user is already reading is not.\n        degeneracyOnAnswer: false\n        # Secondary evidence flags required, on top of the `meaningless` gate.\n        # 2 is measured: 1 trips on legitimate markdown, 3 misses two real floods.\n        degEvidenceMin: 2\n        # Consecutive degenerate blocks before aborting (2 blocks = 256 code units).\n        degStreak: 2\n        # GATE: letters + digits / non-space at or below this = \"no words left\".\n        # This is what makes markdown tables, code, base64 and numeric tables\n        # structurally safe: they all contain words, so they can never be flagged.\n        degMeaningRatioMax: 0.08\n        # SIGNAL: punctuation + emoji / non-space at or above this.\n        degNoiseRatioMin: 0.65\n        # SIGNAL: distinct glyphs / first 48 non-space at or below this.\n        degVarietyRatioMax: 0.3\n        # SIGNAL: one symbol run at least this long (a `====` rule is ONE run).\n        degRunLenMin: 24\n        # SIGNAL: this many symbol runs of >= 3 code points (a `***` flood is many).\n        degRunCountMin: 3\n        # SIGNAL: at least this many emoji in one block, and at least this dense.\n        degEmojiMin: 8\n        degEmojiRatioMin: 0.4\n\n        # ---- detector (defaults are measured; see tools/calibrate.mjs) ----\n        blockChars: 128\n        historyBlocks: 32\n        minRepeatGap: 3\n        noveltyOverlap: 0.7\n        # 10 consecutive repeated blocks = 1280 code units before aborting.\n        noveltyStreak: 10\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/detector.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/wwwwwwwwwwwwwwy/dsh-thinking-breaker.git",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wwwwwwwwwwwwwwy/dsh-thinking-breaker#readme",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wwwwwwwwwwwwwwy/dsh-thinking-breaker/issues",
+      "where": "package.json:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.4"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 30,
+    "pushed_at": "2026-10-08T09:04:45Z",
+    "created_at": "2026-10-05T13:49:19Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/degeneracy.js",
+    "lib/detector.js",
+    "lib/index.js",
+    "lib/schema-fallback.js",
+    "package.json",
+    "test/degeneracy.test.mjs",
+    "test/detector.test.mjs",
+    "test/plugin.test.mjs",
+    "tools/calibrate.mjs",
+    "tools/check.mjs",
+    "tools/verify-cordis-contract.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-thinking-breaker",
+      "text": "**Three circuit breakers for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) agent sessions — in one host plugin.**"
+    },
+    {
+      "section": "dsh-thinking-breaker",
+      "text": "- **A. Reasoning-loop breaker** — when the model repeats itself ≥10 consecutive times while thinking, the request is aborted immediately and the step is retried once with thinking forced **off**, so it answers instead of re-reasoning.\n- **A2. Degeneracy breaker** — when the thinking stream stops carrying meaning altogether — literal asterisks (`***`, `*****`), a rotating emoji flood, punctuation soup — the request is aborted on the same terms, **after two blocks (256 code units)** instead of waiting for a repeat to be confirmed.\n- **B. Tool-failure breaker** — when the same tool call keeps failing in one turn, the model is first told to change approach, and after the threshold the identical call is **denied before dispatch**."
+    },
+    {
+      "section": "dsh-thinking-breaker",
+      "text": "English | [简体中文](./README.zh.md)"
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile desktop add github:wwwwwwwwwwwwwwy/dsh-thinking-breaker\n```\n\nThen **restart the host** — ESM caches are per-process. Full instructions, including the `link:` caveat and rollback, are in [INSTALL.md](./INSTALL.md).\n\n---"
+    },
+    {
+      "section": "Why a plugin and not just a prompt",
+      "text": "A skill or prompt is a document the model has to choose to read. A model already stuck in a loop will not read it, and nothing can interrupt it mid-thought from the prompt layer. Interruption has to happen in the host — which is what this plugin does."
+    },
+    {
+      "section": "Why a plugin and not just a prompt",
+      "text": "It is also worth stating what dsh has **natively**: nothing for this. `maxTokens` only caps a whole response (it cannot see that the model is going in circles), `reasoningEffort` only picks a level, and `streamIdleTimeoutMs` only fires when **no** token arrives — a loop keeps emitting, so it never fires. There is **no thinking-token budget** (`reasoningTokens` is a reporting field, not a budget) and **no `maxSteps`/`maxTurns`** anywhere in the harness."
+    },
+    {
+      "section": "Hooks",
+      "text": "| Hook | Role |\n|---|---|\n| `llm/stream` (prepend) | Feeds `reasoning-delta` chunks to **two** pure detectors — repetition and degeneracy — and `text-delta` to a third when `degeneracyOnAnswer` is on. On a trip: drain the rest silently, emit a terminal `finish` chunk (`kind: 'aborted'`). |\n| `agent/request-error` (prepend) | Recovers **only this plugin's own** aborts, within a per-turn budget, by returning `{ kind: 'retry' }`. Everything else delegates to `next()`. |\n| `agent/request` (prepend) | Stamps the session's turn; forces `reasoningEffort: 'off'` on the recovered attempt. |\n| `tools/post-execute` + `tools/pre-execute` (prepend) | Post-trip guidance; then tool-failure steering, then pre-dispatch denial. |"
+    },
+    {
+      "section": "Three design constraints that are not preferences",
+      "text": "1. **A `llm/stream` listener must not throw, and the stream must not end without a terminal chunk.** `dsh-llm` registers its own prepend validator that fails the call with `LLM stream ended without a terminal finish chunk`; and a throwing listener is a middleware/consumer failure, documented to *\"remain thrown and close the turn directly\"* — so it **never reaches `agent/request-error`** and the recovery logic could not take over. Hence: lawful abort first, explicit recovery second."
+    },
+    {
+      "section": "Three design constraints that are not preferences",
+      "text": "2. **The terminal reason is `aborted`, not `error`.** The retryable code set is `EMPTY_RESPONSE | RATE_LIMIT | SERVER | TIMEOUT | TRANSPORT`; **`ABORTED` is not in it**. So the default handling is terminal (safe), and the retry is something this plugin opts into explicitly — once per turn, then it falls back to terminal."
+    },
+    {
+      "section": "Three design constraints that are not preferences",
+      "text": "3. **The pre-dispatch gate can only key on tool + normalised arguments.** At pre-dispatch time there is no result, so a signature that folded in error text could never match what `post-execute` recorded. Steering uses tool + args + code + normalised error text; the gate uses tool + args only. Digits and hex collapse during normalisation, so a retry that only changes a line number still counts as the same call — while a structurally different approach gets a fresh signature and passes."
+    },
+    {
+      "section": "Detection algorithm — lens A: repetition",
+      "text": "See the header comment in [`lib/detector.js`](./lib/detector.js). The stream is cut into **disjoint blocks** (`blockChars`, default 128 UTF-16 code units); each block yields\n\n- a **128-bit whole-block fingerprint** (four independent FNV-1a seeds) → `exact-repeat`;\n- a set of **4-code-point shingles**, compared by Jaccard overlap against recent blocks → `low-novelty` after `noveltyStreak` consecutive blocks."
+    },
+    {
+      "section": "Why not a sliding window",
+      "text": "The first implementation compared overlapping sliding windows. It is **measurably broken**: with window `W` and stride `S`, two windows `S` apart already share `W−S` characters *by position*, so the overlap score has a structural floor. Measured on a real case (a 35-code-unit Chinese paragraph, `W=256`, `S=64`) the loop scored **0.67** — inside the clean-text band, so **no threshold separated them**. Disjoint blocks share nothing by position, so all overlap is genuine repetition."
+    },
+    {
+      "section": "Thresholds are measured, not guessed",
+      "text": "[`tools/calibrate.mjs`](./tools/calibrate.mjs) sweeps the signal over 6 loop shapes × 3 clean corpora. `blockChars` was swept over 96/128/192/256 — **only 128** lets every loop shape clear the threshold with a long run while all clean corpora score zero.\n\nAt `noveltyStreak: 10`, `noveltyOverlap: 0.7`:"
+    },
+    {
+      "section": "Thresholds are measured, not guessed",
+      "text": "| Corpus | Result |\n|---|---|\n| Verbatim / near-verbatim / ping-pong loops, English and Chinese | trip at block **12–18** |\n| Clean: unique prose, varied English reasoning, varied Chinese reasoning | **no trip** |\n\nMeasured cost before the abort fires: **533** code units for a tight short loop, 1 681 ping-pong / CJK paragraph, 1 927 English paragraph, 2 952 near-verbatim, 6 027 CJK paragraph with a counter. Longer repeated units need longer confirmation windows."
+    },
+    {
+      "section": "Detection algorithm — lens B: degeneracy",
+      "text": "See the header comment in [`lib/degeneracy.js`](./lib/degeneracy.js). Lens A asks *has this been said before*; lens B asks *does this still say anything*. It measures **what a block is made of** rather than comparing it to anything.\n\nEach block yields up to five evidence flags, and the decision is\n\n```\ndegenerate(block)  =  meaningless  AND  at least degEvidenceMin others\n```"
+    },
+    {
+      "section": "Detection algorithm — lens B: degeneracy",
+      "text": "| Flag | Reads | Fires when |\n|---|---|---|\n| `meaningless` | letters + digits over non-space | **gate**: no lexical content left |\n| `noisy` | punctuation + emoji over non-space | the block is mostly symbols |\n| `low-variety` | distinct code points over the first 48 | a handful of glyphs reused |\n| `run-heavy` | longest / count of symbol runs (≥ 3) | one absurd run, or many runs |\n| `emoji-flood` | emoji count and density | emoji are the block's substance |"
+    },
+    {
+      "section": "Detection algorithm — lens B: degeneracy",
+      "text": "The trip is then named after the most specific evidence: `symbol-flood`, `emoji-flood`, or `degenerate-output`."
+    },
+    {
+      "section": "Why the gate, and why several signals",
+      "text": "`meaningless` is a **hard gate**, not a vote, and that buys a property instead of a tuned threshold:\n\n> **A block carrying real lexical content can never be degenerate.**"
+    },
+    {
+      "section": "Why the gate, and why several signals",
+      "text": "Every false-positive risk — markdown tables, dense code, base64 blobs, numeric tables, arrow chains, JSON, `====` rules surrounded by prose, emoji used as annotation — contains words, so all of them are excluded by construction. This is measured, not asserted: `tools/calibrate.mjs` reports that **removing the gate makes three clean corpora trip**, and it is the gate that stops them."
+    },
+    {
+      "section": "Why the gate, and why several signals",
+      "text": "The remaining flags then vote among themselves, so the rule stays multi-signal rather than a single test. An OR would fire on ordinary markdown, and \"do not disturb normal thinking\" is a hard requirement here, not a preference.\n\n`run-heavy` is what separates a `***` flood from a `====` rule: a separator is **one** run, the flood is **many**. Both are covered (`degRunCountMin`, `degRunLenMin`) and neither is sufficient alone."
+    },
+    {
+      "section": "Thresholds are measured, not guessed",
+      "text": "`tools/calibrate.mjs` sweeps 11 degenerate corpora against 11 clean ones and reports `cleanTrips / degenerateMisses` for each `evidenceMin × streak` pair:\n\n| `evidenceMin` | streak 1 | streak 2 | streak 3 | streak 4 |\n|---|---|---|---|---|\n| 1 | **1 / 0** | 0 / 0 | 0 / 0 | 0 / 2 |\n| 2 | **1 / 0** | **0 / 0** ← shipped | 0 / 0 | 0 / 2 |\n| 3 | 1 / 2 | 0 / 2 | 0 / 2 | 0 / 4 |\n| 4 | 0 / 10 | 0 / 10 | 0 / 10 | 0 / 10 |"
+    },
+    {
+      "section": "Thresholds are measured, not guessed",
+      "text": "The shipped `2 / 2` is the largest setting that misses nothing and the smallest that trips on nothing. `evidenceMin: 1` trips on legitimate markdown; `3` already misses two real floods.\n\nMeasured per-block figures for the shapes that matter (default thresholds, `blockChars: 128`):"
+    },
+    {
+      "section": "Thresholds are measured, not guessed",
+      "text": "| Corpus | meaning | noise | variety | runs | verdict |\n|---|---|---|---|---|---|\n| `*** ` flood | 0.000 | 1.00 | 0.04 | 32 | trip at block **1** |\n| one 600-char `*` run | 0.000 | 1.00 | 0.02 | 1 | trip at block **1** |\n| rotating emoji flood | 0.000 | 1.00 | 0.06 | 0 | trip at block **1** |\n| 200 distinct emoji, no repeat | 0.000 | 1.00 | 1.33 | 0 | trip at block **1** |\n| CJK punctuation soup | 0.000 | 1.00 | 0.13 | 0 | trip at block **1** |\n| varied English reasoning | 0.972 | 0.03 | 0.60 | 0 | no trip |\n| markdown table | 0.333 | 0.67 | 0.25 | 9 | no trip (gate shut) |\n| code block | 0.719 | 0.28 | 0.54 | 0 | no trip |\n| 200-char `====` rule in prose | 0.047 | 0.95 | 0.19 | 1 | no trip (streak never reaches 2) |\n| ASCII box with labels | 0.108 | 0.89 | 0.23 | 4 | no trip (gate shut) |\n| emoji as annotation | 0.752 | 0.25 | 0.63 | 0 | no trip |"
+    },
+    {
+      "section": "Why this is not redundant with lens A",
+      "text": "The 200-distinct-emoji corpus above is the case that justifies the second lens. It is cycled with a stride co-prime to the block size, so no two blocks are byte-identical and the 4-gram shingle sets never line up (measured overlap ≈ 0.28, against a `noveltyOverlap` of 0.70). **Lens A is blind to it by construction**; lens B catches it in two blocks. Both directions are pinned by tests — including the converse, that a repetitive flood is normally caught by lens A first."
+    },
+    {
+      "section": "Why this is not redundant with lens A",
+      "text": "The two lenses are also complementary in the other direction: degenerate-but-wordy shapes (`* 检查 * 检查 * 检查`, `好的好的好的`) carry lexical content and are out of scope here — they are exactly what lens A's repetition rules catch."
+    },
+    {
+      "section": "Configuration",
+      "text": "The full recommended block lives in [`cordis.patch.yml`](./cordis.patch.yml). Every key is optional; the plugin's defaults equal the values shown there."
+    },
+    {
+      "section": "Known limits (stated plainly)",
+      "text": "- **Context is never rewound.** This is the fundamental limit: the looped reasoning is already committed to the transcript and no hook removes it (assembly re-reads the log, and rewriting history would break the provider prompt cache). \"Re-think\" means *the same step, done cleanly once* — not a cleared history. The post-trip hint is the available counter-measure.\n- **No round budget.** Cross-step loops (failing differently every time) are out of scope; the harness has no `maxSteps`/`maxTurns`.\n- **A loop unit shorter than one block, dragged along by varying content, is missed** (measured overlap 0.22 for a 6-character phrase followed by a ticking counter).\n- **Semantic circling is missed** — detection is character-repetition based.\n- **A tool that reports failure as success is not caught** (by design: that is the tool's semantics).\n- **Each trip costs something**: a few hundred to a few thousand tokens."
+    },
+    {
+      "section": "Known limits (stated plainly)",
+      "text": "- **A block with any real lexical content is invisible to it, by design.** That is the guarantee, and it is also the blind spot: `* 检查 * 检查 * 检查` and `好的好的好的` are wordy, so they are out of scope. Lens A catches those.\n- **Pure-symbol ASCII art can trip.** A block that is entirely `+`/`-`/`|` with no labels in it raises the gate plus three signals. Requiring `degStreak: 3` is the first thing to try if a workload draws a lot of it. A box with words in it (measured above) is safe.\n- **The gate is a ratio, not a word count.** A block that is 95 % symbols and 5 % words passes the gate (meaning ratio 0.05 ≤ 0.08) and can trip. This is deliberate — a `***` wall with a stray word in it is still a wall — but it is the boundary to know about.\n- **Emoji classification is heuristic.** `\\p{Extended_Pictographic}` minus a deny-list for pictographs that technical prose uses as text (arrows, `©`, `®`, `™`). A misclassified glyph only moves it between the `emoji-flood` and `noisy` signals, both of which are secondary, so detection power is unaffected — but the rule *name* in the log can be off for exotic symbols.\n- **The answer stream is not watched by default.** Aborting output the user is already"
+    },
+    {
+      "section": "Verify",
+      "text": "```bash\nnpm run check     # everything below in one shot: no network, no install\nnpm test          # 132 tests\nnpm run calibrate # re-measure both threshold tables\nnpm run verify    # cordis contract regression\n\nOn Windows use `check.cmd`; on Linux/macOS use `./check.sh`."
+    },
+    {
+      "section": "CI status",
+      "text": "The workflow lives at [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) and runs on\nevery push and pull request: the full test suite, the host-contract regression, the\ncalibration sweep, a syntax pass over every module, and an `npm pack --dry-run` check that\nthe runtime files are actually inside the published package.\n\n`npm run check` runs the same checks locally, with no network and no install."
+    },
+    {
+      "section": "Install",
+      "text": "See [INSTALL.md](./INSTALL.md)."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
