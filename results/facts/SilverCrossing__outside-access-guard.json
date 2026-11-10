@@ -1,0 +1,211 @@
+{
+  "repo": "SilverCrossing/outside-access-guard",
+  "commit": "6d720b046aa7d7fa417afcd28f086e67908ae0ff",
+  "extracted_at": "2026-11-10T12:31:13.146595+00:00",
+  "tree": {
+    "files": 21,
+    "bytes": 93243,
+    "lines_by_language": {
+      "JSON": 50,
+      "JavaScript": 1979,
+      "Markdown": 387,
+      "Other": 39,
+      "YAML": 8
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README_EN.md",
+      "classify.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "log.js",
+      "package.json",
+      "scope.js",
+      "test/apply.test.mjs",
+      "test/approval-log.test.mjs",
+      "test/classify.test.mjs",
+      "test/log.test.mjs",
+      "test/reason.test.mjs",
+      "test/scope-wiring.test.mjs",
+      "test/scope.test.mjs",
+      "test/subagent-mode.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "outside-access-guard",
+    "version": "0.3.0",
+    "private": true,
+    "license": "MIT",
+    "author": "SilverCrossing",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/SilverCrossing/outside-access-guard.git"
+    },
+    "type": "module",
+    "description": "Three-mode gate for tool access outside the session workspace: deny, per-call approval with high-risk double confirmation, or allow; every decision is logged per day.",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "classify.js",
+      "log.js",
+      "scope.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "README_EN.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "dsh": ">=0.2.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle layer: installed rows are inserted into the active profile.\n# The plugin id is stable so a user patch can later override `config`.\n- insert:\n    - id: outside-access-guard\n      name: outside-access-guard\n      config:\n        mode: ask\n        gateShell: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "log.js:20"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/SilverCrossing/outside-access-guard.git",
+      "where": "package.json:9"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 8,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 14,
+    "pushed_at": "2026-10-30T13:26:13Z",
+    "created_at": "2026-10-23T11:34:25Z"
+  },
+  "runtime_files": [
+    "classify.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "log.js",
+    "scope.js"
+  ],
+  "readme": [
+    {
+      "section": "工作区外访问守卫（outside-access-guard）",
+      "text": "[English](README_EN.md) | 中文\n\n给 DeepSeek Harness 补上「读取工作区之外要经过我」这一层，并把\n[dsh-outsideread-switch](https://www.npmjs.com/package/dsh-outsideread-switch)\n式的二值开关扩成三档模式。"
+    },
+    {
+      "section": "背景",
+      "text": "DSH 的文件沙箱在 `workspace-write` 模式下**只限制写入，不限制读取**：\n\n- 读 `C:\\Windows\\win.ini`、列 `C:\\`、读任意盘符文件，全部直接放行；\n- 写工作区之外会被沙箱拒绝；`read-only` 模式同样允许读。\n\n所以「模型能悄悄读走整台机器的文件」是默认行为。本插件挂在工具执行前的\n`tools/pre-execute` 瀑布上，按模式决定放行、审批或拒绝。"
+    },
+    {
+      "section": "设计权衡：子代理没有审批通道",
+      "text": "> 这不是 bug，是设计上的取舍。\n\n子代理（`subagent`、`workflow` 里的 `agent()`）是独立会话，没有绑定审批答复者，所以它发起的工作区外访问一律 **fail closed**：不弹窗、不挂起，立即被拒绝。\n\n模型收到的文案是 `the user rejected tool \"…\"`，看起来像人拒绝，实际是“没有可用的审批通道”；这类调用在日志里只有 `ask`、没有 `approval` 结果行。\n\n为什么这么设计：审批的前提是“有人看见”。自动拒绝的子代理至少不会在你无感知的情况下读取工作区外的内容；如果给它一条无确认的放行通道，护栏就形同虚设。\n\n**影响**：子代理只能在工作区内活动；需要越界的操作请让父会话执行。"
+    },
+    {
+      "section": "三种模式",
+      "text": "| `mode` | 工作区内 | 工作区外 | 说明 |\n| --- | --- | --- | --- |\n| `deny` | 放行 | **直接拒绝** | 对应总开关\"全禁止\" |\n| `ask`（默认） | 放行 | **每次审批** | 敏感路径需要**两次确认** |\n| `allow` | 放行 | 放行 | 对应总开关\"完全允许\" |\n\n模式有三个入口：\n\n1. **持久默认值**：profile patch 里的 `mode`，重启后生效；\n2. **工作区绑定**：`workspaces: [{ root, mode }]`，按会话目录命中最长前缀，跨会话、重启后仍有效；\n3. **会话覆盖**：人类命令 `/outside-access deny|ask|allow|reset`，只改当前会话。\n   斜杠命令只能由人发出，模型无法调用，因此不能用它给自己扩权。\n   覆盖**只存在于内存中**，重启回到工作区绑定或配置默认值。\n\n优先级：会话覆盖 → 工作区绑定 → 配置默认。`root` 必须是绝对路径，相对值会被拒绝并告警。"
+    },
+    {
+      "section": "三种模式",
+      "text": "```yaml\n- id: outside-access-guard\n  config:\n    mode: ask\n```"
+    },
+    {
+      "section": "子代理的独立模式：`subagentMode`",
+      "text": "子代理（`subagent`、`workflow` 里的 `agent()`）没有审批通道，主模式的 `ask` 对它们只会 fail-closed。可以给它们单独一档：\n\n| `subagentMode` | 行为 |\n| --- | --- |\n| 留空（默认） | 继承主模式；`/outside-access` 切换时两边一起变 |\n| `deny` | 子代理一律不许越界，意图最明确 |\n| `ask` | 与主模式相同（实际仍会 fail-closed） |\n| `allow` | 子代理可自由访问工作区外（不推荐） |\n\n判定用 `agents.roots()`（顶层 agent 列表）：不在列表里的视为子代理。服务不可用时按主会话处理。日志里的 `mode` 字段记录的是**实际生效**的模式，并附带 `scope`。"
+    },
+    {
+      "section": "敏感路径：更高一级的报警 + 二次确认",
+      "text": "普通工作区外访问只弹一次审批（第 1/1 次）。命中敏感规则的路径会升级：\n\n1. **第 1/2 次确认**：只负责\"开启最终确认\"，本身不执行任何操作；\n2. **停顿**：两次之间强制等待 `confirmGapMs`（默认 2000 毫秒）；\n3. **第 2/2 次确认**：这次调用的常规审批——**高危警告文案在这一层**；\n4. 两次都批准才执行；任一步拒绝或取消都不会执行。\n\n默认敏感规则（可用 `sensitivePaths` 覆盖，传空数组即关闭）："
+    },
+    {
+      "section": "敏感路径：更高一级的报警 + 二次确认",
+      "text": "```\n**/.ssh/**            **/.aws/**            **/.gnupg/**          **/.kube/**\n**/.config/gcloud/**  **/.docker/config.json\n**/.netrc             **/.git-credentials   **/.npmrc             **/.pypirc\n**/.dsh/.credentials.yaml   **/.dsh/sessions/**   **/.dsh/storages/**\n\n匹配同时使用**词法路径和真实路径**（符号链接解析后），Windows 下不区分大小写。\n如果不想每次点两下，可设 `sensitiveConfirmations: single`，退回\"单次但文案加重\"。"
+    },
+    {
+      "section": "覆盖范围",
+      "text": "按路径参数判定：\n\n| 工具 | 判定字段 |\n| --- | --- |\n| `read` / `read_image` | `file_path` |\n| `grep` / `glob` | `path`（缺省时以工作区为根，放行） |\n| `working_directory` | `cd`（防止先 `cd` 到外面再相对读取） |\n| `pwsh` / `bash` / `shell` | `workdir`，命令文本里的绝对路径、`..`、`~`、`$env:`、`$HOME`、`%VAR%` |\n\n判定细节："
+    },
+    {
+      "section": "覆盖范围",
+      "text": "- 边界取**该 agent 第一次调用时的会话目录**（在派发前固定），之后 `cd` 到外面也不会把围栏带走；\n- 不使用 `sandboxPolicy.workspaceRoot`：桌面 profile 里它可能是 host 进程目录（profile 目录），会把 profile 误当成工作区；\n- 相对路径按会话当前目录解析，绝对路径直接判定；\n- 词法路径 + `realpath` 同时比较，工作区内指向外面的符号链接/junction 也会拦截；\n- 不存在的路径会解析最深的已存在祖先；\n- 盘符相对路径（`C:foo`）无法安全判定，按越界处理；\n- `extraAllowedRoots` 可以显式放行额外根目录（绝对路径或相对工作区）。"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml\n- id: outside-access-guard\n  config:\n    mode: ask                 # deny | ask | allow，默认 ask\n    subagentMode: ''          # deny | ask | allow；留空 = 继承解析结果（工作区绑定 → 配置默认）"
+    },
+    {
+      "section": "日志",
+      "text": "每次判定写一行 JSONL 到 `$DSH_HOME/logs/outside-access-guard/YYYY-MM-DD.log`，按本地日期分文件，默认保留 7 天（进程启动时清理一次，之后每 6 小时一次）：\n\n```json\n{\"ts\":\"2026-10-24T20:38:35.123+08:00\",\"event\":\"ask\",\"mode\":\"ask\",\"tool\":\"read\",\"risk\":\"normal\",\"agent\":\"...\",\"callId\":\"...\",\"reason\":\"...\"}\n```"
+    },
+    {
+      "section": "日志",
+      "text": "- `event`：`ask` / `deny` / `cancel` / `mode` / `approval`（审批结果）；\n- 只记录**被判定过**的调用（工作区内的读取不会产生日志）；\n- 每条判定都带 `modeSource`（`config` / `workspace` / `session`）和 `session`，事后能分清“是配置、工作区绑定还是会话覆盖给的”；\n- 写日志失败只告警，不影响拦截；\n- `log: false` 关闭，`logDir` 换目录，`logRetentionDays` 改保留天数。"
+    },
+    {
+      "section": "已知限制",
+      "text": "1. **shell 是启发式检查，不是系统级隔离。** 绝对路径、`..`、常见环境变量能识别；\n   字符串拼接、二次展开、编码、子进程脚本仍可绕过。真正可靠需要沙箱本身支持\"读也受限\"。\n2. **只覆盖工具层。** 附件、技能加载、会话日志、web 抓取等 Host 内部服务不经过\n   `tools/pre-execute`。\n3. **审批策略为 `never` 或没有应答者时**，`ask` 失败关闭（拒绝），不会放行。\n4. **不改变写入策略**：写工作区外仍由沙箱拒绝；`allow` 只影响本插件，不会放宽内核沙箱。\n5. **会话覆盖不跨会话**：`/outside-access` 只改当前会话，重启失效；需要跨会话固定请用 `workspaces`。子代理也不会继承会话覆盖，它按 `subagentMode` → 工作区绑定 → 配置默认解析。\n6. **开发阶段的已知缺口**：插件源码位于工作区，模型可通过 `write`/`edit` 改写它\n   （重启或热重载后生效）。正式发布前应把安装副本移出工作区，并加自我修改防护。\n7. 敏感规则是\"提醒\"而不是\"保证\"：用户仍可能在两次确认里手滑放行；\n   对真正不可读的路径，请用 `deny` 模式或沙箱策略。"
+    },
+    {
+      "section": "验证",
+      "text": "```powershell"
+    },
+    {
+      "section": "直接执行，不要用 node --test（沙箱内 spawn EPERM）",
+      "text": "node test/classify.test.mjs\nnode test/apply.test.mjs\n```\n\n安装后：\n\n- `/outside-access status` → 显示当前模式；命令由 Host 在启动时注册，改完插件需要重启 DSH；\n- 读工作区外普通文件 → 弹出一次审批；\n- 读 `~/.ssh/id_rsa`、浏览器 `Login Data`、`.dsh/.credentials.yaml` → 弹出两次；\n- `/outside-access deny` 后读任何工作区外文件 → 直接拒绝，不弹窗；\n- `/outside-access allow` 后不再拦截。\n\n> `/outside-access` 是 Host 斜杠命令，只在插件启动时注册；运行时开关只存在于内存，\n> 重启后回到配置里的 `mode`。"
+    },
+    {
+      "section": "安装 / 卸载",
+      "text": "```powershell"
+    },
+    {
+      "section": "安装（本地目录，或 GitHub / npm 的包）",
+      "text": "dsh plugin --profile desktop add /absolute/path/to/outside-access-guard"
+    },
+    {
+      "section": "卸载",
+      "text": "dsh plugin --profile desktop remove outside-access-guard\n```\n\n插件纯 Host、零依赖、无网络请求、无 install 脚本。"
+    },
+    {
+      "section": "与二值开关的区别",
+      "text": "`dsh-outsideread-switch` 只有\"禁止/允许\"两档，且状态由人通过 UI 开关维护；\n本插件在中间加了\"逐次审批\"，并把敏感路径升级为两次确认。两者都是工具层围栏，\nshell 限制也同样是启发式的；`dsh-outsideread-switch` 对自身状态文件有自我提权防护，\n本插件目前没有对应实现（见\"已知限制\"第 6 条）。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT，见 [LICENSE](LICENSE)。"
+    }
+  ],
+  "skipped": []
+}

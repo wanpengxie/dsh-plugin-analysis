@@ -1,0 +1,152 @@
+{
+  "repo": "King20260919/dsh-open-folder-visible",
+  "commit": "00def00620d630f65979305ff045949a5bd1cdfd",
+  "extracted_at": "2026-11-10T11:10:04.240654+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 22176,
+    "lines_by_language": {
+      "JSON": 36,
+      "JavaScript": 338,
+      "Markdown": 178,
+      "Other": 21,
+      "YAML": 23
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-open-folder-visible",
+    "version": "1.0.0",
+    "description": "Windows fix for DSH: the Session-header \"open workspace in File Explorer\" action creates its Explorer window hidden (upstream spawns explorer.exe with windowsHide:true), so the click reports success and nothing appears.",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "windows",
+      "explorer"
+    ],
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Windows workspace-open fix.\n#\n# The shipped `explorer` catalog entry launches through `shell-open`, which on\n# Windows ends at `@deepseek-ai/dsh-native-command`'s `runNativeCommand`:\n#\n#   execFile('explorer.exe', ['<file:// URI>'], { encoding: 'utf8', signal, windowsHide: true })\n#\n# `windowsHide: true` exists to suppress the transient console window a CLI child\n# would flash. Applied to Explorer it means the window is created and left\n# invisible: measured on Windows 10/11 with the shipped call shape, Explorer\n# starts, the correct directory window exists, and `IsWindowVisible()` is false\n# (6/6, still false 9 seconds later). Upstream reads only the exit code, and\n# Explorer's exit 1 counts as a delegated handoff, so the shipped route answers\n# `{ok: true}` whether or not anything became visible.\n#\n# This bundle adds one Host route that spawns the same `explorer.exe` WITHOUT\n# `windowsHide`, plus a browser half that reroutes only the file-manager launch\n# to it. The shipped split button, its application menu, its icons, its feedback\n# and the Ctrl+Alt+O shortcut (`workspace.openLocal`) are all left in place.\n\n- insert:\n    - id: open-folder-visible\n      name: dsh-open-folder-visible\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "client.js:28"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-26T18:07:18Z",
+    "created_at": "2026-09-26T18:05:43Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-open-folder-visible",
+      "text": "Windows fix for DSH: makes the Session-header **\"open workspace in File Explorer\"**\naction raise a **visible** window."
+    },
+    {
+      "section": "The problem",
+      "text": "The Session header has an \"Open In…\" split button whose default action opens the\nsession's workspace directory in File Explorer (also bound to `Ctrl+Alt+O`).\n\nOn Windows, clicking it starts Explorer, creates the correct directory window —\nand that window is **invisible**. The button settles back to idle and reports\nnothing, so the click looks like it did nothing at all."
+    },
+    {
+      "section": "Why",
+      "text": "The shipped `explorer` catalog entry in `@deepseek-ai/dsh-host-open-in-app` is\n`kind: 'shell-open'`, which on Windows ends at `@deepseek-ai/dsh-native-command`:\n\n```js\nexecFile('explorer.exe', ['<file:// URI>'], { encoding: 'utf8', signal, windowsHide: true })\n```\n\n`windowsHide: true` exists to suppress the transient console window a CLI child\nwould flash. Applied to Explorer it means the window is created with\n`IsWindowVisible()` false."
+    },
+    {
+      "section": "Why",
+      "text": "Upstream judges the launch by exit code alone, and Explorer's exit 1 counts as a\ndelegated handoff (`runExplorer`), so the route answers `{ ok: true }` whether or\nnot a window ever became visible."
+    },
+    {
+      "section": "Measured",
+      "text": "Same host, same call shape, only the flag differs:\n\n| Call | New window | `IsWindowVisible()` |\n|---|---|---|\n| `windowsHide: true` (shipped) | 1 | **false** (6/6, still false 9 s later) |\n| `windowsHide: false` | 1 | **true** (6/6) |"
+    },
+    {
+      "section": "The fix",
+      "text": "The Host half adds one route, `POST /open-folder-visible/open`, that spawns the\nsame `explorer.exe` with `windowsHide: false`. Everything else mirrors the\nshipped opener: an argv array (never a shell string), Explorer's exit 1 accepted\nas a delegated handoff, and a watch window so a launcher still running is counted\nas launched rather than killed."
+    },
+    {
+      "section": "The fix",
+      "text": "The browser half wraps `globalThis.fetch` and reroutes **only** the file-manager\nlaunch to that route. Everything else — every other application, every other\nrequest on the page — is passed through untouched."
+    },
+    {
+      "section": "What this deliberately does not do",
+      "text": "It does **not** replace the split button. The shipped button, its application\nmenu, its icons, its per-gesture feedback and the `Ctrl+Alt+O` shortcut\n(`workspace.openLocal`) all stay exactly as they are. Replacing the component\nwould mean re-registering that shortcut, and forgetting to is how a \"fix\" ends up\nremoving the hotkey."
+    },
+    {
+      "section": "Install",
+      "text": "```\ndsh plugin --profile web add github:King20260919/dsh-open-folder-visible\n```\n\nInstalling any plugin runs third-party code with your own permissions. Pin a\ncommit if you want a fixed revision:\n`github:King20260919/dsh-open-folder-visible#<sha>`.\n\nRestart DSH after installing: the Host half registers a route at load time."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Meaning |\n|---|---:|---|\n| `launchWatchMs` | `1500` | Early-failure watch window for the `explorer.exe` handoff. Launch success is decoupled from process exit, because Explorer exits as soon as it has asked the running shell to raise the window. |"
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **Windows only.** On other platforms the route answers `501`; nothing else\n  changes.\n- **This fixes the workspace-open action only.** The file-location action\n  (\"reveal in File Explorer\", `explorer.exe /select,<file>`, used by the\n  delivered-file cards and the changed-files review) is affected by the same\n  `windowsHide` flag through a different code path\n  (`@deepseek-ai/dsh-api-session-controller` → `revealNativePath`), and is **not**\n  covered here.\n- It reroutes one request by wrapping `globalThis.fetch`. If a future release\n  changes the shipped launch route or the request body shape, the reroute simply\n  stops matching and the shipped behaviour returns — the wrapper never breaks the\n  original request."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

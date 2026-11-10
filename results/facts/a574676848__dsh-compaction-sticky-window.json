@@ -1,0 +1,328 @@
+{
+  "repo": "a574676848/dsh-compaction-sticky-window",
+  "commit": "2572811b9633772b595bc5eee10a38848338677b",
+  "extracted_at": "2026-11-10T13:41:33.667907+00:00",
+  "tree": {
+    "files": 27,
+    "bytes": 196187,
+    "lines_by_language": {
+      "JSON": 219,
+      "JavaScript": 3279,
+      "Markdown": 601,
+      "Other": 41,
+      "YAML": 197
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "docs/DETAIL.md",
+      "docs/DETAIL.zh.md",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "market/index.json",
+      "package.json",
+      "presets/sticky-window.patch.yml",
+      "scripts/sync-preset.mjs",
+      "src/budget.js",
+      "src/config.js",
+      "src/guidance.js",
+      "src/history.js",
+      "src/note.js",
+      "src/notice.js",
+      "src/pins.js",
+      "src/tools.js",
+      "src/window.js",
+      "test/engine.integration.mjs",
+      "test/note.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-compaction-sticky-window",
+    "version": "0.8.1",
+    "description": "Replaces the summarizing context compactor with a handoff note the model writes itself and a fresh window that keeps only the system prompt, the note, and the current turn.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "src",
+      "cordis.patch.yml",
+      "presets",
+      "locale/*.json",
+      "docs",
+      "icon.svg",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "icon": "./icon.svg",
+    "scripts": {
+      "test": "node --test test/note.test.mjs test/engine.integration.mjs",
+      "sync-preset": "node scripts/sync-preset.mjs"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "compaction",
+      "context",
+      "window",
+      "sticky-note"
+    ],
+    "license": "MIT",
+    "engines": {
+      "dsh": ">=0.2.0-rc.2 <0.3.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": [
+          "./cordis.patch.yml",
+          "./presets/sticky-window.patch.yml"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Sticky-window compaction, host plane.\n#\n# Two planes can own compaction, and this file handles the one that is a plain\n# profile row:\n#\n# 1. Host plane (CLI, headless, SDK profiles): `compaction-basic` is an ordinary\n#    row from the base bundle, so disabling it here and inserting this backend\n#    in its place means the summarizing one never runs.\n# 2. Preset plane (Web and Desktop profiles): the host rows are already disabled\n#    and each agent preset isolates its own `compaction`, so a row here cannot\n#    reach a session. `presets/sticky-window.patch.yml` declares that plane as a\n#    preset the person can select; this bundle never changes which preset is\n#    selected.\n#\n# Leaving the host row in place on a preset profile is harmless: it provides a\n# service no isolated agent resolves.\n- id: compaction-basic\n  name: '@deepseek-ai/dsh-compaction-basic'\n  disabled: true\n\n- insert:\n    - id: compaction-sticky-window\n      name: 'dsh-compaction-sticky-window'\n      config:\n        # Pressure at 80% of the message budget.\n        thresholdRatio: 0.8\n        # Keep nothing verbatim: the fresh window is the system prompt, the\n        # model's own note, and the turn in flight. A retained tail would leave\n        # the model reading old messages instead of the note it was told to\n        # write, which is the shape this backend exists to avoid.\n        retainTokens: 0\n        # The note is replaced wholesale on every rollover.\n        noteMaxBytes: 6144\n"
+    },
+    {
+      "path": "presets/sticky-window.patch.yml",
+      "text": "# Standard agent preset, compaction group replaced — GENERATED, do not edit by hand.\n#\n# A preset isolates `compaction`, so a profile-level row cannot reach a session\n# that uses one. Overriding this preset by its Loader row id is the supported\n# way in: the whole `config` is replaced, so this file restates the shipped\n# `standard` preset and swaps only its compaction group.\n#\n# The preset keeps its id (`standard`) and its order, so installing this bundle\n# does not change which preset is selected. Every plugin id below is copied from\n# the installation; `sync-preset` refuses to write a file whose id set differs.\n#\n# Regenerate after a DSH upgrade:  node scripts/sync-preset.mjs\n- id: preset-standard\n  name: '@deepseek-ai/dsh-agent-preset'\n  config:\n    id: standard\n    order: 1\n    plugins:\n      - id: persona\n        name: '@deepseek-ai/dsh-persona'\n        config:\n          prefix: You are a coding agent powered by the {{model}} model.\n      - id: agent-instructions\n        name: '@deepseek-ai/dsh-agent-instructions'\n        config:\n          maxBytes: 65536\n      - id: tool-bash\n        name: '@deepseek-ai/dsh-tool-bash'\n        disabled: !!js process.platform === 'win32'\n      - id: tool-pwsh\n        name: '@deepseek-ai/dsh-tool-pwsh'\n        disabled: !!js process.platform !== 'win32'\n      - id: tool-fs\n        name: '@deepseek-ai/dsh-tool-fs'\n      - id: tool-fs-search\n        name: '@deepseek-ai/dsh-tool-fs-search'\n        config:\n          sampleOverCapGlobResults: false\n      - id: tool-jobs\n        name: '@deepseek-ai/dsh-tool-jobs'\n      - id: skill-filesystem\n        name: '@deepseek-ai/dsh-skill-filesystem'\n      - id: tool-skill\n        name: '@deepseek-ai/dsh-tool-skill'\n      - id: command-goal\n        name: '@deepseek-ai/dsh-command-goal'\n      - id: tool-goal\n        name: '@deepseek-ai/dsh-tool-goal'\n      - id: planning\n        name: cordis:group\n        group: true\n        isolate:\n          planMode: true\n        config:\n          - id: plan-mode\n            name: '@deepseek-ai/dsh-plan-mode'\n            config:\n              section: |\n                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n      - id: compaction\n        name: cordis:group\n        group: true\n        isolate:\n          compaction: true\n          toolResultPruner: true\n        config:\n          - id: compaction-sticky-window\n            name: 'dsh-compaction-sticky-window'\n            config:\n              thresholdRatio: 0.8\n              retainTokens: 0\n              noteMaxBytes: 6144\n              auto: false\n              notices: false\n              noteTool: false\n              sensingTool: false\n              historyTool: false\n              newContextTool: false\n              guidance: false\n          - id: command-compact\n            name: '@deepseek-ai/dsh-command-compact'\n          - id: tool-result-pruner\n            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n            config:\n              thresholdChars: 8192\n              headChars: 4096\n              tailChars: 1024\n      - id: delegation\n        name: cordis:group\n        group: true\n        isolate:\n          workflowEngine: true\n        config:\n          - id: tool-subagent-control\n            name: '@deepseek-ai/dsh-tool-subagent-control'\n          - id: tool-subagent-list-agents\n            name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n          - id: tool-subagent\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: spawn\n              toolName: subagent\n              modelSelectionSettings: true\n              backgroundMode: continuable\n          - id: tool-subagent-fork\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: fork\n              toolName: subagent_fork\n              backgroundMode: continuable\n          - id: tool-subagent-codex\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: codex\n              toolName: subagent_codex\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: tool-subagent-claude-code\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: claude-code\n              toolName: subagent_claude_code\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: workflow-ptc\n            name: '@deepseek-ai/dsh-workflow-ptc'\n            config:\n              provider: spawn\n          - id: tool-workflow\n            name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ralph\n            name: '@deepseek-ai/dsh-tool-ralph'\n            disabled: true\n            config:\n              subagentProvider: spawn\n              maxRounds: 64\n      - id: tool-ask-user\n        name: '@deepseek-ai/dsh-tool-ask-user'\n      - id: tool-todo\n        name: '@deepseek-ai/dsh-tool-todo'\n        config:\n          allowParallelInProgress: true\n      - id: tool-web\n        name: '@deepseek-ai/dsh-tool-web'\n        config:\n          fetch: true\n          searchTimeoutMs: 60000\n      - id: present\n        name: '@deepseek-ai/dsh-tool-present'\n      - id: tool-plugin-manager\n        name: '@deepseek-ai/dsh-plugin-manager/tools'\n        disabled: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json",
+    "presets/sticky-window.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:44"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:56"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:68"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:80"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:92"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:104"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:116"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:128"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a574676848/dsh-compaction-sticky-window",
+      "where": "market/index.json:140"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "c1",
+      "where": "test/note.test.mjs:93",
+      "description": "ok"
+    },
+    {
+      "kind": "tool",
+      "name": "c2",
+      "where": "test/note.test.mjs:95",
+      "description": "AssertionError: expected 1"
+    },
+    {
+      "kind": "tool",
+      "name": "c1",
+      "where": "test/note.test.mjs:148",
+      "description": "contents"
+    },
+    {
+      "kind": "tool",
+      "name": "c1",
+      "where": "test/note.test.mjs:160",
+      "description": "ok"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 29,
+    "pushed_at": "2026-10-28T04:27:47Z",
+    "created_at": "2026-10-28T01:45:36Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "presets/sticky-window.patch.yml",
+    "scripts/sync-preset.mjs",
+    "src/budget.js",
+    "src/config.js",
+    "src/guidance.js",
+    "src/history.js",
+    "src/note.js",
+    "src/notice.js",
+    "src/pins.js",
+    "src/tools.js",
+    "src/window.js",
+    "test/engine.integration.mjs",
+    "test/note.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-compaction-sticky-window",
+      "text": "English | [中文](README.zh.md)\n\nA DeepSeek Harness profile bundle that replaces the summarizing context compactor with **a model-written handoff note and a fresh window that keeps almost nothing else**."
+    },
+    {
+      "section": "dsh-compaction-sticky-window",
+      "text": "The shipped backend condenses an old span into a model-written summary: one extra model call per rollover, and a summary whose contents the model did not choose. This backend inverts the ownership. The model writes its own note with `sticky_note`, opens a new window with `new_context`, and that window starts with the system prompt, the note, and the work in flight — nothing else. One deterministic fallback remains for automatic pressure: if no note was written, the evicted messages are reduced to the facts the log can prove."
+    },
+    {
+      "section": "Install",
+      "text": "From a checkout of this repository:\n\n```sh\ndsh plugin --profile <profile> add /absolute/path/to/dsh-compaction-sticky-window\n```\n\nOr through the Plugins page, which installs the bundle and enables it. The bundle patch retires the summarizing backend on every plane the profile exposes, so nothing else needs composing."
+    },
+    {
+      "section": "What installing adds, and what it replaces",
+      "text": "Installing adds four tools and replaces the compaction backend. It takes no tool away, and it does not change which preset your sessions use."
+    },
+    {
+      "section": "What installing adds, and what it replaces",
+      "text": "| Profile kind | Compaction owner | What the bundle does |\n|---|---|---|\n| CLI, headless, SDK | A host-plane row from the base bundle | Disables `compaction-basic` and inserts this backend in its place; the four tools are added |\n| Web, Desktop | Each agent preset, inside a group that isolates `compaction` | Overrides the shipped `standard` preset in place — same id, same order — swapping only its compaction group |"
+    },
+    {
+      "section": "What installing adds, and what it replaces",
+      "text": "On a preset-backed profile a host-plane row cannot reach a session: the preset isolates `compaction`, so its own backend serves its own agents. The supported way in is to override the preset declaration by its Loader row id, which replaces that preset's whole `config`. `presets/sticky-window.patch.yml` is exactly that: the shipped `standard` preset, restated, with one group changed. Because the preset keeps its id and order, **nothing needs selecting** — the summarizing backend is gone as soon as the bundle is."
+    },
+    {
+      "section": "What installing adds, and what it replaces",
+      "text": "This bundle still never touches `agent-preset-registry`. Forcing a different default preset would switch every open session onto an unfamiliar preset, which is a different operation from replacing a backend inside the preset those sessions already use.\n\nThe restated child list is the shipped `standard` list with the compaction group swapped, and `npm run sync-preset` refuses to write a snapshot whose plugin ids differ from the installation it read. Re-run it after a DSH upgrade."
+    },
+    {
+      "section": "The window lifecycle",
+      "text": "```\nwork proceeds ──► context_status: tokens left?\n                        │\n        ┌───────────────┴────────────────┐\n        │ room enough                    │ note is current, room tight"
+    },
+    {
+      "section": "Sequence: the model opens a window",
+      "text": "```mermaid\nsequenceDiagram\n    autonumber\n    actor U as User\n    participant M as Model"
+    },
+    {
+      "section": "Sequence: automatic pressure",
+      "text": "```mermaid\nsequenceDiagram\n    autonumber\n    participant T as Turn loop\n    participant X as Compaction engine\n\nAutomatic pressure is a three-stage ramp, not a cliff:"
+    },
+    {
+      "section": "Sequence: automatic pressure",
+      "text": "| Stage | At | What happens |\n|---|---|---|\n| warning | `threshold − warnTokens` | A notice asks for the note while there is still room to write it. |\n| exhausted | `threshold` | A second notice says the window's budget is spent and the next action is `sticky_note` then `new_context`. A rollover happens here **only if a note is saved**. |\n| blocked | `ceiling = min(threshold + fallbackTokens, capacity)` | With no saved note the window still does not end; the notice now says writing the note is the only action that matters. |"
+    },
+    {
+      "section": "Sequence: automatic pressure",
+      "text": "Each notice fires at most once per window. The rollover itself is postponed — never forced — while the note is missing, because evicting history the model never wrote down is the failure this backend exists to prevent. The single exception is a provider-confirmed context overflow, where the window must end: the note then says plainly that none was written and carries only the recorded facts."
+    },
+    {
+      "section": "Sequence: automatic pressure",
+      "text": "Because the retained window is empty by default (`retainTokens: 0`), the fresh window is genuinely fresh. Set `retainTokens` or `retainRatio` to keep a verbatim tail instead."
+    },
+    {
+      "section": "The note",
+      "text": "Two sections, and only the first is the model's:\n\n| Section | Source |\n|---|---|\n| `## Handoff` | The model's `sticky_note` list, carried verbatim. Claims its byte budget first. |\n| `## Recorded facts` | Derived from the evicted messages: file paths and commands recovered from tool-call arguments, and tool results that reported an error. Suppressed by `derivedAppendix: false`. |"
+    },
+    {
+      "section": "The note",
+      "text": "The note is a normal checkpoint message on the surface, so the next rollover reads it back like any other evicted content — no side storage, and a replayed session rebuilds the identical note.\n\nPins are only read from a `sticky_note` result, so a file the agent read cannot inject or erase them. A pin list over budget is refused with an instruction to consolidate, not silently trimmed."
+    },
+    {
+      "section": "The tools",
+      "text": "| Tool | Answers |\n|---|---|\n| `context_status` | Tokens used, the rollover line, tokens remaining, the current window ordinal, and whether the figure is provider usage or a local estimate. |\n| `sticky_note` | `read` returns the handoff a fresh window inherits; `update` replaces it. |\n| `new_context` | Ends the window now. Refused while this window has no saved note. |\n| `history_query` | `windows` lists archived windows, `search` finds a case-sensitive literal and returns item ids, `read` returns one item by id. |"
+    },
+    {
+      "section": "The tools",
+      "text": "All four are registered on the host plane; a preset realm inherits them through the `tools` registry it does not isolate.\n\n`context_status` prices the same threshold the transaction triggers on, and reports the trigger's own refusals (`available: false` with the reason) rather than a plausible number that would never fire. `src/budget.js` mirrors that arithmetic and is tested against it."
+    },
+    {
+      "section": "The tools",
+      "text": "`new_context` performs the rollover inside the tool call, bounded strictly before the current turn, so the turn's own tool results still have a surface to land on. A turn can outlive everything before it: when no older node is left on the surface, that boundary names no cut, so the rollover falls back to the current step — the last cut that still leaves the turn's own tool results a surface. The write-ahead gate is the reference behavior: no note, no new window."
+    },
+    {
+      "section": "The tools",
+      "text": "`history_query` reads the archive the log already holds: each `compaction/summary` event records the seqs it replaced, and those events keep their seqs forever. Windows and items are named `w<window>:<ordinal>`."
+    },
+    {
+      "section": "The prompt protocol",
+      "text": "The bundle registers one `systemPrompt` section (order 9000) that states what a window is, that everything not written into the note disappears from the live context, when to check the budget, what a handoff must contain, that `new_context` needs a saved note, and how to recover a detail afterwards. It is registered with `interpolate: false` so its braces stay literal.\n\nThe reference implementations make the same move — Axon keeps a `<memory_window_protocol>` block in its stable prefix."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `thresholdRatio` | `0.8` | Share of the message budget that triggers an automatic rollover. |\n| `retainTokens` | `0` | Verbatim tail kept after a rollover. `0` keeps only the turn in flight. |\n| `retainRatio` | — | Fractional form of `retainTokens`; mutually exclusive with it. |\n| `headroomTokens` | shipped default | Reserve subtracted from the context window before pressure is measured. |\n| `maxTokens` | shipped default | Generation cap used when pricing the request. |\n| `compactionRetries` | shipped default | Retries when one rollover does not fall below the threshold. |\n| `maxOverflowRetries` | shipped default | Retries after a provider-confirmed context overflow. |\n| `modelPolicies` | `[]` | Per-provider/model overrides of the fields above. |\n| `auto` | `true` | Whether automatic pressure and overflow listeners are registered. |\n| `noteMaxBytes` | `6144` | UTF-8 budget for the whole note. |\n| `handoffMaxBytes` | `4096` | Budget for `## Handoff`; claimed before anything else. |\n| `recordedMaxBytes` | `2048` | Budget for `## Recorded facts`. |\n| `derivedAppendix` | `true` | Include the recorded-facts section. |\n| `fileListMax` | `24` | "
+    },
+    {
+      "section": "Configuration",
+      "text": "The note budget is additionally trimmed to half of the span it replaces, so a small span shrinks the note instead of failing the transaction's shrink check. A span too small to hold even the note's framing still fails loudly, exactly as the shipped backend does with a summary that cannot fit."
+    },
+    {
+      "section": "Why this shape",
+      "text": "- **The model owns the handoff.** A summary the model did not write is a guess about what matters. The reference implementations hand that decision to the model and give it a gate that makes writing it obligatory before a rollover it requests.\n- **No side storage.** The note, the pins, and the archive index are ordinary surface content or existing log events, so fork, resume, and replay need no extra persistence and no format version.\n- **No new session events.** The mechanism rides the existing `compaction/*` vocabulary.\n- **No dependence on internal APIs.** The backend extends the published `BasicCompactionEngine` and overrides the documented `summarize()` hook; everything else is the shipped transaction."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode --test test/note.test.mjs test/engine.integration.mjs\nnode scripts/sync-preset.mjs\n```\n\n`test/engine.integration.mjs` drives real rollovers through the shipped compaction transaction with a hand-built Cordis Context, and asserts the fresh window really is the note plus the current turn — including one long turn that has to roll over at its last step because it outlived everything before it."
+    },
+    {
+      "section": "Development",
+      "text": "`node_modules/.` holds a local junction to a DSH installation for module resolution in development and is not published."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- The model can still under-write. When it does, the note carries only the recorded facts and says no handoff was written; it never fabricates one.\n- If the model never writes a note, the window holds out until a provider-confirmed overflow forces it. That is deliberate — an unprepared rollover loses state — but it means a model that ignores every notice reaches the hard failure instead of a quiet one.\n- The note's handoff is read from the whole session, so a note written in the turn that triggers a rollover is still carried.\n- A single indivisible message larger than the window cannot be repaired by a rollover; the optional tool-result pruner still runs before selection.\n- The override is a snapshot of `standard` at the targeted DSH release. A DSH upgrade can change that preset without this package noticing; run `sync-preset` and publish a new version. Verified at the targeted release: the restated list has the same 19 top-level plugin ids as the installation.\n- The override applies to sessions **started after** the bundle is enabled. A session already running keeps the preset it mounted at start, so restart (or open a new session) to pick up the new backend; the tools it already "
+    }
+  ],
+  "skipped": []
+}

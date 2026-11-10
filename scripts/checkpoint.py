@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 """Commit and push only independently accepted DSH analysis outputs."""
 from __future__ import annotations
-import json, pathlib, sqlite3, subprocess, sys
+import fcntl, json, pathlib, sqlite3, subprocess, sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 DB=ROOT/"work"/"supervisor.sqlite3"
+LOCK=ROOT/"work"/"checkpoint.lock"
 KINDS=("facts","cards","generated","units")
 def run(*args,check=True):
  return subprocess.run(args,cwd=ROOT,text=True,capture_output=True,check=check)
+LOCK.parent.mkdir(parents=True,exist_ok=True)
+lock_file=LOCK.open("a+")
+try:
+ fcntl.flock(lock_file,fcntl.LOCK_EX|fcntl.LOCK_NB)
+except BlockingIOError:
+ print(json.dumps({"changed":False,"pushed":False,"busy":True}))
+ raise SystemExit
 db=sqlite3.connect(DB)
 repos=[r[0] for r in db.execute("select repo from tasks where state='done' order by rank")]
 paths=[]

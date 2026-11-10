@@ -1,0 +1,175 @@
+{
+  "repo": "Icestab/dsh-image-vision-bridge",
+  "commit": "61b3602e4d4878445f167c68f916c2053c8c122b",
+  "extracted_at": "2026-11-10T10:48:54.245755+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 27390,
+    "lines_by_language": {
+      "JSON": 41,
+      "JavaScript": 455,
+      "Markdown": 132,
+      "Other": 24,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "test/transform.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-image-vision-bridge",
+    "version": "0.1.2",
+    "description": "DSH host plugin: automatically sends images in user messages to a vision model (default mimo-v2.5 on opencode-go) and feeds the returned text description to the main text model (e.g. deepseek-v4-pro), without touching the visible chat transcript.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js"
+    },
+    "files": [
+      "lib/index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "vision",
+      "image",
+      "mimo"
+    ],
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-llm": "^0.1.0-rc.6"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-llm": {
+        "optional": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-image-vision-bridge 的 bundle 补丁层:安装本包时自动插入插件行。\n# 用户可以在自己的 profile cordis.patch.yml 里按 id 覆盖这些配置\n# (例如改 provider/model,或把 enabled 设为 false)。\n- insert:\n    - id: image-vision-bridge\n      name: 'dsh-image-vision-bridge'\n      config:\n        provider: opencode-go\n        model: mimo-v2.5\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "enabled",
+      "kind": "setting",
+      "default": "true",
+      "where": "lib/index.js:55"
+    },
+    {
+      "name": "provider",
+      "kind": "setting",
+      "default": "opencode-go",
+      "where": "lib/index.js:56"
+    },
+    {
+      "name": "model",
+      "kind": "setting",
+      "default": "mimo-v2.5",
+      "where": "lib/index.js:57"
+    },
+    {
+      "name": "maxTokens",
+      "kind": "setting",
+      "default": "2048",
+      "where": "lib/index.js:58"
+    },
+    {
+      "name": "maxDescriptionChars",
+      "kind": "setting",
+      "default": "6000",
+      "where": "lib/index.js:59"
+    },
+    {
+      "name": "prompt",
+      "kind": "setting",
+      "where": "lib/index.js:60"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-08-22T04:16:01Z",
+    "created_at": "2026-08-16T00:09:06Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-image-vision-bridge",
+      "text": "[](https://www.npmjs.com/package/dsh-image-vision-bridge)\n\nDSH 宿主插件:你发送的图片**照常显示在聊天记录里**,插件在 `llm/stream`\n水线上把发给主模型的请求里的图片块悄悄替换成视觉模型 **mimo-v2.5**\n(默认走你已配置的 `opencode-go` 路由,复用现有 `OPENCODE_GO_API_KEY`)\n生成的**文本描述**。描述只进模型、不进聊天:DeepSeek 基于描述回复你,\n聊天里看不到任何\"图片解析\"文本。"
+    },
+    {
+      "section": "工作原理",
+      "text": "1. 图片消息原样进入 agent、原样写入会话日志——聊天框显示的就是你发的图。\n2. 主循环(以及压缩、标题生成等)发出的任何模型请求都会经过 `llm/stream`\n   水线。插件检查请求消息里是否含 image 块:\n   - 不含图片 → 直接放行;\n   - 目标是插件配置的视觉模型本身(自己的调用,或某会话本来就选用了\n     视觉模型)→ 放行,让视觉模型直接看图;\n   - 其他情况 → 构造一份**重写后的请求**:消息里的 image 块(含 tool-result\n     嵌套)替换为描述文本,再以这份请求实际流式调用。原请求对象与\n     会话日志完全不被修改。\n3. 描述结果按附件 id 在进程内缓存(重试/后续轮次不重复调用);视觉调用\n   失败时降级为一段失败说明文本,不打断对话;用户取消时错误照常抛出。"
+    },
+    {
+      "section": "兼容性",
+      "text": "- 已测试环境:DeepSeek Harness `0.1.0-rc.6` 与 `0.1.1-rc.2`(@deepseek-ai/dsh、dsh-llm 同版本、cordis 4.0.1),11 项离线自测均通过。\n- 插件依赖的公开 API:`ctx.llm.stream`、`llm/stream` 水线、`contentHasImage`/`createMessage`/`BlockAssembler`、附件 image 块。这些在 0.1.x 线内稳定;但插件会**重写进入水线的请求**(框架文档要求监听器只读不改),这是官方尚未承诺的用法,升级 dsh 前建议先在临时 profile 里冒烟测试(发一张图即可)。\n- 插件不修改 dsh 安装、不写 dsh 目录、不碰会话日志;失败时按请求降级,不会影响纯文本对话。\n- dsh `0.1.1+` 内置了文本模型的图片占位降级(不报错,但模型看不到图片内容);本插件提供真正的视觉描述,二者互补。"
+    },
+    {
+      "section": "安装(标准 bundle 方式)",
+      "text": "本包声明了 `dsh.bundle`,是标准的可分发 bundle:安装时自动插入插件行,\n无需手改 cordis.patch.yml。\n\n```sh"
+    },
+    {
+      "section": "本地目录 / tarball / npm / GitHub 均可:",
+      "text": "dsh plugin --profile web add dsh-image-vision-bridge              # npm\ndsh plugin --profile web add github:Icestab/dsh-image-vision-bridge#c67b4b3  # GitHub(锁定版本)\ndsh plugin --profile web add ./dsh-image-vision-bridge            # 本地目录\ndsh plugin --profile web add ./dsh-image-vision-bridge-0.1.0.tgz  # tarball\n```\n\n仍有两步手工操作(插件无法替用户完成):"
+    },
+    {
+      "section": "本地目录 / tarball / npm / GitHub 均可:",
+      "text": "1. **让主模型声明可接收图片**(必做):主机的 API 边界yaml\n   llm-pi-ai:\n     providers:\n       opencode-go:\n         apiKeyEnv: OPENCODE_GO_API_KEY\n         modelOverrides:\n           deepseek-v4-pro:\n             input: [text, image]\n   ```\n\n插件会在请求水线上把图片换成文本描述,主模型请求里永远不会真的出现\n   图片块,所以这个声明只是放行边界,不会把图片发给 deepseek。\n\n2. 重启 `dsh web`(web profile 已禁用 HMR,必须重启才生效)。\n\nbundle 默认配置(provider: `opencode-go`,model: `mimo-v2.5`)可被用户覆盖:\n在 profile 自己的 `cordis.patch.yml` 里按行 id `image-vision-bridge` 重写\nconfig 即可(后层胜出)。"
+    },
+    {
+      "section": "安装(手工平铺方式)",
+      "text": "不通过 `dsh plugin` 的手工装法(适合不想用 pnpm 或想直接改代码的场景):\n\n1. 把本包目录复制到 profile 的模块解析路径(裸包名从 profile 目录沿\n   node_modules 链向上查找;hoisted 布局通常是\n   `$DSH_HOME/profiles/node_modules/`,扁平布局则是\n   `$DSH_HOME/profiles/<name>/node_modules/`):\n\n```sh\n   cp -r ./dsh-image-vision-bridge \"$DSH_HOME/profiles/node_modules/\"\n   ```\n\n> 注:以后若在 profile 里运行过 `dsh plugin --profile <name> add/install …`,\n   > pnpm 可能清掉这个手工放置的目录,重新执行上面这条命令即可恢复。"
+    },
+    {
+      "section": "安装(手工平铺方式)",
+      "text": "2. 在 `$DSH_HOME/profiles/<name>/cordis.patch.yml` 中加入插件行(settings.yaml\n   的 `modelOverrides` 配置仍是插件无法替用户完成的前提,见上一节):\n\n```yaml\n   - insert:\n       - id: image-vision-bridge\n         name: 'dsh-image-vision-bridge'\n         config:\n\n3. 同样需要上面的 settings.yaml `modelOverrides` 配置,然后重启 `dsh web`。"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 默认值 | 说明 |\n|---|---|---|\n| `enabled` | `true` | `false` 时完全透传,不做桥接 |\n| `provider` | `opencode-go` | 视觉模型所在 LLM 路由(必须已注册,即 settings.yaml 里 `llm-pi-ai.providers` 已配置) |\n| `model` | `mimo-v2.5` | 视觉模型 id |\n| `maxTokens` | `2048` | 视觉调用最大输出 token |\n| `maxDescriptionChars` | `6000` | 注入主模型前的描述长度上限 |\n| `prompt` | 内置中文提示词 | 发给视觉模型的指令(用户原文会自动拼在前面) |\n\n示例(自定义):\n\n```yaml\n- insert:\n    - id: image-vision-bridge\n      name: 'dsh-image-vision-bridge'\n      config:"
+    },
+    {
+      "section": "自测",
+      "text": "```sh\ncd \"$DSH_HOME/profiles\"\nnode node_modules/dsh-image-vision-bridge/test/transform.test.mjs\n```"
+    }
+  ],
+  "skipped": []
+}

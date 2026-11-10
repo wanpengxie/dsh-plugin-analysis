@@ -8,6 +8,7 @@ DB = ROOT / "work" / "supervisor.sqlite3"
 SNAPSHOT = ROOT / "results" / "supervision" / "status.json"
 LIST = ROOT / "lists" / "high-priority.csv"
 VALIDATOR = ROOT / "scripts" / "validate_results.py"
+CLAIMS_PAUSED = ROOT / ".supervision" / "pause-claims"
 
 def now():
     return dt.datetime.now(dt.timezone.utc).isoformat()
@@ -81,6 +82,10 @@ def claim(worker, tier):
         if existing:
             db.execute("COMMIT")
             print(json.dumps(dict(existing), ensure_ascii=False))
+            return
+        if CLAIMS_PAUSED.exists():
+            db.execute("COMMIT")
+            print("null")
             return
         row = db.execute("""SELECT * FROM tasks WHERE state='queued' AND tier=?
                             ORDER BY rank LIMIT 1""", (tier,)).fetchone()

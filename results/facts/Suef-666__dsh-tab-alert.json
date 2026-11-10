@@ -1,0 +1,181 @@
+{
+  "repo": "Suef-666/dsh-tab-alert",
+  "commit": "b8ac57132a367eb89521688a2dc44bd92d9f0254",
+  "extracted_at": "2026-11-10T12:38:51.715373+00:00",
+  "tree": {
+    "files": 21,
+    "bytes": 131438,
+    "lines_by_language": {
+      "JSON": 1654,
+      "JavaScript": 391,
+      "Markdown": 251,
+      "Other": 68,
+      "TypeScript": 1077,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      ".npmrc",
+      "LICENSE",
+      "README.md",
+      "build.mjs",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "install.ps1",
+      "package-lock.json",
+      "package.json",
+      "protocol.md",
+      "src/client/collector.ts",
+      "src/client/index.ts",
+      "src/client/notifier.ts",
+      "src/client/status.ts",
+      "src/client/types.ts",
+      "src/host/index.ts",
+      "test/collector.test.mjs",
+      "test/loader-contract.test.mjs",
+      "tsconfig.json",
+      "uninstall.ps1"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tab-alert",
+    "description": "Taskbar attention alerts for the DeepSeek Harness web GUI (silent system notification → OS taskbar icon flash when the model asks/approves/a task finishes), plus a real-time event source / middleware: the host side maintains a per-session state machine and forwards normalized live task status over a WebSocket endpoint (ws://127.0.0.1:<port>/tab-alert/stream) for external consumers — pairs with the dsh-pet uTools desktop-pet plugin, and can feed any custom plugin/client.",
+    "version": "0.1.0",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.cjs",
+    "exports": {
+      ".": {
+        "default": "./lib/index.cjs"
+      },
+      "./client": {
+        "default": "./lib/client.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "protocol.md",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "build": "node build.mjs",
+      "typecheck": "tsc --noEmit",
+      "test": "node test/collector.test.mjs",
+      "check": "node build.mjs && node test/collector.test.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime"
+        ]
+      }
+    },
+    "dependencies": {
+      "ws": "^8.0.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6"
+    },
+    "devDependencies": {
+      "esbuild": "^0.24.0",
+      "typescript": "^5.6.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tab-alert 宿主侧挂载行。\n#\n# 本插件是「浏览器侧行为」插件：全部逻辑在客户端（./client），宿主侧不需要任何\n# 服务或路由。这一行只做一件事——把本包挂进 Loader 组合树，让\n# @deepseek-ai/dsh-client-modules 能扫描到 `dsh.client` 声明，从而把\n# 插件纳入 window.__DSH_BOOT__ 模块表并对外提供 /plugins/dsh-tab-alert/client.js。\n- insert:\n    - id: dsh-tab-alert\n      name: dsh-tab-alert\n"
+    }
+  ],
+  "entries": [
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "ws": "^8.0.0"
+    },
+    "devDependencies": {
+      "esbuild": "^0.24.0",
+      "typescript": "^5.6.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 2,
+    "pushed_at": "2026-08-17T07:32:52Z",
+    "created_at": "2026-08-17T05:26:55Z"
+  },
+  "runtime_files": [
+    "build.mjs",
+    "cordis.patch.yml",
+    "package.json",
+    "test/collector.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tab-alert —— dsh 任务栏提醒与实时事件源插件",
+      "text": "dsh-tab-alert 是运行于 dsh（DeepSeek Harness）宿主侧的插件，提供两项能力：\n\n- **任务栏提醒**：dsh 在后台运行并需要用户介入时，通过系统通知提醒用户。\n  页面失焦或隐藏时弹出静音通知，浏览器在操作系统任务栏上闪烁图标\n  （Windows 下为橙色闪烁，Linux 下为通知与 Dock 脉冲）。\n- **实时事件源**：订阅全量会话事件流，维护各会话的实时状态，并通过\n  WebSocket 端点对外提供统一的会话状态数据，供 dsh-pet 等外部消费方使用。"
+    },
+    {
+      "section": "任务栏提醒",
+      "text": "仅在需要用户操作的场景触发提醒，普通回复不提醒：\n\n| 场景 | 说明 |\n|---|---|\n| 模型提问 | 模型向用户提问 |\n| 授权请求 | 请求用户授权 |\n| 方案审查 | 请求用户审查方案 |\n| 目标完成 | 目标阶段进入完成 |\n| 目标失败 / 阻塞 | 目标阶段进入失败或阻塞 |\n| 后台任务完成 / 失败 | 后台任务结束 |\n| 会话在别处完成 | 未查看的会话已完成 |\n| dsh 完成当前回合 | 普通任务执行完毕 |\n\n提醒规则：\n\n- 通过浏览器 Web Notification 触发系统通知与任务栏闪烁，无需修改浏览器；\n- 首次触发时请求一次通知权限；用户拒绝后插件保持静默，不做页内降级；\n- 同一事件只提醒一次，新事件再次提醒；\n- 用户返回页面视为已处理，不再提醒；\n- 插件只订阅官方快照并创建通知，不修改其它插件状态，卸载即清理；\n- 事件同时发布为旁观式 `tab-alert/attention`（cordis 事件），供其它插件观察。"
+    },
+    {
+      "section": "任务栏提醒",
+      "text": "任务栏闪烁是浏览器与操作系统的行为，不同环境下表现可能有差异；\n若静音模式不闪烁，可关闭 `silent` 对比验证。"
+    },
+    {
+      "section": "实时事件源（中间件）",
+      "text": "宿主侧维护各会话的状态机，把归一化的实时任务状态（会话标题、状态、等待原因、\n流式文本等）通过 WebSocket 端点转发给外部消费方。一条数据流，多方复用。\n\n- 官方搭配：[dsh-pet](https://github.com/Suef-666/dsh-pet)（uTools 桌面宠物插件）\n  直连该事件流，将实时状态渲染为桌面状态面板；\n- 第三方开发者可基于同一事件流开发自定义插件或独立客户端（状态面板、\n  托盘图标、播报、看板等）。\n\nWebSocket 端点、数据格式、状态机语义、节流与重连、版本策略的完整说明，\n见 [protocol.md](./protocol.md)。"
+    },
+    {
+      "section": "安装",
+      "text": "前置：dsh CLI 可用，目标 profile（如 web）已初始化。\n\n```powershell"
+    },
+    {
+      "section": "安装（link: 开发链接；改源码后重建并重启 dsh 生效）",
+      "text": "powershell -ExecutionPolicy Bypass -File .\\install.ps1"
+    },
+    {
+      "section": "卸载",
+      "text": "powershell -ExecutionPolicy Bypass -File .\\uninstall.ps1"
+    },
+    {
+      "section": "查看已装插件",
+      "text": "dsh plugin --profile web list\n```\n\n`link:` 为符号链接开发模式，改源码无需重新安装；`file:` 为拷贝安装，\n适合打包分发。卸载后重启 dsh 生效。"
+    },
+    {
+      "section": "配置",
+      "text": "可通过 dsh 行级 config 覆盖默认值（如 cordis.patch.yml 覆盖层）：\n\n```yaml\n- id: dsh-tab-alert\n  config:\n    enabled: true\n    kinds:"
+    },
+    {
+      "section": "构建与测试",
+      "text": "```powershell\nnpm install --ignore-scripts\nnode build.mjs                # 产出 lib/ 构建产物\nnode test\\collector.test.mjs  # 逻辑单测（边沿检测 / 去重 / 重连基线）\n```"
+    },
+    {
+      "section": "项目结构",
+      "text": "```\nsrc/host/index.ts          宿主侧：会话状态机 + WebSocket 事件源\nsrc/client/index.ts        浏览器侧：插件主体（订阅快照 → 提醒 → 事件总线）\nsrc/client/collector.ts    事件差分逻辑\nsrc/client/notifier.ts     Web Notification 提醒"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

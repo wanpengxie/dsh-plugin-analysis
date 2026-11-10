@@ -1,0 +1,133 @@
+{
+  "repo": "PangYiMing/dsh-bisect-debug",
+  "commit": "312c66ebba4b3f16fe85f8f24d0e72ea7a78dfcf",
+  "extracted_at": "2026-11-10T12:01:02.135909+00:00",
+  "tree": {
+    "files": 5,
+    "bytes": 6170,
+    "lines_by_language": {
+      "JSON": 17,
+      "JavaScript": 5,
+      "Markdown": 109,
+      "Other": 21,
+      "YAML": 3
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-bisect-debug",
+    "version": "0.1.0",
+    "description": "Bisect bug root causes in three modes: code / boundary / commit (git bisect run)",
+    "type": "module",
+    "main": "index.js",
+    "files": [
+      "index.js",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: bisect-debug\n      name: dsh-bisect-debug\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-13T14:18:13Z",
+    "created_at": "2026-08-13T14:16:01Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-bisect-debug",
+      "text": "> DeepSeek Harness 插件 · 二分定位 / DSH plugin for bisecting bugs\n\n\"bug 在当前代码里，但不知道具体在哪\"——用**二分法把搜索范围每轮砍一半**，快速锁定到具体函数/边界/commit。\n\n\"Bugs live somewhere in this code, but where?\" — **halve the search space every round** with bisection, down to the exact function, boundary, or commit."
+    },
+    {
+      "section": "三种二分法 Three modes",
+      "text": "| 模式 | 切什么 | 适用场景 | 需要什么 |\n|---|---|---|---|\n| **① 代码二分** | 注释/disable 一半代码 | \"bug 在当前代码里，缩小到具体函数/组件\" | 当前代码 + 可复现的 bug |\n| **② 边界二分** | curl/log 沿数据流逐层验证 | \"不知道是前端还是后端的锅\" | 数据流节点图（≥3 层） |\n| **③ commit 二分** | git bisect 切提交历史 | \"之前还好好的，不知道哪次改坏的\" | git 历史 + 好/坏 commit |\n\n**先判断用哪种**：有明确好/坏时间点 → ③；跨层问题不确定哪层 → ②；确定在当前代码里 → ①（最常用）。"
+    },
+    {
+      "section": "① 代码二分（注释/disable，最常用）",
+      "text": "```\n范围里有 N 个候选（函数/组件/中间件/import）\n→ 注释掉后半 N/2 个\n→ bug 消失 → 根因在被注释的后半里，继续二分后半\n→ bug 还在 → 根因在前半里，继续二分前半\n\n标记法（方便恢复，不丢原代码）：\n\n```js\n// [bisect-disabled] <OriginalComponent />\n// <OriginalComponent />\n```\n\n注意：有依赖关系的模块不能乱注释（会引入新报错）；注释后验证的是\"bug 还在不在\"而不是\"有没有新报错\"；**每轮只注释一半**。"
+    },
+    {
+      "section": "② 边界二分（curl/log 沿数据流）",
+      "text": "任何 bug 都是\"数据在某个环节不再正确\"。**沿数据流逐跳验证**，找到数据正确到达的最后一站：\n\n```\n上游 ──→ 节点A ──→ 节点B ──→ 节点C ──→ 下游（用户看到的现象）\n```\n\n从中间节点验证——midpoint 正确则 bug 在下游，错误则 bug 在上游。不同架构的验证方式：\n\n| 架构 | 验证方式 |\n|---|---|\n| HTTP 前后端 | `curl` 直连后端 API，绕过前端 |\n| 微服务链 | 逐服务 curl 或查日志 |\n| 数据库 | DB 客户端直接查 |\n| 浏览器渲染 | DevTools Network + Console |\n| 函数调用链 | 调用方/被调用方各加 log |\n\n真实案例：点击授权报 405 → 3 个 curl（MCP 登录 200 ✅ / 网关 POST 405 / 下游 API 422 ✅）→ 结论：网关 nginx 拦截 POST。**全程 3 个 curl，0 行代码改动。**\n\n先用**边界二分定层**，再在该层内用**代码二分定函数**。"
+    },
+    {
+      "section": "③ commit 二分（git bisect run）",
+      "text": "把\"好/坏判定\"固化成**退出码脚本**（exit 0=好，exit 1=坏，exit 125=跳过），交给 `git bisect run` 全自动收敛：\n\n```bash"
+    },
+    {
+      "section": "1. 确认好/坏 commit（good 从 tag/log 推断，不问用户）",
+      "text": "git merge-base --is-ancestor <good> <bad>   # 校验 good 在 bad 祖先链上"
+    },
+    {
+      "section": "2. 写判定脚本 .temp/bisect-judge.sh",
+      "text": "npm run build >/dev/null 2>&1 || exit 125\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" --max-time 30 \"http://localhost:8080/\")\n[ \"$code\" = \"200\" ] && exit 0 || exit 1"
+    },
+    {
+      "section": "3. 全自动跑",
+      "text": "git bisect start\ngit bisect bad <bad-commit>\ngit bisect good <good-commit>\ngit bisect run bash .temp/bisect-judge.sh"
+    },
+    {
+      "section": "4. 收尾（必做）",
+      "text": "git bisect reset\n```\n\n注意：base 过期要校验（upstream 合入新文件会误导二分）；启动前工作区必须干净；`git bisect reset` 必做。"
+    },
+    {
+      "section": "执行纪律 Discipline",
+      "text": "1. **连续改了 ≥2 处还没解决 → 停下，回到二分**（最强反偷懒规则）。\n2. **每轮只切一半，测完再切下一半**——禁止一次改多处再测。\n3. **现象优先，代码最后**——先用 curl/log/ping 确认现象和边界，不要一上来就读代码。\n4. bug 不可复现时调整策略：总是复现 → 直接二分；间歇复现 → 加诊断日志等下一次；只发生一次 → 最大日志注入 + 部署监控。\n5. 不好结果也有参考价值——宁可跑完次优解留数据，不中途停下等拍板。"
+    },
+    {
+      "section": "跳过二分的情况 When to skip",
+      "text": "从现象到根因 ≤ 2 步，不进二分：编译器已指出文件+行号 / 用户明确说了根因 / 改一行就能验证 / 已知版本依赖问题。"
+    },
+    {
+      "section": "安装 Install",
+      "text": "```sh"
+    },
+    {
+      "section": "发布到 npm 后",
+      "text": "dsh plugin --profile demo add dsh-bisect-debug"
+    },
+    {
+      "section": "或从 GitHub 安装",
+      "text": "dsh plugin --profile demo add github:PangYiMing/dsh-bisect-debug\n```"
+    },
+    {
+      "section": "许可证 License",
+      "text": "[MIT](./LICENSE)"
+    }
+  ],
+  "skipped": []
+}

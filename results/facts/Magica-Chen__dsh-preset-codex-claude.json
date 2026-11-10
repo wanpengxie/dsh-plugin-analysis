@@ -1,0 +1,252 @@
+{
+  "repo": "Magica-Chen/dsh-preset-codex-claude",
+  "commit": "14fe30011968274be8ea7fcb97e613d66c304962",
+  "extracted_at": "2026-11-10T11:33:33.360334+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 69756,
+    "lines_by_language": {
+      "JSON": 70,
+      "JavaScript": 445,
+      "Markdown": 227,
+      "Other": 31,
+      "Python": 384,
+      "YAML": 320
+    },
+    "outline": [
+      ".github/workflows/verify.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "bin/doctor.mjs",
+      "cordis.patch.yml",
+      "generate-patch.py",
+      "icon.svg",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "tests/doctor.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-preset-codex-claude",
+    "version": "1.1.0",
+    "description": "DeepSeek Harness preset with optional Codex and Claude Code delegation, each with full-access and native unattended-policy tiers.",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "agent-preset",
+      "codex",
+      "claude-code",
+      "subagent"
+    ],
+    "files": [
+      "cordis.patch.yml",
+      "bin/",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "exports": {
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "bin": {
+      "dsh-preset-codex-claude": "bin/doctor.mjs"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Magica-Chen/dsh-preset-codex-claude.git"
+    },
+    "homepage": "https://github.com/Magica-Chen/dsh-preset-codex-claude#readme",
+    "bugs": {
+      "url": "https://github.com/Magica-Chen/dsh-preset-codex-claude/issues"
+    },
+    "engines": {
+      "node": ">=22.12.0",
+      "dsh": "^0.2.1-rc.3"
+    },
+    "dependencies": {
+      "@deepseek-ai/dsh-subagent-codex": "^0.2.1-rc.3",
+      "@deepseek-ai/dsh-subagent-claude-code": "^0.2.1-rc.3",
+      "js-yaml": "^4.1.0"
+    },
+    "scripts": {
+      "build": "python3 generate-patch.py",
+      "doctor": "node bin/doctor.mjs",
+      "test": "node --test"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch: four Host providers and one `codex-claude` agent preset.\n# Codex uses the official app-server; Claude Code uses the official Agent SDK.\n# Each vendor has a full-access and a native unattended-policy registration.\n# Pairing and delegation are optional. Managed activations return a child id\n# immediately; the runtime delivers each external worker's final result later.\n#\n# The historical *_readonly tool names are NOT filesystem security boundaries:\n# Codex `never` inherits native sandbox settings; Claude Code `dontAsk` denies\n# permission prompts, but native user/project settings can pre-authorize tools.\n# Use an independently enforced sandbox for tasks requiring strict read-only.\n# Full-access workers bypass native permission checks and can modify files/run\n# commands. Choose that tier only when the user's task authorizes those effects.\n#\n# Providers belong on the Host, not in eagerly retained preset revisions.\n# Names are private to this bundle, avoiding collisions with optional standalone\n# Codex/Claude bundles. Only this preset exposes these four named tools.\n# `maxDepth: provider-managed` delegates nested-agent policy to each product.\n- insert:\n    - id: provider-preset-codex-claude-codex\n      name: '@deepseek-ai/dsh-subagent-codex'\n      config:\n        providerName: preset-codex-claude-codex\n        permissionMode: dangerously-bypass-approvals-and-sandbox\n\n    - id: provider-preset-codex-claude-codex-readonly\n      name: '@deepseek-ai/dsh-subagent-codex'\n      config:\n        providerName: preset-codex-claude-codex-readonly\n        permissionMode: never\n\n    - id: provider-preset-codex-claude-claude\n      name: '@deepseek-ai/dsh-subagent-claude-code'\n      config:\n        providerName: preset-codex-claude-claude\n        permissionMode: bypassPermissions\n\n    - id: provider-preset-codex-claude-claude-readonly\n      name: '@deepseek-ai/dsh-subagent-claude-code'\n      config:\n        providerName: preset-codex-claude-claude-readonly\n        permissionMode: dontAsk\n\n    - id: preset-codex-claude\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: codex-claude\n        name: Codex + Claude Code\n        description: >-\n          Standard coding tools plus four delegation subagents: Codex and Claude\n          Code, each with full-access and native unattended-policy tiers.\n          Pairing is optional; neither unattended tier guarantees read-only.\n        order: 20\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              suffix: Your working directory is {{cwd}}.\n              prefix: >-\n                You are a coding agent powered by the {{model}} model. Codex\n                (`subagent_codex`, `subagent_codex_readonly`) and Claude Code\n                (`subagent_claude_code`, `subagent_claude_readonly`) are optional\n                delegation tools; use either, both, or neither as the task warrants.\n                Full-access tools bypass native permission checks and may write files\n                and run commands; use them only for effects the user has authorized.\n                The *_readonly names are legacy labels, not read-only enforcement:\n                Codex inherits native sandbox settings, and Claude Code may use tools\n                already allowed by native settings. For strict read-only work, require\n                an independently enforced sandbox instead. Reconcile delegated results\n                and take responsibility for the final answer.\n\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n          # ---------------------------------------------------------------\n          # Scoped model-facing tools for the four Host provider registrations.\n          # Every delegation returns a child id immediately. External workers\n          # deliver a completion notice but do not accept follow-up messages.\n          # Start independent work together; pairing is never mandatory.\n          # ---------------------------------------------------------------\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n\n              # In-harness DSH children, kept alongside the product workers.\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n\n              # --- Codex, full access ---\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: preset-codex-claude-codex\n                  toolName: subagent_codex\n                  maxDepth: provider-managed\n\n              # --- Codex, read-oriented ---\n              - id: tool-subagent-codex-readonly\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: preset-codex-claude-codex-readonly\n                  toolName: subagent_codex_readonly\n                  maxDepth: provider-managed\n\n              # --- Claude Code, full access ---\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: preset-codex-claude-claude\n                  toolName: subagent_claude_code\n                  maxDepth: provider-managed\n\n              # --- Claude Code, native unattended policy ---\n              - id: tool-subagent-claude-readonly\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: preset-codex-claude-claude-readonly\n                  toolName: subagent_claude_readonly\n                  maxDepth: provider-managed\n\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n"
+    }
+  ],
+  "entries": [
+    "bin/doctor.mjs",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Magica-Chen/dsh-preset-codex-claude.git",
+      "where": "package.json:33"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Magica-Chen/dsh-preset-codex-claude#readme",
+      "where": "package.json:35"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Magica-Chen/dsh-preset-codex-claude/issues",
+      "where": "package.json:37"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-subagent-codex": "^0.2.1-rc.3",
+      "@deepseek-ai/dsh-subagent-claude-code": "^0.2.1-rc.3",
+      "js-yaml": "^4.1.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-10-27T02:17:32Z",
+    "created_at": "2026-10-10T23:44:36Z"
+  },
+  "runtime_files": [
+    "bin/doctor.mjs",
+    "cordis.patch.yml",
+    "icon.svg"
+  ],
+  "readme": [
+    {
+      "section": "dsh-preset-codex-claude",
+      "text": "[](https://github.com/Magica-Chen/dsh-preset-codex-claude/blob/main/LICENSE)\n[](https://github.com/Magica-Chen/dsh-preset-codex-claude/actions/workflows/verify.yml)\n\nA [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) **agent preset** that offers\n**Codex** and **Claude Code** as delegation subagents, each with an unattended native-policy tier and\nan explicit full-access tier. One session can use either worker or dispatch both on independent tasks."
+    },
+    {
+      "section": "dsh-preset-codex-claude",
+      "text": "```text\nsubagent_codex               Codex        bypass approvals and sandbox\nsubagent_codex_readonly      Codex        never ask; native sandbox configuration\nsubagent_claude_code         Claude Code  bypass permission checks\nsubagent_claude_readonly     Claude Code  dontAsk; native authorization rules"
+    },
+    {
+      "section": "dsh-preset-codex-claude",
+      "text": "**The `_readonly` tool names are historical labels, not security guarantees.** Neither tier is a\nDSH-enforced read-only sandbox. See [Permission tiers](#permission-tiers--what-they-actually-mean).\n\nThe preset uses the **official** `@deepseek-ai/dsh-subagent-codex` and\n`@deepseek-ai/dsh-subagent-claude-code` providers — no reimplementation. Codex runs over its own\n`app-server` protocol; Claude Code runs over the official Agent SDK."
+    },
+    {
+      "section": "What this gives you",
+      "text": "- **Pick the worker per task.** Delegate a self-contained task to either product without changing the\n  parent session's model.\n- **Pick the native permission policy.** Use the unattended policy tier or explicitly bypass native\n  permission checks. The policy is fixed per provider registration, not chosen by each tool call.\n- **Run independent tasks concurrently.** In DSH `0.2.1-rc.3`, delegation returns a child id promptly;\n  the runtime delivers the result in a completion notice. There is no `run_in_background` argument.\n- **Keep in-harness delegation.** The preset also includes ordinary `subagent` and `subagent_fork`."
+    },
+    {
+      "section": "What this gives you",
+      "text": "It is a declarative bundle: four Host provider registrations and four preset-scoped product tools,\nplus the standard coding tools. It does not wrap or fork either product."
+    },
+    {
+      "section": "Install",
+      "text": "The provider packages are dependencies of this bundle, both declared as **`^0.2.1-rc.3`**. These\nranges can select newer prereleases whose DSH requirements differ from your installed host.\n\n**For the tested DSH `0.2.1-rc.3` baseline**, first install matching provider bundles:\n\n```bash\ndsh plugin --profile web add @deepseek-ai/dsh-subagent-codex@0.2.1-rc.3\ndsh plugin --profile web add @deepseek-ai/dsh-subagent-claude-code@0.2.1-rc.3\n```\n\nThen install this preset into the same Web profile:"
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add github:Magica-Chen/dsh-preset-codex-claude\n```\n\nDSH composes its runtime package resolution from the installation and selected bundles' dependency\ngraphs. You do **not** need to copy these providers into the global DSH installation or run\n`npm install --prefix` there. Installation-provided packages take precedence in DSH's runtime table;\nother selected bundles can also affect which package is selected."
+    },
+    {
+      "section": "Install",
+      "text": "If you already have a checkout, the local-directory alternative is:\n\n```bash\ndsh plugin --profile web add file:/path/to/dsh-preset-codex-claude\n```\n\nFollow any restart requirement reported by DSH. When replacing an installed version, use the Plugins\npage or the supported remove/add operations rather than overwriting its runtime files. Create a\n**new session** and select **“Codex + Claude Code”** to validate the current preset revision."
+    },
+    {
+      "section": "Install",
+      "text": "Optionally run the static preflight from the installed copy:\n\n```bash\nnode \"${DSH_HOME:-$HOME/.dsh}/profiles/web/node_modules/dsh-preset-codex-claude/bin/doctor.mjs\"\n```\n\nAdjust the profile name or installation location as appropriate. Passing preflight does not prove\nthat the live preset mounted or that a product can authenticate and execute a task."
+    },
+    {
+      "section": "Requirements",
+      "text": "- Node **≥ 22.12.0** and a compatible DSH installation; the target baseline is **`0.2.1-rc.3`**.\n- A DSH Web profile for the preset picker.\n- The providers' bundled native platform payloads, installed with their optional dependencies.\n- Native Codex and/or Claude Code configuration and authentication for the workers you intend to use."
+    },
+    {
+      "section": "Requirements",
+      "text": "A separate `codex` or `claude` executable on `PATH` is **not** the runtime requirement. The providers\nship pinned product runtimes and do not fall back to a host CLI. A host CLI can be useful for managing\nnative login/settings, but its presence, version, or login status does not verify the bundled worker."
+    },
+    {
+      "section": "Requirements",
+      "text": "Native user/project settings remain authoritative. Credential-shaped ambient environment variables\nare scrubbed before child startup; an API key intended for a worker must be supplied through that\nprovider's explicit `env` configuration. Do not commit credentials to this bundle or its generated\npatch. The preflight neither reads credentials nor attempts authentication."
+    },
+    {
+      "section": "Use",
+      "text": "Pick **“Codex + Claude Code”** for a new session, then ask the parent agent to delegate. For example,\nthe product tools accept self-contained prompts:\n\n```text\nsubagent_codex(\n  description=\"Fix parser tests\",\n  prompt=\"Run the parser tests, investigate the two failures, and make the smallest fix.\"\n)\n\nThe second prompt is a task instruction, not an enforcement boundary. Check the worker's native\nsettings or use an independently enforced sandbox when non-modification is mandatory."
+    },
+    {
+      "section": "Use",
+      "text": "Each product worker starts **fresh without your conversation**. Calls return child ids; the parent\nreceives completion notices and can continue independent work in the meantime. Pairing is offered,\nnot mandated. Codex/Claude executions are one-shot and do not accept `send_message` follow-ups."
+    },
+    {
+      "section": "Permission tiers — what they actually mean",
+      "text": "| Tool | Native mode | What is enforced by the provider |\n|---|---|---|\n| `subagent_claude_code` | `bypassPermissions` | Explicitly bypasses native permission checks |\n| `subagent_claude_readonly` | `dontAsk` | Denies operations that are not already authorized, rather than prompting |\n| `subagent_codex` | `dangerously-bypass-approvals-and-sandbox` | Sets `approvalPolicy: never` and `sandbox: danger-full-access` |\n| `subagent_codex_readonly` | `never` | Sets `approvalPolicy: never`; sends no sandbox override |"
+    },
+    {
+      "section": "Permission tiers — what they actually mean",
+      "text": "- **Codex `never` is not read-only.** Its sandbox comes from native Codex configuration. Disabling\n  approval prompts does not itself forbid writes or commands.\n- **Claude `dontAsk` is not a blanket denylist for Write/Edit/Bash.** Native settings and existing\n  authorization still apply. The unattended callback denies permission requests; that alone does\n  not prove that every side-effecting tool must request permission.\n- **Full-access tiers deliberately bypass safeguards.** They can modify files and external systems\n  reachable by the child process. DSH's parent-session file policy is not a substitute for these\n  external workers' native permission systems."
+    },
+    {
+      "section": "Caveats",
+      "text": "- **Preset revisions are retained by live Agents.** A live session keeps its existing revision when\n  the declaration changes; newly created Agents can use the updated revision. Old implementations\n  are not retained across process restarts: recovery uses the currently available definition.\n- **A browser refresh is not a package reload.** Follow DSH's installation/activation diagnostics and\n  restart when requested. A failed definition can be replaced or repaired; it is not universally\n  cached as broken for the entire process lifetime.\n- **Do not enable two bundles declaring the same preset id.** In particular, migrate the old local\n  multiagent bundle rather than enabling it alongside this package if both declare `codex-claude`.\n- **Official provider bundles also expose global tools in rc.3.** This preset uses namespaced Host\n  provider names. Its scoped tools shadow same-named global tools for its Agents; users of other\n  presets may still see global tools from separately enabled official bundles.\n- **Native settings and payloads matter.** Missing optional payloads, unsupported platforms, native\n  project settings, and authentication can still cause delegation failure after stat"
+    },
+    {
+      "section": "How it works",
+      "text": "The bundle declares four namespaced provider instances as **Host rows**, separate from the agent\npreset's scoped tool rows. This avoids re-registering process-wide provider names for every retained\npreset revision. Tool names remain short and stable.\n\n[cordis.patch.yml](cordis.patch.yml) is generated. [generate-patch.py](generate-patch.py) holds the\ncanonical rows and persona; edit the generator and regenerate instead of editing the patch by hand:"
+    },
+    {
+      "section": "How it works",
+      "text": "```bash\nnpm run build      # python3 generate-patch.py\n```"
+    },
+    {
+      "section": "The preflight",
+      "text": "[bin/doctor.mjs](bin/doctor.mjs) performs **static structural and dependency checks** without loading\nprovider code or starting a model:"
+    },
+    {
+      "section": "The preflight",
+      "text": "- Locates DSH through its executable path, or an explicit `DSH_PRESET_CC_INSTALL` directory.\n- Looks for provider package manifests from the DSH installation first, then from this bundle's own\n  dependency location. Reports the source and observed version, rather than requiring equal package\n  version strings or claiming that a mismatch creates a separate service singleton.\n- Checks the preset declaration, unique row ids and provider names, the four product tool bindings,\n  and the actual `plan-mode` row's non-empty `config.section`.\n- Parses Loader `!!js` scalars as inert data; it does not evaluate them."
+    },
+    {
+      "section": "The preflight",
+      "text": "This deliberately limited lookup **does not reproduce the active profile's complete resolution\ntable**, compatibility admission, native payload loading, or live activation. A provider found on\ndisk is not proof that the running profile selected it. Authentication, native settings, effective\npermissions, and delegation remain unverified. A different observed version is a diagnostic, not\nan automatic proof of compatibility or incompatibility."
+    },
+    {
+      "section": "The preflight",
+      "text": "Exit `0` means the static checks passed, possibly with warnings. Exit `1` means a static check failed.\nUse `--help` for the installation and baseline overrides. Do not treat either the doctor or the\nrepository's structural tests as an end-to-end product test."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```bash\ndsh plugin --profile web remove dsh-preset-codex-claude\n```\n\nThis removes the preset bundle through DSH's package management. Separately installed official\nprovider bundles remain separate installations; remove those through DSH if they are no longer\nwanted. Do not manually uninstall packages from DSH's global installation for this preset."
+    },
+    {
+      "section": "Compatibility",
+      "text": "The target baseline is **DSH `0.2.1-rc.3`**, with both provider dependencies declared as\n**`^0.2.1-rc.3`**. These are caret ranges, not exact pins: a later dependency resolution can select\nanother satisfying release. Provider compatibility is governed by its declared `engines.dsh` or\nDSH peer requirements, which DSH checks at composition boundaries. For example, providers\n`0.2.1-rc.4` satisfy the caret range but declare exact rc.4 DSH peers; they must not be assumed compatible\nwith an rc.3 host. The baseline installation commands above explicitly select the rc.3 provider\nbundles. Updating the host or dependencies still requires reviewing the selected versions and\nchecking actual activation; do not bypass a compatibility refusal just to make the preset load."
+    },
+    {
+      "section": "Compatibility",
+      "text": "Upstream contracts for this baseline:\n\n- [Codex provider rc.3 documentation](https://unpkg.com/@deepseek-ai/dsh-subagent-codex@0.2.1-rc.3/README.md)\n- [Claude Code provider rc.3 documentation](https://unpkg.com/@deepseek-ai/dsh-subagent-claude-code@0.2.1-rc.3/README.md)\n- [DSH package loading documentation](https://unpkg.com/@deepseek-ai/dsh-app-boot@0.2.1-rc.3/README.md)"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

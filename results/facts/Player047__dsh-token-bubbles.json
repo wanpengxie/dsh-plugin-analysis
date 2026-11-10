@@ -1,0 +1,201 @@
+{
+  "repo": "Player047/dsh-token-bubbles",
+  "commit": "1520e7e16098669d31f03962b6463725d2bcc89d",
+  "extracted_at": "2026-11-10T12:04:46.649115+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 38541,
+    "lines_by_language": {
+      "JSON": 31,
+      "JavaScript": 485,
+      "Markdown": 218,
+      "Other": 21,
+      "YAML": 9
+    },
+    "outline": [
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-token-bubbles",
+    "version": "0.4.5",
+    "description": "Token usage visualizer for the DeepSeek Harness web GUI: watch colorful bubbles pop up from the bottom-right corner while your agent generates tokens.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime"
+        ]
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-token-bubbles bundle patch.\n# When this package is installed with `dsh plugin --profile web add ...`,\n# the profile auto-appends it to dsh.profile.bundles and applies this layer,\n# so the plugin mounts without any manual cordis.patch.yml editing.\n# The host row is a no-op; it exists so the row activates and\n# dsh-client-modules serves the client bundle at /plugins/dsh-token-bubbles/client.js.\n- insert:\n    - id: token-bubbles\n      name: dsh-token-bubbles\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-08-26T13:37:01Z",
+    "created_at": "2026-08-25T17:40:47Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-token-bubbles",
+      "text": "中文 | [English](README.en.md)\n\n*这是一个氛围编程（Vibe Coding）项目。使用 Deepseek V4 Pro 模型，@Deepseek-Harness。*\n\n> A useful — or delightfully useless — plugin for DeepSeek Harness that visualizes your token usage as you go. It's just delightful watching colorful bubbles pop up while your agent is emptying your wallet, isn't it?\n\nDeepSeek Harness web GUI 的 token 可视化插件：生成 token 时，右下角会冒出一个个彩色小方块，按顺序排列，每行 10/20 个，每个方块代表的 token 数可以分别设置（输入系 / 输出系各一个除数，自由调倍数）。"
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "| 颜色 | 含义 |\n|---|---|\n| 🟪 紫红 `#e446f9` | 输出 token（可见回复文本） |\n| 🟣 深紫 `#5524a4` | 思考 token（reasoning） |\n| 🔵 浅蓝 `#79c4ff` | 输入 token（缓存未命中） |\n| 🔵 深蓝 `#2d5cf6` | 输入 token（缓存命中） |\n\n颜色可在 `COLORS` 常量里改。\n\n所有方块进入同一条 FIFO 队列，由定时器按 `revealIntervalMs` 的节奏逐个放出：每个方块上屏时都落在右下角最贴近角落的位置，所以无论哪种颜色，网格都**从下往上**生长（最新方块在最下，旧的被推向左侧和上方；换行时整块网格带 150ms 平滑上移动画）。队列**不会中途清空**——每一步产生的方块都排在队尾接着显示，只有切换会话时清屏。整层 `pointer-events: none`，**不会遮挡或阻挡对话操作**。\n\n两个可选机制（都默认开启，见配置表）："
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "- **超时消失**：每个方块显示 `lifetimeMs` 后，从最老的开始溶解——从顶行开始、行内从左往右、逐行向下，节奏由 `expireIntervalMs` 控制。溶解时**其余方块原地不动**，最底下一行始终保持满员，直到上方全部消完才轮到它；网格自动变成时间窗口；\n- **自适应速度**：等待队列越长，每 tick 放出的方块越多（积压每多 `adaptiveStep` 个多放 1 个，单 tick 上限 `adaptiveCap` 个），不会让显示等太久。\n\n同屏数量超出 `maxSquares` 时仍会整行淘汰最顶上的一行（带离场动画），作为兜底。\n\n数据来源有两个："
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "- **紫红（输出）/ 深紫（思考）**：实时估算——直接订阅当前会话快照的流式 `partial` 块，按**语言自适应**折合（CJK ≈ 1.2 字符/token、其他 ≈ 4 字符/token，常数由真实会话的官方用量标定），把 `text` 与 `reasoning` 两类块分开计数，模型一边写、方块就一边排队；每次模型调用结束时，再用官方 `outputTokens` 对账（`calibrateWithUsage`），差额补发/回扣，把总数校准到官方真值。\n- **浅蓝（输入未命中）/ 深蓝（缓存命中）**：token-meter 的 `tokenUsage` 会话投影（`uncachedInputTokens` / `cacheReadTokens` / `cacheWriteTokens`），在每次模型调用上报用量时推送。"
+    },
+    {
+      "section": "方式一：从 GitHub 安装（推荐）",
+      "text": "```powershell\ndsh plugin --profile web add github:Player047/dsh-token-bubbles\n```\n\n想锁版本可以带 tag（按仓库实际 tag 替换）：\n\n```powershell\ndsh plugin --profile web add github:Player047/dsh-token-bubbles#v0.4.5\n```"
+    },
+    {
+      "section": "方式二：本地开发（link 安装）",
+      "text": "```powershell\ngit clone https://github.com/Player047/dsh-token-bubbles.git\ndsh plugin --profile web add .\\dsh-token-bubbles\n```\n\n两种方式都会在 web profile 目录里执行 pnpm 安装，并把 `dsh-token-bubbles` 自动追加进 `dsh.profile.bundles`（包的 `cordis.patch.yml` 会插入宿主行，宿主行是 no-op，仅用于让客户端 bundle 被 `/plugins/dsh-token-bubbles/client.js` 提供）。\n\n- **GitHub 安装** = 拷贝进 profile，改配置请改自己 profile 里的 `node_modules/dsh-token-bubbles/lib/client.js`，改完重启生效；\n- **link 安装** = 直接指向本地源码，改源码后重启即可生效，适合开发迭代。\n\n安装后**重启 web profile** 生效："
+    },
+    {
+      "section": "方式二：本地开发（link 安装）",
+      "text": "```powershell\ndsh web\n```\n\n（旧进程退出后重新启动即可；会话有持久化，对话不会丢。还没有 web profile 的用户，`dsh plugin` 会自动初始化。）"
+    },
+    {
+      "section": "卸载",
+      "text": "```powershell\ndsh plugin --profile web remove dsh-token-bubbles\n```\n\n然后重启 `dsh web`。"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 当前值 | 说明 |\n|---|---|---|\n| `inputTokensPerSquare` | `1000` | 输入系（未缓存输入 + 缓存命中）每个方块代表的 token 数 |\n| `outputTokensPerSquare` | `10` | 输出系（正文 + 思考）每个方块代表的 token 数；调小（如 `100`）让输出方块更密，与输入量级平衡 |\n| `columns` | `20` | 每行方块数（可选 `10` / `20`） |\n| `squareSize` / `gap` | `12` / `3` | 方块边长与间距（px） |\n| `maxSquares` | `1100` | 屏幕上同时存在的方块数上限，超出时整行淘汰最顶上的一行（带离场动画，兜底） |\n| `pendingCap` | `100000` | 待显示队列的软上限（防异常堆积） |\n| `batchCap` | `100000` | 单次用量更新最多入队的方块数 |\n| `revealIntervalMs` | `1` | 显示节奏：每多少 ms 一个 tick |\n| `timeoutEnable` | `true` | 超时消失开关：开启后每个方块显示 `lifetimeMs` 后从最早的开始逐个消失 |\n| `lifetimeMs` | `20000` | 方块显示时长（ms），配合 `timeoutEnable` |\n| `expireIntervalMs` | `10` | 逐个消失的节奏：每多少 ms 让最老的 1 个过期方块离场 |\n| `adaptiveSpeed` | `true` | 自适应速度开关：积压越多每 tick 放出越多 |\n| `adaptiveStep` | `100` | 每积压多少方块，每 tick 多放 1 个 |\n| `adaptiveCap` | `50` | 每 tick 最多放出的方块数 |\n| `cjkCharsPerToken` | `1.2` | 流式估算：CJK 字符每 token 字符数（官方用量标定） |\n| `otherCharsPerToken` | `4` | 流式估算：英文/数字/代码每 token 字符数（思考实测 ≈3.9） |\n| `calibrateWithUsage` | `true` | 官方校准开关：每次调用结束用官方 `outputTokens` 对账补差 |\n| `corner` | `{right:16, bottom:16}` | 右下角留白 |"
+    },
+    {
+      "section": "工作原理",
+      "text": "- 宿主侧：包被挂载为 composition 里的一行（no-op 插件），`dsh-client-modules` 据此把 `lib/client.js` 以 `/plugins/dsh-token-bubbles/client.js?rev=…` 注入启动清单。\n- 客户端侧：bundle 通过 `window.__ModuleLoader__` 注册为 Cordis 客户端插件（`inject: [\"slots\", \"sessions\", \"timer\"]`），把可视化组件注册进 `shell.overlay`（框架级浮层，点击穿透）。\n- 组件订阅 `sessions.currentProvideInfo` 拿到当前会话；`tokenUsage` 投影的可观察面产生蓝色方块（输入/缓存增量），会话快照的流式 `partial` 产生深紫（思考）与紫红（输出）方块（按 CJK/其他 语言自适应折合估算 token，边写边排队，调用结束时用官方用量校准）。所有方块都进入同一条 FIFO 队列，由 `timer` 服务按 `revealIntervalMs` 逐个放出，因此所有颜色都从右下角向上生长；超出行数上限时最顶上一行播放离场动画后移除，会话切换时清屏并重新建立基线。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "[中文](README.md) | English\n\n*This is a Vibe Coding project. Using Deepseek V4 Pro, @Deepseek-Harness*\n\n> A useful — or delightfully useless — plugin for DeepSeek Harness that visualizes your token usage as you go. It's just delightful watching colorful bubbles pop up while your agent is emptying your wallet, isn't it?"
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "A token visualizer plugin for the DeepSeek Harness web GUI: as tokens stream, small colored squares bubble up from the bottom-right corner, in order, 10/20 per row, with independent tokens-per-square divisors for the input side and the output side (tune each multiplier freely)."
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "| Color | Meaning |\n|---|---|\n| 🟪 Magenta `#e446f9` | Output tokens (visible reply text) |\n| 🟣 Dark purple `#5524a4` | Reasoning tokens |\n| 🔵 Light blue `#79c4ff` | Input tokens (cache miss) |\n| 🔵 Dark blue `#2d5cf6` | Input tokens (cache hit) |\n\nColors can be changed in the `COLORS` constant."
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "Every square goes through ONE FIFO queue and is released at the `revealIntervalMs` cadence. Each square always mounts into the slot closest to the bottom-right corner, so the grid always grows **bottom-up** for every color (the newest square sits at the bottom, older ones get pushed left and up; when a row completes, the whole grid glides up one cell with a 150ms animation). The queue is **never cleared mid-session** — squares from every step simply line up at the back — it only clears on session switch. The whole layer is `pointer-events: none`, so it **never blocks or intercepts the conversation**."
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "- **Timeout disappearance**: after a square has been shown for `lifetimeMs`, the oldest squares dissolve in place — starting from the top row, left to right within each row, then row by row downward, paced by `expireIntervalMs`. While dissolving, **all other squares stay put**; the bottommost row always remains full and is the last to go. The grid effectively becomes a sliding time window.\n- **Adaptive speed**: the longer the waiting queue, the more squares are released per tick (one extra square per `adaptiveStep` backlogged, capped at `adaptiveCap` per tick), so the display never falls too far behind."
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "When the on-screen count exceeds `maxSquares`, the topmost row is still evicted as a whole (with a leave animation) as a safety net.\n\nThere are two data sources:"
+    },
+    {
+      "section": "dsh-token-bubbles",
+      "text": "- **Magenta (output) / dark purple (reasoning)**: estimated live — the plugin subscribes to the streaming `partial` blocks of the current session snapshot and folds them with a **language-adaptive heuristic** (CJK ≈ 1.2 chars/token, other ≈ 4 chars/token — constants calibrated against real provider usage), counting `text` and `reasoning` blocks separately, so squares queue up while the model is still writing. When each model call finishes, the estimate is **reconciled against the official `outputTokens`** (`calibrateWithUsage`): the difference is topped up or clawed back so the totals match the official count.\n- **Light blue (cache miss) / dark blue (cache hit)**: the token-meter's `tokenUsage` session projection (`uncachedInputTokens` / `cacheReadTokens` / `cacheWriteTokens`), pushed whenever each model call reports usage."
+    },
+    {
+      "section": "Option 1: install from GitHub (recommended)",
+      "text": "```powershell\ndsh plugin --profile web add github:Player047/dsh-token-bubbles\n```\n\nTo pin a version, add a tag (replace with an actual repository tag):\n\n```powershell\ndsh plugin --profile web add github:Player047/dsh-token-bubbles#v0.4.5\n```"
+    },
+    {
+      "section": "Option 2: local development (link install)",
+      "text": "```powershell\ngit clone https://github.com/Player047/dsh-token-bubbles.git\ndsh plugin --profile web add .\\dsh-token-bubbles\n```\n\nBoth options run pnpm inside the web profile directory and automatically append `dsh-token-bubbles` to `dsh.profile.bundles` (the package's `cordis.patch.yml` inserts a no-op host row whose only job is to make the client bundle served at `/plugins/dsh-token-bubbles/client.js`)."
+    },
+    {
+      "section": "Option 2: local development (link install)",
+      "text": "- **GitHub install** = copied into the profile; to tweak the config, edit `node_modules/dsh-token-bubbles/lib/client.js` inside your own profile, then restart.\n- **link install** = points directly at your local source; edits take effect after a restart — best for development.\n\nRestart the web profile to take effect:\n\n```powershell\ndsh web\n```"
+    },
+    {
+      "section": "Option 2: local development (link install)",
+      "text": "(Exit the old process and start again; sessions are persisted, so conversations are not lost. Users without a web profile yet get one auto-initialized by `dsh plugin`.)"
+    },
+    {
+      "section": "Uninstall",
+      "text": "```powershell\ndsh plugin --profile web remove dsh-token-bubbles\n```\n\nThen restart `dsh web`."
+    },
+    {
+      "section": "Configuration",
+      "text": "All configuration lives in the `CFG` constant at the top of the client bundle; edit it and restart `dsh web` to apply:"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Current value | Description |\n|---|---|---|\n| `inputTokensPerSquare` | `1000` | Tokens per square for the input side (uncached input + cache hits) |\n| `outputTokensPerSquare` | `10` | Tokens per square for the output side (text + reasoning); lower it (e.g. `100`) for denser output squares that balance the input side |\n| `columns` | `20` | Squares per row (`10` / `20`) |\n| `squareSize` / `gap` | `12` / `3` | Square size and gap (px) |\n| `maxSquares` | `1100` | On-screen square cap; the topmost row is evicted as a whole (with a leave animation) when exceeded |\n| `pendingCap` | `100000` | Soft cap of the waiting queue (guards against pathological backlog) |\n| `batchCap` | `100000` | Max squares enqueued per usage update |\n| `revealIntervalMs` | `1` | Display cadence: one tick every N ms |\n| `timeoutEnable` | `true` | Timeout switch: when on, each square dissolves after `lifetimeMs`, oldest first |\n| `lifetimeMs` | `20000` | How long a square stays visible (ms), used with `timeoutEnable` |\n| `expireIntervalMs` | `10` | Dissolve cadence: let the oldest expired square leave every N ms |\n| `adaptiveSpeed` | `true` | Adaptive speed switch: more backlog → more squares per tick |\n| `"
+    },
+    {
+      "section": "How it works",
+      "text": "- Host side: the package mounts as one row in the composition (a no-op plugin), which is what makes `dsh-client-modules` inject `lib/client.js` into the boot manifest at `/plugins/dsh-token-bubbles/client.js?rev=…`.\n- Client side: the bundle registers as a Cordis client plugin (`inject: [\"slots\", \"sessions\", \"timer\"]`) via `window.__ModuleLoader__` and mounts its component into `shell.overlay` (the frame-wide click-through layer).\n- The component subscribes to `sessions.currentProvideInfo` for the current session; the `tokenUsage` projection face produces the blue squares (input/cache deltas), and the streaming `partial` of the session snapshot produces the dark-purple (reasoning) and magenta (output) squares (language-adaptive token estimation, queued while streaming and reconciled against official usage at the end of each call). All squares flow through one FIFO queue released by the `timer` service at `revealIntervalMs`, so every color grows bottom-up; when the row cap is exceeded the topmost row leaves with an animation, and a session switch clears the screen and re-baselines."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

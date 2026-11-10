@@ -1,0 +1,462 @@
+{
+  "repo": "LLL-lyh0/dsh-continue-guard",
+  "commit": "85f05b22375e3c675b952d2843059a7899506292",
+  "extracted_at": "2026-11-10T11:13:51.883440+00:00",
+  "tree": {
+    "files": 22,
+    "bytes": 318353,
+    "lines_by_language": {
+      "JSON": 117,
+      "JavaScript": 5921,
+      "Markdown": 191,
+      "Other": 43,
+      "YAML": 59
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/store/icon-180.png",
+      "docs/store/icon-96.png",
+      "docs/store/icon.svg",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "scripts/check-readme-counts.mjs",
+      "scripts/mutate-client.mjs",
+      "scripts/mutate-monitor.mjs",
+      "scripts/mutate-readme.mjs",
+      "scripts/mutate-startup.mjs",
+      "scripts/verify-bundle.mjs",
+      "scripts/verify-client.mjs",
+      "scripts/verify-host.mjs",
+      "scripts/verify-mount.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-continue-guard",
+    "version": "0.3.0",
+    "description": "一键「继续」：在输入栏提供一键续跑意外中断的会话；常驻网络监测，网一回来 2 秒内自动续跑；宿主重启（含正常关机）后接上被进程退出打断、没跑完的回合。One-click continue for interrupted sessions, with a resident link monitor that resumes within seconds of the network returning and startup recovery for turns a host restart left unfinished.",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "dsh-bundle",
+      "cordis",
+      "continue",
+      "auto-resume",
+      "network"
+    ],
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE",
+      "scripts/*.mjs",
+      "docs/store/*"
+    ],
+    "scripts": {
+      "test": "node scripts/verify-host.mjs && node scripts/verify-client.mjs && node scripts/verify-bundle.mjs && node scripts/verify-mount.mjs && node scripts/check-readme-counts.mjs",
+      "test:host": "node scripts/verify-host.mjs",
+      "test:client": "node scripts/verify-client.mjs",
+      "test:bundle": "node scripts/verify-bundle.mjs",
+      "test:mount": "node scripts/verify-mount.mjs",
+      "test:docs": "node scripts/check-readme-counts.mjs",
+      "test:mutation": "node scripts/mutate-client.mjs && node scripts/mutate-monitor.mjs && node scripts/mutate-startup.mjs && node scripts/mutate-readme.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      }
+    },
+    "author": "LLL-lyh0",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/LLL-lyh0/dsh-continue-guard.git"
+    },
+    "homepage": "https://github.com/LLL-lyh0/dsh-continue-guard#readme",
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.1.2-alpha.1 || >=0.1.2-alpha.1 <0.2.0-0 || >=0.2.0-rc.1 <0.2.1-alpha.1 || >=0.2.1-alpha.1 <0.3.0-0"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/dsh-llm": {
+        "optional": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 一键「继续」插件（Continue button）\n#\n# 输入栏下方（composer 停靠区）加一颗「继续」按钮：意外中断的会话点一下就重新跑起来；\n# 同时监听网络中断 / 上游截断（输出超限、断流），恢复后等 1~3 秒自动补发一次「继续」。\n#\n# Host 半身持有唯一的中断判定与续跑预算，Client 半身只渲染按钮并调用同一组路由。\n# 下面每一项都可改；字段语义见 index.js 的 DEFAULTS 与 Config。\n- insert:\n    - id: dsh-continue-guard\n      name: 'dsh-continue-guard'\n      config:\n        enabled: true\n        # 按钮与自动续跑发送的文本。\n        text: 继续\n        # 自动续跑总开关。关掉后只剩手动按钮。\n        autoResume: true\n        # 网络恢复后到发出「继续」的等待（毫秒），建议 1000~3000。\n        resumeDelayMs: 2000\n        # 同一会话连续自动续跑的次数上限；人一说话就清零。\n        maxAutoResumes: 3\n        # 普通模型/代理错误是否也自动续跑。\n        # 默认否：AUTH、额度耗尽与断网在本地无法区分，自动重试会白烧额度。\n        autoResumeOnError: false\n        # 输出在 max-tokens 处被截断时自动续跑（这类截断重试是安全的）。\n        resumeOnTruncation: true\n        # 连通性探测目标，按顺序尝试。换成你自己的网关更可靠：\n        # 有些环境会拦这些域名，探测失败会被当成「还没联网」。\n        probeUrls:\n          - https://api.deepseek.com\n          - https://www.baidu.com\n          - https://github.com\n        probeTimeoutMs: 4000\n        probeRetries: 5\n        probeBackoffMs: 3000\n        probeBackoffMaxMs: 30000\n        # ── 常驻网络监测 ──\n        # 挂载后立刻探一次，之后按这个间隔一直探下去（无关是否有会话在等待）。\n        # 为什么必须常驻：WiFi 掉线再来，宿主收不到任何一个可靠事件；「链路还在断」\n        # 和「已经能上网」唯一的分辨办法就是不停地问。10 秒既是要求的节奏，也就是\n        # 「网回来了」到「会话被接上」之间最坏的延迟。\n        # 每次检查是并行的单次尝试（不重试），所以一轮最多花 probeTimeoutMs，\n        # 不会像串联重试那样占住一分钟以上、把恢复边沿吞掉。\n        netCheckIntervalMs: 10000\n        # 同一会话两次自动续跑之间的最小间隔（毫秒）。\n        minResumeGapMs: 4000\n        # 按钮外观：是否画胶囊底/描边；是否把中断原因写进 hover 提示。\n        pill: true\n        showReason: true\n        # 排查「为什么没自动继续」时打开：每次判定与续跑都写进宿主日志。\n        verbose: false\n        # ── 启动恢复 ──\n        # 宿主重启后扫描最近的会话日志：上一轮「开着没关」的回合说明进程是在跑的时候\n        # 被杀掉的——这类会话没有活着的 agent，也没有内存里的中断状态，只有日志留着证据。\n        # 扫到就按同一套预算/探测/间隔规则自动接上；用户自己按过停止的会话永不接。\n        startupResume: true\n        # 往前看多久（毫秒）。默认一天：够覆盖「刚刚那次意外退出」，又不会翻出陈年旧账。\n        startupResumeWithinMs: 86400000\n        # 一次启动最多接上几个会话（按最后活动时间从新到旧）。\n        startupResumeLimit: 3\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify-mount.mjs:57"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify-mount.mjs:523"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify-mount.mjs:679"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify-mount.mjs:680"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify-mount.mjs:684"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify-mount.mjs:685"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "cordis.patch.yml:29"
+    },
+    {
+      "host": "www.baidu.com",
+      "url": "https://www.baidu.com",
+      "where": "cordis.patch.yml:30"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com",
+      "where": "cordis.patch.yml:31"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "index.js:123"
+    },
+    {
+      "host": "www.baidu.com",
+      "url": "https://www.baidu.com",
+      "where": "index.js:123"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com",
+      "where": "index.js:123"
+    },
+    {
+      "host": "${host",
+      "url": "http://${host",
+      "where": "index.js:1580"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "index.js:1876"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LLL-lyh0/dsh-continue-guard.git",
+      "where": "package.json:58"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LLL-lyh0/dsh-continue-guard#readme",
+      "where": "package.json:60"
+    },
+    {
+      "host": "ok.example",
+      "url": "https://ok.example",
+      "where": "scripts/verify-bundle.mjs:128"
+    },
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "scripts/verify-bundle.mjs:182"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "https://127.0.0.1:1/",
+      "where": "scripts/verify-host.mjs:427"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test",
+      "where": "scripts/verify-host.mjs:804"
+    },
+    {
+      "host": "b.test",
+      "url": "https://b.test",
+      "where": "scripts/verify-host.mjs:804"
+    },
+    {
+      "host": "c.test",
+      "url": "https://c.test",
+      "where": "scripts/verify-host.mjs:804"
+    },
+    {
+      "host": "blocked.test",
+      "url": "https://blocked.test",
+      "where": "scripts/verify-host.mjs:820"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test",
+      "where": "scripts/verify-host.mjs:820"
+    },
+    {
+      "host": "blocked.test",
+      "url": "https://blocked.test",
+      "where": "scripts/verify-host.mjs:822"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test",
+      "where": "scripts/verify-host.mjs:828"
+    },
+    {
+      "host": "slow.test",
+      "url": "https://slow.test",
+      "where": "scripts/verify-host.mjs:837"
+    },
+    {
+      "host": "fast.test",
+      "url": "https://fast.test",
+      "where": "scripts/verify-host.mjs:837"
+    },
+    {
+      "host": "slow.test",
+      "url": "https://slow.test",
+      "where": "scripts/verify-host.mjs:839"
+    },
+    {
+      "host": "fast.test",
+      "url": "https://fast.test",
+      "where": "scripts/verify-host.mjs:845"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test",
+      "where": "scripts/verify-host.mjs:851"
+    },
+    {
+      "host": "b.test",
+      "url": "https://b.test",
+      "where": "scripts/verify-host.mjs:851"
+    },
+    {
+      "host": "probe.test",
+      "url": "https://probe.test",
+      "where": "scripts/verify-host.mjs:874"
+    },
+    {
+      "host": "evil.example",
+      "url": "https://evil.example",
+      "where": "scripts/verify-mount.mjs:307"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "https://127.0.0.1:1/",
+      "where": "scripts/verify-mount.mjs:482"
+    },
+    {
+      "host": "wire.test",
+      "url": "https://wire.test/",
+      "where": "scripts/verify-mount.mjs:526"
+    },
+    {
+      "host": "wire.test",
+      "url": "https://wire.test/",
+      "where": "scripts/verify-mount.mjs:534"
+    },
+    {
+      "host": "wire.test",
+      "url": "https://wire.test/",
+      "where": "scripts/verify-mount.mjs:560"
+    },
+    {
+      "host": "wire.test",
+      "url": "https://wire.test/",
+      "where": "scripts/verify-mount.mjs:574"
+    },
+    {
+      "host": "wire.test",
+      "url": "https://wire.test/",
+      "where": "scripts/verify-mount.mjs:593"
+    },
+    {
+      "host": "blocked.test",
+      "url": "https://blocked.test/",
+      "where": "scripts/verify-mount.mjs:619"
+    },
+    {
+      "host": "wire.test",
+      "url": "https://wire.test/",
+      "where": "scripts/verify-mount.mjs:720"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-30T15:49:51Z",
+    "created_at": "2026-10-27T13:02:10Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "一键「继续」· dsh-continue-guard",
+      "text": "输入框下方多一颗 **继续** 按钮。任务被意外打断时（网络掉线、上游把回复截断、代理掐了流），点一下就把那个会话重新跑起来；并且会自己盯着网络——**网络一回来自动按这一下**，等 1~3 秒再发，不让你手动补话。\n\n> 插件跑在 DeepSeek Harness 的 profile 里，Host 半身负责判定与投递，Client 半身只负责画那颗按钮。\n\n---"
+    },
+    {
+      "section": "1. 一键续跑",
+      "text": "按钮常驻在 composer 停靠区（`conversation.composer.dock`，就是宿主显示「轮次 / 步数 / token」那一行）。点一下 = **以正常用户输入的形式**发一句 `继续`。\n\n**点击走的是输入框自己的那条路**：`sessions.binding(id).session.beginSubmission(...)` + `session.prompt([{type:'text',text}], 'queue', …)`——和你敲字按回车是同一对 API。所以这句话会作为一条**普通用户消息**出现在对话里。注意它**不伪造任何消息来源**：这正是调用真实提交链路的意义，署名由宿主在真实链路上完成。\n\nHost 侧另有一条兜底通路（`POST /resume`，署名 `plugin:dsh-continue-guard`），只在客户端拿不到 `sessions` 服务时启用。而**真实拒绝**（上游报错）绝不被兜底重试——那会把同一句话发两遍。"
+    },
+    {
+      "section": "2. 自动续跑是真的把循环叫醒",
+      "text": "自动续跑走 Host 侧：`agent.followup()` 既排队下一轮的提示词，**又唤醒驱动器**。如果只是往日志里写一条 `user/message`，消息看得见、循环却不会醒——那正是这款插件要修的病。没有活跃 Agent 时宿主会明确回报 `no-agent`，不会假装成功。"
+    },
+    {
+      "section": "3. 断网 / 截断后自动续跑",
+      "text": "**WiFi 掉线再重连是这条的重点**，而且有两条独立的证据通路（之前只有一条，所以漏了一半情况）：\n\n1. **错误本身的形状**：`TRANSPORT` / `TIMEOUT` / 5xx / `fetch failed` / `ECONNRESET` / `getaddrinfo` / 未预期的 EOF… 这些一望即知是链路问题。\n2. **这台机器自己报离线**：WiFi 掉线时，浏览器会先报 `offline`。有些 WiFi 断流并不产生上面那些 errno 文案，而是被上游表现成「空回复」「上游过载」这种通用错误——单看错误无法与额度/账号问题区分。但只要**本机在那一刻确实报了离线**，这就是链路问题，自动续跑。"
+    },
+    {
+      "section": "3. 断网 / 截断后自动续跑",
+      "text": "浏览器恢复 `online` 时，插件把它当作**「链路已回来」的证据**（而不是等探测跑完），立刻走同一套 2 秒冷却。⚠️ 这里修过一个真 bug：原来这个恢复信号被 `if (!networkDown) return` 丢掉了 —— 而 `networkDown` 只有在探测**失败过**之后才为真，探测又慢（重试+退避可达 137 秒），所以在 WiFi 重连那一刻它通常是 `false`，信号被丢掉，会话就永远不续。现在恢复信号无条件被采纳，发送前的所有检查照旧。\n\n**手动停止仍然永不续跑。** 这是用宿主源码定死的判据：`abortedCancelCause` 的取值是闭集（`user` / `parent` / `disposed` / `hook`），其中 `user` 只由 `cancel({kind:'user'})` 产生——也就是你按停止按钮、侧栏或命令触发的那条路径。**WiFi 掉线产生不了它**，所以「点了停止就不自动续」这条规则不需要任何妥协，也不会有误伤。"
+    },
+    {
+      "section": "3. 断网 / 截断后自动续跑",
+      "text": "| 触发 | 默认自动续跑 | 为什么 |\n|---|---|---|\n| 网络中断（`TRANSPORT` / `TIMEOUT` / 5xx / `fetch failed` …） | ✅ | 链路恢复后重试是安全的 |\n| 本机报过离线时出现的通用错误 | ✅ | 本机确实断过网，这是链路问题而非账号问题 |\n| 上游截断（`max-tokens`，输出超限） | ✅ | 请求本身是成功的，只是没写完 |\n| 上下文超窗（`CONTEXT_WINDOW_EXCEEDED`） | ❌ | 该压缩，硬重试只会再撞墙 |\n| 普通模型/代理错误 | ❌（可开） | AUTH、额度耗尽在本地与断网无法区分，乱重试等于白烧额度 |"
+    },
+    {
+      "section": "3. 断网 / 截断后自动续跑",
+      "text": "**网络怎么判**：`navigator.onLine` 单独用不可信——网卡插着它照样是 `true`，哪怕背后是断掉的上联、captive portal 或没路由的 VPN。所以真正的判据是 Host 侧对几个探测目标发起的**带超时的真实请求**。探测失败不会把状态永久钉在“离线”：一个每 10 秒的巡检会自己重试，因为链路恢复这件事**不会给任何进程发事件**。反过来，浏览器报 `online` 是「链路已回来」的**第一手证据**，用它把等待缩短到 2 秒冷却，而不是傻等一轮探测跑完。\n\n**发送前的三重护栏**：Agent 必须 `idle`（运行中投 followup 会烂在收件箱里）、收件箱必须空着、同一会话两次自动续跑之间还有最小间隔。连续自动续跑有次数上限；**人一说话就清零**——包括次数和间隔，因为人接手过之后，下一次失败是新的一轮。"
+    },
+    {
+      "section": "4. 宿主重启后自动接上没跑完的会话",
+      "text": "前三条都要求**会话还活着**（有 agent、有内存里的中断状态）。但如果 DSH 自己被关掉、崩掉、或被杀掉，那个「正在跑」的回合就**什么都没有了**：没有 agent，没有事件，内存状态也随进程一起消失。证据只剩会话日志，而它有两种形态，两种都要接："
+    },
+    {
+      "section": "4. 宿主重启后自动接上没跑完的会话",
+      "text": "- **回合没关**（`turn/start` 之后没有 `turn/end`）→ 进程被强杀/崩溃。宿主自己修日志时也用这个判据（`dsh-session` 的 `interruptedTurnClosers`）。\n- **回合被 `disposed` 关掉**（`aborted/reason.disposed`）→ **正常关闭宿主、关机重启**。`AgentLoop.cancel({kind:'disposed'})` 会在退出时把正在跑的回合**补上结尾**，所以日志看起来是「已结束」——旧版扫描只找没关的回合，因此**这一类完全漏掉**，正是你说的「关机、宿主关闭后要接上」。判据的语义在两条路径上是相反的：**活着的时候** `disposed` 是「你主动结束」，绝不能续；**重启后看上一轮的日志**，它是「宿主半路走了」的指纹，必须续。\n\n所以启动时会做一次扫描："
+    },
+    {
+      "section": "4. 宿主重启后自动接上没跑完的会话",
+      "text": "- 只看**最近 24 小时**内有活动的会话（`startupResumeWithinMs`），按最后活动时间**从新到旧**；\n- 最多接上 `startupResumeLimit`（默认 3）个，不会一次唤醒一堆；\n- 判定之后走**同一套** 2 秒冷却 + 探测 + 预算 + 间隔，不是另起一条发送路径；\n- 结尾的判定**只认日志**，而且下面这些形状是在 **467 份真实日志**里数出来的，不是猜的：\n  - 回合没关（`turn/start` 之后没有 `turn/end`）→ 进程中途退出 → 接；\n  - `{\"kind\":\"aborted\",\"reason\":{\"kind\":\"disposed\"}}` → 宿主正常关闭/关机 → **接**（`host.exit`）；\n  - `{\"kind\":\"error\"}` 且错误是传输类（TRANSPORT / TIMEOUT / SERVER / fetch failed…）→ 当成断网 → **等网络探测通过**再接；\n  - `{\"kind\":\"max-tokens\"}` → 输出被截断 → 按 `resumeOnTruncation` 接；\n  - `{\"kind\":\"aborted\",\"reason\":{\"kind\":\"user\"}}` → **人按过停止** → 永不接（这是明确要求）；\n  - `{\"kind\":\"aborted\",\"reason\":{\"kind\":\"parent\"}}` → 父会话结束，是有意的 → 不接；\n  - `completed` → 没事，不接；\n  - 上下文超窗（`CONTEXT_WINDOW_EXCEEDED`）→ 永不接（要先压缩，否则只是再溢出一次）。\n- 判定为中断的会话会先**按老规矩种一个 episode**（复用同一套预算、探测、最小间隔、防连点），再在没有活 agent 时用 `agents.resume({ resumeSessionId })` 唤醒它——这也是宿主自己的崩溃恢复入口，它会顺手把那个没关上的回合补上结尾。\n- **不抢别人的活**：会话已经有 agent 且在跑就跳过（界面可能已经先打开了它）。唤醒失败也不影响别的：episode 已经种下，手动打开那个会话照样会续。"
+    },
+    {
+      "section": "4. 宿主重启后自动接上没跑完的会话",
+      "text": "---"
+    },
+    {
+      "section": "安装",
+      "text": "```bash"
+    },
+    {
+      "section": "从 GitHub 装（推荐）",
+      "text": "dsh plugin add github:LLL-lyh0/dsh-continue-guard"
+    },
+    {
+      "section": "或者先 clone 再按本地路径装",
+      "text": "git clone https://github.com/LLL-lyh0/dsh-continue-guard\ndsh plugin add link:./dsh-continue-guard\n```\n\n装完**重启 Harness** 才生效（bundles 只在启动时读一次）。想改行为就改 `cordis.patch.yml` 里的 `config`（字段见下），不用动代码。\n\n本插件懒加载宿主自带的 `@deepseek-ai/dsh-llm`（用于判定\"这轮到底是被网络截断、还是真的结束了\"），以 `peerDependencies` 声明、`optional: true`；加载不到时退化成只看状态机的保守判断，不会挂掉。"
+    },
+    {
+      "section": "或者先 clone 再按本地路径装",
+      "text": "> ⚠️ **不要**在这个包里裸 `import '@deepseek-ai/...'`。插件可能以 `link:` 方式安装，Node 会从 **workspace 的真实路径**解析，而 workspace 没有 `node_modules/@deepseek-ai/*`，裸 import 会在加载阶段抛 `ERR_MODULE_NOT_FOUND`，整个插件直接不挂载（本仓库实测过）。需要 harness 模块时走 `createRequire(process.execPath)` + `import(fileURL)`，并且**必须留本地兜底**——`index.js` 里的 `loadHarnessModule()` 就是这么写的。\n\n---"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `enabled` | `true` | 总开关 |\n| `text` | `继续` | 手动点击与自动续跑发送的文本 |\n| `autoResume` | `true` | 自动续跑总开关；关掉只剩手动按钮 |\n| `resumeDelayMs` | `2000` | 网络恢复后到发出「继续」的等待（建议 1000–3000） |\n| `maxAutoResumes` | `3` | 连续自动续跑上限；人一说话就清零 |\n| `autoResumeOnError` | `false` | 普通错误是否也自动续跑 |\n| `resumeOnTruncation` | `true` | 输出在 max-tokens 处截断时是否自动续跑 |\n| `probeUrls` | deepseek / baidu / github | 连通性探测目标；**并行**各试一次，谁先答上来算谁 |\n| `probeTimeoutMs` | `4000` | 单次探测超时（并行，所以一轮最坏就这么多） |\n| `netCheckIntervalMs` | `10000` | 常驻网络监测的心跳：不管有没有会话在等，都按这个节奏问一次「现在能不能上网」 |\n| `probeRetries` | `5` | 发送前一次「确认链路」的重试次数（慢，但只在真要发之前跑一次） |\n| `probeBackoffMs` / `probeBackoffMaxMs` | `3000` / `30000` | 上述确认的重试退避基数与上限 |\n| `minResumeGapMs` | `4000` | 两次自动续跑的最小间隔 |\n| `minResumeDelayMs` | `1200` | `resumeDelayMs` 的下限，防止配成 0 秒连打 |\n| `startupResume` | `true` | 启动时是否扫描近期会话、接上被进程退出打断的回合 |\n| `startupResumeWithinMs` | `86400000` | 只回看这么久以内的会话（默认 1 天） |\n| `startupResumeLimit` | `3` | 一次启动最多自动接起几个会话 |\n| `pill` / `showReason` | `true` / `true` | 按钮外观；是否把原因写进 hover 提示 |\n| `verbose` | `false` | 排查「为什么没自动继续」时打开 |"
+    },
+    {
+      "section": "配置",
+      "text": "`probeUrls` 值得按环境改：某些网络会拦这些域名，探测连不上就会被当成「还没联网」。为此监测有一条**旁证**通路：只要有一个回合**正常跑完**（`turn/end` 且 `kind: completed`），就说明链路是通的，探测的结论会被它推翻。这条不是补丁而是必需——本机走的是自带 CA 的 TLS 终结加速器，裸 `fetch` 去探 `api.deepseek.com` 可能因为证书校验失败而永远「不可达」，只看探测结果会永远不续跑。\n\n---"
+    },
+    {
+      "section": "按钮怎么读",
+      "text": "| 状态 | 外观 | 含义 |\n|---|---|---|\n| 空闲 | 半透明 | 没检测到中断；点了照样补一句「继续」 |\n| 蓝色高亮 | 实心 | 检测到中断，可一键续跑 |\n| 转圈 + 倒计时 | 琥珀色 | 网络已恢复 / 已排定，N 秒后自动发 |\n| 「正在检测网络…」 | 琥珀 + 红点 | 探测中 / 还没恢复 |\n| 绿色「已发送」 | 绿色 | 会话真的重新跑起来了 |\n\n---"
+    },
+    {
+      "section": "验证",
+      "text": "四道门禁，全部离线可跑，`npm test` 一次跑完（146 项）：\n\n```bash\nnode scripts/verify-host.mjs    # 64 项决策规则 + 启动恢复 + 网络监测（虚拟时钟 + 假 agent）\nnode scripts/verify-client.mjs  # 24 项按钮状态机（VM + React 桩 + 假宿主）\nnode scripts/verify-bundle.mjs  # 29 项静态接线检查\nnode scripts/verify-mount.mjs   # 29 项挂载与端到端投递（假 ctx + 真路由 + 假网络）"
+    },
+    {
+      "section": "验证",
+      "text": "外带一道 meta 门禁（`node scripts/check-readme-counts.mjs`，也在 `npm test` 里）：它把上面四个脚本真跑一遍，解析各自实际执行的项数，和本节引用的数字逐个比对，**对不上就转红**。加它是因为这些数字原来是手写的，已经悄悄漂过一次（写着 89、实际 100）——需要人记得更新的数字迟早是错的，而错掉的数字会让整段验证说明看起来像套话，于是真门禁也会被一起忽略。\n\n**`verify-host`——判定规则。**「该续的时候续了、不该续的时候没续」是看界面看不出来的，所以用可以手拨的虚拟时钟和假 agent 把每条决策钉住：正常结束/用户 stop 不算中断；上下文超窗永不自动续；截断会续；探测失败后靠 10 秒巡检重试而不是等一个永远不来的事件；运行中 / 收件箱非空时不投；预算封顶；人说话后预算与间隔一起清零；自己发的消息回声不算人类介入；`turn/start` 结算 episode；连点不双发；手动点击永远可用且不吃自动预算。"
+    },
+    {
+      "section": "验证",
+      "text": "**`verify-client`——状态机。** 把真实的 `client.js` 塞进 Node VM，配上够用的 React 桩和不带 DOM 的假宿主，逐个状态渲染那颗按钮：每个宿主状态都有非空文案、倒计时不会显示负数、armed 是琥珀色、探测中与等待中必须文案不同、预算耗尽要说明原因、点击会 POST 且成功后要真的回显、同一 tick 连点只发一次、所有请求都是文档相对路径。点击那条路单独钉死：**先走 `beginSubmission` + `prompt`（不再碰 HTTP 路由）**、发出的字来自配置而不是硬编码、被上游**真实拒绝**时如实报告且**绝不**降级重发（否则同一句话发两遍）；只有拿不到 `sessions` 服务时才回落到 `POST /resume`。"
+    },
+    {
+      "section": "验证",
+      "text": "**`verify-bundle`——静默失效。** patch 里的键 schema 不认（加载器拒绝该行、插件凭空消失）、`exports` 指向不存在的文件、图标不是合法 SVG、client 用了 root-absolute 路径（`<base href=\"./\">` 下永远打不到路由）、硬编码颜色、host 顶层裸 import harness 包，以及**注入形状**：`webServer` 必须是静态硬依赖、路由必须注册在插件上下文而不是 `agents` 注入里、`sessions` 必须是**延迟注入**（写成静态依赖会让整块客户端插件永远 pending，连按钮都不渲染）。还有**服务调用形状**：`ctx.agents` 是 `AgentRegistry` 门面而不是 `AgentLoop`，它的 `resume(options)` 只收一个参数（`ownerCtx` 由门面自己补），写成 `resume(scope, {...})` 会把上下文当成 options、`options.resumeSessionId` 变成 `undefined`，启动恢复于是静默失效——静态扫描把这条钉在代码上，不依赖任何假件。这些检查扫描的是**剥掉注释后的代码**，避免被自己的说明文字误伤。"
+    },
+    {
+      "section": "验证",
+      "text": "**`verify-mount`——挂载与真实投递。** 前三道测的是零件，这道测的是**接头**：用假 ctx 真正跑一次 `apply()`，再通过注册出来的真路由发 HTTP 请求，断言 followup 真的投递到 agent、消息署名是 `plugin:` 而非伪造的 `user`、连点只发一条、以及**没有循环驱动器时路由依然存在**（这条正是 404 的回归守卫）。启动恢复也在这道：搭一个临时 `DSH_HOME`，里面放一份真的 zstd 会话日志（有 `turn/start` 没有 `turn/end`，就是进程被杀掉留下的形状），跑完 `apply()` 后断言那个会话**真的被唤醒、而且真的收到了续跑消息**——只断言「调过 resume」是不够的，被唤醒的 agent 一开始就是 idle，不推它一把会话会被打开然后干坐着。这里的假 `agents` 服务必须**照真实门面长得一样**（一个参数的 `resume(options)`，并且像 `announce` 那样派发 `agent/created`），否则它比真货宽松、永远抓不到真货的报错。"
+    },
+    {
+      "section": "验证",
+      "text": "> 这些门禁抓到过真 bug，不是装饰：HTTP 4xx 曾被误判成断网、人工介入后最小间隔仍拦住下一次续跑、`onClick` 里漏解构 `setState`（点击成功却抛 `ReferenceError`、成功提示永远不出现）、靠 React state 做连点防护（同一 tick 两下会真发两条）、点击走的是插件署名而不是用户输入（改走真实提交链路后，`beginSubmission` 漏掉会让回显凭空消失）、**HTTP 路由被绑在 `agents` 服务对里**（`agents` 缺席时全部点击返回 404），以及最隐蔽的那个——**启动恢复调服务用错了签名**：`ctx.agents` 是门面，`resume(options)` 只收一个参数，而代码写成 `resume(scope, {...})`，于是 `options` 成了上下文、`resumeSessionId` 变成 `undefined`，在 schema 校验那一层就死掉、连日志都没打开。它让 host / client / bundle 三道门禁**全绿**，因为它们谁都没执行到那一行；是 mount 门禁把假件补成真门面的形状之后才抓住的。\n>\n> 都在代码里修掉，并留下对应断言；每条另做了反向 mutation 验证（把 bug 放回去，确认门禁真的转红，且还原后文件逐字节一致——一个「还原了但没完全还原」的脚本会让下一轮测的是变异体）。当前 `npm run test:mutation` 共 **26 个 mutation 全部被抓到**：client 4 + monitor 9 + startup 10 + readme 3。\n>\n> 还有一条同样只在**真实数据**里才看得见：日志尾部是 `{\"kind\":\"interrupted\"}` 时，那是**宿主自己**补的收尾标记（`openTurnClosers(events, {kind:'interrupted'})`，`agents.resume` 修复孤儿回合时写的），语义就是「上一轮被打断、而且已经有人替它收了尾」。它原先会落到 `upstream.aborted`——那需要 `autoResumeOnError`（默认关），于是这种会话永远不被接续；更糟的是**它会被永久取消资格**：因为「尝试接续一次」这个动作本身就会写下那个标记，尝试失败之后，之后每一次启动扫描都会把它判成上游中止。现在它按 `host.exit` 处理（启动侧的崩溃指纹），并有一条端到端断言钉住：修好之后，同一个会话**确实被唤醒、而不是只被分类了一次**。\n>\n> 有一条 mutation 值得单独说：唤醒之后有**两条互相冗余的路径**都会去摆手（`observeIdle` 和网络监测第一次 null→true 的边），实测**只去掉任"
+    },
+    {
+      "section": "结构",
+      "text": "```\nindex.js            Host：中断判定、续跑预算、探测、HTTP 路由、plugin entry\nclient.js           Client：composer 停靠区的按钮（__ModuleLoader__ 懒工厂）\ncordis.patch.yml    插入插件行 + 全部可调参数\nlocale/{zh,en}.json Plugin Manager 显示的标题与描述"
+    },
+    {
+      "section": "红线",
+      "text": "**两种续跑，两种署名，不能混。**\n\n- **手动点击 = 真人此刻的输入。** 它不伪造任何消息来源，而是走输入框自己的提交链路（`beginSubmission` + `prompt`），由宿主在真实链路上完成「这是用户输入」的判定。这正是它不该被降级成插件消息的原因——那会把一次真实点击写成一个宿主从未做出的证明。\n- **自动续跑 = 插件行为。** 署名 `{ kind: 'plugin:dsh-continue-guard', plugin: 'dsh-continue-guard' }`，**绝不冒用** `{ kind: 'user' }`——后者是宿主对「真人直接输入」的证明，会放行 goal 创建/恢复这类带权限的动作，也会被渲染成用户发言。自动续跑不是人，就不能装成人。\n\n判断标准只有一句话：**这一次，是人按的，还是插件自己决定的？**"
+    }
+  ],
+  "skipped": []
+}

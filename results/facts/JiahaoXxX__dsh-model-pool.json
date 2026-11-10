@@ -1,0 +1,860 @@
+{
+  "repo": "JiahaoXxX/dsh-model-pool",
+  "commit": "a3415e739a2550160921bd824799306d7cbe3b60",
+  "extracted_at": "2026-11-10T10:56:02.023179+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 139920,
+    "lines_by_language": {
+      "JSON": 99,
+      "Markdown": 1083,
+      "Other": 52,
+      "YAML": 22
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "PUBLISHING.md",
+      "README.md",
+      "README.zh-CN.md",
+      "bundle/cordis.patch.yml",
+      "icon.svg",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-model-pool",
+    "description": "自定义模型池：任意 provider/model 组成降级链，请求失败（认证、配额、限流）时自动沿池切换；模型选择器可选 ModelPool/Auto（无官方模型链尾要求）",
+    "keywords": [
+      "dsh",
+      "dsh-plugin"
+    ],
+    "version": "0.2.7",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "icon": "./icon.svg",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/client/index.js"
+      },
+      "./locale/*.json": "./locale/*.json",
+      "./bundle/cordis.patch.yml": "./bundle/cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "dist",
+      "bundle",
+      "locale",
+      "icon.svg",
+      "PUBLISHING.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./bundle/cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-plugin-manager",
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-conversation",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-connection",
+          "@deepseek-ai/dsh-api-remotes"
+        ],
+        "platform": "web"
+      }
+    },
+    "engines": {
+      "node": ">=22"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-agent": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-api-gateway": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-api-remotes": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-api-session-controller": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-connection": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-locale": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-store": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-ui-chat": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-ui-conversation": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-ui-plugin-manager": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-ui-renderer": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-ui-settings": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-client-ui-slots": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-commands": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-llm": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-llm-retry": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-session": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-session-projection": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-settings": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-tool-subagent": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-typert-protocol": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-typert-registry": "^0.2.0-rc.2",
+      "@deepseek-ai/schemastery": "^3.18.2",
+      "react": "^18.2.0"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/JiahaoXxX/dsh-model-pool.git"
+    },
+    "homepage": "https://github.com/JiahaoXxX/dsh-model-pool#readme",
+    "bugs": {
+      "url": "https://github.com/JiahaoXxX/dsh-model-pool/issues"
+    }
+  },
+  "bundle": [
+    {
+      "path": "bundle/cordis.patch.yml",
+      "text": "# dsh-model-pool（fork of dsh-llm-fallbacks 0.6.5）的 profile-bundle patch：\n# 在 profile 的 bundle 栈上插入本插件的一行（dsh-base 在前，本 bundle 在\n# llm-retry bundle 之后；同名行后写的层覆盖先写的层）。\n#\n# 插入位置决定 host waterfall 的复合顺序：profile 必须让 llm-retry bundle\n# 排在 dsh-model-pool 之前，这样本插件的 `agent/request-error` 监听器组合在\n# llm-retry 之后——只有重试预算耗尽才介入（normal 模式），或在 always 模式下\n# 先向下游委派。\n#\n# patch 是整行替换语义：它替换目标行的整个 `config` 而不是逐字段合并，所以用\n# 户级 override 必须把它要保留的每个字段都重写一遍。这里只发布中性默认值\n# （空池 = 插件不生效）；profile 层（cordis.patch.yml）的 override 优先。\n#\n# 行 `id` 保持 `llm-fallbacks`：内部标识（settings 写入命名空间\n# `llm-fallbacks`、cordis 服务名、typert 端点 `dsh-model-pool#fallbacks/*`）\n# 全部沿用，只有包名与界面名称换成本 fork 的 `dsh-model-pool`。\n# 池子内容请在 GUI「模型池」卡片里编辑，或在本行的 config 下写 rootChain。\n\n- insert:\n    - id: llm-fallbacks\n      name: 'dsh-model-pool'\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/client/index.d.ts",
+    "dist/client/index.js",
+    "bundle/cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/JiahaoXxX/dsh-model-pool.git",
+      "where": "package.json:81"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/JiahaoXxX/dsh-model-pool#readme",
+      "where": "package.json:83"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/JiahaoXxX/dsh-model-pool/issues",
+      "where": "package.json:85"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-11-03T11:47:49Z",
+    "created_at": "2026-10-30T11:42:23Z"
+  },
+  "runtime_files": [
+    "bundle/cordis.patch.yml",
+    "dist/client/index.d.ts",
+    "dist/client/index.js",
+    "dist/index.d.ts",
+    "dist/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-model-pool",
+      "text": "> **dsh-model-pool 0.1.0 — a fork of `dsh-llm-fallbacks` 0.6.5.** Two deliberate divergences:\n> 1. The upstream rule \"the all-day chain must end with exactly one official model\n>    (`deepseek-official` Flash/Pro)\" is **removed** — any `provider/model` entry may lead\n>    or tail the pool, and the chain is driven entirely by your own configuration.\n> 2. The virtual picker row is named **`ModelPool / Auto`** (upstream: `FallbacksChain / Auto`).\n>    Internal identifiers keep their upstream names on purpose: settings namespace\n>    `fallbacks:`, profile row id `llm-fallbacks`, cordis service `fallbacks`.\n>\n> Two additions on top of 0.6.5: the virtual row advertises the **union of the pool's\n> reasoning tiers**, so 推理强度 (reasoning effort) is selectable in the picker, and each\n> delegated request is pinned to the **nearest tier the actual head accepts**."
+    },
+    {
+      "section": "dsh-model-pool",
+      "text": "[English](README.md) | [中文](README.zh-CN.md)\n\n[](LICENSE)\n\nAutomatic provider/model fallback chains for dsh (DeepSeek Harness): when an agent's LLM requests keep failing — retries exhausted, auth errors, quota exceeded, rate limiting (429) — the plugin switches provider/model along the fallback chain for the current role, and the current step/turn continues on the target model: tasks are not interrupted by model problems."
+    },
+    {
+      "section": "dsh-model-pool",
+      "text": "The point of this fork is that **the pool is entirely yours**: workbuddy → qoder → trae, or any other order, in whatever mix of providers you actually have configured. Nothing in the chain has to be an official DeepSeek model.\n\nWorks in both dsh front ends: the **web** profile (Settings → Plugins → Model pool card) and the **dsh-tui** terminal profile (`/fallbacks` session diagnostics, `/fallbacks config` readback, and the `/settings` fallbacks section for editing)."
+    },
+    {
+      "section": "Time slots",
+      "text": "Time slots rotate the **effective root chain** by wall-clock windows: each slot row carries its own fallback chain, and the first row whose window contains the current moment replaces the all-day chain for the next root request — the all-day chain stays as the last resort when no slot matches. Peak and valley windows can therefore use different chains while the failure walk (fallback switch) remains untouched."
+    },
+    {
+      "section": "Time slots",
+      "text": "Four frozen UTC+8 presets (windows are code constants; preset rows lock `tz` to Asia/Shanghai):\n\n| Preset | Window |\n|---|---|\n| `liang-peak` | Monday–Friday 09:00–12:00 and 14:00–18:00 |\n| `liang-valley` | every other UTC+8 time (complement of Liang Peak) |\n| `glm-peak` | Monday–Friday 14:00–18:00 |\n| `glm-valley` | every other time (complement of GLM Peak) |\n\nGLM Peak and GLM Valley are offered in the card picker only when `zai-coding-cn` is configured."
+    },
+    {
+      "section": "Time slots",
+      "text": "The first extra row whose window contains the current moment (in `fallbacks.tz`, default Asia/Shanghai) wins; no match → the all-day `rootChain`. Slot rotation is a routing seed, not a failure decision: it applies on the next root request, consumes no cooldown, and is logged as a time-slot switch — failure walks keep fallback switch. Full semantics → [Time-slot presets](#time-slot-presets)."
+    },
+    {
+      "section": "Install",
+      "text": "This is a self-hosted fork — it is not on npm. Install it from a git URL, a local directory, or a packed tarball; the package ships a **prebuilt `dist/`** and declares no `prepare`/`postinstall` script, so nothing compiles or downloads on the target machine and pnpm's build-approval gate never triggers.\n\n**From a git repository** (the way to share it — `github:owner/repo`, a full `git+https://…` URL, and a local clone path all work):"
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add github:<owner>/dsh-model-pool      # web profile\ndsh plugin --profile dsh-tui add github:<owner>/dsh-model-pool  # dsh-tui terminal profile\n```"
+    },
+    {
+      "section": "Install",
+      "text": "In **DSH Desktop** the same spec goes into the Plugins page install box (exact absolute paths and `github:owner/repo` are both accepted; a *relative* path is not — the host rejects it with \"a local path must be absolute\"). Restart DSH Desktop afterwards: the plugin bundle is loaded at startup, so a browser refresh alone is not enough.\n\n**From a local directory or tarball** (no git needed):"
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add C:\\path\\to\\dsh-model-pool            # directory containing package.json\ndsh plugin --profile web add C:\\path\\to\\dsh-model-pool-0.1.0.tgz  # packed tarball\n```\n\nA directory install is a *path* install: the host requires a readable `package.json` with a `name` and a `dsh.bundle` — this package has both. Nothing builds either way."
+    },
+    {
+      "section": "Install",
+      "text": "> **Do not run this alongside the official `dsh-llm-fallbacks`.** The profile row id `llm-fallbacks` is shared on purpose (the settings namespace, cordis service and typert endpoint all use it), so two rows with that id in one profile is a conflict. Uninstall the official one first."
+    },
+    {
+      "section": "Install",
+      "text": "Pin a version with `@<version>` on a registry spec. The plugin ships **localized metadata** (title/description for the Plugins-page detail view, English + 简体中文) and an **icon** — both declared in the package (`locale/*.json` + `icon.svg`) and picked up by the host automatically."
+    },
+    {
+      "section": "Configuration surfaces",
+      "text": "The plugin's settings live in a shared `fallbacks:` namespace, editable from three surfaces:"
+    },
+    {
+      "section": "Configuration surfaces",
+      "text": "| Surface | What it is | Notes |\n|---|---|---|\n| **Web settings card** | Settings → Plugins → Model pool | Full GUI editor for the `fallbacks:` namespace; writes the shared settings document |\n| **`$DSH_HOME/settings.yaml`** | `fallbacks:` section in the dsh settings document | The shared source of truth — the same file the web card writes; readable and editable everywhere, including scripted setups |\n| **TUI `/settings`** | fallbacks section in the dsh-tui settings screen | dsh-tui ≥ v0.8.5; native fields for simple keys, JSON text fields for complex structures (see [dsh-tui profile (terminal)](#dsh-tui-profile-terminal)) |"
+    },
+    {
+      "section": "Configuration surfaces",
+      "text": "Pick the surface that matches your front end: web users get the card, terminal users get `/settings`, and the YAML file works everywhere. (`/fallbacks` and `/fallbacks config` are diagnostics — read-only views, not edit surfaces.)"
+    },
+    {
+      "section": "Minimal configuration",
+      "text": "Add a `fallbacks:` section to the shared settings document (`$DSH_HOME/settings.yaml` — see [Configuration surfaces](#configuration-surfaces)):\n\n```yaml\nfallbacks:\n  rootChain:               # the pool: walked in this order, first entry is the head\n    - workbuddy/glm-5.3                # tried first\n    - qoder-global/qfmodel             # after QUOTA / RATE_LIMIT / AUTH\n\nBuild the section up in five steps:"
+    },
+    {
+      "section": "Minimal configuration",
+      "text": "**1. Configure content.** There is **no feature switch** in the section — the plugin intervenes exactly when something is configured: a non-empty `rootChain`, at least one `pools` row, at least one `timeSlots` row, or one declared role. An empty section is a complete no-op, and the Plugins-page row toggle is the master switch (disabling the plugin row stops it entirely)."
+    },
+    {
+      "section": "Minimal configuration",
+      "text": "**2. Set the all-day `rootChain`.** The entries ARE the pool: they are walked in order when a request fails, so the first entry is the head (the model requests normally go to) and the rest are the fallbacks, in order. There is no separate \"Default model\" slot and no official-model requirement — any `provider/model` entry is legal in any position, as long as the chain is non-empty."
+    },
+    {
+      "section": "Minimal configuration",
+      "text": "> **Validation**: the only structural rule left is that `rootChain` holds at least one entry — an empty pool is rejected on save (unless `pools` declares at least one pool, in which case a named pool is enough content). Selector syntax is `provider/model`. A wildcard entry (a bare model or bare provider) is accepted inside the chain but cannot serve as the *head*, because the virtual route needs an exact `provider/model` to dispatch to; the delegate serves the **first dispatchable exact** entry of the effective chain and skips wildcard rows. The plugin does not probe catalog availability at save time — an entry that is not currently catalog-served is accepted and merely fails over when reached, so a temporarily unconfigured provider never blocks a save."
+    },
+    {
+      "section": "Minimal configuration",
+      "text": "**3. Add `timeSlots` (optional).** Rows rotate the effective root chain by wall-clock windows. Preset rows use frozen UTC+8 windows (only their chain is editable; while a preset row exists, `tz` locks to `Asia/Shanghai`); custom rows take `start`/`end` (may wrap midnight) and an optional `days` list. The first row whose window contains the current moment wins; no match → the all-day `rootChain`. Rotation is a routing seed — it applies on the next root request and consumes no cooldown (see [Time slots](#time-slots))."
+    },
+    {
+      "section": "Minimal configuration",
+      "text": "**4. Add `roles` (optional, YAML/TUI only).** Declare role entities in `roles.list` (id, persona, chain, optional `fallback` policy), then map subagents to them with `roles.rules`. Rules never match root requests — with no rule match (or on a root request) the built-in `inherit` role applies and appends the `rootChain`. Roles are routing config, not pool config, so the settings card no longer edits them: author them here or in the TUI `/settings` fallbacks section. Existing rows are preserved untouched through a card save — the card simply never renders them."
+    },
+    {
+      "section": "Minimal configuration",
+      "text": "**5. Add `pools` (optional).** Each row is an independent pool with its own picker row (`ModelPool/<id>`). A named pool walks only its own chain and throws when exhausted instead of continuing into `rootChain` — see [Named pools](#named-pools).\n\nField-by-field reference (role entities, fallback strategies, rules, selector syntax, preset roles, time-slot presets) is in the sections below — this README is the reference for the fork."
+    },
+    {
+      "section": "Minimal configuration",
+      "text": "> **Upgrade note (breaking, behavior change)**: the config-level `enabled` switch is **removed** — a stored section still carrying `enabled: true/false` loads cleanly (the key is ignored and stripped on the next save), but the switch no longer gates anything. If you relied on `enabled: false` to keep the plugin inert, empty the section (or disable the plugin row on the Plugins page) instead."
+    },
+    {
+      "section": "Verify",
+      "text": "Save the config and restart the session, then type `/fallbacks` — the read-only in-session diagnostics (origin, resolved role, chain, recent fallback switches, cooldown status). In a dsh-tui profile, `/fallbacks config` reads back the composed configuration; see [dsh-tui profile (terminal)](#dsh-tui-profile-terminal)."
+    },
+    {
+      "section": "Features",
+      "text": "- **Automatic fallback for root and subagents**: any agent switches down the chain to the next available provider/model on model failure — no manual model switching.\n- **Two-block config**: `rootChain` for the root agent; declared role entities (`roles.list`) referenced by `roles.rules` (or the built-in `inherit`).\n- **Chain as root primary from the picker**: whenever the plugin has content configured, the host model picker (web and TUI alike) shows a virtual `ModelPool` / `Auto` row — selecting it uses the configured chain as the root primary (the chain needs a dispatchable exact head for the delegation to succeed); selecting a real model keeps fallback-only (see [ModelPool in the model picker](#modelpool-in-the-model-picker)).\n- **Named pools**: optional `fallbacks.pools` rows declare extra, fully independent pools that each appear as their own `ModelPool/<id>` row in the picker (`glm-5.3 → WorkBuddy`). Selecting one binds the session to that pool alone: it walks only its own chain and fails when exhausted rather than continuing into `rootChain`, so a named pool is a hard routing boundary rather than an extension of the shared chain (see [Named pools](#named-pools)).\n- **Time slo"
+    },
+    {
+      "section": "dsh-tui profile (terminal)",
+      "text": "In a dsh-tui profile the plugin has three operator surfaces, with a strict duty split:"
+    },
+    {
+      "section": "dsh-tui profile (terminal)",
+      "text": "- **`/fallbacks`** — what happened this session: origin, resolved role, effective chain, recent fallback switches, cooldown status (half-open marker rows when `recovery: half-open` is active). Read-only.\n- **`/fallbacks config`** — what is configured: composed-config readback (trigger codes, root chain, time slots, timezone, roles, role rules, cooldown, revert policy, safety valves, presets, role auto-match). Read-only apart from the one action command **`/fallbacks config revert-seed <role-id>`**, which restores a seeded role's persona to its declared seed default — the web settings card no longer shows role rows at all (no revert affordance), so the command is that action's only surface.\n- **`/settings`** — the edit surface. The plugin registers a **fallbacks** section with full parity to the `fallbacks` config namespace — and, unlike the web card, it still edits `roles.list` and `roles.rules` (the card dropped the roles surface; this section keeps it): booleans (`roleAutoMatch`) render as toggles, selects (`presets`, `revertPolicy`) as pickers, and numbers (`cooldownMs`, `maxSwitchesPerStep`, `alwaysModeRetryCap`) as numeric inputs; complex structures (`rootChain`, `pools`, `tim"
+    },
+    {
+      "section": "dsh-tui profile (terminal)",
+      "text": "**Requirements**: the `/settings` fallbacks section needs **dsh-tui ≥ v0.8.5** (commit `c51661f` or later on `main`; the settings seam shipped in v0.8.0, the groups shape + validation in v0.8.5). On an older dsh-tui the section is absent, and file editing remains the only TUI edit surface."
+    },
+    {
+      "section": "dsh-tui profile (terminal)",
+      "text": "File editing still works everywhere: the shared `$DSH_HOME/settings.yaml` (`fallbacks:` section — the same file the web card writes) for global settings, or the profile patch `~/.dsh/profiles/dsh-tui/cordis.patch.yml` (`config:` overrides on the plugin row) for dsh-tui-specific values. A patch row **replaces** the targeted row's whole `config` — restate every field you want to keep (schema defaults fill the rest)."
+    },
+    {
+      "section": "ModelPool in the model picker",
+      "text": "Whenever the plugin has content configured (a non-empty `rootChain`, at least one `pools` row, at least one `timeSlots` row, or one declared role), it registers a virtual provider, **ModelPool**, with one catalog row per configured chain: **Auto** for the root chain, plus one row per [named pool](#named-pools). The web profile and dsh-tui both see the rows: they share the same adapter catalog, so the rows need no settings-page wiring or host patch (it is independent of the `/settings` fallbacks section, which edits configuration rather than the picker catalog). An empty `rootChain` does not hide the Auto row as long as other content is configured — the label falls back to a bare `Auto` and `stream()` refuses with `EMPTY_EFFECTIVE_CHAIN`; with nothing at all configured there is no row."
+    },
+    {
+      "section": "ModelPool in the model picker",
+      "text": "Selecting **ModelPool / Auto** uses the configured chain as the root **primary**: the request stays on the virtual pair and the adapter's thin delegate dispatches the effective chain's first exact `provider/model` at request time, so the fallback engine degrades from that head as usual. Serving the selection unchanged (instead of rewriting the route to the head) is also what keeps the host's model-change notice quiet: the recorded route equals the session selection, so the notice appears once on a genuine selection change rather than being re-armed on every step. Selecting any real catalog model keeps the v0.2.2 fallback-only behavior — the session model is primary and the chain engages only after it fails."
+    },
+    {
+      "section": "ModelPool in the model picker",
+      "text": "There is **no `rootMode` switch** — no config key, YAML field, settings toggle, or gateway flag. The mode is the session's `{provider, model}` selection itself: `ModelPool` = chain primary; any real model = fallback-only.\n\nNotes:"
+    },
+    {
+      "section": "ModelPool in the model picker",
+      "text": "- **Picker label**: the Auto row's catalog `name` (what the composer trigger shows) is live — `Auto: glm-5.3[all-day]`, `Auto: qfmodel[Liang Peak]` (the head's catalog display name, not the model id); the id stays `Auto`. A named pool's row is labelled `<pool id> → <the provider currently in use>`, e.g. `glm-5.3 → WorkBuddy`; the label follows the chain down as soon as the head is benched (see [Chain status](#chain-status-which-entry-is-cooling-down)). Bare `Auto` when the chain has no dispatchable exact head. The row re-reads itself when the chain state changes; also refresh by reopening the picker.\n- **Thin delegate on every origin**: the row is served by the same `stream()` delegate for the root agent and for a subagent session that inherits the selection — subagent role resolution and injection keep their semantics apart from one deliberate widening: dispatch-time rule matching accepts **either** the recorded pair or the served head (a superset of the previous matching, so a rule keyed on the real head keeps matching), and the virtual row is never a second routing engine. A subagent that inherits the selection still routes through the chain head.\n- **Head requirement**: a deleg"
+    },
+    {
+      "section": "Named pools",
+      "text": "Named pools give a single plugin mount **several independent pools**, each with its own chain and its own row in the model picker. Where the root chain (`Auto`) is one pool shared by every session, a named pool is a separate, self-contained routing contract:\n\n```yaml\nfallbacks:\n  rootChain: [\"deepseek-official/deepseek-v4-pro\"]\n  pools:\n    - id: glm-5.3"
+    },
+    {
+      "section": "Named pools",
+      "text": "The picker then offers three rows: `Auto`, `glm-5.3 → GLM Coding Plan`, `ours → Qoder`. Picking one selects the whole pool as the session's routing contract."
+    },
+    {
+      "section": "Named pools",
+      "text": "- **Id rules**: `/^[a-z0-9][a-z0-9._-]{0,31}$/` (lowercase letter or digit first, then letters/digits/`-`/`.`/`_`, max 32 chars). `auto` is reserved — the built-in Auto row already represents the root chain. Ids must be unique; the first duplicate row wins and the rest warn.\n- **A pool never merges with the root chain.** Selecting `ModelPool/ours` walks `ours`'s chain only. When every entry in it has failed the request **fails** — it does not continue into `rootChain`. That is the point of a named pool: a hard boundary, not an extension of the shared chain.\n- **Pool head = first exact entry.** The chain is walked in order; the first parseable `provider/model` is the head, and the picker label is built from that provider's display name. An empty or wildcard-only pool throws `EMPTY_EFFECTIVE_CHAIN` naming the pool (`llm-fallbacks: pool \"ours\" has no dispatchable entries`), which is why the card refuses to save one.\n- **No self-routing**: a pool entry may not point at `ModelPool` — that would make the pool serve itself.\n- **Reasoning tiers are per pool.** Each row advertises the union of the tiers its own chain accepts (same rule as Auto: no `defaultEffort` is forced, and a requested "
+    },
+    {
+      "section": "Named pools",
+      "text": "In the card the **Named pools** section sits right after the default pool's chain editor and before **Advanced**: one collapsible card per pool with an id input and a chain editor (the same row editor as the root chain), plus an add button. It has its own Save/Discard pair and its own validation bucket, so a bad pool id blocks only that section's save."
+    },
+    {
+      "section": "Adding a provider that advertises no models",
+      "text": "A connector can register a provider for selection while exposing no model list for it. `trae-global` is the common\nexample: the Trae connector advertises all three panels (`trae`, `trae-enterprise`, `trae-global`) as configurable\nproviders, but only a panel with a signed-in account publishes a model catalog. The provider therefore shows up in the\ndropdown while its model list stays empty.\n\nThe chain editor handles that case instead of blocking you:"
+    },
+    {
+      "section": "Adding a provider that advertises no models",
+      "text": "- When the chosen provider has no catalog group, the model cell becomes a **free-text input** rather than a permanently\n  disabled dropdown, with the hint 「This provider has no model catalog; type the model id directly below.」 Type the\n  model id the connector expects (for example `deepseek-v4.1-flash`) and the row serializes to a normal\n  `trae-global/deepseek-v4.1-flash` selector.\n- A row that names a provider but no model is reported as exactly that — 「Selector \"trae-global\" names a provider but\n  no model; write it as \"trae-global/model-id\".」 — instead of the misleading 「Invalid selector」. The same message is\n  used for the root chain, the subagent chain, named pools and time slots.\n- The selector grammar itself is unchanged: a bare provider is still not a routable entry, because the host resolves\n  routes as `provider/model`. Only the input affordance and the diagnosis changed, so every valid configuration keeps\n  working exactly as before."
+    },
+    {
+      "section": "Chain status (which entry is cooling down)",
+      "text": "Every chain editor — the default pool's and each named pool's — carries a read-only **chain status** strip above it. It lists the entries in routing order with a state dot, so \"first source exhausted, second one answering\" is visible at a glance without reading logs:\n\n```\nChain status                          In use: Qoder · dfmodel\n● 1. Qoder · dfmodel                  In use\n● 2. Trae · deepseek-v4.1-flash       Cooling down · back in 42s\n● 3. WorkBuddy · deepseek-v4.1-flash  Standby"
+    },
+    {
+      "section": "Chain status (which entry is cooling down)",
+      "text": "- **In use** (green) is the entry the engine would dispatch to right now — the effective head after skipping benched entries.\n- **Cooling down** (amber) is benched and shows when it returns. A bench is normally a timer; with `recovery: \"half-open\"` it reads **Probing** instead, and `revertPolicy: \"never\"` shows **Disabled** because that entry is out for the rest of the session.\n- **Standby** (grey) is a healthy entry further down the chain.\n- Every row also carries a small **Bench** (冷却) button on its right — press it to push that one source into cooldown, or press it again (**Release** / 解封) to lift it. See [Benching one source on purpose](#benching-one-source-on-purpose).\n- When *every* entry is benched the strip says so and the engine still walks the chain by trying the entry whose bench **releases soonest** — see [A fully-benched chain still keeps walking](#a-fully-benched-chain-still-keeps-walking)."
+    },
+    {
+      "section": "Chain status (which entry is cooling down)",
+      "text": "The strip refreshes every 5 seconds and after every settings change. It is strictly derived from the plugin's own observed request errors: the state is per-agent and never persisted, so a fresh session starts with no cooling entries. Providers do not publish a cross-plugin status API, so each provider's own status detection (WorkBuddy's account pool, Qoder's quota) stays inside that provider — the pool only learns about a failure when a request actually fails."
+    },
+    {
+      "section": "Chain status (which entry is cooling down)",
+      "text": "The picker label follows the same state: a named pool renders `glm-5.3 → <the provider currently in use>`, and the label moves down the chain as soon as the head is benched."
+    },
+    {
+      "section": "Reset and connectivity test",
+      "text": "Every chain-status strip carries its own two buttons, and they act on **that chain only**: the default strip's buttons cover the root chain (or the time-slot chain currently in force), and each named pool's buttons cover that pool's chain."
+    },
+    {
+      "section": "Reset and connectivity test",
+      "text": "- **Reset cooldowns** (重置冷却) drops the benches that chain owns — per-agent cooldowns, half-open probe records, and benches discovered by a connectivity test — and re-reads the status. Use it after a provider outage you know has cleared, instead of waiting out `cooldownMs`. A route that also appears in another chain is released there too, because a bench belongs to the provider route rather than to the chain that happened to notice the failure.\n- **Test connectivity** (检测连通) sends a one-token request to each route of that chain and benches the ones that answer with a definite failure. A dead source is therefore out of the way before your next real request, instead of costing you a failed turn."
+    },
+    {
+      "section": "Reset and connectivity test",
+      "text": "Probing one chain never blocks another: each strip tracks its own run and keeps its own tally, so a long probe on `glm-5.3` leaves the default chain's buttons usable."
+    },
+    {
+      "section": "Benching one source on purpose",
+      "text": "You do not have to wait for a failure to take a source out of rotation. Every row of every chain-status strip carries its own **Bench** (冷却) button: press it and that single route is pushed straight into cooldown for the full `cooldownMs`, exactly as if it had just returned a definite failure. Press it again — the label now reads **Release** (解封) — and the bench is lifted immediately."
+    },
+    {
+      "section": "Benching one source on purpose",
+      "text": "This is the control you reach for when a provider is technically answering but you do not want it used right now: a key you are about to rotate, a plan that is slow this afternoon, a source you are A/B testing against. It is a per-route decision, not a per-chain one, so a route that appears in several chains is benched (or released) everywhere at once — a bench belongs to the provider route, never to the chain that noticed it."
+    },
+    {
+      "section": "Benching one source on purpose",
+      "text": "Only the pressed row's button greys out while the request is in flight; the rest of the strip and the other strips stay live. The same two mechanisms as the strip buttons apply: a forced bench lands in the shared cooldown store, so it also covers sessions that have not started yet, and it ages out on its own when the window expires."
+    },
+    {
+      "section": "Benching one source on purpose",
+      "text": "A connectivity test is deliberately **conservative about what counts as evidence**. A timeout, an abort, a transport blip, or a rate limit says nothing about whether a route can serve, so benching on one would bury a healthy provider for the whole cooldown window. Such codes are retried once and, if still inconclusive, reported as *inconclusive* and **not benched**:\n\n```\nTested 5 routes: 3 reachable, 1 benched, 1 inconclusive (not benched)\n```"
+    },
+    {
+      "section": "Benching one source on purpose",
+      "text": "Only a provider-side verdict (`QUOTA_EXHAUSTED`, `MODEL_NOT_FOUND`, `AUTH`, `PERMISSION_DENIED`, …) benches a route, and it goes through the same account-aware window as a real failure — a quota verdict describes one account, so it earns the short bench described below rather than the full `cooldownMs`. The full transient list is `TIMEOUT`, `ABORTED`, `TRANSPORT`, `NETWORK_ERROR`, `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `ENOTFOUND`, `EAI_AGAIN`, `EHOSTUNREACH`, `ENETUNREACH`, `RATE_LIMITED`, `RATE_LIMIT`, `RATE_LIMIT_EXCEEDED`, `TOO_MANY_REQUESTS`, `OVERLOADED`, `OVERLOADED_ERROR`, `UNAVAILABLE`, `SERVER`, `SERVER_ERROR`, `INTERNAL_ERROR`, `BAD_GATEWAY`, `SERVICE_UNAVAILABLE`, `UPSTREAM_TIMEOUT`, `UPSTREAM_ERROR`, `EMPTY_RESPONSE`, `ACCOUNT_SIGNED_OUT`. (`RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT` and `EMPTY_RESPONSE` are exactly the codes the Harness itself treats as retryable — `DEFAULT_RETRYABLE_CODES` in @deepseek-ai/dsh-llm.)"
+    },
+    {
+      "section": "Benching one source on purpose",
+      "text": "Global benches use the same window as route failures, so a probe result and a real failure age out together."
+    },
+    {
+      "section": "A transient failure gets a soft bench",
+      "text": "The same reasoning applies to failures you did not probe for — the ones the engine sees while routing a real request. A `TIMEOUT` or a `RATE_LIMIT` on the head is not evidence that the source is broken, so it earns a **soft bench of one minute**, not a full `cooldownMs`:"
+    },
+    {
+      "section": "A transient failure gets a soft bench",
+      "text": "- `TRANSIENT_BENCH_MS` is 60 s. A failure whose code is in the transient list above benches the route for `min(cooldownMs, 60 s)`, so shrinking `cooldownMs` below a minute also shrinks the soft bench.\n- A request-scoped failure (`CONTEXT_WINDOW_EXCEEDED`) never touches the cooldown at all.\n- An always-mode retry-cap decision carries no failure code, so it keeps the full window."
+    },
+    {
+      "section": "A quota or credential failure is about one account, not the route",
+      "text": "This is the part that most often surprises people, because it is the opposite of what a plain \"fallback list\" does."
+    },
+    {
+      "section": "A quota or credential failure is about one account, not the route",
+      "text": "Every connector under this pool (Qoder, Trae, WorkBuddy, …) keeps its **own pool of accounts** and rotates between them per request. So a `QUOTA`, `AUTH`, `HARD_CREDIT` or `INVALID_API_KEY` verdict reaching the pool is a statement about **one account**, not a verdict that the provider route is dead. Benching the whole route for `cooldownMs` over it is precisely the misdiagnosis that makes a well-stocked pool report 「当前请求的额度已用尽」."
+    },
+    {
+      "section": "A quota or credential failure is about one account, not the route",
+      "text": "Codes in `ACCOUNT_SCOPED_CODES` therefore get a much shorter, account-aware window (`ACCOUNT_BENCH_MS` = 1 min), and the streak ceiling is `ACCOUNT_ESCALATION_CAP_MS` (15 min) rather than the full `cooldownMs`:\n\n| consecutive account-scoped failures | bench |\n| --- | --- |\n| 1 | 1 min |\n| 2 | 2 min |\n| 3 and beyond | 15 min (the account ceiling) |"
+    },
+    {
+      "section": "A quota or credential failure is about one account, not the route",
+      "text": "The ceiling is deliberately far shorter than a typical `cooldownMs` (5 h in the shipped profile): the connector's own account pool refills on a much faster cycle, so a five-hour bench would keep a healthy source hidden long after it recovered. A code outside the set — `MODEL_NOT_FOUND`, `PERMISSION_DENIED`, a genuine route defect — still gets the full window and is never softened."
+    },
+    {
+      "section": "A blip retries the same source before it switches",
+      "text": "Benching is only half of it. Even a one-minute bench is too eager if the pool **hops to another source on the very first error**, because a hop costs the upstream prompt cache and, between providers running different models, can change the model mid-session. What you actually want is to switch when a source is *exhausted*, not when it hiccups."
+    },
+    {
+      "section": "A blip retries the same source before it switches",
+      "text": "Every connector here rotates between its own accounts per request, so a retry on the **same** provider is not a wasted round trip — it lands on the next account. `shouldRetrySameRoute` therefore absorbs a failure in place up to `SAME_ROUTE_RETRIES` (3) times before the pool treats the source as exhausted and switches:"
+    },
+    {
+      "section": "A blip retries the same source before it switches",
+      "text": "| failure code | what the pool does |\n| --- | --- |\n| `QUOTA`, `AUTH`, `HARD_CREDIT`, `RATE_LIMIT`, … (`ACCOUNT_SCOPED_CODES`) | retry the same source, so its own rotation can answer |\n| `TIMEOUT`, `TRANSPORT`, `SERVER`, `EMPTY_RESPONSE`, … (transient) | retry the same source |\n| `INVALID_REQUEST`, `CONTEXT_WINDOW_EXCEEDED`, `NO_ADAPTER`, `MODEL_NOT_FOUND` | switch immediately — another account cannot cure these |"
+    },
+    {
+      "section": "A blip retries the same source before it switches",
+      "text": "The two columns follow the same split as the bench windows above: only a failure a *fresh account* can cure is worth retrying in place; a verdict about the request or the route itself is not."
+    },
+    {
+      "section": "A blip retries the same source before it switches",
+      "text": "An in-place retry is deliberately **not a downgrade**: it does not bench the route it is handing straight back (otherwise a single blip would take a healthy source out of rotation for a minute and immediately re-route around it), and it is not recorded as a switch. It does consume one of `maxSwitchesPerStep` attempts, so a pathological route cannot loop forever, and the per-route retry ledger resets whenever the `(turn, step)` pair changes."
+    },
+    {
+      "section": "A blip retries the same source before it switches",
+      "text": "The result is the behaviour you want from a pool: `trae` gets one bad request, retries itself, and the session stays on `trae` with a warm prompt cache. Only when its accounts are genuinely spent does the next request land on `workbuddy`."
+    },
+    {
+      "section": "A repeated transient failure is promoted, not re-softened",
+      "text": "A soft bench exists to forgive *one* blip. It is not meant to be a permanent 60-second loop: a route that keeps coming back and keeps failing is exactly the case where a one-minute bench hurts, because the engine walks back to it on every request and the chain oscillates between two sources instead of settling on the healthy one.\n\nSo a transient failure is counted per route, and the third consecutive strike **promotes** it to the full `cooldownMs`:"
+    },
+    {
+      "section": "A repeated transient failure is promoted, not re-softened",
+      "text": "| consecutive transient failures | bench |\n| --- | --- |\n| 1 | 1 min (soft) |\n| 2 | 2 min (soft, doubled) |\n| 3 and beyond | the full `cooldownMs` |"
+    },
+    {
+      "section": "A repeated transient failure is promoted, not re-softened",
+      "text": "The count resets on any success from that route — a real answer proves it is healthy, so the next failure starts from a soft bench again. Clearing a bench by hand (Reset cooldowns, Release, or a passing connectivity test) resets the count too. A definite verdict is never softened in the first place, so it is never escalated either: it already got the full window on strike one."
+    },
+    {
+      "section": "A success releases the bench immediately",
+      "text": "A bench is not a promise to stay down. Whenever the plugin sees a completed assistant message from a route it has benched, that bench is dropped right away and the provider returns to the head of the chain on the next request. This works in `timer` mode too, not only with `recovery: \"half-open\"` — a real answer is proof the source is alive, and waiting out the remaining timer when you already have that proof is exactly the kind of misdiagnosis this avoids."
+    },
+    {
+      "section": "A success releases the bench immediately",
+      "text": "`revertPolicy: \"never\"` is the exception: it is an explicit request to keep a failed entry out for the rest of the session, so a success does not override it."
+    },
+    {
+      "section": "A fully-benched chain still keeps walking",
+      "text": "A bench is a *prediction* that a source just broke, not a verdict. So when a failure arrives and **nothing** on the chain is still selectable (everything is cooling down, or already failed inside this step), the plugin does **not** hand you the raw error:"
+    },
+    {
+      "section": "A fully-benched chain still keeps walking",
+      "text": "1. Filter candidates the normal way — skip the current route, skip routes already failed in this step, skip routes that cannot hold the context.\n2. If nothing survives, try the entry whose bench **releases soonest**. A source back in 40 seconds is plainly better than one benched for five hours.\n3. If even that yields nothing **and** the failure is account-scoped, retry the current route anyway for a fresh account: the connector rotates accounts on every call, so one exhausted account is not a reason to surface 「额度已用尽」.\n4. Only a genuine step-wide ping-pong on a non-account verdict hands the raw failure back to the host."
+    },
+    {
+      "section": "A fully-benched chain still keeps walking",
+      "text": "A warn line records step 2: `every candidate is benched — falling back to <provider>/<model> (soonest release) instead of surfacing the raw failure`, and step 3: `every candidate is benched after the account-scoped failure <code> — retrying <provider>/<model> for a fresh account instead of surfacing the raw error`. That is why selecting `ModelPool/Auto` does not make the pool one-shot: when one source burns its quota and takes a bench, the chain moves on, and the next request picks a different starting point."
+    },
+    {
+      "section": "A fully-benched chain still keeps walking",
+      "text": "Note that **no dispatchable head** and **everything benched** are different conditions. The former (empty chain, wildcard-only rows) still throws `UNDISPATCHABLE_EFFECTIVE_HEAD` / `EMPTY_EFFECTIVE_CHAIN`, because that is a configuration error and retrying it is pointless."
+    },
+    {
+      "section": "Priority order is drag-and-drop",
+      "text": "Both the root chain and each named pool's chain are ordered lists, and the order *is* the priority: the first non-benched entry is what you get. Every chain is reorderable in the same way, including the **Default pool** section's **Model pool (fallback chain)** editor:\n\n- **Pool cards** (named pools) are dragged by the grip handle in their header.\n- **Chain entries** — the default pool's rows and each named pool's rows — are dragged by the grip in the entry footer."
+    },
+    {
+      "section": "Priority order is drag-and-drop",
+      "text": "The change is a normal unsaved edit, so it goes through that section's Save button like any other edit. Dragging is disabled while the settings are read-only, and a chain with a single entry shows no grip at all, since there is nothing to reorder."
+    },
+    {
+      "section": "A manual model choice is never overridden",
+      "text": "The pool engines act only on the routes they own. If you pick a **concrete** model in the picker that belongs to **no** chain the session is riding, the plugin treats it as a deliberate manual choice and lets its failures pass straight through to llm-retry / the original error: no switch, no cooldown, no retry override. Backing off from a manual pick is exactly the hijack this behaviour removes."
+    },
+    {
+      "section": "A manual model choice is never overridden",
+      "text": "What still counts as pool-owned: the virtual `ModelPool/Auto` row and every `ModelPool/<pool id>` row (those *are* routing contracts, so failures there are what the engine is for), **every concrete route that appears in the chain the session is actually riding** — the effective root chain, or the named pool the session selected — and any subagent session (its route comes from role injection, not from a human click)."
+    },
+    {
+      "section": "A manual model choice is never overridden",
+      "text": "That third point matters for named pools: a `ModelPool/analyst` session walks *analyst*'s chain, so `trae/deepseek-v4.1-flash` sitting in that chain is pool-owned even though it is not the all-day head. Before this was explicit, a named-pool session judged its own chain members to be manual picks and refused to switch at all."
+    },
+    {
+      "section": "Time-slot presets",
+      "text": "Time slots are introduced in the [featured overview](#time-slots) above; this section is the reference. Time-slot rows rotate the **effective root chain** by wall-clock windows — useful for peak/valley pricing without confusing wall-clock rotation with failure fallback. The copy split is strict: slot rotation logs and UI say **time-slot switch**; the failure walk keeps **fallback switch**; the conversation notice Model downgraded stays on the failure path only."
+    },
+    {
+      "section": "Time-slot presets",
+      "text": "- **Match order**: at every root request, the first extra row whose window contains the current moment (in `fallbacks.tz`, default `Asia/Shanghai` / UTC+8) wins — that row's chain **replaces** the all-day chain. No row matches → the all-day `rootChain` is used. The all-day row is always last and **required** to be non-empty, but any provider/model may sit anywhere in it.\n- **Presets** (frozen, not user-editable): `liang-peak` = Monday–Friday 09:00–12:00 **and** 14:00–18:00; `liang-valley` = every other UTC+8 time; `glm-peak` = Monday–Friday 14:00–18:00; `glm-valley` = every other time. One preset id = one row; the card picker never offers a duplicate.\n- **Custom rows**: `start` / `end` (`HH:mm`, may wrap midnight) + optional `days` (0=Sunday…6=Saturday; omitted/empty = every day) + models.\n- **Next-request apply**: a slot boundary crossing never preempts an in-flight step — the new row takes effect on the next root request. Rotation is mount-only: info log + card/`/fallbacks` status line, no durable switch event.\n- **Flat settings card** (the official Plugins-page form language): the card is always open — no collapsible chrome and no feature switch — and each section carries its ow"
+    },
+    {
+      "section": "Preset roles",
+      "text": "The plugin ships **5 bundled generic subagent roles** out of the box — `reviewer` / `scout` / `security-reviewer` / `sonic` / `task` — declared automatically on `apply` as seeded `roles.list` rows (`{ id, persona }`): idempotent, and never overwriting an operator persona. They appear in the `/fallbacks config` role summary, ready for `roles.rules` to reference. (The settings card no longer renders role rows — see [Minimal configuration](#minimal-configuration) step 4; edit roles in YAML or the TUI `/settings` section instead.) (`designer` and `librarian` are no longer bundled: rows saved by earlier versions keep their persona and now show source `user` as ordinary editable rows only when no live producer still declares the id, even though the operator never wrote them; a companion's live declaration keeps them seeded and read-only with source `external` when unnamed or its registered set name otherwise.)"
+    },
+    {
+      "section": "Preset roles",
+      "text": "- **Switch**: `fallbacks.presets` — `'bundled'` (default) declares the preset roles on apply; `'none'` disables the automatic declaration (already-materialized rows stay).\n- Source attribution: each row carries a source (`preset` / `user` / `external`); the source badge and the per-row editability described above apply to the YAML/TUI surfaces."
+    },
+    {
+      "section": "Agent presets (plugin composition)",
+      "text": "Agent **presets** are a dsh feature for composing plugins — they are declarative child-plugin lists a user can apply as a set, and they carry **no** model fields of their own. This plugin needs no preset-specific configuration: because a preset composes plugins, the fallback applies **wherever the plugin's row is mounted** — a preset that includes the `llm-fallbacks` row (name `dsh-model-pool`) gives that preset's sessions the same pool and roles configured for the plugin."
+    },
+    {
+      "section": "Agent presets (plugin composition)",
+      "text": "- **A user preset override replaces the entire child list** (no merge): a preset that omits the plugin row silently unmounts the plugin for sessions using that preset. Restate every plugin row you want to keep.\n- **Preset-scoped chain configs are possible by mounting the row inside a preset**: the plugin row's `config:` overrides in a preset composition produce a chain configuration that applies to that preset's sessions only (patch rows replace the whole `config`, so restate every field)."
+    },
+    {
+      "section": "Fallback triggers (`triggerCodes`)",
+      "text": "`fallbacks.triggerCodes` is a plain list of dsh failure codes, and **any** code the harness can report is accepted — not only the three defaults (`AUTH` / `QUOTA` / `RATE_LIMIT`). A failure whose code is not listed passes straight through to llm-retry or to the original error, exactly as if the plugin were not installed. Retryable failures (5xx / `TRANSPORT` / `TIMEOUT` / `EMPTY_RESPONSE`) need no extra entries: llm-retry backs them off first and the failure enters the chain decision the same way once that budget is exhausted."
+    },
+    {
+      "section": "Matching is by condition, not by literal spelling",
+      "text": "Connectors do not agree on the code they use for the same real-world event: Trae reports lowercase `authentication` / `upstream` / `soft_rate` / `hard_credit`, WorkBuddy reports `busy` / `channel_reject`, the harness itself re-classifies pi-ai failures into bare strings like `AUTH` / `RATE_LIMIT` / `SERVER`, and quota shows up as either `QUOTA` or `ACCOUNT_QUOTA`. Compared literally, your `AUTH` would never meet Trae's `authentication` — **half of a configured trigger list is dead**, which makes the pool look like it is doing nothing at all."
+    },
+    {
+      "section": "Matching is by condition, not by literal spelling",
+      "text": "Both sides are therefore normalised before comparison (uppercased, whitespace and hyphens folded to underscores) and synonyms are collapsed:"
+    },
+    {
+      "section": "Matching is by condition, not by literal spelling",
+      "text": "| Trigger you write | Also catches these real failure codes |\n| --- | --- |\n| `AUTH` | `authentication`, `authorization`, `INVALID_CREDENTIAL`, `ACCOUNT_SIGN_IN_REQUIRED`, `WORKBUDDY_CREDENTIAL_REJECTED`, `unsupported-region`, `UNAUTHORIZED` |\n| `QUOTA` | `ACCOUNT_QUOTA`, `INSUFFICIENT_QUOTA`, `QUOTA_EXCEEDED`, `hard_credit` |\n| `RATE_LIMIT` | `soft_rate`, `TOO_MANY_REQUESTS`, `busy`, `channel_reject` |\n| `SERVER` | `upstream`, `UPSTREAM_ERROR`, `PI_AI_ERROR`, `INTERNAL` |\n| `TRANSPORT` | `STREAM_CLOSED`, `CONNECTION_RESET` |"
+    },
+    {
+      "section": "Matching is by condition, not by literal spelling",
+      "text": "Codes outside the table keep their meaning (`TIMEOUT`, `EMPTY_RESPONSE`, `CONTEXT_WINDOW_EXCEEDED`, …), so existing configurations do not change semantics — the half that spelling differences used to lock out simply starts working."
+    },
+    {
+      "section": "Context-window rejections",
+      "text": "A request larger than the model's context window is reported as `CONTEXT_WINDOW_EXCEEDED` — dsh core's canonical code for a provider 400 \"maximum context length\". It is not a retryable code, so list it explicitly to fail over to a larger-context model:\n\n```yaml\nfallbacks:\n  triggerCodes:\n    - AUTH\n    - QUOTA"
+    },
+    {
+      "section": "The window a pool row advertises",
+      "text": "A virtual row fronts a **whole chain**, and a request may be served by any entry in it. So each row advertises the **smallest** context window among the chain's dispatchable routes — the only number that holds for every hop."
+    },
+    {
+      "section": "The window a pool row advertises",
+      "text": "This matters because the host sizes a session against the window it is told, and the compressor on the way upstream does the same. A row that declares no window leaves the harness sizing against a default that can be far larger than the route that actually serves the request; the payload then grows past a smaller route's limit, and the switch that was supposed to save the request fails instead."
+    },
+    {
+      "section": "The window a pool row advertises",
+      "text": "Practically: a chain of `trae/deepseek-v4.1-flash` (1,000,000) plus `qoder/dfmodel` (200,000) makes the row advertise **200,000**. That is deliberate. Compressing to the small route's window costs some history; hopping onto that route with an oversized payload costs the whole turn.\n\nWhen no entry's window can be resolved, the field is omitted rather than guessed — the host rejects a non-integer window outright."
+    },
+    {
+      "section": "The window a pool row advertises",
+      "text": "**Ordering — the fallback runs before compaction.** With `CONTEXT_WINDOW_EXCEEDED` in `triggerCodes`, this plugin's `agent/request-error` listener handles the rejection **before** the harness's compaction plugin gets to compact: the conversation moves to the fallback model on the first overflow, and the context is never compacted. Leave the code out of `triggerCodes` if you would rather have compaction tried first."
+    },
+    {
+      "section": "The window a pool row advertises",
+      "text": "**Request-scoped switching.** A context-window rejection says the *request* was too big, not that the route is unhealthy. Such a switch is **request-scoped**: the from-route is recorded as failed for the current step (so the step does not bounce straight back to it) and still counts against `maxSwitchesPerStep`, but it is **not** put on cooldown for `cooldownMs` and does not feed the half-open recovery counter — the next, shorter prompt goes to the primary model as usual, and no half-open probe is spent on a route that never failed. Every other trigger code stays **route-scoped** (cooldown + recovery bookkeeping) exactly as before."
+    },
+    {
+      "section": "The window a pool row advertises",
+      "text": "**Candidates that cannot fit are skipped.** On a context-window walk the chain skips any candidate whose advertised context window is not larger than the failing model's — falling over from a 128k model to an 8k one would only fail again. Windows come from the host model catalog: the catalog row's `contextWindow` when it carries one, otherwise `llm.resolveModelInfo(provider, model)`'s `context.contextWindow`. A model that discloses no window either way is kept as a candidate, so a provider without capacity metadata never empties a chain. Skipped candidates are named in the switch log line as `skipped: context-window`."
+    },
+    {
+      "section": "Host subagent model policy (dsh 0.1.2)",
+      "text": "dsh 0.1.2 adds host-side child-model selection for subagents: a `subagent-model-selection` settings allowlist, a per-session `subagent/model-selection-policy` event, and spawn-time `provider/model/reasoning_effort` routing. The plugin reconciles with it under one runtime arbiter — plugin roles/chains remain the failure-recovery layer the host does not provide."
+    },
+    {
+      "section": "Host subagent model policy (dsh 0.1.2)",
+      "text": "**Policy read (per session)**: the session `subagent/model-selection-policy` event wins; otherwise the `subagent-model-selection` settings service when `enabled`. Missing service / `enabled: false` / no event → policy off.\n\nWhen the policy is **enabled**:"
+    },
+    {
+      "section": "Host subagent model policy (dsh 0.1.2)",
+      "text": "- **Authorized head preserved (skip inject)**: a subagent spawned with an explicit `provider`+`model` (spawn options, durable `request/header`, or a `model/selection` selection) keeps that route as its chain head — role-inject is skipped and the authorized route is never overwritten at the first request; the plugin chain applies only from failure time onward. Pure inheritance (no explicit selection fields) is **not** an authorized route.\n- **Allowlist-constrained inject**: pure inheritance still resolves a role in the three stages above, but the injected chain head is plugin-originated and must be on the effective allowlist — the first resolved in-allowlist candidate wins. Empty intersection → inject is skipped and the host seed stands (warn log).\n- **Allowlist-constrained failure switching**: after a triggering failure, the resolved candidates (wildcards already expanded; cooldown / step-failed / same-as-current filters already applied) are intersected with the allowlist in walk order. Empty intersection → **no switch**, no out-of-allowlist request, a warn log plus an in-memory blocked-attempt record (no durable session write — issue #52 stands).\n- **Fail-closed**: a present-but-m"
+    },
+    {
+      "section": "Host subagent model policy (dsh 0.1.2)",
+      "text": "When the policy is **disabled or absent**, inject and failure-switch **selection** are unchanged from 0.3.5 (no allowlist filter, no authorized-route skip)."
+    },
+    {
+      "section": "Host subagent model policy (dsh 0.1.2)",
+      "text": "**Effort rule (policy-independent)**: `reasoningEffort` on every override path (role-inject, failure switch, always-cap switch) follows the upstream 0.1.2 `routeChanged` rule — an unchanged provider+model route keeps the seed effort; a route change drops it unless an effort is explicitly named for the override (explicit always survives). A stale effort is never carried into a different provider."
+    },
+    {
+      "section": "Host subagent model policy (dsh 0.1.2)",
+      "text": "In this fork the virtual `ModelPool / Auto` route participates too: its advertised tiers are the **union** of what the pool's routes declare, and each delegated call is pinned to the nearest tier the actual head accepts, so a tier chosen in the picker survives a fallback to a head with a different tier set."
+    },
+    {
+      "section": "Mount-only (no dsh modification)",
+      "text": "The plugin installs as a **pure mount**: one `dsh.bundle.patch` row in the profile, a `dsh.client.inject` list for the web UI, and its own remote endpoints (`dsh-model-pool#fallbacks/get`, `…/set`, `…/reset`, `…/revert-seed`, registered through the host's `typert` service). Nothing patches the DSH installation, there is no postinstall step, and DSH upgrades never require re-patching. Stale leftover patches from an older patched install are harmless."
+    },
+    {
+      "section": "Version compatibility",
+      "text": "`peerDependencies` pin `@deepseek-ai/*` at `^0.2.0-rc.2`, `cordis` at `^4.0.2`, `schemastery` at `^3.18.2`, `react` at `^18.2.0`; `engines.node` is `>=22`. On a host outside that range, DSH refuses to enable the plugin and prints the exact `dsh plugin --profile <profile> allow-version <name>@<version> --dsh-version <runtimeVersion> --accept-risk` command that overrides the check — run it only if you accept the risk, since the plugin reaches into internals that a different host version may have moved."
+    },
+    {
+      "section": "Documentation",
+      "text": "This README is the reference for the fork. There is no separate `docs/` tree: the sections above (Time slots, Quick start, Configuration surfaces, ModelPool in the model picker, Time-slot presets, Preset roles, Agent presets, Fallback triggers, Host subagent model policy, Mount-only) cover the `fallbacks` namespace, selector syntax and card usage end to end."
+    },
+    {
+      "section": "Documentation",
+      "text": "If you are the one *publishing* this fork rather than using it, see [PUBLISHING.md](PUBLISHING.md) — how to push it to a git host, why the repo installs without building, and how to ship a change to `dist/`."
+    },
+    {
+      "section": "License",
+      "text": "Released under the **MIT** License — see [LICENSE](LICENSE). The LICENSE file is authoritative for copyright and license terms."
+    },
+    {
+      "section": "dsh-model-pool",
+      "text": "> **dsh-model-pool 0.1.0 —— fork 自 `dsh-llm-fallbacks` 0.6.5。两处刻意的分歧：**\n> 1. 上游「全天链必须以恰好一个官方模型（`deepseek-official` Flash/Pro）收尾」的规则\n>    已**移除**——任何 `provider/model` 条目都可以居首或收尾，整条链完全由你自己的配置驱动。\n> 2. 选择器虚拟行更名为 **`ModelPool / Auto`**（上游为 `FallbacksChain / Auto`）。\n>    内部标识有意保留上游名字：settings 命名空间 `fallbacks:`、profile 行 id\n>    `llm-fallbacks`、cordis 服务名 `fallbacks`。\n>\n> 在 0.6.5 之上另有两处新增：虚拟行广播整个池的**推理强度并集**，因此选择器里\n> 可选推理强度；每个被委托的请求都会钉到**实际链头接受的最接近档位**。\n\n[English](README.md) | [中文](README.zh-CN.md)"
+    },
+    {
+      "section": "dsh-model-pool",
+      "text": "[](LICENSE)\n\ndsh（DeepSeek Harness）的自动模型降级链：当某个 agent 的模型请求持续失败（重试耗尽、权限、配额超限、限流 429）时，插件按当前角色沿链切换 provider/model，当前 step/turn 在目标模型上继续完成——任务不因模型问题中断。\n\n本 fork 的要点是**池子完全由你决定**：workbuddy → qoder → trae，或任意其它顺序、任意你实际配置了的 provider 组合。链里没有任何一项必须是官方 DeepSeek 模型。\n\n两个 dsh 前端均可用：**web** profile（设置 → 插件配置 → 模型池 卡片）与 **dsh-tui** 终端 profile（`/fallbacks` 会话诊断、`/fallbacks config` 回读，以及 `/settings` 中的 fallbacks 区块用于编辑）。"
+    },
+    {
+      "section": "峰谷无忧",
+      "text": "峰谷无忧（分时切换）按墙钟窗口轮换**生效 root 链**：每个时段槽行拥有自己的 fallback 链，第一个窗口包含当前时刻的行将在下一个 root 请求取代全时段链——无行命中时，全时段链作为兜底保持在最后。峰谷窗口因此可以使用不同的模型链，而失败降级路径（降级切换）保持不变。\n\n四个冻结的 UTC+8 预设（窗口为代码常量；存在预设行时 `tz` 锁定 Asia/Shanghai）：\n\n| 预设 | 窗口 |\n|---|---|\n| `liang-peak` | 周一至周五 09:00–12:00 与 14:00–18:00 |\n| `liang-valley` | 其它所有 UTC+8 时间（Liang Peak 的补集） |\n| `glm-peak` | 周一至周五 14:00–18:00 |\n| `glm-valley` | 其余时间（GLM Peak 的补集） |\n\nGLM 峰与 GLM 谷仅在已配置 `zai-coding-cn` 时出现在设置卡选择器中。"
+    },
+    {
+      "section": "峰谷无忧",
+      "text": "每个 root 请求时刻，第一条窗口包含当前时刻（按 `fallbacks.tz`，默认 Asia/Shanghai）的额外行生效；无行命中 → 全时段 `rootChain`。分时切换是路由种子而非失败决策：在下一个 root 请求生效、不消耗冷却，日志记为**分时切换**；失败降级保持**降级切换**。完整语义 → [分时槽预设（分时切换）](#分时槽预设分时切换)。"
+    },
+    {
+      "section": "安装",
+      "text": "这是一个自托管 fork——不在 npm 上。可从 git URL、本地目录或打包好的 tarball 安装；包内附带**已构建的 `dist/`**，且未声明 `prepare`/`postinstall` 脚本，因此目标机既不编译也不下载任何东西，pnpm 的构建审批环节也不会触发。\n\n**从 git 仓库安装**（分享给它人的方式——`github:owner/repo`、完整的 `git+https://…` URL、以及本地 clone 路径都可用）：\n\n```sh\ndsh plugin --profile web add github:<owner>/dsh-model-pool      # web profile\ndsh plugin --profile dsh-tui add github:<owner>/dsh-model-pool  # dsh-tui 终端 profile\n```"
+    },
+    {
+      "section": "安装",
+      "text": "在 **DSH Desktop** 中，同样的 spec 填进插件页的安装框（绝对路径与 `github:owner/repo` 都被接受；*相对*路径不行——宿主会以 \"a local path must be absolute\" 拒绝）。装完**重启 DSH Desktop**：插件 bundle 在启动时加载，只刷新浏览器不够。\n\n**从本地目录或 tarball 安装**（不需要 git）：\n\n```sh\ndsh plugin --profile web add C:\\path\\to\\dsh-model-pool            # 含 package.json 的目录\ndsh plugin --profile web add C:\\path\\to\\dsh-model-pool-0.1.0.tgz  # 打包好的 tarball\n```\n\n目录安装属于 *path* 安装：宿主要求一个可读的 `package.json`，且带 `name` 与 `dsh.bundle`——本包两者都有。两种方式都不需要构建。"
+    },
+    {
+      "section": "安装",
+      "text": "> **不要与官方 `dsh-llm-fallbacks` 同时运行。** profile 行 id `llm-fallbacks` 是有意共用的（settings 命名空间、cordis 服务、typert 端点都沿用它），同一 profile 里出现两个该 id 的行即冲突。先卸载官方那个。\n\nregistry spec 可加 `@<version>` 钉版本。插件自带**本地化元数据**（插件页详情视图的标题/描述，英文 + 简体中文）与**图标**——均以包内声明（`locale/*.json` + `icon.svg`）交由宿主自动读取。"
+    },
+    {
+      "section": "配置界面",
+      "text": "插件的设置存在于共享的 `fallbacks:` 命名空间中，可通过三个界面编辑：\n\n| 界面 | 是什么 | 说明 |\n|---|---|---|\n| **Web 设置卡** | 设置 → 插件配置 → 模型池 | `fallbacks:` 命名空间的完整 GUI 编辑器；写入共享设置文档 |\n| **`$DSH_HOME/settings.yaml`** | dsh 设置文档中的 `fallbacks:` 分节 | 共享的事实源——与 Web 卡写入的是同一个文件；任何场景（包括脚本化配置）都可读写 |\n| **TUI `/settings`** | dsh-tui 设置界面中的 fallbacks 区块 | 需要 dsh-tui ≥ v0.8.5；简单键用原生字段，复杂结构用 JSON 文本字段（见 [dsh-tui profile（终端）](#dsh-tui-profile终端)） |"
+    },
+    {
+      "section": "配置界面",
+      "text": "按你的前端选择入口：web 用户用设置卡，终端用户用 `/settings`，YAML 文件处处可用。（`/fallbacks` 与 `/fallbacks config` 是诊断命令——只读视图，不是编辑入口。）"
+    },
+    {
+      "section": "最小配置",
+      "text": "在共享设置文档（`$DSH_HOME/settings.yaml`——见 [配置界面](#配置界面)）中添加 `fallbacks:` 分节：\n\n```yaml\nfallbacks:\n  rootChain:               # 池子本体：按此顺序走链，第一项即链头\n    - workbuddy/glm-5.3                # 最先尝试\n    - qoder-global/qfmodel             # QUOTA / RATE_LIMIT / AUTH 之后\n\n按五个步骤逐步构建：\n\n**1. 配置内容。** 本分节**没有功能开关**——只要配置了内容（非空 `rootChain`、至少一条 `pools` 行、至少一条 `timeSlots` 行、或一个已声明角色），插件即介入；空分节完全 no-op。插件页的行开关是总开关（停用插件行即完全停止）。"
+    },
+    {
+      "section": "最小配置",
+      "text": "**2. 配置全时段 `rootChain`。** 这些条目**就是**池子：请求失败时按顺序走链，因此第一项是链头（请求平时落到的模型），其余依次是降级目标。没有单独的「默认模型」槽位，也没有官方模型要求——任意 `provider/model` 条目可以放在任意位置，唯一约束是链非空。\n\n> **校验**：仅存的结构性规则是 `rootChain` 至少一项——空池在保存时被拒绝（若 `pools` 至少声明了一个池，则命名池也足以构成内容）。selector 语法为 `provider/model`。通配符条目（裸模型或裸 provider）在链内被接受，但**不能**充当**链头**，因为虚拟路由需要一个精确的 `provider/model` 才能派发；薄委托服务生效链中**第一个可派发的精确条目**并跳过通配符行。插件在保存时不探测目录可用性——当前目录里没有服务的条目照样被接受，只是走到它时才降级，因此暂时未配置的 provider 绝不会阻塞保存。"
+    },
+    {
+      "section": "最小配置",
+      "text": "**3. 添加 `timeSlots`（可选）。** 各行按墙钟窗口轮换生效 root 链。预设行使用冻结的 UTC+8 窗口（仅链可编辑；存在预设行时 `tz` 锁定 `Asia/Shanghai`）；自定义行使用 `start`/`end`（可跨午夜）与可选的 `days` 列表。第一个窗口包含当前时刻的行生效；无行命中 → 全时段 `rootChain`。分时切换是路由种子——在下一个 root 请求生效、不消耗冷却（见 [峰谷无忧](#峰谷无忧)）。"
+    },
+    {
+      "section": "最小配置",
+      "text": "**4. 添加 `roles`（可选，仅 YAML/TUI）。** 在 `roles.list` 中声明角色实体（id、persona、chain、可选的 `fallback` 策略），再用 `roles.rules` 把 subagent 映射到角色。规则绝不匹配 root 请求——未命中规则（或 root 请求）时由内置 `inherit` 角色兜底，追加 `rootChain`。角色属于路由配置而非池配置，因此设置卡不再编辑它们：在此处或 TUI 的 `/settings` fallbacks 区块中书写。已有行经由卡片保存时原样保留——卡片只是从不渲染它们。\n\n**5. 添加 `pools`（可选）。** 每条 `pools` 行是一个独立的池，在选择器里占一行（`ModelPool/<id>`）。命名池只走自己的链，用尽即抛错，不会接着走 `rootChain`——见 [命名池](#命名池)。\n\n逐字段参考（角色实体、fallback 策略、规则、selector、预设角色、分时槽预设）见下文各节——本 README 就是这个 fork 的参考文档。"
+    },
+    {
+      "section": "最小配置",
+      "text": "> **升级提示（破坏性变更）**：配置级 `enabled` 开关已**移除**——存量配置仍携带 `enabled: true/false` 时可正常加载（该键被忽略，下次保存时剥离），但不再起任何门控作用。如果你靠 `enabled: false` 保持插件惰性，请改为清空分节（或在插件页停用该行）。"
+    },
+    {
+      "section": "验证",
+      "text": "保存配置并重启会话，然后键入 `/fallbacks`——只读的会话内诊断（来源、解析角色、链、最近降级切换、冷却状态）。在 dsh-tui profile 中，`/fallbacks config` 回读组合配置；见 [dsh-tui profile（终端）](#dsh-tui-profile终端)。"
+    },
+    {
+      "section": "能力一览",
+      "text": "- **root / subagent 自动降级**：任意 agent 在模型故障下按链切换到下一个可用 provider/model，无需手动换模型。\n- **两块制配置**：`rootChain` 管 root 代理；声明式角色实体（`roles.list`）供 `roles.rules` 引用（或内置 `inherit`）。\n- **选择器里把链当主模型**：只要插件配置了内容，宿主模型选择器（web 与 TUI 一致）即出现虚拟 `ModelPool` / `Auto` 行——选中它即以配置的链作为 root 主模型（需要可派发的精确链头才能成功委托）；选真实模型则保持 fallback-only（见 [模型选择器中的 ModelPool](#模型选择器中的-modelpool)）。\n- **命名池**：可选的 `fallbacks.pools` 行声明额外的、完全独立的池，每个池各自以 `ModelPool/<id>` 行的形式出现在选择器中（`glm-5.3 → WorkBuddy`）。选中即把会话绑定到该池：只走它自己的链，用尽即失败，而不会接着走 `rootChain`；因此命名池是硬路由边界，不是共享链的延伸（见 [命名池](#命名池)）。\n- **峰谷无忧（分时切换）**：可选的 `fallbacks.timeSlots` 行按墙钟窗口（配置级 `tz` 时区，默认 `Asia/Shanghai`）轮换 root 生效链——四个冻结的 UTC+8 预设（`liang-peak` / `liang-valley` / `glm-peak` / `glm-valley`，窗口为代码常量、仅模型链可编辑），或自定义 `start`/`end`/`days` 窗口。第一条命中的行生效；全时段行固定最后。时段切换在**下一个** root 请求生效，日志记为**分时切换**——路由种子而非失败决策：不消耗冷却、不计入 `maxSwitchesPerStep`。失败降级保留**降级切换**文案（见 [分时槽预设（分时切换）](#分时槽预设分时切换)）。\n- **派发时角色解析**：在 subagent 的首次请求上，其角色按三个阶段解析——显式（`agentPreset` 匹配已声明角色 id）→ 确定性规则（匹配记录 pair 或实际服务的链头——见 [模型选择器中的 ModelPool](#模型选择器中的-modelpool)）→ LLM 自动匹配（从已声明角色体系中选择，`fallbacks.roleAutoMatch` 默认 `true`）。解析出的角色的链头模型注入首次请求，并以显式 `role → model` 日志行记录（不写 durable `fallbacks/switch` 事件——issue #52 停写）；设 `roleAut"
+    },
+    {
+      "section": "dsh-tui profile（终端）",
+      "text": "- **`/fallbacks`** —— 本次会话发生了什么：来源、解析角色、生效链、最近降级切换、冷却状态（`recovery: half-open` 生效时显示 half-open 标记行）。只读。\n- **`/fallbacks config`** —— 配置了什么：组合配置回读（触发码、根链、分时槽、时区、角色、角色规则、冷却、回主策略、安全阀、预置、角色自动匹配）。除唯一的动作命令 **`/fallbacks config revert-seed <role-id>`** 外只读——该命令把某个 seed 角色的 persona 还原为已声明的默认（Web 设置卡已完全不显示角色行、不提供还原入口，此命令是该动作的唯一入口）。\n- **`/settings`** —— 编辑界面。插件注册 **fallbacks** 区块，与 `fallbacks` 配置命名空间完全对齐——并且与 Web 设置卡不同，它仍然编辑 `roles.list` 与 `roles.rules`（卡片已移除角色编辑面，此区块保留）：布尔（`roleAutoMatch`）渲染为开关、下拉（`presets`、`revertPolicy`）为选择器、数值（`cooldownMs`、`maxSwitchesPerStep`、`alwaysModeRetryCap`）为数字输入；复杂结构（`rootChain`、`pools`、`timeSlots`、`roles.list`、`roles.rules`）为 JSON 文本字段，`triggerCodes` 为逗号分隔文本字段。非法草稿（JSON 解析失败、空 `rootChain`、分时行畸形）会阻止保存——区块绝不写入损坏配置。"
+    },
+    {
+      "section": "dsh-tui profile（终端）",
+      "text": "**版本要求**：`/settings` 的 fallbacks 区块需要 **dsh-tui ≥ v0.8.5**（`main` 上 commit `c51661f` 及以后；settings seam 于 v0.8.0 引入，groups 结构与校验于 v0.8.5 引入）。更旧的 dsh-tui 没有该区块，文件编辑仍是 TUI 唯一编辑面。\n\n文件编辑在任意情况下仍然可用：全局设置写共享的 `$DSH_HOME/settings.yaml`（`fallbacks:` 分节——与 Web 卡写的是同一个文件）；dsh-tui 专属覆盖写 profile patch `~/.dsh/profiles/dsh-tui/cordis.patch.yml`（插件行上的 `config:` 覆盖）。注意：patch 行会**整体替换**目标行的整个 `config`——想保留的字段都要写全（schema 默认值补齐其余）。"
+    },
+    {
+      "section": "模型选择器中的 ModelPool",
+      "text": "只要插件配置了内容（非空 `rootChain`、至少一条 `pools` 行、至少一条 `timeSlots` 行、或一个已声明角色），它就注册一个虚拟 provider **ModelPool**，每个已配置的链各占一行：根链对应 **Auto**，另加每个[命名池](#命名池)一行。web profile 与 dsh-tui 都能看到这些行：两者共享同一个 adapter catalog，无需设置页接线或宿主补丁（它与 `/settings` 的 fallbacks 区块相互独立——区块编辑的是配置，不是选择器目录）。只要其它内容仍在，空 `rootChain` **不会**隐藏 Auto 行——文案退化为裸 `Auto`，`stream()` 以 `EMPTY_EFFECTIVE_CHAIN` 拒绝服务；完全没有任何内容时才没有这一行。"
+    },
+    {
+      "section": "模型选择器中的 ModelPool",
+      "text": "选择 **ModelPool / Auto** = 把配置的链作为 root **主模型**：请求保留在虚拟对上，由 adapter 的薄委托在请求时刻派发到生效链的第一个精确 `provider/model`，失败后由降级引擎从该链头照常沿链切换。之所以让选择原样下发（而不是把路由改写成链头），也正是为了不让宿主的模型变更提示被反复触发：落盘的路由与会话选择一致，因此该提示只在**选择真的发生变化**时出现一次，而不再每一步重新注入。选择任何真实目录模型则保持 v0.2.2 的 fallback-only 行为——会话模型为主，链只在它失败后介入。\n\n**没有 `rootMode` 开关**——没有配置键、YAML 字段、设置开关或 gateway 标志。模式就是会话的 `{provider, model}` 选择本身：`ModelPool` = 链为主模型；任意真实模型 = fallback-only。\n\n注意："
+    },
+    {
+      "section": "模型选择器中的 ModelPool",
+      "text": "- **选择器文案**：目录行的 `name`（composer 触发器显示）是动态的——`Auto: glm-5.3[all-day]`、`Auto: qfmodel[Liang Peak]`（用链头的 catalog 显示名，不是 model id）；id 仍是 `Auto`。命名池的行文案为 `<池 id> → 当前正在使用的 provider`，例如 `glm-5.3 → WorkBuddy`；链头一旦冷却，标签会顺着链往下走（见 [链路状态](#链路状态哪一条正在冷却)）。链中没有可派发的精确链头时只显示裸 `Auto`。链路状态变化时该行会自行重读；重新打开选择器亦可刷新。\n- **全来源同一个薄委托**：root 代理与继承了该选择的 subagent 会话由同一个 `stream()` 薄委托服务——subagent 的角色解析与注入语义不变，只有一处刻意的放宽：派发时规则匹配接受**记录 pair 或实际服务的链头**（此前匹配的超集，因此以真实链头为键的规则仍能命中），虚拟行绝不是第二个路由引擎。继承了该选择的 subagent 仍经链头路由。\n- **链头要求**：只要生效链里存在至少一个精确 `provider/model` 条目，委托就能成功——薄委托服务它能解析的第一个。让池子惰性的情形：`rootChain` 为空（保存被阻止），或链中只有通配符行时 `stream()` 抛 `EMPTY_EFFECTIVE_CHAIN` / `UNDISPATCHABLE_EFFECTIVE_HEAD`。停用插件（插件页行开关，或清空全部已配置内容）后该行隐藏（slot/链编辑不会触发注册抖动）。\n- **过期选择**：行消失（插件停用）而会话仍选中 `ModelPool / Auto` 时，会话继续把它显示为当前模型，但 `routable: false`——从目录选一个真实模型即可继续（宿主原生目录语义）。\n- **能力与重试策略跟随链头**：该行的模型元数据（上下文窗口、模态、推理）镜像当前生效链头，`providerRetryPolicy` 返回**该链头的**策略——因此用户配置的 `llm-deepseek.retryPolicy` 在这条路由上同样生效，不再退回宽松默认。宿主在注册时一次性捕获该策略，因此之后修改策略、或分时槽导致链头 provider 轮换，都只有在插件重新注册后才会反映。重试事件按虚拟 provider 记账——即运行时实际看到的路由。"
+    },
+    {
+      "section": "命名池",
+      "text": "命名池让**一个插件挂载**同时提供**多个互相独立的池**，每个池有自己的链、并在模型选择器里占独立一行。根链（`Auto`）是所有会话共享的一个池；命名池则是各自独立、自成一体的路由契约：\n\n```yaml\nfallbacks:\n  rootChain: [\"deepseek-official/deepseek-v4-pro\"]\n  pools:\n    - id: glm-5.3\n\n选择器于是出现三行：`Auto`、`glm-5.3 → GLM Coding Plan`、`ours → Qoder`。选中其一即以整个池作为该会话的路由契约。"
+    },
+    {
+      "section": "命名池",
+      "text": "- **id 规则**：`/^[a-z0-9][a-z0-9._-]{0,31}$/`（首字符为小写字母或数字，其后为字母/数字/`-`/`.`/`_`，最长 32 字符）。`auto` 为保留字——内置 Auto 行已代表根链。id 必须唯一；重复行只有第一条生效，其余告警。\n- **命名池绝不与根链合并。** 选中 `ModelPool/ours` 只在 `ours` 的链内切换。当该链全部条目都失败时请求**直接失败**——它不会接着走 `rootChain`。这正是命名池的意义：硬边界，而不是共享链的延伸。\n- **链头 = 第一个精确条目。** 链按顺序走，第一个可解析的 `provider/model` 即链头，行文案由该 provider 的显示名构成。空池或只有通配符的池会抛出 `EMPTY_EFFECTIVE_CHAIN` 并指明池名（`llm-fallbacks: pool \"ours\" has no dispatchable entries`），因此设置卡不允许保存这样的池。\n- **不可自路由**：池内条目不能指向 `ModelPool`——那会让池服务自己。\n- **推理强度按池独立。** 每一行声明的是它自己那条链所接受档位的并集（与 Auto 同一规则：不强制 `defaultEffort`，请求的档位会被强制到实际服务的链头所接受的最近一档）。\n- **会话记忆**：由某个池服务的会话会把这个池当作自己的降级尾链。否则引擎会在第一次切换后悄悄退回 `rootChain`，等于无声地越过上面那条边界。\n- **空分节 = 完全 no-op。** 没有 `pools` 行时插件行为与之前完全一致：只有 `Auto` 一行，只走 `rootChain`。"
+    },
+    {
+      "section": "命名池",
+      "text": "在设置卡中，**命名池**区块紧跟在默认池的链编辑器之后、**进阶**之前：每个池一张可折叠卡片，含 id 输入框与链编辑器（与根链相同的行编辑器），底部另有添加按钮。它拥有独立的保存/放弃按钮对与独立的校验桶，因此某个池 id 非法只会阻止该区块保存。"
+    },
+    {
+      "section": "添加一个「没有模型目录」的 provider",
+      "text": "连接器可以把某个 provider 注册成可选，却不给它模型列表。`trae-global` 就是典型：Trae 连接器把三个面板（`trae`、`trae-enterprise`、`trae-global`）都注册为可配置 provider，但只有已登录账号的面板才会发布模型目录。于是这个 provider 出现在下拉框里，模型列表却是空的。\n\n链编辑器现在会处理这种情况，而不是把你挡在门外："
+    },
+    {
+      "section": "添加一个「没有模型目录」的 provider",
+      "text": "- 当选中的 provider 没有目录分组时，模型栏变成**可手填的输入框**，而不是永远灰掉的下列表，并提示「该 provider 没有可用模型目录，可以在下方直接手填 model id。」填上连接器认识的 model id（例如 `deepseek-v4.1-flash`），这一行就会序列化成正常的 `trae-global/deepseek-v4.1-flash` 选择器。\n- 只写了 provider、没写 model 的行会被如实指出——「选择器 \"trae-global\" 写的是 provider，但没填 model：请补成 \"trae-global/模型名\"。」——而不是那句误导人的「选择器非法」。根链、子代理链、命名池、分时槽用的是同一条提示。\n- 选择器语法本身没有放宽：裸 provider 依然不是可路由条目，因为宿主是按 `provider/model` 解析路由的。改的只是输入方式与诊断文案，因此所有原本合法的配置行为完全不变。"
+    },
+    {
+      "section": "链路状态（哪一条正在冷却）",
+      "text": "每个链编辑器——默认池的和每个命名池的——上方都有一条只读的**链路状态**条。它按路由顺序列出各条目并带状态点，所以「第一个源已耗尽、第二个正在作答」一眼可见，不用翻日志：\n\n```\n链路状态                              使用中：Qoder · dfmodel\n● 1. Qoder · dfmodel                  使用中\n● 2. Trae · deepseek-v4.1-flash       冷却中 · 42 秒后恢复\n● 3. WorkBuddy · deepseek-v4.1-flash  备用"
+    },
+    {
+      "section": "链路状态（哪一条正在冷却）",
+      "text": "- **使用中**（绿）是引擎此刻真正会派的条目——跳过已冷却条目之后的生效链头。\n- **冷却中**（琥珀）处于冷却并显示恢复时间。冷却通常是定时；`recovery: \"half-open\"` 时显示**待探测**，`revertPolicy: \"never\"` 时显示**已停用**，因为该条目在本会话内不再回来。\n- **备用**（灰）是链上更靠后的健康条目。\n- 每一行右侧还带一个小小的**冷却**按钮——按下去把这一条源压进冷却，再按一次（已变成**解封**）就解除。见 [手动把某一条源压进冷却](#手动把某一条源压进冷却)。\n- 当**所有**条目都在冷却时，状态条会明说，而引擎仍会挑**最早解冻**的那一条去试——见 [整条链都在冷却时照样往下走](#整条链都在冷却时照样往下走)。"
+    },
+    {
+      "section": "链路状态（哪一条正在冷却）",
+      "text": "状态条每 5 秒刷新一次，设置变更后也会立即刷新。它完全来自插件自己观察到的请求错误：状态按 agent 隔离且从不持久化，所以新会话一开始没有任何冷却条目。各家 provider 并不对外提供跨插件的状态 API，因此它们自己的状态检测（WorkBuddy 的账号池、Qoder 的额度）只在各自插件内部生效——模型池只有在请求真正失败后才会知道。\n\n选择器标签跟随同一状态：命名池渲染为 `glm-5.3 → 当前正在使用的 provider`，链头一被冷却，标签就自动换成链上下一条。"
+    },
+    {
+      "section": "重置冷却与检测连通",
+      "text": "每条链路状态条都自带一对按钮，作用范围**只限它上面那条链**：默认链的按钮只管根链（若有分时槽命中，就是当前生效的分时链），每个命名池的按钮只管该池自己的链。\n\n- **重置冷却**：清掉该链拥有的冷却——按 agent 的冷却、半开探测记录、以及连通性检测发现的冷却——然后重新读取状态。某个源出过一次故障但你确知已经恢复时，用它比等满 `cooldownMs` 更省事。若某个路由同时出现在别的链里，那里的冷却也会一起释放：冷却是挂在 provider 路由上的，不挂在「谁先发现故障」的那条链上。\n- **检测连通**：对该链的每个源各发一次一 token 的请求，把明确失败的源立刻冷却掉。这样死源在你下一次真实请求之前就已经被跳过，而不是先浪费一轮失败。\n\n检测一条链不会挡住另一条：每条状态条各自记录自己的运行状态与统计，因此对 `glm-5.3` 的长检测不会让默认链的按钮变灰。"
+    },
+    {
+      "section": "手动把某一条源压进冷却",
+      "text": "不必等它失败才把它移出轮转。每条链路状态条里的**每一行**都自带一个「冷却」按钮：按下去，这一条路由会立刻被压进完整 `cooldownMs` 的冷却，效果等同于它刚刚返回了一个确定失败；再按一次（此时按钮已变成「解封」），冷却立即解除。\n\n这是给「provider 技术上还能答，但我现在不想用它」准备的开关：一把马上要轮换的密钥、一个下午特别慢的套餐、一个正在 A/B 对比的源。它是**按路由**而非按链的决策，因此同一路由若出现在多条链里，会一起被冷却（或一起解封）——冷却属于 provider 路由本身，不属于「哪条链先发现」。\n\n请求在途时只有被按的那一行按钮会变灰，同一条状态条的其它行、以及其它池的状态条都保持可用。它与状态条上那两个按钮共用同一套机制：强制冷却落在共享冷却库里，因此对尚未开始的会话也生效，并会在窗口到期后自动过期。\n\n检测对「什么算证据」刻意**保守**。超时、主动中断、传输抖动、限流都不足以证明某个源不能服务——照此冷却会让一个健康的 provider 白白坐满整个冷却窗口。这类码会重试一次，仍无定论就记为**未判定**并且**不冷却**："
+    },
+    {
+      "section": "手动把某一条源压进冷却",
+      "text": "只有 provider 侧给出的确定结论（`QUOTA_EXHAUSTED`、`MODEL_NOT_FOUND`、`AUTH`、`PERMISSION_DENIED` 等）才会真正把一条源打入冷却，而且走的是与真实失败相同的「按账号」窗口——额度类结论只描述一个账号，因此拿到的是下面那个短窗口，而不是完整 `cooldownMs`。完整的一次性码表为 `TIMEOUT`、`ABORTED`、`TRANSPORT`、`NETWORK_ERROR`、`ECONNRESET`、`ECONNREFUSED`、`ETIMEDOUT`、`ENOTFOUND`、`EAI_AGAIN`、`EHOSTUNREACH`、`ENETUNREACH`、`RATE_LIMITED`、`RATE_LIMIT`、`RATE_LIMIT_EXCEEDED`、`TOO_MANY_REQUESTS`、`OVERLOADED`、`OVERLOADED_ERROR`、`UNAVAILABLE`、`SERVER`、`SERVER_ERROR`、`INTERNAL_ERROR`、`BAD_GATEWAY`、`SERVICE_UNAVAILABLE`、`UPSTREAM_TIMEOUT`、`UPSTREAM_ERROR`、`EMPTY_RESPONSE`、`ACCOUNT_SIGNED_OUT`。（其中 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE` 正是宿主自己判定为可重试的那一组，见 @deepseek-ai/dsh-llm 的 `DEFAULT_RETRYABLE_CODES`。）"
+    },
+    {
+      "section": "手动把某一条源压进冷却",
+      "text": "全局冷却与路由失败共用同一个窗口，所以探测结论与真实失败的过期节奏一致。"
+    },
+    {
+      "section": "一次性失败只软冷却",
+      "text": "同一条道理也适用于你没有主动检测的那些失败——引擎在真实请求中看到的失败。链头上出现一次 `TIMEOUT` 或 `RATE_LIMIT`，并不足以说明这个源坏了，因此它只换来**一分钟的软冷却**，而不是整个 `cooldownMs`：\n\n- `TRANSIENT_BENCH_MS` 为 60 秒。失败码属于上面那张一次性码表时，冷却时长为 `min(cooldownMs, 60 秒)`；把 `cooldownMs` 调到一分钟以下，软冷却也随之变短。\n- 请求级失败（`CONTEXT_WINDOW_EXCEEDED`）完全不触碰冷却。\n- 常开模式触到重试上限时的那次决策不带失败码，因此保留完整窗口。"
+    },
+    {
+      "section": "额度或凭证失败是一个账号的事，不是整条路由的事",
+      "text": "这是最容易被误解的一节，因为它和普通的「降级列表」正好相反。\n\n这个池子接的每个连接器（Qoder、Trae、WorkBuddy……）都自带**自己的账号池**，并且每次请求都会在账号之间轮换。因此一个 `QUOTA`、`AUTH`、`HARD_CREDIT` 或 `INVALID_API_KEY` 抵达插件时，它说的是**某一个账号**的状态，而不是「这条 provider 路由已经死了」。为一纸单账号判决就把整条路由打入 `cooldownMs`，正是让一个很充足的池子报出「当前请求的额度已用尽」的那种误诊。\n\n因此 `ACCOUNT_SCOPED_CODES` 里的码拿到的是一个短得多、按账号计的窗口（`ACCOUNT_BENCH_MS` 为 1 分钟），升级上限是 `ACCOUNT_ESCALATION_CAP_MS`（15 分钟），而不是完整 `cooldownMs`：\n\n| 连续额度/凭证类失败次数 | 冷却时长 |\n| --- | --- |\n| 1 | 1 分钟 |\n| 2 | 2 分钟 |\n| 3 次及以上 | 15 分钟（账号上限） |"
+    },
+    {
+      "section": "额度或凭证失败是一个账号的事，不是整条路由的事",
+      "text": "这个上限刻意远短于典型 `cooldownMs`（出厂配置里是 5 小时）：连接器自己的账号池回补周期快得多，5 小时冷却会让一个早已恢复的健康源被藏很久。不在这个集合里的码——`MODEL_NOT_FOUND`、`PERMISSION_DENIED`、真正的路由缺陷——仍然拿完整窗口，且永不被软化。"
+    },
+    {
+      "section": "一次小波动先原地重试，不要立刻换源",
+      "text": "冷却只是其中一半。真正让人难受的是**第一次报错就跳源**：每次跳源都要重新预热上游的 prompt 缓存，如果两个源跑的不是同一个模型，还会中途换模型。你真正想要的是「某个源跑空了才换」，不是「抖一下就换」。\n\n这里的每个连接器都在自己内部按请求轮换账号，所以对**同一个**源重试并不是白跑一趟——它会落到下一个账号上。因此 `shouldRetrySameRoute` 会先原地吸收失败，最多 `SAME_ROUTE_RETRIES`（3）次，之后才把这个源当作耗尽并切换："
+    },
+    {
+      "section": "一次小波动先原地重试，不要立刻换源",
+      "text": "| 失败码 | 池子的动作 |\n| --- | --- |\n| `QUOTA`、`AUTH`、`HARD_CREDIT`、`RATE_LIMIT`……（`ACCOUNT_SCOPED_CODES`） | 原地重试同一个源，让它自己的账号轮换来答 |\n| `TIMEOUT`、`TRANSPORT`、`SERVER`、`EMPTY_RESPONSE`……（一次性失败） | 原地重试同一个源 |\n| `INVALID_REQUEST`、`CONTEXT_WINDOW_EXCEEDED`、`NO_ADAPTER`、`MODEL_NOT_FOUND` | 立刻切换——换账号治不了这些 |\n\n这两列和上面的冷却窗口是同一条分界线：只有**换个账号就能治好**的失败才值得原地重试，针对请求本身或路由本身的判定不值得。"
+    },
+    {
+      "section": "一次小波动先原地重试，不要立刻换源",
+      "text": "原地重试故意**不算一次降级**：它不会把自己正要交回去的那条路由压进冷却（否则一次抖动就会把一个健康的源踢出轮换一分钟、然后又立刻绕开它），也不记入切换次数。但它会消耗一次 `maxSwitchesPerStep` 名额，所以病态的路由不会无限循环；每路由的重试账本在 `(turn, step)` 变化时清零。\n\n最终得到的就是池子该有的行为：`trae` 收到一次坏请求，自己重试，会话继续留在 `trae` 上、prompt 缓存还是热的；只有当它的账号真的都跑空了，下一个请求才会落到 `workbuddy`。"
+    },
+    {
+      "section": "反复的一次性失败要升级，而不是继续软冷却",
+      "text": "软冷却的意义是**原谅一次抖动**，不是把它变成永久的 60 秒循环：某个源一次次回来、一次次失败，恰恰是一分钟软冷却最有害的场景——引擎每次请求都会走回它，链就在两个源之间来回横跳，而不是稳定到那个健康的源上。\n\n因此一次性失败会按路由计数，连续第 **3** 次就**升级**为完整 `cooldownMs`：\n\n| 连续一次性失败次数 | 冷却时长 |\n| --- | --- |\n| 1 | 1 分钟（软） |\n| 2 | 2 分钟（软，翻倍） |\n| 3 次及以上 | 完整 `cooldownMs` |\n\n该路由一旦成功，计数即清零——真实的回答证明它健康，下一次失败重新从软冷却开始。手动解除冷却（重置冷却、解封、或一次通过的连通检测）同样清零。确定结论本来就不会被软处理，因此也永远不会被「升级」：它第一次拿到的就是完整窗口。"
+    },
+    {
+      "section": "一旦成功立刻解除冷却",
+      "text": "冷却不是「必须蹲满」的承诺。只要插件看到某条已被冷却的路由产出了完整的 assistant 消息，就会立刻解除该条冷却，下一次请求它又回到链头。这条在 `timer` 模式下同样生效，不只是 `recovery: \"half-open\"`——真实的回答就是「这个源还活着」的证据，既然已经拿到证据还要干等剩下的计时，正是这里要避免的那种误诊。\n\n`revertPolicy: \"never\"` 是例外：它明确要求把一个失败条目排除到会话结束，因此成功不会覆盖它。"
+    },
+    {
+      "section": "整条链都在冷却时照样往下走",
+      "text": "冷却是对「这个源刚才坏了」的**预测**，不是判决。因此当一次失败发生、而链上**没有任何**条目还能入选时（全部在冷却里、或已在本次 step 里失败过），插件**不会**就此把原始错误抛给你：\n\n1. 先按正常规则筛候选——跳过当前路由、跳过本次 step 已失败的路由、跳过装不下上下文的候选。\n2. 若一个都不剩，就挑**最早解冻**的那一条去试。窗口只剩 40 秒的源，明显好过还要蹲 5 小时的源。\n3. 若连这一步也挑不出来、且失败是**按账号**性质的，就直接重试当前路由去撞一个新账号：连接器每次调用都会轮换账号，所以一个账号耗尽不是把「额度已用尽」甩给你的理由。\n4. 只有当整条链在本 step 内都试遍、且失败不是按账号性质时，才把原始失败交还给宿主。"
+    },
+    {
+      "section": "整条链都在冷却时照样往下走",
+      "text": "日志里会留两行 warn：第 2 步是 `every candidate is benched — falling back to <provider>/<model> (soonest release) instead of surfacing the raw failure`，第 3 步是 `every candidate is benched after the account-scoped failure <code> — retrying <provider>/<model> for a fresh account instead of surfacing the raw error`。这就是为什么池子不会因为你选 `ModelPool/Auto` 而变成一次性的：某个源额度耗尽、进了冷却，链会走到下一个源，下一次再自动换个起点。\n\n同时，**没有可派发链头**与**全部冷却**是两件事：前者（空链、只有通配符行）仍然抛 `UNDISPATCHABLE_EFFECTIVE_HEAD` / `EMPTY_EFFECTIVE_CHAIN`，因为那是配置错误，重试没有意义。"
+    },
+    {
+      "section": "优先级即顺序（可拖动）",
+      "text": "根链与每个命名池的链都是有序表，而顺序**就是**优先级：第一条未被冷却的条目就是实际使用的条目。每一条链都用同样方式排序，**默认池**区块里的「模型池（降级链）」编辑器也不例外：\n\n- **池卡片**（命名池）用标题栏的手柄拖动。\n- **链条目**——默认池的每一行、以及每个命名池的每一行——用条目底部的手柄拖动。\n\n拖动产生的是一次普通的未保存修改，因此和其它编辑一样通过该区块的保存按钮生效。设置为只读时不可拖动；只有一条目的链不显示手柄，因为没有可换的位置。"
+    },
+    {
+      "section": "手动选择永不被改写",
+      "text": "模型池只在它自己拥有的路由上动手。如果你在选择器里选了一个**具体**模型、且它**不属于**当前会话所走的任何一条链，插件就把它视为有意的手动选择，让失败原样交给 llm-retry / 原始错误：不切换、不冷却、不改写重试。把手动选择撬走，正是这一行为要消除的那个毛病。\n\n仍属于「池拥有」的情形：虚拟行 `ModelPool/Auto` 与每个 `ModelPool/<池 id>`（它们本身就是路由契约，在它们上面失败正是引擎的职责）、**当前会话所走那条链里的每一个具体路由**——生效 root 链，或会话所选的那个命名池的链——以及任何子代理会话（它的路由来自角色注入，不是人点的）。\n\n第三条对命名池尤其关键：一个 `ModelPool/analyst` 会话走的是 *analyst* 的链，因此链里的 `trae/deepseek-v4.1-flash` 属于池拥有，尽管它不是全天链链头。在这一点被写明之前，命名池会话会把自己链里的成员误判成手动选择，从而完全拒绝切换。"
+    },
+    {
+      "section": "分时槽预设（分时切换）",
+      "text": "峰谷无忧在[首页专题](#峰谷无忧)中介绍，本节是完整参考。分时槽行按墙钟窗口轮换**生效 root 链**——适合按峰谷切换模型，且不会把墙钟轮换误认为故障降级。文案严格区分：时段轮换的日志与 UI 用**分时切换**；失败降级保持**降级切换**；会话内「模型已降级」提示只出现在失败路径。"
+    },
+    {
+      "section": "分时槽预设（分时切换）",
+      "text": "- **匹配顺序**：每个 root 请求时刻，第一条窗口包含当前时刻（按 `fallbacks.tz`，默认 `Asia/Shanghai` / UTC+8）的额外行生效——该行的模型链**取代**全时段链；无行命中则用全时段 `rootChain`。全时段行固定最后且**必须非空**，但任意 provider/model 都可以放在其中任意位置。\n- **预设**（冻结，不可编辑窗口）：`liang-peak` = 周一至周五 09:00–12:00 **与** 14:00–18:00；`liang-valley` = 其它所有 UTC+8 时间；`glm-peak` = 周一至周五 14:00–18:00；`glm-valley` = 其余时间。一个预设 id 对应一行；设置卡的选择器不会重复提供已添加的预设。\n- **自定义行**：`start` / `end`（`HH:mm`，可跨午夜）+ 可选 `days`（0=周日…6=周六；缺省/空 = 每天）+ 模型。\n- **下一请求生效**：时段边界跨越绝不打断进行中的 step——新行在下一个 root 请求生效。轮换仅挂载生效：info 日志 + 设置卡/`/fallbacks` 状态行，无 durable 切换事件。\n- **平铺设置卡**（官方插件页表单语言）：卡片始终展开——无可折叠外壳、无功能开关——每个区块各自带 **保存/放弃** 按钮对，只写入通过校验的那一份草稿。**默认池**区块下分两块——**分时槽设置**（额外行：添加预设 / 添加自定义 / 删除 / 按钮或**拖拽**排序；预设行只读展示窗口摘要、仅可编辑模型链；自定义行带可编辑名称；**时区选择器**在此区块内，只要存在预设行就**锁定 Asia/Shanghai**——预设窗口是冻结的 UTC+8 常量）与**模型池（降级链）**编辑器，后者编辑的是**整条** `rootChain`。行可折叠为「名称 + 首个模型」（内容级折叠）。本 fork **没有**单独的「默认模型」面板——它编辑的官方链尾槽位已不存在，每个条目都是普通链行。没有 `timeSlots.enabled` 总开关（添加行即开启），也没有 `rootMode` 控件。卡片中的**子代理**区块已移除：角色与角色规则属于路由配置，只能在 YAML 或 TUI 的 `/settings` 区块中编辑。"
+    },
+    {
+      "section": "预设角色（Preset roles）",
+      "text": "插件内置 **5 个通用子代理角色**，开箱即用——`reviewer` / `scout` / `security-reviewer` / `sonic` / `task`——`apply` 时自动以 seeded `roles.list` 行（`{ id, persona }`）声明：幂等，且绝不覆盖 operator 同名 persona。它们出现在 `/fallbacks config` 的角色摘要中，可直接被 `roles.rules` 引用。（设置卡已不再渲染角色行——见 [最小配置](#最小配置)第 4 步；请改在 YAML 或 TUI 的 `/settings` 区块中编辑角色。）（`designer` 与 `librarian` 不再内置：早期版本保存的行保留其 persona，现在只有在没有任何生产者仍声明其 id 时才显示 source `user` 并成为普通可编辑行——尽管 operator 并未写过这些行；伴随插件仍在声明的行会继续保持 seeded 只读状态，source 为未命名时的 `external`，或其已注册集合名。）"
+    },
+    {
+      "section": "预设角色（Preset roles）",
+      "text": "- **开关**：`fallbacks.presets`——`'bundled'`（默认）在 apply 时声明预设角色；`'none'` 关闭自动声明（已物化行保留）。\n- 来源标注：每行带来源（`preset` / `user` / `external`）；上段所述来源徽标与逐行可编辑性适用于 YAML/TUI 界面。"
+    },
+    {
+      "section": "Agent 预设（插件组合）",
+      "text": "Agent **preset** 是 dsh 的插件组合机制——一份声明式的子插件行清单，用户可整组启用；preset 本身**不携带任何模型字段**。本插件无需 preset 专属配置：preset 组合的是插件，因此 fallback 生效于**插件行被挂载的每一处**——包含 `llm-fallbacks` 行（name `dsh-model-pool`）的 preset，其会话即享有同一套池与角色配置。\n\n两条组合注意事项：\n\n- **用户 preset 覆盖会整体替换子插件清单**（无合并）：遗漏了本插件行的 preset 会在使用该 preset 的会话中静默卸载本插件。想保留的插件行都要重新写全。\n- **preset 级链配置可通过把插件行挂进 preset 实现**：preset 组合中插件行的 `config:` 覆盖会形成仅作用于该 preset 会话的链配置（patch 行整体替换 `config`，字段要写全）。"
+    },
+    {
+      "section": "降级触发码（`triggerCodes`）",
+      "text": "`fallbacks.triggerCodes` 是一份 dsh 失败码列表，**任何**宿主可上报的失败码都被接受——不限于三个默认值（`AUTH` / `QUOTA` / `RATE_LIMIT`）。未列出的失败码原样透传给 llm-retry 或原始错误，与未安装插件完全一致。可重试型失败（5xx / `TRANSPORT` / `TIMEOUT` / `EMPTY_RESPONSE`）无需额外条目：llm-retry 先行退避，预算耗尽后同样进入链决策。"
+    },
+    {
+      "section": "匹配是「按条件」而不是「按字面」",
+      "text": "各家 connector 对同一件事的码并不统一：Trae 抛小写的 `authentication` / `upstream` / `soft_rate` / `hard_credit`，WorkBuddy 抛 `busy` / `channel_reject`，宿主自己会把 pi-ai 的失败重新分类成 `AUTH` / `RATE_LIMIT` / `SERVER` 这样的裸串，而配额又有 `QUOTA` / `ACCOUNT_QUOTA` 两种写法。若按字面比对，你写的 `AUTH` 就永远等不到 Trae 的 `authentication`——**触发表里一半的码是死的**，池子看起来就像根本没在动作。\n\n因此两侧都会被归一化后再比较（大写、空白与连字符转下划线），并折叠同义码："
+    },
+    {
+      "section": "匹配是「按条件」而不是「按字面」",
+      "text": "| 你写的触发器 | 同时接住这些实际失败码 |\n| --- | --- |\n| `AUTH` | `authentication`、`authorization`、`INVALID_CREDENTIAL`、`ACCOUNT_SIGN_IN_REQUIRED`、`WORKBUDDY_CREDENTIAL_REJECTED`、`unsupported-region`、`UNAUTHORIZED` |\n| `QUOTA` | `ACCOUNT_QUOTA`、`INSUFFICIENT_QUOTA`、`QUOTA_EXCEEDED`、`hard_credit` |\n| `RATE_LIMIT` | `soft_rate`、`TOO_MANY_REQUESTS`、`busy`、`channel_reject` |\n| `SERVER` | `upstream`、`UPSTREAM_ERROR`、`PI_AI_ERROR`、`INTERNAL` |\n| `TRANSPORT` | `STREAM_CLOSED`、`CONNECTION_RESET` |"
+    },
+    {
+      "section": "匹配是「按条件」而不是「按字面」",
+      "text": "不在表里的码保持原义（`TIMEOUT`、`EMPTY_RESPONSE`、`CONTEXT_WINDOW_EXCEEDED` 等），所以已有配置不会因此改变语义——只是原先被拼写差异挡在门外的那一半开始生效了。"
+    },
+    {
+      "section": "上下文窗口超限（context-window）",
+      "text": "请求超出模型上下文窗口时，上报的失败码是 `CONTEXT_WINDOW_EXCEEDED`——dsh 内核对 provider 400 \"maximum context length\" 的规范码。它不是可重试码，需显式列出，才能降级到上下文更大的模型：\n\n```yaml\nfallbacks:\n  triggerCodes:\n    - AUTH\n    - QUOTA"
+    },
+    {
+      "section": "池子对外声明的窗口",
+      "text": "一个虚拟行背后是**整条链**，而请求可能落到链上任意一个入口。因此每一行对外声明的是该链所有可调度路由中**最小**的上下文窗口——这是唯一对每一次跳转都成立的值。\n\n这一点很关键：宿主按它被告知的窗口来决定会话能长到多大，上游那层压缩器也一样。若某一行不声明窗口，宿主就只能按默认值去规划，而这个默认值可能远大于实际服务这次请求的路由；于是内容被养到超过了那条小窗口路由的上限，本该救场的降级反而把这一轮彻底弄挂。\n\n举个实际的例子：链里同时有 `trae/deepseek-v4.1-flash`（1,000,000）和 `qoder/dfmodel`（200,000），该行声明的就是 **200,000**。这是有意的：按小窗口路由压缩，代价是损失一些历史；带着超规格的内容跳到那条路由，代价是整轮失败。\n\n某一条路由的窗口查不出来时，该字段直接省略，而不是猜一个数——宿主会直接拒绝非整数的窗口。"
+    },
+    {
+      "section": "池子对外声明的窗口",
+      "text": "**顺序——降级先于压缩。** 只要 `triggerCodes` 含 `CONTEXT_WINDOW_EXCEEDED`，本插件的 `agent/request-error` 监听就会**先于**宿主压缩插件处理该拒绝：首次超限即把会话切到 fallback 模型，上下文完全不会被压缩。若更希望先尝试压缩，就不要把该码列入 `triggerCodes`。\n\n**请求级切换。** 上下文超限说明**这一次请求**太大，而不是路由不健康。此类切换是**请求级（request-scoped）**：from 路由仍记入本 step 的失败集合（本 step 不会立刻弹回该模型）、仍计入 `maxSwitchesPerStep`，但**不**进入 `cooldownMs` 冷却、也不累加半开恢复计数器——下一条更短的提示词照常走主模型，不会在从未故障的路由上浪费一次半开探针。其余触发码一律保持**路由级（route-scoped）**（冷却 + 恢复记账），与既有行为一致。"
+    },
+    {
+      "section": "池子对外声明的窗口",
+      "text": "**装不下的候选被跳过。** 上下文超限走链时，凡是已知上下文窗口不大于失败模型的候选一律跳过——从 128k 模型降到 8k 只会再失败一次。窗口取自宿主模型目录：目录行自带 `contextWindow` 时取之，否则取 `llm.resolveModelInfo(provider, model)` 的 `context.contextWindow`。两处都未公开窗口的模型保留为候选，因此缺少容量元数据的 provider 绝不会把链清空。被跳过的候选在切换日志行中标注 `skipped: context-window`。"
+    },
+    {
+      "section": "宿主子代理模型策略（dsh 0.1.2）",
+      "text": "dsh 0.1.2 为 subagent 增加了宿主侧的子模型选择：`subagent-model-selection` 设置允许列表、每会话的 `subagent/model-selection-policy` 事件、派发时的 `provider/model/reasoning_effort` 路由。插件在单一运行时仲裁点下与之协调——插件的角色/链仍是宿主不提供的失败恢复层。\n\n**策略读取（按会话）**：会话 `subagent/model-selection-policy` 事件优先；否则读取 `subagent-model-selection` 设置服务（`enabled` 时）。服务缺失 / `enabled: false` / 无事件 → 策略关闭。\n\n策略**启用**时："
+    },
+    {
+      "section": "宿主子代理模型策略（dsh 0.1.2）",
+      "text": "- **授权链头保留（跳过注入）**：以显式 `provider`+`model` 派发的 subagent（派发 options、durable `request/header`、或 `model/selection` 选择）将该路由保持为链头——跳过角色注入，授权路由在首次请求上绝不被覆盖；插件链仅从失败时刻起生效。纯继承（无显式选择字段）**不是**授权路由。\n- **允许列表约束注入**：纯继承仍走三阶段角色解析，但注入的链头由插件发起、必须在生效允许列表内——按序取第一个已解析且在列表内的候选。交集为空 → 跳过注入，保留宿主种子路由（warn 日志）。\n- **允许列表约束失败切换**：触发码失败后，已解析候选（通配符已展开；冷却 / 本步已失败 / 与当前相同等过滤已应用）按走链顺序与允许列表求交集。交集为空 → **不切换**、不发送允许列表之外的请求，记 warn 日志 + 内存态 blocked-attempt 记录（不写 durable 会话事件——issue #52 不变）。\n- **Fail-closed**：策略事件存在但载荷畸形，或设置启用但路由列表不可读 → 该会话的插件注入与切换全部禁用（warn 日志）；宿主种子与非切换行为不受影响。\n- **卡片不再展示（本 fork）**：设置卡不再渲染策略区块——它原本位于已被移除的**子代理**区块内。宿主策略的强制行为与上述完全一致（warn 日志、阻止切换、fail-closed），只是卡片上不再有只读面板。要看策略状态仍靠会话内 `/fallbacks` 诊断与 warn 日志。\n- **虚拟路由例外**：显式指定插件虚拟 provider（`ModelPool` / `Auto`）派发的 subagent，即为该路由的用户授权（spec D2——显式选择）。虚拟 adapter 将其请求内部委托给配置的生效链头，是该路由的既定用途，不属于 D1 的选择语义——D1 约束的是插件做出的 provider/model 选择，而不是显式所选虚拟路由内部的委托——被委托的链头不经允许列表过滤。"
+    },
+    {
+      "section": "宿主子代理模型策略（dsh 0.1.2）",
+      "text": "策略**关闭或缺省**时，注入与失败切换的**选择**与 0.3.5 一致（无允许列表过滤、无授权路由跳过）。\n\n**Effort 规则（与策略无关）**：所有覆盖路径（角色注入、失败切换、always 上限切换）上的 `reasoningEffort` 遵循上游 0.1.2 的 `routeChanged` 规则——provider+model 路由不变则保留种子 effort；路由变化且未显式指定 effort 则丢弃（显式指定的 effort 永远保留）。陈旧的 effort 绝不会被带入另一个 provider。\n\n在本 fork 中虚拟 `ModelPool / Auto` 路由同样参与：它广播的档位是池中各路由所声明档位的**并集**，且每次委托都钉到实际链头接受的最接近档位，因此在选择器里选定的档位可以在降级到档位集合不同的链头后继续成立。"
+    },
+    {
+      "section": "纯挂载（零 dsh 修改）",
+      "text": "插件以**纯挂载**方式安装：profile 里一条 `dsh.bundle.patch` 行、一份给 web UI 的 `dsh.client.inject` 清单，加上它自有的远端端点（`dsh-model-pool#fallbacks/get`、`…/set`、`…/reset`、`…/revert-seed`，经宿主 `typert` 服务注册）。它不打补丁到 DSH 安装目录、没有 postinstall 步骤，DSH 升级永不需重打。旧版打补丁安装遗留的补丁无害。"
+    },
+    {
+      "section": "版本兼容性",
+      "text": "`peerDependencies` 将 `@deepseek-ai/*` 钉在 `^0.2.0-rc.2`、`cordis` 在 `^4.0.2`、`schemastery` 在 `^3.18.2`、`react` 在 `^18.2.0`；`engines.node` 为 `>=22`。宿主超出该范围时，DSH 会拒绝启用插件，并打印覆盖该检查的确切命令 `dsh plugin --profile <profile> allow-version <name>@<version> --dsh-version <runtimeVersion> --accept-risk`——只有在接受风险时才执行，因为插件触及的内部结构可能已被不同宿主版本移动。"
+    },
+    {
+      "section": "文档",
+      "text": "本 README 就是这个 fork 的参考文档，没有单独的 `docs/` 目录：上述各节（峰谷无忧、快速开始、配置界面、模型选择器中的 ModelPool、分时槽预设、预设角色、Agent 预设、降级触发码、宿主子代理模型策略、纯挂载）已完整覆盖 `fallbacks` 命名空间、selector 语法与卡片用法。\n\n如果你是**发布**这个 fork 的人而不是使用它，看 [PUBLISHING.md](PUBLISHING.md)——怎么推到 git 托管、为什么这份仓库装起来不需要构建、以及改完 `dist/` 之后怎么发版。"
+    },
+    {
+      "section": "许可",
+      "text": "本项目以 **MIT** 许可证发布，全文见 [LICENSE](LICENSE)。版权与许可条款以 LICENSE 文件为准。"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,157 @@
+{
+  "repo": "NotKeKe/dsh-opencode-session-header",
+  "commit": "dc8ff6113e3d50738b09492159c2e48239e53d78",
+  "extracted_at": "2026-11-10T11:53:10.962506+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 14057,
+    "lines_by_language": {
+      "JSON": 13,
+      "JavaScript": 201,
+      "Markdown": 89,
+      "Other": 21,
+      "YAML": 3
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "verify.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-opencode-session-header",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Inject the x-opencode-session header on OpenCode Go requests that are missing it.",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "meta": {
+      "title": "OpenCode session header",
+      "description": "補上 opencode.ai 出站請求缺失的 x-opencode-session 頭，修復 400 MissingSessionID；已有該頭時不覆蓋。"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: opencode-session-header\n      name: '@local/dsh-opencode-session-header'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/responses",
+      "where": "verify.mjs:36"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/responses",
+      "where": "verify.mjs:43"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1/messages",
+      "where": "verify.mjs:49"
+    },
+    {
+      "host": "edge.opencode.ai",
+      "url": "https://edge.opencode.ai/zen/go/v1/responses",
+      "where": "verify.mjs:55"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/responses",
+      "where": "verify.mjs:59"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-15T15:59:37Z",
+    "created_at": "2026-10-15T15:34:03Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-opencode-session-header",
+      "text": "給 DeepSeek Harness（DSH）的 Host bundle：替送往 **OpenCode Go** 的請求補上缺失的 `x-opencode-session` 標頭 —— 而且只在標頭真的缺了的時候才補。"
+    },
+    {
+      "section": "解決的問題",
+      "text": "OpenCode Go（`opencode.ai/zen/go`）自 2026-09-05 前後開始**強制要求**每個推理請求攜帶 `x-opencode-session`，缺了會直接拒絕路由：\n\n```\nINVALID_REQUEST 400: {\"type\":\"MissingSessionID\",\n  \"message\":\"Request is missing x-opencode-session and cannot be routed efficiently.\"}\n```\n\n在 DSH 裡這個標頭平常是帶得上的：agent loop 每次對話都會填一個 session id，`llm-pi-ai` 走 pi-ai 目錄 provider 時由其 `withOpenCodeSessionHeader` 從 `options.sessionId` 生成。**所以一般對話不會出問題。**"
+    },
+    {
+      "section": "解決的問題",
+      "text": "問題出在**沒有 session id 的手動組裝請求**。最典型的是內建的 `@deepseek-ai/dsh-experimental-auto-review`：它的 reviewer 呼叫（`classifyRisk()`）只帶 `provider` / `model` / `system` / `messages` / `temperature` / `signal`，沒有 `sessionId`。結果就是 —— **把權限切成 Auto review 之後，每次工具執行前的審查請求都 400，工具本身也跟著失敗。**"
+    },
+    {
+      "section": "這個外掛怎麼修",
+      "text": "包裝 host 進程的 `globalThis.fetch`，規則只有一條：\n\n| 情況 | 行為 |\n|---|---|\n| host 是 `opencode.ai`（含子網域）且缺 `x-opencode-session` | 補上一個穩定的合法 token |\n| 已經帶了該標頭（不分大小寫） | **原封不動** |\n| 其他 provider（DeepSeek 官方、Anthropic、OpenAI…） | 完全不碰 |\n| URL 無法解析或任何例外 | 回退原始呼叫，不製造新的失敗模式 |\n\n**「只在缺失時補」是這個外掛存在的理由。** 換成在 provider profile 直接寫死一個標頭（`cordis.patch.yml` 的 `headers:`）也能讓 reviewer 通關，但那會把主對話原本正確的 per-session 值一起蓋掉 —— 等於拿對話路由／快取親和性去換。這裡不碰已存在的值，主對話維持原狀。"
+    },
+    {
+      "section": "這個外掛怎麼修",
+      "text": "閘道只檢查標頭**存在且格式合法**，不驗證 session 是否真的註冊過，所以一個 process 穩定的 token 就足夠；同一個 session 的多次審查請求也會共用同一個路由鍵。"
+    },
+    {
+      "section": "為什麼是包裝 fetch，不是攔截 llm/stream",
+      "text": "`llm` service 有 `llm/stream` waterfall，看起來是理想的攔截點，但它改不動最終送出去的請求：\n\n```js\n// @deepseek-ai/dsh-llm —— stream()\nreturn this.ctx.waterfall(this, \"llm/stream\", options,\n  () => this.adapterStream(options, prepared));\n```\n\nfinal callback 用閉包捕獲了 `options` 與 `prepared`，而且不吃參數，所以 listener 即使呼叫 `next(newOptions)` 也到不了 adapter。要在請求層補東西，只能往更下層、也就是 fetch 這一層走。"
+    },
+    {
+      "section": "安裝",
+      "text": "用 DSH 的外掛管理器（`plugin_manager` → `install_bundle`，target 指向這個目錄），或 CLI：\n\n```sh\ndsh plugin --profile <profile> add <本目錄絕對路徑>"
+    },
+    {
+      "section": "也可以直接從 GitHub 安裝：",
+      "text": "dsh plugin --profile <profile> add github:NotKeKe/dsh-opencode-session-header\n```\n\n安裝成功會回報 `application: applied`，代表變更已生效（通常不需要重啟）。用 `Config.listConfigs`（不需批准）或 `dsh --profile <profile> --dump-config` 應該能看到 `opencode-session-header` 這一列。"
+    },
+    {
+      "section": "移除",
+      "text": "```sh\ndsh plugin --profile <profile> remove @local/dsh-opencode-session-header\n```\n\n卸載時會還原原本的 `fetch`，不修改任何檔案、憑證或設定。"
+    },
+    {
+      "section": "注意",
+      "text": "- 以 `link:` 方式安裝時，**這個目錄不能移動或刪除**，否則外掛會失效。要清理請先移除 bundle。\n- 目前沒有 Config schema。要調整目標 host 或 token 前綴，請改 `index.js` 的 `TARGET_HOSTS` / `TOKEN_PREFIX` 常數。\n- 把 `VERBOSE` 設成 `true` 可以讓每次注入都印一行到 host console，方便排查；平常請保持 `false`。"
+    },
+    {
+      "section": "檔案",
+      "text": "| 檔案 | 作用 |\n|---|---|\n| `index.js` | 全部邏輯（fetch 包裝） |\n| `package.json` | Host-only bundle manifest，零依賴、無需 build |\n| `cordis.patch.yml` | 插入 `opencode-session-header` 這一列 |\n| `verify.mjs` | 離線行為檢查 |"
+    },
+    {
+      "section": "背景連結",
+      "text": "- pi-ai issue：`@earendil-works/pi-ai` never sends the `x-opencode-session` header —— https://github.com/earendil-works/pi/issues/9326\n- opencode issue：Go provider 400 MissingSessionID —— https://github.com/anomalyco/opencode/issues/47763\n- OpenCode 官方公告（2026-09-03）：自 09/06 起，缺少此標頭的請求可能開始報錯。"
+    },
+    {
+      "section": "授權",
+      "text": "MIT License —— 見 [LICENSE](LICENSE)。"
+    }
+  ],
+  "skipped": []
+}

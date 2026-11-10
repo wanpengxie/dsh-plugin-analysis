@@ -1,0 +1,140 @@
+{
+  "repo": "President-H/dsh-balance-view",
+  "commit": "3983f1319005ac75973ea0b5732947383e227fb7",
+  "extracted_at": "2026-11-10T12:05:42.039233+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 10263,
+    "lines_by_language": {
+      "JSON": 15,
+      "JavaScript": 147,
+      "Markdown": 81,
+      "Other": 24,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@president_h_999/dsh-balance-view",
+    "version": "0.1.0",
+    "description": "把 DSH 的 DeepSeek 账号余额定时写成本地 JSON 并开一个只读接口，方便脚本、插件或机器人随时查余额",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "balance"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-balance-view\n      name: dsh-balance-view\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:11"
+    },
+    {
+      "name": "DSH_CLIENT_VERSION",
+      "kind": "env",
+      "where": "lib/index.js:85"
+    },
+    {
+      "name": "DSH_VERSION",
+      "kind": "env",
+      "where": "lib/index.js:85"
+    },
+    {
+      "name": "DSH_LOCALE",
+      "kind": "env",
+      "where": "lib/index.js:86"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "lib/index.js:131"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-30T13:39:27Z",
+    "created_at": "2026-10-30T12:59:10Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-balance-view",
+      "text": "把 DSH（DeepSeek Harness）里登录账号的 **DeepSeek 余额** 定时落成一个本地 JSON 文件，并开一个只读 HTTP 接口。\n好处很简单：**脚本、别的插件、聊天机器人**不用登录 DSH，也能随时读到最新余额，而且读取本身不消耗 token。"
+    },
+    {
+      "section": "它做什么",
+      "text": "- 通过宿主自带的 `deepseekAccount` 服务取余额（充值钱包 + 赠金，口径与官方 `total_balance` 一致）\n- 每 2 分钟刷新一次，写进 `$DSH_HOME/dsh-balance-view/cache.json`（默认 `~/.dsh/dsh-balance-view/cache.json`）\n- 顺便提供一个只读接口：`GET /dsh-balance/balance.json`（加 `?refresh=1` 立刻重新取一次）"
+    },
+    {
+      "section": "它不做什么",
+      "text": "- 不自己拼 HTTP、不碰任何凭据：token 的注入、请求头、失效清理全部交给宿主的账号服务\n- 不改设置、不写别的文件、不联网做别的事\n- 没有 UI，一行界面都不加"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile <你的 profile> add dsh-balance-view\n```\n\n本地开发时直接链进来：\n\n```bash\ndsh plugin --profile <你的 profile> add link:<本目录绝对路径>\n```\n\n装完重启一次 DSH，就会看到 `~/.dsh/dsh-balance-view/cache.json` 开始更新。"
+    },
+    {
+      "section": "缓存文件长什么样",
+      "text": "```json\n{\n  \"ok\": true,\n  \"total\": 7.76,\n  \"recharge\": 7.76,\n\n失败时 `ok` 为 `false`，`code` 会告诉你是哪一种：\n\n| code | 意思 |\n| --- | --- |\n| `NO_ACCOUNT_SERVICE` | 当前宿主没有账号服务（老版本 DSH） |\n| `NOT_LOGGED_IN` | 没登录 DeepSeek 账号，也没有账号凭据 |\n| `NOT_READY` | 账号服务没就绪 |\n| `NO_WALLET` | 账号没有任何余额钱包 |\n| `ERROR` | 取数时抛异常，`error` 里是原因 |"
+    },
+    {
+      "section": "怎么读",
+      "text": "```bash\ncurl http://127.0.0.1:<DSH 端口>/dsh-balance/balance.json?refresh=1\n```\n\n或者直接读那个 cache.json。下面是个最简单的读取脚本（Node）：\n\n```js\nimport { readFileSync } from 'node:fs'\nconst j = JSON.parse(readFileSync(process.env.HOME + '/.dsh/dsh-balance-view/cache.json', 'utf8'))\nconsole.log(j.ok ? `余额 ${j.total} ${j.currency}` : `读不到：${j.error}`)\n```"
+    },
+    {
+      "section": "已知边界",
+      "text": "- DSH 没开着就不会刷新，这时候缓存会变旧，`checkedAt` 就是判断依据\n- 只读，不提供任何写入或充值能力\n- 只在有 `deepseekAccount` 服务的宿主上有意义（账号登录用户）；纯 API key 用户请看宿主自己的余额卡片"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
