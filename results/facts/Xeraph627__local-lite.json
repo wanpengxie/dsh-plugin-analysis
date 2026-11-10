@@ -1,0 +1,294 @@
+{
+  "repo": "Xeraph627/local-lite",
+  "commit": "654a86195d6d07002aa046f2155a93b025d4c242",
+  "extracted_at": "2026-11-10T01:51:38.211095+00:00",
+  "tree": {
+    "files": 20,
+    "bytes": 96908,
+    "lines_by_language": {
+      "JSON": 36,
+      "JavaScript": 1473,
+      "Markdown": 355,
+      "Other": 35,
+      "YAML": 209
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "tools/asar.mjs",
+      "tools/capture-host-state.mjs",
+      "tools/install-to-library.mjs",
+      "tools/measure-session.mjs",
+      "tools/mutation-check.mjs",
+      "tools/patch-anchoring.mjs",
+      "tools/pr-comment.mjs",
+      "tools/pr-status.mjs",
+      "tools/session-frames.mjs",
+      "tools/session-log.mjs",
+      "tools/test-tool-surface.mjs",
+      "tools/validate-patch.mjs",
+      "tools/verify-claims.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@Xeraph627/dsh-local-lite-preset",
+    "version": "1.2.0",
+    "description": "本地简化 (local-lite): a minimum-prompt DeepSeek Harness agent preset for short-context local models — cuts the standing per-request cost from 9,288 to 2,004 tokens (-78%)",
+    "type": "module",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "dsh-bundle",
+      "agent-preset",
+      "local-model",
+      "context-window",
+      "llm"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Xeraph627/local-lite.git"
+    },
+    "homepage": "https://github.com/Xeraph627/local-lite#readme",
+    "bugs": {
+      "url": "https://github.com/Xeraph627/local-lite/issues"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "exports": {
+      ".": "./lib/index.js"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "lib/index.js"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# local-lite (本地简化) — a minimum-prompt agent preset for short-context models.\n#\n# The design goal is one number: how many tokens every single request spends\n# before the user's own words. Four surfaces contribute, and this file touches\n# all four:\n#\n# 1. THE SYSTEM PROMPT. `persona` mounts the preset's whole prompt as one\n#    `complete: true` section, so the assembled prompt IS that text — the\n#    harness identity, web-surface, tool-guidance, file-reference, and\n#    structured-output sections never reach the model. `includeRuntimeContext:\n#    false` also removes the sourced user-role runtime snapshots. The prefix is\n#    a few lines of working discipline plus the workspace directory; it is the\n#    entire system prompt, and it is deliberately written in the user's own\n#    language because these models are typically strongest there.\n#\n# 2. THE TOOL SCHEMAS. Schemas repeat on every request, so the roster is the\n#    dominant cost once the prompt is small. Ten tool names are declared across\n#    five rows — read/write/edit, glob/grep, web_search, one shell, and the three\n#    job controls — and `web_fetch` is off, so the wire carries those ten plus\n#    `read_image`, which `dsh-tool-fs` auto-registers while `attachments` is\n#    mounted and no preset can declare. The shell is the PERSISTENT pwsh row\n#    rather than `tool-pwsh`, because the persistent row accepts a `description`\n#    override (its own default is long) and its schema is one `command` string\n#    with no sandbox-escalation fields.\n#\n# 3. THE SHELL. One persistent PowerShell per session means `cd` survives\n#    across calls, which matters more to a small model than to a large one: it\n#    removes the compound-command reasoning that short-context models get\n#    wrong. Output is capped by the tool's own `maxOutputChars`, so raw logs\n#    cannot evict the prompt. Background execution is reached through the\n#    sibling `tool-jobs` controls plus the shell's own `&`/`Start-Process`.\n#\n# 3b. THE INHERITED GLOBAL SURFACE. Tools mounted by the HOST are visible to\n#    every agent regardless of preset, and on this deployment that is where most\n#    of the remaining cost sat: six `ssh_*` controls plus\n#    `load_workspace_dependencies`, about 1,249 tokens of the wire between them.\n#    The `tool-surface` row below computes a deny\n#    filter from the live global view and registers it on this preset's standing\n#    scope, so agents composed from this preset stop paying for global tools the\n#    preset does not declare. It is computed rather than listed because\n#    `ctx.tools.restrict()` throws on an unknown name. Re-measure before editing\n#    `keep`: it is the escape hatch for a global tool this preset should keep.\n#    Note the preset does NOT register `web_fetch`, so a host that mounts it\n#    globally gets it masked like any other tool this preset does not declare.\n#\n#    How much that is worth is per-host, because the row can only remove tools\n#    the host mounted: the same-machine pair of sessions (this row running vs\n#    not) differed by 1,151 tokens. On a plain harness the removable globals are\n#    `load_workspace_dependencies` (~158) and a host-global `web_fetch` (61).\n#    The preset's own cost is the stable number; this one is not.\n#\n# 4. WHAT IS DELIBERATELY ABSENT. Plan mode (its `plan:policy` section is ~1k\n#    tokens of standing system prompt and cannot be shortened — note the\n#    `complete: true` persona prefix makes a second complete section an\n#    assembly failure, so plan mode and this preset are mutually exclusive).\n#    Subagents, goals, skills, todos, `ask_user_question`, `present`, the\n#    workflow engine, and `str_replace_editor` (it duplicates read/write/edit).\n#    `tool-result-pruner` is absent too: the shell and read tools already bound\n#    their own output, and silently trimming a result a small model just asked\n#    for is a worse trade at this context size than the space it saves.\n#\n# `compaction-basic` IS included and is not optional at this scale: a short\n# context window is the failure mode being designed for, so automatic\n# compaction has to work. It stays in an isolated realm with nothing else.\n#\n# Adapted from the builtin `minimal` and `standard` presets (MIT).\n- insert:\n    - id: preset-local-lite\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: local-lite\n        name: 本地简化\n        description: 为上下文短小的本地模型准备的极简预设：系统提示词只有几行，工具面收拢为文件读写、检索与终端命令。\n        order: 5\n        plugins:\n          # ── prompt: the whole system prompt, and nothing else ──────────────\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              complete: true\n              includeRuntimeContext: false\n              prefix: |-\n                你是本地精简模式的编码助手，工作目录 {{cwd}}。\n\n                规则：\n                - 先读再改。修改文件前先读取它；不确定就先查，不要猜。\n                - 用工具动手，不要空谈。需要事实就 read/grep/glob/web_search；需要执行就用 shell 工具。\n                - 保持简短。一次解决一件事，回答用要点，不要复述已知内容。\n                - 改了代码要验证；有失败就修到通过，或者如实说明卡在哪里。\n                - 不要输出大段日志：在命令里自己过滤，只取需要的范围。\n                - 项目里有 AGENTS.md 或 README 时，先读它。\n\n          # ── files: read / write / edit + glob / grep ──────────────────────\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n            config:\n              readLimit: 1200\n\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n\n          # ── retrieval: web_search only ───────────────────────────────────\n          # `fetch: false` skips registering `web_fetch` at all (the tool-web\n          # plugin gates each tool on its own flag). The preset's job is coding\n          # and lookup for a small local model, and server-side search is enough\n          # for that; leaving fetch off also means the model is never the one\n          # choosing a URL to request, and it drops one tool schema.\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: false\n              searchMaxResults: 5\n              searchMaxQueries: 2\n\n          # ── shell: one persistent process per session ────────────────────\n          # A preset-published service must sit in a group carrying an\n          # entry-local `isolate` realm; without one it publishes into the root\n          # realm and collides with every other preset.\n          - id: shell\n            name: cordis:group\n            group: true\n            isolate:\n              terminals: true\n            config:\n              - id: pty\n                name: '@deepseek-ai/dsh-terminal'\n              - id: terminal-bash\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform === 'win32'\n              - id: terminal-pwsh\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  shellDialect: pwsh\n              - id: persistent-bash\n                name: '@deepseek-ai/dsh-tool-bash-persistent'\n                disabled: !!js process.platform === 'win32'\n                config:\n                  timeoutMs: 300000\n                  maxOutputChars: 12000\n                  description: |-\n                    在当前工作目录下运行 bash 命令并返回输出。\n                    * 这是一个常驻 shell：cd、变量、导出在多次调用之间保持。\n                    * 参数不需要 XML 转义；用 && 串联多条命令。\n                    * 输出过多时自己过滤（grep/head/tail/wc），只读需要的范围。\n                    * 长时间运行的命令用 & 放到后台，再用 job_output 读取。\n              - id: persistent-pwsh\n                name: '@deepseek-ai/dsh-tool-pwsh-persistent'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  timeoutMs: 300000\n                  maxOutputChars: 12000\n                  description: |-\n                    在当前工作目录下运行 PowerShell 命令并返回输出。\n                    * 这是一个常驻 shell：cd、变量、函数在多次调用之间保持。\n                    * 参数不需要 XML 转义；用原生 Windows 路径（C:\\...），环境变量用 $env:NAME。\n                    * 输出过多时自己过滤（Select-String/-First/-Tail），只读需要的范围。\n                    * 长时间运行的命令用 Start-Process 或 & 放到后台，再用 job_output 读取。\n\n          # ── background jobs: job_output / job_list / job_kill ────────────\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n\n          # ── tool surface: mask inherited global tools ────────────────────\n          # The name MUST be a bare package specifier — here the bundle's OWN\n          # package name, which resolves to its `exports` entry point\n          # (`./lib/index.js`). A path name does NOT work, and it fails in a way\n          # worth knowing:\n          #\n          # The Host's patch parser anchors row names only for `insert` rows and\n          # the children of `group: true` rows. A preset declaration's\n          # `config.plugins` is neither — so `/abs/plugin.mjs` reaches the\n          # Loader as a bare filesystem path (not a `file://` URL) and\n          # `./plugin.mjs` as a literal relative string. Either way the module\n          # cannot be resolved, the row's fiber is never created, and the\n          # registry's audit fails this ENTIRE preset with \"<id>: never\n          # started\" — the UI then shows 加载失败 for the whole preset.\n          #\n          # The plugin ships INSIDE this package rather than as a sibling\n          # dependency on purpose. A `link:` or `file:` dependency of a bundle is\n          # not installed transitively: the profile symlinks the bundle folder\n          # and never installs the bundle's own dependencies, so a nested\n          # package is absent on any other machine. One package, one specifier,\n          # nothing to install.\n          - id: tool-surface\n            name: '@Xeraph627/dsh-local-lite-preset'\n            config:\n              # Global tools to keep anyway. `ask_user_question` is the one\n              # worth considering: a small model can otherwise only give up when\n              # a request is genuinely ambiguous. Left out by default, because\n              # `tool-surface` already keeps everything this preset declares and\n              # the goal here is a floor on standing cost.\n              keep: []\n\n\n\n\n\n          # ── compaction: required at this context size ───────────────────\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_WEB_URL",
+      "kind": "env",
+      "where": "tools/capture-host-state.mjs:26"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/install-to-library.mjs:30"
+    },
+    {
+      "name": "DSH_LOCAL_LITE_CATALOG",
+      "kind": "env",
+      "where": "tools/install-to-library.mjs:48"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Xeraph627/local-lite.git",
+      "where": "package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Xeraph627/local-lite#readme",
+      "where": "package.json:20"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Xeraph627/local-lite/issues",
+      "where": "package.json:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:19387",
+      "where": "tools/capture-host-state.mjs:26"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com/repos/${repo",
+      "where": "tools/pr-comment.mjs:34"
+    },
+    {
+      "host": "api.github.com${path",
+      "url": "https://api.github.com${path",
+      "where": "tools/pr-status.mjs:60"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 15,
+    "pushed_at": "2026-10-18T04:22:49Z",
+    "created_at": "2026-10-03T14:43:56Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "local-lite · 本地简化",
+      "text": "> 一个为**上下文窗口很小的本地模型**准备的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Agent 预设。\n> 每次请求的固定开销约 **1,789 token**（系统提示词 + 工具 schema），工具面收拢为\n> 文件读写、检索、终端与后台任务共 10 个工具。\n>\n> A minimum-prompt DSH agent preset for short-context local models: a standing\n> per-request cost of about 1,789 tokens (system prompt plus tool schemas), with\n> the tool surface narrowed to ten tools for files, search, terminal and background jobs.\n\n装好之后，新建会话的预设选择器里会多出一项 **本地简化**。\n\n---"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "每次请求在模型真正开口之前，都要先付一笔固定开销：\n\n| 组成 | 说明 |\n|---|---|\n| 系统提示词 | 每次请求完整重发 |\n| 工具 schema JSON | **同样每次请求完整重发**，工具面越大越贵 |\n\n标准预设在 `deepseek-account / deepseek-flash`（100 万窗口）上的实测：\n\n```\n系统提示词      5,953 字符   ≈  1,490 token\n工具 schema   31,191 字节    ≈  7,798 token   （36 个工具）\n--------------------------------------------\n固定开销                     ≈  9,288 token\n\n单个体积最大的工具：`pwsh` 860 token、`workflow` 847、`plugin_manager` 612、\n`ask_user_question` 312。关键结论是：**裁工具比裁提示词有效得多**——提示词全砍也才省 1.5k。"
+    },
+    {
+      "section": "同一台机器、同一个模型上的对照",
+      "text": "| 会话 | 系统提示词 | 工具 schema | 固定开销 |\n|---|---|---|---|\n| 本地简化，native 呈现（`web_fetch` 关） | 190 token | 1,599 token（11 个工具） | **1,789 token** |\n| 本地简化，native 呈现，`web_fetch` 开 | 186 token | 1,818 token（13 个工具） | 2,004 token |\n| 本地简化，native 呈现，`tool-surface` **未**生效 | 186 token | 2,969 token（19 个工具） | 3,155 token |\n| 本地简化，**PTC 呈现**（`tools` 行 `mode: both`） | 190 token | 2,289 token（13 个工具） | 2,479 token |\n| 标准预设（`deepseek-flash`，另一条路由，仅作参照） | 1,490 token | 7,798 token（36 个工具） | 9,288 token |"
+    },
+    {
+      "section": "同一台机器、同一个模型上的对照",
+      "text": "第 2、3 行的 persona 逐字节相同（已比对哈希），宿主工具面相同，**唯一差别是\n`tool-surface` 有没有把继承来的全局工具摘掉**：那 6 个 `ssh_*` 加\n`load_workspace_dependencies` 本身约 1,249 token，两行相差 1,151（余下差额来自第 2 行\n仍注册着 `web_fetch` 的 schema，第 3 行没有）。这一对量的是插件本身的收益，\n不是跨 profile 的对比。\n\n第 4 行是 PTC 部署的实测：wire 上多了保留的 `run_code`（531 token），而**继承来的全局\n工具仍全部缺席** —— 这是「保留名必须排除出 deny 名单」那条修复在真机上的验证。\n因为 `run_code` 在这条对照里始终存在，第 4 行与第 1 行的差额（690）**不能**当作遮蔽\n收益，它只说明 PTC 呈现本身贵了多少。"
+    },
+    {
+      "section": "同一台机器、同一个模型上的对照",
+      "text": "> 第 1 行是当前配置的实测。与第 2 行的差别有两处：`web_fetch` 的 schema（61 token）不再\n> 注册，以及 `load_workspace_dependencies` 被摘掉（第 2 行里它还在）。提示词 190 而非 186\n> 是因为 persona 的 247 字符后追加的工作目录行这次是 10 字符（`D:\\ASUS\\Work\\Chat` 那次是\n> 17 字符）。\n>\n> 第 5 行只作为量级参照，**不要与其它行相减**：它跑在另一条路由、另一个窗口大小上。\n>\n> **收益大小取决于机器上装了多少宿主插件**：摘掉的都是宿主层挂载的工具，干净 harness 上\n> 只剩 `load_workspace_dependencies` 与宿主全局的 `web_fetch` 两个可摘（约 220 token）。\n> 本预设的**固定成本**是约 1,789 token；`tool-surface` 是随 profile 变化的**额外**收益。\n>\n> 一个容易误判的地方：会话记录头部的 `agentPreset` 字段是在**建会话时**写入的，\n> 早于预设绑定，所以跑本地简化的会话里那个字段仍写着 `standard`。判断依据应该是模型\n> 真正收到的东西——`tools/verify-claims.mjs` 现在就是这么做的：wire 上还留着继承来的\n> 全局工具，就说明 `tool-surface` 没生效。"
+    },
+    {
+      "section": "与自带 minimal 的差异",
+      "text": "同样的机器、同样的路由（`lm-studio`，32k 窗口）实测：\n\n| | 系统提示词 | 工具 | 固定开销 |\n|---|---|---|---|\n| 自带 `minimal` | 46 字符 | 2（一个 shell + 宿主层的 `load_workspace_dependencies`） | **361 token** |\n| 本地简化 | 257 字符 | 11 | **1,789 token** |\n\n`minimal` 只有一个 shell，**没有**读写文件、检索、后台任务与自动压缩——它适合测试和对比\n「只剩终端的模型能做什么」。本地简化多花的约 **1,428 token** 买到的正是这些能干活的能力：\nread/write/edit、glob/grep、web_search、job 控制，以及短上下文必需的 `compaction-basic`。\n两者定位不同，不是同一个预设的两个版本。"
+    },
+    {
+      "section": "`tool-surface` 在干净 harness 上实际省多少",
+      "text": "**省得比这张表看起来少。** 它只能摘「宿主挂载、而本预设不声明」的工具：\n\n- 干净 harness 上这一类只有 `load_workspace_dependencies`（约 **158 token**）；\n- 若部署还把 `web_fetch` 挂到全局，再加 **61 token**；\n- 两者都不挂时收益接近 **0**。\n\n作者这台机器上「本行生效 vs 未生效」相差 1,151 token，是因为它**额外装了 SSH 插件**（6 个\n`ssh_*`）。那部分不是预设的固定特征，所以本页把它标成 per-host 的额外收益，而把\n**约 1,789 token 的预设自身成本**当作稳定值。\n\n---"
+    },
+    {
+      "section": "1. 系统提示词只剩一段 persona",
+      "text": "`@deepseek-ai/dsh-persona` 的 `complete: true` 让那段 prefix 成为**整个**系统提示词：\nharness 身份、web-surface、工具指南、文件引用、结构化输出等段落一律不再注入。\n配合 `includeRuntimeContext: false`，sandbox / approval 那几条 user-role 运行时快照也一并关闭。\n\n提示词本身 247 字符，组装时再追加一行工作目录（总长随该路径变化：实测 10 字符路径下共 257 字符），写成中文，因为本地小模型通常在中文上表现最好：\n\n```\n你是本地精简模式的编码助手，工作目录 <cwd>。\n\n规则：\n- 先读再改。修改文件前先读取它；不确定就先查，不要猜。"
+    },
+    {
+      "section": "1. 系统提示词只剩一段 persona",
+      "text": "提示词里**不出现具体可执行文件名**（不写 `pwsh`、不写 PowerShell 的参数名）：`pwsh` 行在非 Windows 上是 `disabled` 的，写死工具名会让 macOS / Linux 用户看到一个不存在的工具。平台相关的指引只放在各自已被 `process.platform` 门控的 shell 行里。"
+    },
+    {
+      "section": "2. 工具面收拢到这几件",
+      "text": "这条组合**声明 10 个工具名**（分布在 5 个插件行上）：\n\n| 工具 | 能力 | 来源 |\n|---|---|---|\n| `read` / `write` / `edit` | 读写文件 | `@deepseek-ai/dsh-tool-fs` |\n| `glob` / `grep` | 按路径 / 内容检索 | `@deepseek-ai/dsh-tool-fs-search` |\n| `web_search` | 联网检索（**不开 `web_fetch`**） | `@deepseek-ai/dsh-tool-web` |\n| `pwsh`（Windows）/ `bash`（POSIX） | 执行终端命令 | `@deepseek-ai/dsh-tool-pwsh-persistent` |\n| `job_output` / `job_list` / `job_kill` | 后台任务控制 | `@deepseek-ai/dsh-tool-jobs` |\n\n（每个平台只挂其中一个 shell，所以「一个 shell」在操作系统间不改变总数。）"
+    },
+    {
+      "section": "2. 工具面收拢到这几件",
+      "text": "`web_fetch` 关掉了（`fetch: false`）：`dsh-tool-web` 对两个工具各自判门，设成 false 就不注册\n`web_fetch`，`web_search` 照常。本预设的用途是本地小模型的编码与检索，服务端检索够用；关掉\n它同时意味着**模型不参与选择要请求哪个 URL**，并少掉一件工具的 schema。\n\n**wire 上是 11 个**：上面这 10 个加上 `read_image` —— 它由 `dsh-tool-fs` 在宿主挂载\n`attachments` 时自动注册，预设无法声明它。实测会话的 11 个正是这个构成。\n\n宿主还可能**全局**挂载 `load_workspace_dependencies` 与 `web_fetch`（约 158 / 61 token），\n这两个正是 `tool-surface` 会摘掉的；作者这台机器额外装了 SSH 插件，多出 6 个 `ssh_*`。\n**工具数取决于 profile，不是这个预设的固定属性。**\n\n三个取舍："
+    },
+    {
+      "section": "2. 工具面收拢到这几件",
+      "text": "- **用持久 shell，不用每次新进程的 shell。** 持久行可以覆写 `description`（自带默认值很长），\n  schema 也只有一个 `command` 参数、没有 sandbox 升级字段（省 671 token）。`cd`、变量、函数\n  跨调用保持，对小模型尤其重要——它省掉了「把命令拼成一条复合命令」这一步推理。\n  `maxOutputChars: 12000` 保证原始日志挤不掉提示词。\n- **输出上限在工具层收窄，网络面也收窄。** `readLimit: 1200`、`searchMaxResults: 5`；\n  `fetch: false` 直接不注册 `web_fetch`（不设它的话，出厂的 `fetchMaxOutputChars` 是\n  200,000 字符，比本地模型的整个窗口还大——那个上限本身也说明这一件工具不适合小窗口）。\n- **保留 `compaction-basic`。** 短上下文正是要设计的失效场景，自动压缩必须能工作。"
+    },
+    {
+      "section": "3. 遮蔽继承来的全局工具",
+      "text": "这一条是本预设唯一的自研插件 `tool-surface`，也是收益最大的一块。\n\nDSH 把 **host 层挂载的工具对每个 agent 都可见**，与预设无关。所以即使预设只声明 10 个工具，\n实测仍有 19 个——多出来的是一个 SSH 插件（6 个 `ssh_*`，≈1,090 token）和\n`load_workspace_dependencies`（158 token），跟这个预设毫无关系。\n\n`tool-surface` 用 `ctx.tools.restrict({ deny })` 把它们从这个预设的 scope 上摘掉。注意\n**名单是算出来的，不是写死的**：\n\n```\ndeny = { 实时全局视图里的名字 } - { 本预设自己注册的 } - { 保留的传输名 } - { keep } + { alsoDeny }\n```\n\n`restrict()` 遇到未知工具名会**直接抛错**，所以写死的名单一旦 profile 变化（比如你启用了\nSSH 插件）就会反过来让预设挂不上。算出来的名单不会过期。"
+    },
+    {
+      "section": "3. 遮蔽继承来的全局工具",
+      "text": "**保留的传输名必须排掉**：`tools` 行处于 `ptc` 或 `both` 模式时，全局视图里会出现\n保留名 `run_code`，而 `restrict()` 拒绝它。这一条不是装饰——`tools/mutation-check.mjs`\n把过滤拆掉后实测：`accepted=0, warnings=2`，**整套遮蔽全丢**，重试也救不回来（重试只丢\n调用方显式写的 `alsoDeny`，算出来的 `run_code` 会跟着进重试）。\n\n其余失败路径都只记日志、不抛错：削不掉只是多花 token，不该让预设组不起来。`keep` 是\n保留某个继承工具的逃生口，例如 `keep: [ask_user_question]`。"
+    },
+    {
+      "section": "故意不放的东西",
+      "text": "- **plan 模式**：`plan:policy` 段落约 1,000 token 常驻系统提示词且无法缩短。另外\n  `complete: true` 的 persona 与它会构成两个 complete 段，assembly 会直接失败——两者互斥。\n- **subagent / workflow / ralph / goal / skill / todo / ask_user_question / present**。\n- **`str_replace_editor`**：与 read/write/edit 功能重复。\n- **`tool-result-pruner`**：shell 和 read 已在工具层设了上限，而在这个上下文规模上，\n  悄悄裁掉小模型刚主动要来的结果，比它省下的空间更糟。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "需要 DeepSeek Harness（Desktop 或 CLI）以及它自带的 `plugin_manager` 工具。\n\n```\nplugin_manager { action: \"install_bundle\", target: \"<本仓库的 git 地址或 npm 包名>\" }\n```\n\n本地开发时直接指向目录：\n\n```\nplugin_manager { action: \"install_bundle\", target: \"D:\\\\path\\\\to\\\\local-lite\" }\n```\n\n装完后**重启 DSH**（预设定义在启动时按 patch 解析），新建会话时在预设选择器里选 **本地简化**。"
+    },
+    {
+      "section": "卸载",
+      "text": "```\nplugin_manager { action: \"remove_bundle\", target: \"@Xeraph627/dsh-local-lite-preset\" }\n```"
+    },
+    {
+      "section": "本机开发时注意",
+      "text": "- 若 profile 里记录的是 `link:` 指向你的工作目录，**不要删除或移动该目录**，否则预设失效。\n- 改完 `cordis.patch.yml` 或 `lib/index.js` 后要让 Loader 重读。**改行插件名必须重启**；\n  只改插件代码体时，关掉再打开预设行通常就够：\n\n```\n  plugin_manager { action: \"set_plugin\", target: \"include:preset-local-lite\", enabled: false }\n  plugin_manager { action: \"set_plugin\", target: \"include:preset-local-lite\", enabled: true }\n  ```\n\n- 用 `install_bundle` 重装时 target 要用**解析后的包名**而不是路径，否则报\n  `ambiguous-install`（它按「依赖有没有变化」判断装了什么，路径匹配不上任何依赖键）。\n\n---"
+    },
+    {
+      "section": "技术栈",
+      "text": "| 层 | 用了什么 |\n|---|---|\n| 运行载体 | Node.js ESM（`\"type\": \"module\"`） |\n| 插件框架 | [Cordis](https://github.com/deepseek-ai/deepseek-harness) —— 插件是 `export const name / inject / apply(ctx, config)` |\n| 配置方言 | Cordis loader patch YAML（`insert` 列表、`!!js` 表达式、`cordis:group`、`isolate` realm） |\n| 扩展点 | DSH `ctx.tools` 注册表（`schemas()` 读全局视图、`restrict()` 按 scope 遮蔽全局工具） |\n| 预设声明 | `@deepseek-ai/dsh-agent-preset`（`dsh.bundle.patch` 指向的 patch 里 insert 一行） |\n| 提示词 | `@deepseek-ai/dsh-persona`（`complete: true` + `includeRuntimeContext: false`） |\n| 开发工具 | 纯 Node 内置模块，零开发依赖：`node:zlib`（zstd）、`node:module`、`js-yaml`（借自 profile） |"
+    },
+    {
+      "section": "技术栈",
+      "text": "> 为什么没有构建步骤：插件只有 `lib/index.js` 一个文件、零 runtime 依赖，不需要打包器。\n> 包体就是源码，`pnpm pack` 的产物正好是运行所需的 4 个文件。"
+    },
+    {
+      "section": "项目结构",
+      "text": "```\nlocal-lite/\n├─ package.json          # 既是 bundle 清单，也是插件入口（exports）\n├─ cordis.patch.yml      # 预设声明本体\n├─ lib/index.js          # tool-surface 插件：按实时全局视图遮蔽继承来的工具\n\n---"
+    },
+    {
+      "section": "开发",
+      "text": "零依赖，直接跑：\n\n```powershell"
+    },
+    {
+      "section": "1. 声明校验：形状 / 禁止路径行 / 行名解析 / isolate 完整性 —— 必须全绿才能装",
+      "text": "node tools/validate-patch.mjs cordis.patch.yml"
+    },
+    {
+      "section": "2. 插件回归测试：六种情形，假注册表复刻 restrict() 的三类拒绝",
+      "text": "node tools/test-tool-surface.mjs"
+    },
+    {
+      "section": "3. 变异校验：把 run_code 过滤拆掉，证明整套遮蔽真的会失效",
+      "text": "node tools/mutation-check.mjs"
+    },
+    {
+      "section": "4. 实测某个会话的固定开销",
+      "text": "node tools/measure-session.mjs <session.v4.jsonl.zstd>"
+    },
+    {
+      "section": "5. 校验文档数字（persona 必须不含平台专用工具名）",
+      "text": "node tools/verify-claims.mjs cordis.patch.yml <session.v4.jsonl.zstd>"
+    },
+    {
+      "section": "6. 会话日志概览（事件类型统计 / 读某类事件）",
+      "text": "node tools/session-log.mjs <session.v4.jsonl.zstd> [eventType]"
+    },
+    {
+      "section": "7. 按市场发布的三件套装进预设库（验证 preset center 的安装/声明路径）",
+      "text": "node tools/install-to-library.mjs            # --remove 卸载；--from <目录> 指定来源"
+    },
+    {
+      "section": "8. 固化 preset center 在运行中宿主上对库目录的读取（实机证据）",
+      "text": "node tools/capture-host-state.mjs [--session <session.v4.jsonl.zstd>]\n```\n\n会话日志位置：`$DSH_HOME/sessions/<转义后的工作区目录>/<session-id>/session.v4.jsonl.zstd`"
+    },
+    {
+      "section": "四个踩过的坑（都已在工具里固化成检查）",
+      "text": "**1. 预设声明里的行名绝不能是路径。** 失败的不是那一行，而是**整个预设**——UI 上整张卡片\n显示「加载失败」加一句 `tool-surface (...): never started`。原因在 Host 的\n`anchorInsertedPluginNames` 只锚定 `insert` 行和 `group: true` 行的子行；预设声明的\n`config.plugins` 不是 `config`，解析器不会下钻，于是相对路径原样传下去、绝对路径以裸文件\n系统路径（而非 `file://` URL）传下去，两种都解析不到。**必须用裸包名 specifier。**\n`validate-patch.mjs` 现在把路径行当硬错误拒绝（三种形式都有回归覆盖）。"
+    },
+    {
+      "section": "四个踩过的坑（都已在工具里固化成检查）",
+      "text": "**2. 插件不能是 bundle 的子依赖。** 曾经把插件放成同仓库子包、用 `link:./tool-surface` 引用——\n**这在别的机器上必然坏**：bundle 的依赖不会被传递安装，profile 只是把 bundle 目录符号链接\n进来，不会装它自己的依赖。所以插件改成放在包内、由 `exports` 暴露，patch 里直接用包名本身。\n**一个包，一个 specifier，零依赖。**\n\n**3. `install_bundle` 会跑 pnpm，pnpm 会去问 registry。** 网络不通时实测挂了近 4 小时才被\n终止，失败时会回滚 profile 的 `package.json`。网络不可用时改用 `set_plugin` 关掉再打开预设行。"
+    },
+    {
+      "section": "四个踩过的坑（都已在工具里固化成检查）",
+      "text": "**4. 会话日志的帧边界只能靠 magic 找，不能靠「能不能解出东西」。** 日志是一串**各自独立**的\nzstd 帧，很多帧的帧头 `fcsFlag = 0`（不声明解压大小）。曾经用「能解出非空内容的最短前缀」当\n帧长——而**跨过帧边界的切片会返回后一帧的字节**，看起来完全合法，于是四帧被当成一帧走完，\n一份完整会话被读成「只有会话头、没有任何请求」。我因此一度判定维护者给的会话是空的。\n现在唯一实现是 `session-frames.mjs`，边界取下一个 magic 的位置，三个工具共用它。\n\n---"
+    },
+    {
+      "section": "兼容性",
+      "text": "- 在 **DeepSeek Harness 0.2.0-rc.2**（Windows / Electron Desktop，`lm-studio / qwen3.5-9b`）\n  上开发并实测通过：系统提示词 257 字符（persona 247 字符 + 一行 10 字符的工作目录）。\n- shell 行按平台二选一（`!!js process.platform` 门控）：Windows 用 `pwsh`，POSIX 用 `bash`。\n  两个套餐的 `description` 都覆写成中文。**POSIX 分支尚未在真机验证过**——但 persona 里\n  不出现具体工具名，所以非 Windows 用户不会拿到一个不存在的工具。\n- 预设 id 是 `local-lite`，roster order 5，选择器显示名 **本地简化**。\n- `tool-surface` 依赖 `ctx.tools.schemas()` / `ctx.tools.restrict()` 这两个 API；\n  上游若改名，它会**只记日志、不抛错**（预设照常挂载，只是少省 1.2k token），\n  所以升级 DSH 后建议用 `tools/verify-claims.mjs` 复查一次工具数量。\n- 干净 harness 上 wire 是 10 个工具；装了额外宿主插件会更多，那时 `tool-surface` 才会\n  开始削掉它们。工具数取决于 profile，不是这个预设的固定属性。\n- 实测基线（本机 `lm-studio / liquid/lfm2.5-1.2b`、32k 窗口）：系统提示词 257 字符 /\n  190 token，工具 schema 11 个 / 6,087 字节 / 1,599 token，合计 **1,789 token**。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。声明部分改编自 DeepSeek Harness 内置的 `minimal` 与 `standard` 预设（MIT）；\n`lib/index.js`、`tools/*` 为本项目自有实现。"
+    }
+  ],
+  "skipped": []
+}

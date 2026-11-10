@@ -1,0 +1,148 @@
+{
+  "repo": "d3vmeh/dsh-llm-gate",
+  "commit": "2a7acb42a7dd104a967e75778270a17b160f9106",
+  "extracted_at": "2026-11-10T03:15:00.467241+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 59548,
+    "lines_by_language": {
+      "JSON": 1179,
+      "JavaScript": 497,
+      "Markdown": 61,
+      "Other": 22,
+      "YAML": 13
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "src/index.js",
+      "test/gate.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-llm-gate",
+    "version": "0.1.0",
+    "description": "Per-provider concurrency gate for DeepSeek Harness LLM requests",
+    "license": "MIT",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "llama.cpp",
+      "concurrency"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/d3vmeh/dsh-llm-gate.git"
+    },
+    "scripts": {
+      "test": "vitest run"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "vitest": "^4.1.11"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle layer for dsh-llm-gate: inserts the plugin with no providers gated.\n# Configure it from your profile's cordis.patch.yml with an override row:\n#\n# - id: llm-gate\n#   config:\n#     providers:\n#       llamacpp:\n#         maxConcurrent: 1\n- insert:\n    - id: llm-gate\n      name: dsh-llm-gate\n      config:\n        providers: {}\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/d3vmeh/dsh-llm-gate.git",
+      "where": "package.json:25"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "vitest": "^4.1.11"
+    }
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-08-29T04:59:09Z",
+    "created_at": "2026-08-29T01:36:30Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-llm-gate",
+      "text": "Per-provider concurrency gate for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) model requests."
+    },
+    {
+      "section": "dsh-llm-gate",
+      "text": "If a provider can only serve a fixed number of requests at once (e.g a local `llama-server` with `--parallel 1`), every extra request is deferred by the server with nothing sent back. The client cannot tell \"waiting for a slot\" from \"dead\", and Node HTTP layer times out after 300 seconds with `terminated`. In practice this happens when there is overlap between a subagent and the main agent or compaction and the agent."
+    },
+    {
+      "section": "dsh-llm-gate",
+      "text": "This plugin holds surplus requests inside dsh instead. A request waits in a FIFO queue before any HTTP request is made so no timeout is running while it waits. When a slot frees, the next request is dispatched."
+    },
+    {
+      "section": "Install",
+      "text": "```\ndsh plugin --profile web add dsh-llm-gate\n```\n\nThen configure the providers to gate in `~/.dsh/profiles/web/cordis.patch.yml`:\n\n```yaml\n- id: llm-gate\n  config:\n    providers:\n      llamacpp:\n\nThe provider key is the route name from your `llm-pi-ai.providers` (or other adapter) settings. Providers not listed are not gated. Restart `dsh web` and open a new session.\n\nCheck the composed config with `dsh --profile web --dump-config`."
+    },
+    {
+      "section": "Settings",
+      "text": "| Setting | Required | Meaning |\n|---|---|---|\n| `maxConcurrent` | yes | Requests allowed in flight to this provider. For llama.cpp, match `--parallel`. |\n| `maxQueued` | no | Requests allowed to wait. Beyond this, a request fails at once with `QUEUE_FULL`. Default: unlimited. |\n| `queueTimeoutMs` | no | Longest a request may wait for a slot before failing with `QUEUE_TIMEOUT`. Default: wait indefinitely. |"
+    },
+    {
+      "section": "Settings",
+      "text": "Queue failures end the turn with the code shown. They are not retried by `dsh-llm-retry`."
+    },
+    {
+      "section": "What you will see",
+      "text": "The plugin prints a line to the dsh terminal only when a request has to wait:\n\n```\nllm-gate: llamacpp session=a61e6e40 queued (depth 1)\nllm-gate: llamacpp session=a61e6e40 dispatched after 5730ms\n```\n\n`purpose=compaction` or `purpose=session-title` is added for auxiliary requests. Requests that get a slot immediately print nothing."
+    },
+    {
+      "section": "Notes",
+      "text": "- This gate serializes requests so it does not make a single-slot server faster. For parallelizing, give llama.cpp more slots (`--parallel 2 --kv-unified`) and raise `maxConcurrent` to match.\n- Waiting time is not counted by the adapter's `streamIdleTimeoutMs` because the adapter is not called until the slot is acquired. You still need `streamIdleTimeoutMs` large enough for your prompt processing time (see the `llm-pi-ai` provider settings).\n- A queued request is cancelled through its abort signal. Dropping the stream without aborting leaves the request queued until a slot frees, at which point it dispatches and is closed immediately.\n- Requires the `llm` service; hooks the `llm/stream` waterfall, so it covers every model request in the host: agents, subagents, compaction, and title generation."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

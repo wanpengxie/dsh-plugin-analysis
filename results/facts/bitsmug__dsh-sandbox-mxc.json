@@ -1,0 +1,381 @@
+{
+  "repo": "bitsmug/dsh-sandbox-mxc",
+  "commit": "1a11c11c6668f574c08fedf7795d2700a594962a",
+  "extracted_at": "2026-11-10T02:45:23.456182+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 123889,
+    "lines_by_language": {
+      "JSON": 56,
+      "JavaScript": 1643,
+      "Markdown": 301,
+      "Other": 36,
+      "YAML": 153
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "pnpm-workspace.yaml",
+      "tests/policy.test.mjs",
+      "tests/readiness.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-sandbox-mxc",
+    "version": "0.1.2",
+    "author": "dsh-sandbox-mxc-dev",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/bitsmug/dsh-sandbox-mxc.git"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "description": "DeepSeek Harness sandbox provider backed by MXC (Microsoft eXecution Containers): wraps ctx.sandbox.confine() argv as `wxc-exec --config-base64 <policy> -- <command>` on the BaseContainer backend. One runtime dependency (@microsoft/mxc-sdk, for the wxc-exec executable), no kernel patch.",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-sandbox": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0"
+    },
+    "scripts": {
+      "test": "node --test \"tests/**/*.test.mjs\""
+    },
+    "engines": {
+      "node": ">=22"
+    },
+    "dependencies": {
+      "@microsoft/mxc-sdk": "^1.0.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-sandbox": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0"
+    },
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "sandbox",
+      "mxc",
+      "processcontainer",
+      "windows"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-sandbox-mxc bundle patch —— 把 DSH 的进程沙箱提供者换成 MXC。\n#\n# 做法（官方方言）：\n#   ① 把默认 provider（`@deepseek-ai/dsh-sandbox-local`，即 ACL 受限令牌 runner）按 id 停掉；\n#   ② 插入本插件——它提供同一个服务名 `sandbox`（`SandboxProvider` 构造时 `super(ctx, 'sandbox')`），\n#      因此 DSH 的消费方（pwsh / bash / fs 三个 tool 家族）无须改动。\n#\n# 为什么不用\"把 id=sandbox 那行的 name 改掉\"：方言规定 truthy `name` 是**断言**既有行而非重命名 ⇒\n# 只能\"停旧行 + 插新行\"。\n#\n# 改本文件后需要**重启 profile** 才生效（provider 在 host 平面）。\n\n- id: sandbox\n  name: '@deepseek-ai/dsh-sandbox-local'\n  disabled: true\n\n- insert:\n    - id: sandbox-mxc\n      name: dsh-sandbox-mxc\n      config:\n        # MXC 执行器的绝对路径。留空 ⇒ 插件依次尝试：\n        #   ① 环境变量 DSH_MXC_WXC；② @microsoft/mxc-sdk 包内的 bin/<arch>/wxc-exec.exe；③ 同包的 bin/（老布局）。\n        # 三条都拿不到 ⇒ 加载期就抛错（fail loud），绝不静默放行。\n        wxcExecPath: !!js process.env.DSH_MXC_WXC ?? ''\n        # 除工作区之外还要**只读**开放的根（例如工具链目录）。实测：白名单之外连【读】都会被拒。\n        readonlyPaths: []\n        # 除 writableRoots(policy) 之外额外可写的根。\n        extraWritablePaths: []\n        # 一律拒绝的根（MXC filesystem.deniedPaths）。denyMustExist（默认 true）：任一 deny 路径不存在就拒绝执行该命令。\n        deniedPaths: []\n        # 网络：不写 ⇒ 用 MXC 默认（实测 default_policy=block，即不出网）。原样透传，1.0 契约只认 egress / ingress。\n        # network: !!js ({ egress: { default: 'deny' } })\n        # 窄旋钮（放宽，默认关）：只放行**回环**（network.ingress.hostLoopback: 'allow'），egress 仍然全封。\n        # 需要容器内起 loopback TCP server 的工具才打开；host-loopback 在 PSEC 1.0 上的兼容修复需要 MXC >= 1.0.1。\n        # allowHostLoopback: false\n        # 加载期就绪门（默认 true）：对同一个执行器跑 --probe，选不出隔离档就拒绝加载；降级只告警。\n        # readinessCheck: true\n        # 探针 / DACL 档策略自检的单次上限（毫秒，必须 ≥1；Node 的 timeout:0 = 无超时，不予放行）。\n        # probeTimeoutMs: 15000\n        # validateTimeoutMs: 60000\n        # timeoutMs: 0\n        # containerIdPrefix: dsh-mxc\n        # ★ 未知键会在加载期直接报错（不是静默忽略）——合法键表见 README 的配置表。\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "cordis.patch.yml:24"
+    },
+    {
+      "name": "ComSpec",
+      "kind": "env",
+      "where": "lib/index.js:219"
+    },
+    {
+      "name": "comspec",
+      "kind": "env",
+      "where": "lib/index.js:219"
+    },
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "lib/index.js:410"
+    },
+    {
+      "name": "NODE_OPTIONS",
+      "kind": "env",
+      "where": "lib/index.js:478"
+    },
+    {
+      "name": "SystemRoot",
+      "kind": "env",
+      "where": "lib/index.js:715"
+    },
+    {
+      "name": "SystemRoot",
+      "kind": "env",
+      "where": "lib/index.js:789"
+    },
+    {
+      "name": "WINDIR",
+      "kind": "env",
+      "where": "lib/index.js:789"
+    },
+    {
+      "name": "SystemDrive",
+      "kind": "env",
+      "where": "lib/index.js:801"
+    },
+    {
+      "name": "SystemDrive",
+      "kind": "env",
+      "where": "lib/index.js:862"
+    },
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:133"
+    },
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:134"
+    },
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:147"
+    },
+    {
+      "name": "find",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:208"
+    },
+    {
+      "name": "NODE_OPTIONS",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:212"
+    },
+    {
+      "name": "includes",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:245"
+    },
+    {
+      "name": "some",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:247"
+    },
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:295"
+    },
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:297"
+    },
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:308"
+    },
+    {
+      "name": "DSH_MXC_WXC",
+      "kind": "env",
+      "where": "tests/policy.test.mjs:332"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:58"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/bitsmug/dsh-sandbox-mxc.git",
+      "where": "package.json:7"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@microsoft/mxc-sdk": "^1.0.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-sandbox": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-10-22T11:28:30Z",
+    "created_at": "2026-10-10T15:33:19Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-sandbox-mxc",
+      "text": "[](https://www.npmjs.com/package/dsh-sandbox-mxc)\n[](https://github.com/bitsmug/dsh-sandbox-mxc/tags)\n[](https://github.com/bitsmug/dsh-sandbox-mxc/actions/workflows/publish.yml)\n[](LICENSE)\n[](https://dsh-plugin.org/plugins/bitsmug/dsh-sandbox-mxc)\n[](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)\n\nA DeepSeek Harness **sandbox provider** backed by\n[MXC](https://www.npmjs.com/package/@microsoft/mxc-sdk) (Microsoft eXecution Containers)."
+    },
+    {
+      "section": "dsh-sandbox-mxc",
+      "text": "It implements the harness's process-confinement seam (`ctx.sandbox`, a\n`SandboxProvider` from `@deepseek-ai/dsh-sandbox`) by wrapping the exact argv the caller is about to\nspawn:\n\n```\nwxc-exec.exe --config-base64 <policy-json> -- <original argv...>\n```"
+    },
+    {
+      "section": "dsh-sandbox-mxc",
+      "text": "- **No `@microsoft/mxc-sdk` import.** The plugin never loads the SDK's native bindings — it only needs\n  the `wxc-exec` executable, located with `require.resolve`. So the SDK's\n  *“native stdio on Windows requires Node.js 24.21.0 or newer within Node.js 24, or Node.js 26.8.0\n  or newer”* restriction **does not apply**. It runs on the Node inside the harness (verified on\n  `v24.20.0`).\n- **One runtime dependency:** `@microsoft/mxc-sdk` (declared in `dependencies`; used *only* to locate\n  `wxc-exec.exe`). Config validation is hand-written; no schema library.\n- **No kernel patch.** It is a sibling provider to `@deepseek-ai/dsh-sandbox-local`, selected through\n  the harness's normal bundle-patch layer.\n- **Policy semantics are not re-implemented here.** Read/write roots come from\n  `writableRoots(policy)` / `canonicalPath(path)` exported by `@deepseek-ai/dsh-sandbox`, so the\n  meaning of `read-only` / `workspace-write` stays in one place."
+    },
+    {
+      "section": "Requirements",
+      "text": "- **Windows.** This provider drives MXC's Windows backends (`wxc-exec.exe`, ProcessContainer / AppContainer).\n- **DeepSeek Harness** that mounts the `sandbox` service (`@deepseek-ai/dsh-sandbox` — declared in `peerDependencies`; never bundled).\n- **Node.js `>=22`** — the harness's own Node is fine.\n- **`wxc-exec.exe`** — resolved in this order: `config.wxcExecPath` → `$DSH_MXC_WXC` → the installed\n  `@microsoft/mxc-sdk`'s `bin/<arch>/wxc-exec.exe` (`arm64` / `x64`), then its `bin/wxc-exec.exe`.\n- **MXC `>= 1.0.1`** for the `allowHostLoopback` knob: the ProcessContainer host-loopback fix on PSEC 1.0\n  ([microsoft/mxc#1490](https://github.com/microsoft/mxc/pull/1490)) ships in 1.0.1.\n- **An *unpackaged* PowerShell**, when the profile's pwsh tool points at a Store/MSIX build: MXC containers **cannot launch packaged (MSIX) apps**\n  (`The target executable '…\\WindowsApps\\…\\pwsh.exe' appears to be a packaged (MSIX) app`). Point the executor's `pwshPath` at an unpackaged\n  build — e.g. the official ZIP extracted to a stable directory of your choosing.\n- **That shell's own install directory must be readable inside the container** — list it in `config.readonlyPaths`. An unpackaged PowerShel"
+    },
+    {
+      "section": "Verified environment",
+      "text": "| Item | Value |\n|---|---|\n| OS | Windows (x64) |\n| Harness | DSH `0.2.0-rc.2` (the repository source is at `0.2.1-rc.2`; this plugin's range covers both) |\n| Node.js | `v24.20.0` (the harness's own) |\n| Shell | PowerShell `7.7.0-preview.5`, **unpackaged** (ZIP-extracted) |\n| MXC | `@microsoft/mxc-sdk` `1.0.1`; `wxc-exec --probe` reported the **BaseContainer** tier on a Windows 11 host and the **AppContainer + DACL** tier on a Windows 10 host |"
+    },
+    {
+      "section": "Verified environment",
+      "text": "Measured behaviour (the full matrix is under `## Security posture`): workspace writes allowed; **writes** outside the policy denied;\noutbound network blocked by default; clipboard isolated from the host. Reads are **not** an absolute boundary — see the\nsecurity-posture notes below before trusting a machine. Three tier-dependent facts are worth knowing:"
+    },
+    {
+      "section": "Verified environment",
+      "text": "- **`base-container` needs Windows 11; Windows 10 can only use the DACL tier.** Same binary, two hosts:\n  on **Windows 11** (build ≥ 26100) `wxc-exec --probe` reports `tier=base-container / needsDaclAugmentation=false /\n  baseContainerApiPresent=true`; on **Windows 10** it reports `tier=appcontainer-dacl /\n  needsDaclAugmentation=true / baseContainerApiPresent=false` — the process-security-environment API the strong tier needs is\n  simply not there, so on Windows 10 every path in the policy must be DACL-augmentable (see `## Requirements`, where the provider\n  handles that by dropping and reporting). `wxc-host-prep.exe` (elevated) clears the system-drive and NUL-device warnings but\n  cannot create the missing API."
+    },
+    {
+      "section": "Install",
+      "text": "Two things are independent: **(a)** installing this plugin, and **(b)** making a `wxc-exec`\nexecutable reachable."
+    },
+    {
+      "section": "(a) Install the plugin into a profile",
+      "text": "Local checkout (development, and the usual way for a git-only plugin):\n\n```powershell"
+    },
+    {
+      "section": "<profile>/node_modules/dsh-sandbox-mxc  ->  <absolute-path-to-this-repo>",
+      "text": "```\n\nFrom a registry (if you publish it):\n\n```powershell\ndsh plugin --profile <profile> add dsh-sandbox-mxc\n```\n\nEither way the plugin's own `cordis.patch.yml` is applied, which\n\n1. disables the default provider row (`- id: sandbox` → `@deepseek-ai/dsh-sandbox-local`), and\n2. inserts this plugin — it provides the **same service name** `sandbox`, so every consumer\n   (`pwsh`, `bash`, and filesystem tool families) is unchanged."
+    },
+    {
+      "section": "<profile>/node_modules/dsh-sandbox-mxc  ->  <absolute-path-to-this-repo>",
+      "text": "> The Cordis patch dialect treats a truthy `name` as an **assertion** on an existing row, not a\n> rename — which is why the patch disables the old row and inserts a new one instead of editing\n> `name` in place.\n>\n> **Restart the profile** after changing the patch: the provider lives on the host plane."
+    },
+    {
+      "section": "(b) Make `wxc-exec` reachable",
+      "text": "In order of precedence:\n\n1. plugin `config.wxcExecPath` (absolute path to `wxc-exec.exe`);\n2. environment variable `DSH_MXC_WXC`;\n3. derivation from an installed `@microsoft/mxc-sdk`: `<package>/bin/<arch>/wxc-exec.exe` (the SDK's own\n   layout — `arm64` on Arm64 hosts, `x64` elsewhere), then `<package>/bin/wxc-exec.exe` (older layout)."
+    },
+    {
+      "section": "(b) Make `wxc-exec` reachable",
+      "text": "If none resolves, the plugin throws while the profile loads (see *Host readiness* — the same executor\nmust also pass `--probe`), and `confine()` **fails closed** with `SandboxUnavailableError` (code\n`SANDBOX_UNAVAILABLE`) rather than letting a command run unconfined. Installing\n`@microsoft/mxc-sdk` is a normal runtime dependency (declared in `dependencies`, installed from npm);\nit is never imported — it is used only to locate `wxc-exec.exe`."
+    },
+    {
+      "section": "Configuration",
+      "text": "**Unknown keys fail the profile load** with an actionable error naming the key and the valid set (the\nplugin is the config boundary: a misspelled or stale key silently dropping your safety intent is worse\nthan a loud failure). The valid keys are exactly the table below."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `wxcExecPath` | `''` | Absolute path to `wxc-exec.exe`. Empty ⇒ try `DSH_MXC_WXC`, then derive from `@microsoft/mxc-sdk` (`bin/<arch>` then `bin`). |\n| `readonlyPaths` | `[]` | Extra roots the container may **read** (beyond the workspace). |\n| `extraWritablePaths` | `[]` | Extra roots the container may **write** (beyond `writableRoots(policy)`). |\n| `deniedPaths` | `[]` | Roots the container may never touch (MXC `filesystem.deniedPaths`). |\n| `denyMustExist` | `true` | Any `deniedPaths` entry missing on this machine ⇒ **refuse that command** (MXC rejects a policy containing a missing path). |\n| `network` | omitted | Escape hatch, passed through verbatim. Omitted ⇒ MXC's default, which is **block** (measured `default_policy=block`). The MXC 1.0 contract accepts only `egress` and `ingress` here; the always-supported shape is `{ egress: { default: 'deny' } }`. |\n| `allowHostLoopback` | `false` | Narrow knob over the above: `true` ⇒ the policy gets `network.ingress.hostLoopback: 'allow'`. Only host loopback is opened (egress stays blocked). Needed by tools that must start a **loopback TCP server** (measured case: Simulink inside the container"
+    },
+    {
+      "section": "Configuration",
+      "text": "Both timeout keys must be a finite number `>= 1`: Node treats `timeout: 0` as **no timeout**, the\nopposite of what these fields promise.\n\n```yaml\n- insert:\n    - id: sandbox-mxc\n      name: dsh-sandbox-mxc\n      config:"
+    },
+    {
+      "section": "Host readiness",
+      "text": "While the profile loads (Windows only, `readinessCheck: true` by default) the plugin resolves\n`wxc-exec` and runs **that same executable's own** host probe, `wxc-exec --probe`:"
+    },
+    {
+      "section": "Host readiness",
+      "text": "- No executor resolvable, or `--probe` failing to start (ENOENT, timeout, non-zero exit without JSON),\n  or the probe selecting **no** isolation tier ⇒ the plugin throws with an actionable error and the\n  profile does not load. A provider that cannot confine would fail every command anyway; a loud failure\n  at load is the honest one. Run `\"<wxcExecPath>\" --probe` yourself to see the facts.\n- Tier-degradation `warnings` from the probe are reported but **never block** (MXC explains why it\n  degraded), and `allowHostLoopback` is reported when the probe says the host cannot do\n  `ingressHostLoopbackAllow`.\n- The system drive is checked for AppContainer directory access (`icacls <SystemDrive>\\` must list\n  `S-1-15-2-1` / `APPLICATION PACKAGES`); when missing, the plugin warns with the exact fix —\n  an elevated `wxc-host-prep prepare-system-drive` (the command ships in `@microsoft/mxc-sdk/bin/<arch>/`).\n  Without it, directory listing (e.g. `dir`) inside the container fails with `Access is denied`, while\n  reads and writes still work. Non-fatal."
+    },
+    {
+      "section": "Host readiness",
+      "text": "Set `readinessCheck: false` to skip the gate; `confine()` then fails closed on the first command\ninstead of the profile load."
+    },
+    {
+      "section": "What the container can see of your invocation",
+      "text": "The command, its environment, and the whole policy travel to the executor as a **base64 request\nenvelope on `argv`** (`--config-base64`). A host user with process-inspection rights can read that\nwhile the process runs, so **do not put secrets in command arguments or `sandboxEnv` values** until MXC\nprovides a non-argv transport ([microsoft/mxc#626](https://github.com/microsoft/mxc/issues/626)).\nAn inline `NODE_OPTIONS` shim also widens the command line: see *Container environment* below for the\nmeasured size budget."
+    },
+    {
+      "section": "Container environment (the Node named-pipe shim)",
+      "text": "Inside an MXC container the process token cannot create **named pipes** — which is exactly how libuv\nimplements `stdio: 'pipe'`. Measured in one container on this machine:"
+    },
+    {
+      "section": "Container environment (the Node named-pipe shim)",
+      "text": "| Call inside the container | Result |\n|---|---|\n| `spawnSync(cmd.exe, ['/c','echo','hi'], { encoding: 'utf8', timeout: 300 })` | **never returns**; `timeout` / `killSignal` do not fire |\n| `spawnSync(…, { stdio: ['ignore', fd, fd] })` (file handles) | returns in **6–10 ms** |\n| `stdio: 'inherit'` / `'ignore'` | returns in 6–10 ms |\n| `.NET NamedPipeServerStream` / `net.listen` | `Access to the path is denied` / `EADDRINUSE` |"
+    },
+    {
+      "section": "Container environment (the Node named-pipe shim)",
+      "text": "So with `injectNodePipeShim: true` (the default) the provider adds one `NODE_OPTIONS` entry — an inline\n`data:text/javascript,…` preload, so **no file is written** — which, inside the container, changes\n`child_process` for every Node process the command starts:"
+    },
+    {
+      "section": "Container environment (the Node named-pipe shim)",
+      "text": "- **`spawnSync` / `execFileSync` / `execSync`** — stdout/stderr are captured through **temporary file\n  descriptors** and read back; a slot stays a pipe only if the caller asked for something else.\n  `execFileSync` / `execSync` are re-implemented on purpose: Node’s own implementations do not go\n  through the overridden `spawnSync` export, so overriding the export alone would not cover them. The\n  `exec*Sync` error shape (`status` / `stdout` / `stderr`, message starting with `Command failed: `) and\n  Node's default `encoding: 'buffer'` are preserved; `maxBuffer` no longer applies (output goes to a file).\n- **`spawn` / `exec` / `execFile` / `fork`** — **throw immediately** with\n  `code: 'MXC_NAMED_PIPE_UNAVAILABLE'` and a message naming the API, instead of hanging forever."
+    },
+    {
+      "section": "Container environment (the Node named-pipe shim)",
+      "text": "Notes: the shim also governs any Node process the container’s command starts (`NODE_OPTIONS` is\ninherited — that is the point), and a command that genuinely needs asynchronous child processes has to\nrun **outside** the container. Set `injectNodePipeShim: false` to leave the container environment exactly\nas it was before this feature."
+    },
+    {
+      "section": "Container environment (the Node named-pipe shim)",
+      "text": "The shim travels in the **command line** (environment → config JSON → `--config-base64`), and Windows\ncaps a command line at ≈32767 characters — so the inlined source is kept comment-lean, and the test\nsuite asserts the encoded size (measured: ≈14579 characters for the `NODE_OPTIONS` entry and ≈20148 for\nthe whole policy envelope)."
+    },
+    {
+      "section": "Mode mapping",
+      "text": "| Harness mode | MXC `filesystem` |\n|---|---|\n| `read-only` | `readwritePaths: []`, and the workspace root is added to `readonlyPaths` (without that, the container could not even *read* the workspace) |\n| `workspace-write` | `readwritePaths: writableRoots(policy)` (workspace root + platform temp areas) |\n| `danger-full-access` | `confine()` is not called by the harness |"
+    },
+    {
+      "section": "Mode mapping",
+      "text": "`ui` is always pinned to `{ disable: false, clipboard: 'none', injection: false }` and\n`processContainer.ui` to `{ isolation: 'container', desktopSystemControl: false, systemSettings:\n'none', ime: false }`."
+    },
+    {
+      "section": "Security posture (measured, not assumed)",
+      "text": "| Property | Measured result |\n|---|---|\n| Backend | `BaseContainer` (confirmed from `--debug` native logs; **no `--experimental` needed**) |\n| ACL augmentation | `--probe` reports `needsDaclAugmentation: false` — it does **not** need the write-authorization step that the bundled ACL provider requires |\n| Enforcement reported to the harness | `partial` — MXC governs the writes it is asked to govern, but not every file effect (see the filesystem row) |\n| Filesystem (writes) | A write outside `readwritePaths` is denied, on every volume tested (`拒绝访问。` from `cmd`, status 1, no file created); a read-only root cannot be written |\n| Filesystem (reads) | **Not an absolute boundary.** Measured on the `base-container` tier with MXC `1.0.1`: reading a file in the user profile is denied, and enumerating a directory outside the policy is denied — but a plain file read outside the policy **on the workspace's own volume succeeded**. MXC documents `deniedPaths` interactions as backend-specific, so treat reads as volume/DACL-dependent rather than granted-or-denied |\n| Network | Blocked by default (omitted `egress` resolves to `\"deny\"`; measured `default_policy=block`) |\n| Clipboard | `clipboard:'n"
+    },
+    {
+      "section": "Security posture (measured, not assumed)",
+      "text": "Cost of `ui.disable: false`: Win32k becomes reachable from the container, i.e. the kernel attack\nsurface is wider than a fully UI-less container — the unavoidable price of running a native Windows\n`node.exe`/`pwsh`. Clipboard and input injection stay closed, and the harness's bundled ACL provider\ndoes not isolate that surface either, so this is not a regression there."
+    },
+    {
+      "section": "Denial and runner-failure evidence",
+      "text": "`confine()` returns two pieces of evidence the harness uses to tell *\"confinement worked and blocked it\"*\napart from *\"the runner never ran the command\"*:"
+    },
+    {
+      "section": "Denial and runner-failure evidence",
+      "text": "- `denialSignatures` — the denial dialect this backend actually produces, matched case-insensitively:\n  `Access is denied`, `Access to the path`, `Permission denied`, `Operation not permitted`, and `拒绝访问`.\n  Measured: the harness's normal executor (pwsh/.NET) prints `Access to the path '<x>' is denied.`; Node's\n  `EACCES`/`EPERM` show up as their *messages* (`permission denied` / `operation not permitted`) — the\n  bare errno names never appear in stderr and are deliberately **not** listed. `cmd.exe` on a Chinese\n  system prints 「拒绝访问。」 as **GBK** bytes (`BE DC BE F8 B7 C3 CE CA`), so the listed Chinese form does\n  not survive a UTF-8 read: a `cmd`-driven denial is reported per the English/errno forms only.\n- `runnerFailureRules` — five fatal stderr signatures that mean the command never ran:\n  `BaseContainer is unavailable`, `DACL fallback requires write-DACL permission on`,\n  `appears to be a packaged (MSIX) app`, `STATUS_DLL_INIT_FAILED`, `0xC0000142`. Deliberately **no**\n  `allowedExitCodes` gate: `wxc-exec` exits 1 for its own errors while a confined command may also exit 1,\n  so an exit gate would conflate the two (the harness's `dsh-sandbox-local` bwrap/seatbelt rungs match b"
+    },
+    {
+      "section": "Denial and runner-failure evidence",
+      "text": "The test suite asserts both with the harness's own predicates (`matchesSignature`, `classifyRunnerFailure`):\na denial must not classify as a runner failure, and vice versa."
+    },
+    {
+      "section": "Tests",
+      "text": "Covers: policy→config mapping (including the empty writable set under `read-only`), the argv shape\nand the `--` separator, base64 round-trip, the pinned security defaults, fail-closed resolution,\nexecutor candidate order (`bin/<arch>` before `bin`), `--probe` facts parsing, the load-time readiness\ngate (success / probe failure / no tier / `readinessCheck: false` / non-Windows), the DACL-tier\nadaptation judgement, `allowHostLoopback` policy composition, strict config validation, the denial /\nrunner-failure contract via the harness's own predicates, and the command-line size budget."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](LICENSE)."
+    }
+  ],
+  "skipped": []
+}

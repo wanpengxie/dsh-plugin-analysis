@@ -1,0 +1,2524 @@
+{
+  "repo": "chillBnetley/dsh-model-router",
+  "commit": "fd344a34263d944d01a773606114469294b0e417",
+  "extracted_at": "2026-11-10T03:03:31.537989+00:00",
+  "tree": {
+    "files": 28,
+    "bytes": 368535,
+    "lines_by_language": {
+      "JSON": 5288,
+      "JavaScript": 3993,
+      "Markdown": 187,
+      "Other": 58,
+      "YAML": 220
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "data/capabilities.json",
+      "data/lifecycle.json",
+      "gateways.local.json.example",
+      "index.js",
+      "lib/chitchat-style.mjs",
+      "lib/classify.mjs",
+      "lib/client.js",
+      "lib/policy.mjs",
+      "lib/session-events.mjs",
+      "package.json",
+      "test/chitchat-style.test.mjs",
+      "test/classify.test.mjs",
+      "test/integration.test.mjs",
+      "test/mode-e2e.test.mjs",
+      "test/policy.test.mjs",
+      "test/real-catalog.test.mjs",
+      "test/route-spike.mjs",
+      "test/routing-v2.test.mjs",
+      "test/session-events.test.mjs",
+      "tools/build-capabilities.mjs",
+      "tools/health-check.mjs",
+      "tools/probe-catalog.mjs",
+      "tools/probe-raw-body.mjs",
+      "tools/validate-profile.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-model-router",
+    "version": "0.1.0",
+    "description": "Question-type-aware model routing for DeepSeek Harness: correctness first for research tasks, free models first for small talk",
+    "license": "MIT",
+    "type": "module",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./classify": "./lib/classify.mjs",
+      "./policy": "./lib/policy.mjs",
+      "./client": "./lib/client.js"
+    },
+    "files": [
+      "index.js",
+      "lib/",
+      "data/",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-api-session-controller"
+        ],
+        "platform": "web"
+      }
+    },
+    "scripts": {
+      "test": "node --test test/*.test.mjs"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.0"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "dsh-plugin",
+      "model-router",
+      "llm-routing"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The config layer this package contributes: insert the router into the Loader tree.\n# Applied automatically once a profile lists this package in dsh.profile.bundles.\n- insert:\n    - id: dsh-model-router\n      name: dsh-model-router\n      config:\n        enabled: true\n\n        # Off by default so the first enable is observable rather than silent:\n        # with dryRun the router only logs what it WOULD pick and changes nothing.\n        dryRun: false\n\n        # Where an unclassifiable model or exhausted candidate pool lands.\n        # The native DeepSeek route: always configured, no third-party gateway.\n        fallback:\n          provider: deepseek-account\n          model: deepseek-flash\n\n        # Research-type tasks are quality-first: cost only breaks ties.\n        research:\n          types:\n            - learning_tutor\n            - coding\n            - math_reasoning\n            - knowledge_qa\n            - agentic_tools\n          # Hard floor regardless of cost. null = take whatever scores highest.\n          # This key was documented here and never read by the policy, so setting it\n          # changed nothing at all. It is now enforced BEFORE the top rating is\n          # taken. If a floor would empty the pool the router relaxes it and says so\n          # in the reason, because a mistyped floor should not silence the turn.\n          minScore: null\n\n        # Small talk is efficiency-first: any model clearing the floor is\n        # acceptable, and among those the free ones win.\n        casual:\n          types:\n            - daily_chat\n          minScore: 3\n          preferFree: true\n\n        # Everything else: near-best quality, then cheapest of those.\n        # maxScoreDrop: 0 keeps ONLY the exact top score in contention, so a\n        # lower-rated free model cannot displace a specialist that sits at the\n        # top of the rating (e.g. Claude/GPT for writing).\n        #\n        # `translation` was listed here and has now been removed on purpose: 30 of\n        # its 64 ratings are null and the matrix's own caveats say \"do not route on\n        # it\". A configured policy for a column that is mostly missing means\n        # translation turns almost always fall through to the fallback route.\n        balanced:\n          types:\n            - writing_literature\n            - long_context\n          maxScoreDrop: 0\n\n        # Types with no configured policy fall here and are ordered by price alone.\n        # `translation` is the live example and it is deliberate: 32 of its ratings\n        # are tier inference at `confidence: low`, and the matrix's own caveats say\n        # not to route on that column — so price is the only honest tie-break left.\n        # The floor stops \"cheapest\" from reaching a model rated 1 at everything.\n        # Raising it will not improve translation quality; only real data will.\n        defaultPolicy:\n          minScore: 2\n\n        # Specialty preference — the \"brain vs executor\" split. Among models tied\n        # at the SAME top score, prefer these model-id substrings (in order)\n        # before falling back to price.\n        #\n        # How the preference is applied changed. It used to be a lexicographic\n        # override: on a tie the first matching brand won outright. It is now a\n        # bounded bonus, `preferBonus / (1 + rank)`, so it can only reorder a\n        # genuine tie — every one of the 446 ratings in the matrix is an integer on\n        # a 1-5 scale, so no bonus below 1 can outrank a real one-point gap — and\n        # the second-choice brand can no longer overtake the first on price.\n        #\n        # Two further corrections. It now matches the MODEL ID only, not the\n        # provider name: a gateway called `claude-proxy` used to hand top\n        # preference to every model it served. And it does not apply to a\n        # candidate whose rating is explicitly `low`/`unknown` confidence: those\n        # numbers are tier inference, not measurements, and letting a brand list\n        # arbitrate between them is a decision dressed up as evidence. That case is\n        # live today — `learning_tutor` has 31 models tied at its top rating and\n        # every one of them is rated from inference, so this entry currently has no\n        # effect on that type, which is the honest outcome.\n        #\n        # It applies to brain turns only (hard/moderate, plus the types that are\n        # inherently reasoning work); trivial repetitive turns stay on the cheapest\n        # qualifying model. A type omitted here keeps pure \"price breaks ties\".\n        prefer:\n          coding: [\"claude\", \"gpt\"]\n          math_reasoning: [\"gpt\", \"gemini\", \"claude\"]\n          knowledge_qa: [\"claude\", \"gpt\", \"gemini\", \"grok\"]\n          learning_tutor: [\"claude\", \"gpt\", \"gemini\"]\n          agentic_tools: [\"claude\", \"gpt\"]\n          writing_literature: [\"claude\", \"gpt\"]\n          long_context: [\"claude\", \"gemini\", \"gpt\"]\n\n        # Bounded nudges applied on top of the recorded rating. Both are below 1 on\n        # purpose: the rating scale is integers, so anything at or above 1 would let\n        # a preference outrank a genuine quality gap. Set either to 0 to switch it\n        # off. These must be numbers — a quoted \"0.5\" fails at mount rather than\n        # being silently ignored at decision time.\n        preferBonus: 0.5\n        reasoningBonus: 0.25 # a probe-verified reasoning model, on reasoning-shaped types\n        # A preference may only buy a BOUNDED premium. Two models rated equal are\n        # equal, and without this the brand list is an open-ended cheque: at 37x the\n        # price gap a flash model loses to Opus on a tie. Raise it to express brand\n        # priority deliberately; set it to a huge number to make prefer absolute.\n        preferPriceCap: 4\n\n        # Context-window feasibility. The router used to read no window at all, so a\n        # 200K conversation could be routed to a 128K model and silently truncated.\n        # The window now comes from the provider's own `resolveModelInfo`, which is\n        # the only authoritative value; the matrix is a per-provider opt-in below.\n        # The token estimate is deliberately high: under-estimating loses the whole\n        # turn to truncation, over-estimating only costs a more expensive route.\n        respectContext: true\n        contextHeadroom: 1.15 # reserve for the response on top of the estimate\n        promptOverheadTokens: 8000 # system prompt + tool schemas, absent from messages\n        # Falling back to the matrix window is ON by default: those values come from\n        # vendor documentation and all 52 of them are plausible, and switching the\n        # fallback off would leave the gate inert on any provider whose\n        # resolveModelInfo does not answer. The matrix NEVER overrides a live value —\n        # it only fills a gap. List a provider under `exclude` if you have checked\n        # its window is overstated, since an overstated window admits a model that\n        # truncates, and truncation loses the work rather than the money.\n        contextWindowFallback:\n          default: true\n          exclude: []\n\n        # The capability matrix is a snapshot of a market that moves weekly, and\n        # nothing used to notice when it aged. Past this age the router warns at\n        # boot and reports the age in /route. Rebuild with:\n        #   node tools/probe-catalog.mjs && node tools/build-capabilities.mjs\n        maxMatrixAgeDays: 45\n\n        # Cooldowns. The provider-level entry is the important one: rate limits are\n        # enforced per account or gateway, so several models sharing one key each\n        # holding only a model-scoped cooldown just took turns hitting the same wall.\n        # Consecutive failures at a provider double its window up to the cap, and\n        # one completed turn resets the streak.\n        cooldownMs: 120000\n        providerCooldownMs: 60000\n        maxCooldownMs: 600000\n        # One flat window for an exhausted daily allowance (`quota`), which resets\n        # on a schedule — escalating it walks the whole gateway out of service for\n        # the rest of the day. A spent billing balance (`insufficient_quota`) is\n        # NOT governed by this: that is permanent and takes maxCooldownMs instead.\n        quotaTtlMs: 120000\n\n        # Types forced to be treated as brain work regardless of difficulty, so a\n        # configured `prefer` entry applies to them even on a trivial turn. EMPTY by\n        # default: forcing it cost 33x on a six-character request (\"优化下这段代码\"\n        # went to the most expensive coder), because difficulty cannot reliably tell\n        # a one-line hard bug from a one-line easy one. Add a type only if you want\n        # that trade, knowing the short turns pay for it.\n        alwaysBrainTypes: []\n\n        # Grok on this gateway cannot call tools, so it may never serve a turn\n        # that executes a task. This list is the only place it is allowed.\n        #\n        # That is no longer enforced here by name. Whether a model can call tools\n        # is settled by the capability record — its own probe reached Grok, forced\n        # tool_choice, and got no tool call — so the tool gate excludes it on\n        # measurement. What remains below is purely the deployment's own rule about\n        # where Grok may serve at all, and `match` is configurable so the policy is\n        # not welded to a provider name that may change.\n        grok:\n          enabled: true\n          allowedTypes:\n            - daily_chat\n          # match: /^(grok|xai)\\b|^grok[-_]/i\n\n        # The per-session \"工作 / 闲聊\" mode. `work` keeps the type-based policy\n        # above exactly as-is; `chat` steers the whole turn toward free models\n        # (Space Bunny Free first), and lets a genuinely hard question escalate\n        # to Grok for reasoning. The /mode command writes a durable map\n        # (data/modes.json) AND a `model-router/mode` session event; `defaultMode`\n        # is the value a session uses before it has ever been toggled. Routing\n        # reads the map, never the session log, because resolving a live session\n        # at route time can silently miss.\n        defaultMode: work\n        # Override where that map lives (the tests point it at a temp file).\n        # stateFile: ./data/modes.json\n        chat:\n          # The free model chat mode prefers first (must be free in the matrix).\n          preferred:\n            id: space-bunny-free\n\n        # After routing, write the chosen model back into the session's durable\n        # model selection so the composer's model seat switches to it and the\n        # user can see what actually served the turn. Disable if you prefer the\n        # selection to stay untouched.\n        reflectModel: true\n\n        # Keep small talk short at the wire level (a hard bound, independent of\n        # instruction following). null disables the cap.\n        chitchatMaxTokens: 700\n\n        # Tone control for small talk: contributes a system-prompt section that\n        # appears ONLY on small-talk turns, so every other prompt stays\n        # byte-identical. Note that a section which toggles turn to turn changes\n        # the system-prompt prefix, which is what a prompt cache keys on —\n        # disable this if cache reuse matters more than tone.\n        chitchatStyle:\n          enabled: true\n          # directive: override the built-in wording entirely.\n\n        # Auxiliary calls (session title, compaction) carry a purpose and keep\n        # whatever model the harness chose; their output format is contractual.\n        respectPurpose: true\n\n        # Provider/model pairs routing must never override, as \"provider/model\".\n        # Use this to protect a model pinned by configuration, e.g. a subagent's\n        # agentOptions.provider/model.\n        respectModels: []\n\n        # Never route a request carrying an image to a text-only model.\n        respectModalities: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "lib/classify.mjs",
+    "lib/policy.mjs",
+    "lib/client.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "test/integration.test.mjs:9"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "test/mode-e2e.test.mjs:17"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "test/route-spike.mjs:5"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "test/session-events.test.mjs:9"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "tools/build-capabilities.mjs:6"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "tools/health-check.mjs:6"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "tools/probe-catalog.mjs:6"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "tools/probe-raw-body.mjs:7"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "tools/validate-profile.mjs:12"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-20-flash",
+      "where": "data/capabilities.json:51"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-20-flash",
+      "where": "data/capabilities.json:56"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-20-flash",
+      "where": "data/capabilities.json:61"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-20-flash",
+      "where": "data/capabilities.json:66"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-20-flash",
+      "where": "data/capabilities.json:76"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-20-flash",
+      "where": "data/capabilities.json:86"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-20-flash",
+      "where": "data/capabilities.json:91"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:141"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:146"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:151"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:156"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:161"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:166"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:171"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:176"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:181"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:229"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:234"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:239"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:244"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:249"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:254"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:259"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:264"
+    },
+    {
+      "host": "blog.google",
+      "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/3-8-flash-and-3-8-flash-cyber/",
+      "where": "data/capabilities.json:269"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:319"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:324"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:329"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:334"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:339"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:344"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:349"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:354"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:359"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:409"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:414"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:419"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/claude-sonnet-5-5",
+      "where": "data/capabilities.json:424"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:429"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:434"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:439"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:444"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:449"
+    },
+    {
+      "host": "spacebunnyalpha.com",
+      "url": "https://spacebunnyalpha.com/",
+      "where": "data/capabilities.json:493"
+    },
+    {
+      "host": "spacebunnyalpha.com",
+      "url": "https://spacebunnyalpha.com/",
+      "where": "data/capabilities.json:498"
+    },
+    {
+      "host": "spacebunnyalpha.com",
+      "url": "https://spacebunnyalpha.com/",
+      "where": "data/capabilities.json:503"
+    },
+    {
+      "host": "spacebunnyalpha.com",
+      "url": "https://spacebunnyalpha.com/",
+      "where": "data/capabilities.json:508"
+    },
+    {
+      "host": "spacebunnyalpha.com",
+      "url": "https://spacebunnyalpha.com/",
+      "where": "data/capabilities.json:513"
+    },
+    {
+      "host": "spacebunnyalpha.com",
+      "url": "https://spacebunnyalpha.com/",
+      "where": "data/capabilities.json:518"
+    },
+    {
+      "host": "spacebunnyalpha.com",
+      "url": "https://spacebunnyalpha.com/",
+      "where": "data/capabilities.json:528"
+    },
+    {
+      "host": "spacebunnyalpha.com",
+      "url": "https://spacebunnyalpha.com/",
+      "where": "data/capabilities.json:533"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-flash",
+      "where": "data/capabilities.json:573"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-flash",
+      "where": "data/capabilities.json:578"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-flash",
+      "where": "data/capabilities.json:583"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-flash",
+      "where": "data/capabilities.json:588"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-flash",
+      "where": "data/capabilities.json:593"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-flash",
+      "where": "data/capabilities.json:598"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-flash",
+      "where": "data/capabilities.json:608"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-flash",
+      "where": "data/capabilities.json:613"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:654"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:659"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:664"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:669"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:674"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:679"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:689"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:694"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:735"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:740"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:745"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:750"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:755"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:760"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:770"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-25-pro",
+      "where": "data/capabilities.json:775"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-30-flash",
+      "where": "data/capabilities.json:891"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-30-flash",
+      "where": "data/capabilities.json:896"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-30-flash",
+      "where": "data/capabilities.json:901"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-30-flash",
+      "where": "data/capabilities.json:906"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-30-flash",
+      "where": "data/capabilities.json:911"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-30-flash",
+      "where": "data/capabilities.json:916"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-30-flash",
+      "where": "data/capabilities.json:926"
+    },
+    {
+      "host": "agnes-ai.com",
+      "url": "https://agnes-ai.com/zh-Hans/docs/agnes-30-flash",
+      "where": "data/capabilities.json:931"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zen/",
+      "where": "data/capabilities.json:1433"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zen/",
+      "where": "data/capabilities.json:1438"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zen/",
+      "where": "data/capabilities.json:1443"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/PhillipChaffee/big-pickle-swe-atlas",
+      "where": "data/capabilities.json:1448"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1453"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1468"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1473"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1511"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1516"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1521"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:1526"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1531"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1536"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1541"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1546"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1551"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1593"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1598"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1603"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:1608"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1613"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1618"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1623"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1628"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1633"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1676"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:1681"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1686"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:1691"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:1696"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:1701"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1706"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:1711"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:1716"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-5",
+      "where": "data/capabilities.json:1759"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-5",
+      "where": "data/capabilities.json:1764"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-5",
+      "where": "data/capabilities.json:1769"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-5",
+      "where": "data/capabilities.json:1774"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-5",
+      "where": "data/capabilities.json:1779"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-5",
+      "where": "data/capabilities.json:1784"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1789"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1794"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-5",
+      "where": "data/capabilities.json:1799"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1842"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-sonnet-5",
+      "where": "data/capabilities.json:1847"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1852"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1857"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-sonnet-5",
+      "where": "data/capabilities.json:1862"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1867"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1872"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1877"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-sonnet-5",
+      "where": "data/capabilities.json:1882"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1925"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1930"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1935"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-sonnet-5",
+      "where": "data/capabilities.json:1940"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/claude-sonnet-5-5",
+      "where": "data/capabilities.json:1945"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1950"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1955"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:1960"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-sonnet-5",
+      "where": "data/capabilities.json:1965"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2005"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2010"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2015"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2020"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2025"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2030"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2040"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2045"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2080"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2085"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2090"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2095"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2100"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2105"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2115"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+      "where": "data/capabilities.json:2120"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "where": "data/capabilities.json:2156"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "where": "data/capabilities.json:2161"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "where": "data/capabilities.json:2166"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "where": "data/capabilities.json:2171"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "where": "data/capabilities.json:2176"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "where": "data/capabilities.json:2181"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "where": "data/capabilities.json:2191"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+      "where": "data/capabilities.json:2196"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2231"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2236"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2241"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2246"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2251"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2256"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2266"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2271"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2380"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2385"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2390"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2395"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2400"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2405"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2410"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2415"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2420"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2469"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:2474"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2479"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2484"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:2489"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2494"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2499"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2504"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2509"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2558"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:2563"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2568"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2573"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:2578"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2583"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2588"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2593"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2598"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2647"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:2652"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2657"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2662"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:2667"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2672"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2677"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2682"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2687"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2732"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:2737"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2742"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2747"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2752"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2757"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2762"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2767"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:2772"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2817"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2822"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2827"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2832"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2837"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2842"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2847"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2852"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2857"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2897"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2902"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2907"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2912"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2917"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2922"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2927"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2932"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2980"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2985"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2990"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:2995"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3000"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3005"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3010"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3015"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3020"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3063"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3068"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3073"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3078"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3083"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3088"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3093"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3098"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3103"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3146"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3151"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3156"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3161"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3166"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3171"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3176"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3181"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3186"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3233"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:3238"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3243"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3248"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:3253"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3258"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3263"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3268"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3273"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3319"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:3324"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3329"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-7",
+      "where": "data/capabilities.json:3334"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:3339"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3344"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3349"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3354"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3359"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3405"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3410"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3415"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:3420"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3425"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3430"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3435"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3440"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-opus-4-8",
+      "where": "data/capabilities.json:3445"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Jul/9/gpt-5-6/",
+      "where": "data/capabilities.json:3488"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3493"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3498"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Jul/9/gpt-5-6/",
+      "where": "data/capabilities.json:3503"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3508"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3513"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3518"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3523"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3528"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3575"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3580"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3585"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Jul/9/gpt-5-6/",
+      "where": "data/capabilities.json:3590"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3595"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3600"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3605"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3610"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Jul/9/gpt-5-6/",
+      "where": "data/capabilities.json:3615"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3658"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3663"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3668"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3673"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3678"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3683"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3688"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3693"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Jul/9/gpt-5-6/",
+      "where": "data/capabilities.json:3698"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Sep/22/opus-and-sol-and-luna/",
+      "where": "data/capabilities.json:3741"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3746"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3751"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Sep/22/opus-and-sol-and-luna/",
+      "where": "data/capabilities.json:3756"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3761"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3766"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3771"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3776"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Sep/22/opus-and-sol-and-luna/",
+      "where": "data/capabilities.json:3781"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2026/Sep/22/opus-and-sol-and-luna/",
+      "where": "data/capabilities.json:3824"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3829"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3834"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3839"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3844"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3849"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3854"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3859"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3864"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3907"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3912"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3917"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3922"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3927"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3932"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3937"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3942"
+    },
+    {
+      "host": "artificialanalysis.ai",
+      "url": "https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence",
+      "where": "data/capabilities.json:3947"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3988"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3993"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:3998"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4003"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4008"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4013"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4018"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4023"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4028"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4070"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4075"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4080"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4085"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4090"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4095"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4100"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4105"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4110"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4157"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4162"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4167"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4172"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4177"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4182"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4187"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4192"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4197"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4244"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4249"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4254"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4259"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4264"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4269"
+    },
+    {
+      "host": "the-decoder.de",
+      "url": "https://the-decoder.de/xais-grok-4-20-haengt-in-benchmarks-zurueck-und-glaenzt-dennoch-mit-niedrigster-halluzinationsrate/",
+      "where": "data/capabilities.json:4274"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4279"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4284"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin",
+      "where": "data/capabilities.json:4323"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin",
+      "where": "data/capabilities.json:4328"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin",
+      "where": "data/capabilities.json:4333"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin",
+      "where": "data/capabilities.json:4338"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin",
+      "where": "data/capabilities.json:4343"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin",
+      "where": "data/capabilities.json:4348"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin",
+      "where": "data/capabilities.json:4358"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin",
+      "where": "data/capabilities.json:4363"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4397"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash",
+      "where": "data/capabilities.json:4402"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash",
+      "where": "data/capabilities.json:4407"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash",
+      "where": "data/capabilities.json:4412"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash",
+      "where": "data/capabilities.json:4417"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash",
+      "where": "data/capabilities.json:4422"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash",
+      "where": "data/capabilities.json:4432"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/inclusionAI/Ling-3.0-flash",
+      "where": "data/capabilities.json:4437"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4472"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4477"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4482"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4487"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4492"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4507"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4512"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+      "where": "data/capabilities.json:4549"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+      "where": "data/capabilities.json:4554"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+      "where": "data/capabilities.json:4559"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+      "where": "data/capabilities.json:4564"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+      "where": "data/capabilities.json:4569"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+      "where": "data/capabilities.json:4574"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+      "where": "data/capabilities.json:4584"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+      "where": "data/capabilities.json:4589"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "where": "data/capabilities.json:4626"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "where": "data/capabilities.json:4631"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "where": "data/capabilities.json:4636"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "where": "data/capabilities.json:4641"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "where": "data/capabilities.json:4646"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "where": "data/capabilities.json:4651"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "where": "data/capabilities.json:4661"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "where": "data/capabilities.json:4666"
+    },
+    {
+      "host": "dev.meta.ai",
+      "url": "https://dev.meta.ai/docs",
+      "where": "data/capabilities.json:4704"
+    },
+    {
+      "host": "dev.meta.ai",
+      "url": "https://dev.meta.ai/docs",
+      "where": "data/capabilities.json:4709"
+    },
+    {
+      "host": "dev.meta.ai",
+      "url": "https://dev.meta.ai/docs",
+      "where": "data/capabilities.json:4714"
+    },
+    {
+      "host": "dev.meta.ai",
+      "url": "https://dev.meta.ai/docs",
+      "where": "data/capabilities.json:4719"
+    },
+    {
+      "host": "dev.meta.ai",
+      "url": "https://dev.meta.ai/docs",
+      "where": "data/capabilities.json:4724"
+    },
+    {
+      "host": "dev.meta.ai",
+      "url": "https://dev.meta.ai/docs",
+      "where": "data/capabilities.json:4729"
+    },
+    {
+      "host": "dev.meta.ai",
+      "url": "https://dev.meta.ai/docs",
+      "where": "data/capabilities.json:4739"
+    },
+    {
+      "host": "dev.meta.ai",
+      "url": "https://dev.meta.ai/docs",
+      "where": "data/capabilities.json:4744"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4778"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4783"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4788"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4793"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4798"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4803"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4808"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4813"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+      "where": "data/capabilities.json:4818"
+    },
+    {
+      "host": "developer.nvidia.com",
+      "url": "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-lightning-delivers-fast-accurate-specialized-task-execution-for-long-running-agents/",
+      "where": "data/capabilities.json:4852"
+    },
+    {
+      "host": "developer.nvidia.com",
+      "url": "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-lightning-delivers-fast-accurate-specialized-task-execution-for-long-running-agents/",
+      "where": "data/capabilities.json:4857"
+    },
+    {
+      "host": "developer.nvidia.com",
+      "url": "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-lightning-delivers-fast-accurate-specialized-task-execution-for-long-running-agents/",
+      "where": "data/capabilities.json:4862"
+    },
+    {
+      "host": "developer.nvidia.com",
+      "url": "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-lightning-delivers-fast-accurate-specialized-task-execution-for-long-running-agents/",
+      "where": "data/capabilities.json:4867"
+    },
+    {
+      "host": "developer.nvidia.com",
+      "url": "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-lightning-delivers-fast-accurate-specialized-task-execution-for-long-running-agents/",
+      "where": "data/capabilities.json:4872"
+    },
+    {
+      "host": "developer.nvidia.com",
+      "url": "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-lightning-delivers-fast-accurate-specialized-task-execution-for-long-running-agents/",
+      "where": "data/capabilities.json:4877"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "data/capabilities.json:4887"
+    },
+    {
+      "host": "developer.nvidia.com",
+      "url": "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-lightning-delivers-fast-accurate-specialized-task-execution-for-long-running-agents/",
+      "where": "data/capabilities.json:4892"
+    },
+    {
+      "host": "models.dev",
+      "url": "https://models.dev/api.json",
+      "where": "tools/build-capabilities.mjs:95"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/v1",
+      "where": "tools/probe-catalog.mjs:12"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "tools/probe-catalog.mjs:26"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "command",
+      "name": "/mode ",
+      "where": "lib/client.js:76"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 9,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-06T02:46:28Z",
+    "created_at": "2026-10-06T02:41:30Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/chitchat-style.mjs",
+    "lib/classify.mjs",
+    "lib/client.js",
+    "lib/policy.mjs",
+    "lib/session-events.mjs",
+    "tools/build-capabilities.mjs",
+    "tools/probe-catalog.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-model-router",
+      "text": "Question-type-aware model routing for DeepSeek Harness.\n\nInstead of one model answering everything, the router classifies each turn and\nre-dispatches it to the model that fits — correctness first for research work,\nfree models first for small talk."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ngit clone https://github.com/<you>/dsh-model-router.git\ncp -r dsh-model-router ~/.dsh/plugins/\n```\n\nThen list `dsh-model-router` in `dsh.profile.bundles` in your profile's\n`cordis.patch.yml`. The plugin contributes its own `config:` block — see\n[cordis.patch.yml](cordis.patch.yml) for the annotated defaults.\n\n**Start with `dryRun: true`.** The router then only logs what it *would* pick and\nchanges nothing, so you can watch it against your own catalogue before letting it\nmove real traffic."
+    },
+    {
+      "section": "How it decides",
+      "text": "| Task kind | Objective |\n| --- | --- |\n| `coding`, `math_reasoning`, `learning_tutor`, `knowledge_qa`, `agentic_tools` | **quality-first**: the highest-rated model wins outright; price only breaks ties among equally-rated candidates |\n| `daily_chat` | **efficiency-first**: any model clearing the score floor is acceptable, and among those the free ones win |\n| `writing_literature`, `translation`, `long_context` | near-best (within `maxScoreDrop` of the top), then cheapest |"
+    },
+    {
+      "section": "How it decides",
+      "text": "- **Grok is barred from every turn that executes a task.** On the configured\n  gateway it never receives tool schemas, so it may only serve the types listed\n  under `grok.allowedTypes` (default: small talk) and never a turn carrying tool\n  activity or an action request.\n- **Unknown is not a guess.** A model with no capability record, or whose tool\n  support is unknown on a tool-executing turn, is excluded; if nothing\n  qualifies the request is routed to `fallback` — or left untouched when no\n  fallback is configured and live.\n- **Rate-limited routes cool down** instead of being retried every turn.\n- **Auxiliary calls are never routed.** Session-title and compaction requests\n  carry a `purpose` and keep the model the harness chose, because their output\n  format is contractual. `respectPurpose: false` disables this.\n- **Pinned models can be exempted.** `respectModels: [\"provider/model\"]` makes\n  routing leave those requests alone — the escape hatch for a subagent whose\n  model is pinned by `agentOptions`."
+    },
+    {
+      "section": "Small-talk tone",
+      "text": "`maxTokens` bounds small-talk length at the wire level, but tone needs a prompt.\nThe plugin contributes one system-prompt section (`model-router:chitchat-style`)\nthat renders **only** on small-talk turns; on every other turn it renders empty\nand is dropped, so those prompts are byte-identical to one assembled without\nthis plugin."
+    },
+    {
+      "section": "Small-talk tone",
+      "text": "Turn correlation is exact rather than bookkeeping: the assembly hook's `scope`\nis the Agent, and an Agent exposes `.session`, so the latest genuine user\nmessage is read straight off the session (plugin-authored context and tool\nresults are skipped — they are user-role messages too).\n\n⚠️ A section that toggles turn to turn changes the system-prompt prefix, which\nis what a prompt cache keys on. Set `chitchatStyle.enabled: false` if cache\nreuse matters more than tone."
+    },
+    {
+      "section": "Subagents and agent teams",
+      "text": "Both keep working: the router swaps which model serves a stream and nothing\nelse. Spawning, the team task board, messaging, tool exposure and the\nsubagent/teammate model *selection* are all untouched.\n\nEvery `llm/stream` call is routed, including a child agent's own turns — so a\nsubagent doing code gets a coding model. A child's selection is inherited from\nits parent (or pinned by `agentOptions`); use `respectModels` to protect a pin."
+    },
+    {
+      "section": "Mechanism",
+      "text": "It hooks the `llm/stream` waterfall — the seam the harness documents as where\nprovider/model routing is replaced — and returns a **new request envelope**.\nThe incoming request is never mutated: loop-built requests are deep-frozen and\ntheir content is a pure function of the session log."
+    },
+    {
+      "section": "Configuration",
+      "text": "Everything lives in the profile's `cordis.patch.yml` under this plugin's\n`config:`. See [cordis.patch.yml](cordis.patch.yml) for the annotated defaults.\n\nUseful switches:\n\n- `dryRun: true` — log what it *would* pick and change nothing. Do this first.\n- `enabled: false` — leave every request exactly as the caller built it.\n- `chunk` limits: `chitchatMaxTokens` bounds small-talk output at the wire level."
+    },
+    {
+      "section": "工作 / 闲聊 mode",
+      "text": "A user-selected override steers the whole turn, independent of the task type:\n\n- `work` (default) — the type-based policy above, unchanged.\n- `chat` — free models first: **Space Bunny Free** is preferred, then the rest of\n  the free pool; a genuinely hard question (not a tool-executing turn) may\n  escalate to **Grok** for reasoning."
+    },
+    {
+      "section": "工作 / 闲聊 mode",
+      "text": "Mode is per-session. The composer's ⚡ 工作 / 闲聊 toggle (in the model-selector\nrow) writes it; `/mode` (or `/mode work|chat`) shows or sets it. Three sources\nkeep it reliable, in precedence order:"
+    },
+    {
+      "section": "工作 / 闲聊 mode",
+      "text": "1. **`data/modes.json`** — the plugin's own map, written by `/mode` and read by\n   the router on every turn. This is the source routing trusts, so a switch\n   applies on the very next turn and survives a restart.\n2. **the `model-router/mode` session event** — appended by `/mode` as the\n   semantic record in the session log, and read back for a session whose mode\n   predates the state file.\n3. **`defaultMode`** — the value a session uses before it has ever been toggled."
+    },
+    {
+      "section": "工作 / 闲聊 mode",
+      "text": "`stateFile` overrides where that map lives (the tests point it at a temp file),\nand `chat.preferred.id` names the free model chat mode prefers first.\n\nThe state file exists because reading the mode back out of the session log at\nroute time is not dependable: resolving the live session for a turn can miss, and\na miss is **silent** — the mode simply stays at its default even though the write\nitself succeeded. Routing therefore never depends on that read."
+    },
+    {
+      "section": "Reflecting the routed model",
+      "text": "When the router picks a different model, it writes that pick back into the\nsession's durable model selection, so the composer's model seat **switches to the\nmodel that actually served the turn** — you can see what answered you.\n`reflectModel: false` disables this and leaves the selection untouched."
+    },
+    {
+      "section": "Inspecting a decision",
+      "text": "`/route` prints the last decision: the classified kind, its confidence, whether\ntools were required, the mode in effect, what the caller asked for, what was\nchosen, and why."
+    },
+    {
+      "section": "Data",
+      "text": "`data/capabilities.json` is the capability matrix the policy reads: per model,\nnine task ratings with their source URL and confidence, price, modality, and\nmeasured facts (reachability, tool calling, time-to-first-token) from live\nprobing. `tools/` holds the probes that produced it; `tools/validate-profile.mjs`\nchecks a profile's provider section against the adapter's own schema."
+    },
+    {
+      "section": "Data",
+      "text": "Capability confidence is uneven by nature: vendor benchmark figures are `high`,\ntier inference anchored on metadata is `low`, and unverifiable ids are `unknown`.\n`translation` is almost entirely unmeasured and should not be routed on.\n\nThe matrix is a snapshot and ages; the router warns at boot past\n`maxMatrixAgeDays`. To re-measure it against **your own** gateways, copy\n`gateways.local.json.example` to `gateways.local.json` and list the endpoints you\nwant probed:"
+    },
+    {
+      "section": "Data",
+      "text": "```json\n[{ \"route\": \"my-gateway\", \"base\": \"https://api.example.com/v1\", \"keyEnv\": \"MY_GATEWAY_API_KEY\" }]\n```\n\n`keyEnv` names a key in `~/.dsh/.credentials.yaml`, so no credential is ever\nwritten into this repository. Then `node tools/probe-catalog.mjs` and rebuild with\n`node tools/build-capabilities.mjs`."
+    },
+    {
+      "section": "What is deliberately not in this repository",
+      "text": "The router writes and reads state that identifies *your* usage, and probing needs\nto know *which* services you pay for. None of it is tracked:\n\n| File | What it holds |\n| --- | --- |\n| `data/modes.json` | session ID → work/chat |\n| `data/diagnostics.log` | every routing decision, timestamped |\n| `data/probe-*.json`, `data/research-*.json` | raw gateway responses and catalogue dumps |\n| `gateways.local.json` | your gateway endpoints and the credential each one uses |"
+    },
+    {
+      "section": "What is deliberately not in this repository",
+      "text": "All are covered by `.gitignore` and are created on demand at runtime."
+    },
+    {
+      "section": "Tests",
+      "text": "```sh\nnode --test test/*.test.mjs\n```\n\nRoughly 100 tests: classifier behaviour, every policy rule above, and an\nintegration suite that mounts the real plugin into a real cordis context and\nasserts actual dispatch decisions. Two `mode-e2e` cases covering restore-from-\nsession-log are currently red — they fail on the author's machine too and are\nunrelated to routing."
+    }
+  ],
+  "skipped": []
+}
