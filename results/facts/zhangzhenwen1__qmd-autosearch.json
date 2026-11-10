@@ -1,0 +1,226 @@
+{
+  "repo": "zhangzhenwen1/qmd-autosearch",
+  "commit": "f8927e7ca12a0d49bbc319aa1d5bef5c6fc3cfa7",
+  "extracted_at": "2026-11-10T22:20:09.426185+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 40873,
+    "lines_by_language": {
+      "JSON": 64,
+      "JavaScript": 748,
+      "Markdown": 117,
+      "Other": 30,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "qmd-autosearch",
+    "version": "0.2.0",
+    "type": "module",
+    "main": "index.js",
+    "description": "DSH plugin: auto-supplement QMD semantic search when the model greps/globs a knowledge-base directory",
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "qmd",
+      "semantic-search",
+      "mcp",
+      "knowledge-base"
+    ],
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-plugin-manager"
+        ]
+      }
+    },
+    "engines": {
+      "node": ">=18"
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/zhangzhenwen1/qmd-autosearch.git"
+    },
+    "homepage": "https://github.com/zhangzhenwen1/qmd-autosearch"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# qmd-autosearch — bundle patch applied by `dsh plugin add qmd-autosearch`\n# 参照 awesome-dsh-plugin contributing.md 的 dsh.bundle 格式\n- insert:\n    - id: qmd-autosearch\n      name: qmd-autosearch\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost:6179/mcp",
+      "where": "client.js:35"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:6179/mcp",
+      "where": "client.js:66"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:6179/mcp",
+      "where": "index.js:63"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:6179/mcp",
+      "where": "index.js:70"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:6179/mcp",
+      "where": "index.js:100"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:6179/mcp\\n",
+      "where": "index.js:364"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zhangzhenwen1/qmd-autosearch.git",
+      "where": "package.json:49"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zhangzhenwen1/qmd-autosearch",
+      "where": "package.json:51"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-11-02T00:42:50Z",
+    "created_at": "2026-08-15T09:54:56Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "qmd-autosearch",
+      "text": "自动补搜插件：当模型在知识库目录执行 `grep` / `glob` 搜索时，自动补充一次 QMD 语义检索，并把结果注入模型上下文。\n\nDeepSeek Harness 插件（`dsh-plugin`）。零外部依赖。"
+    },
+    {
+      "section": "功能",
+      "text": "- **自动触发**：模型在 QMD 集合对应的目录内执行 `grep` / `glob`（顶层调用）即触发，无需显式调用\n- **语义补搜**：QMD 单次查询（lex + vec，服务端 LLM 重排），检索范围限定在配置的 collections\n- **智能查询词**：以最近的用户消息（任务要求）为语义主查询；消息过短或与搜索主题无关时，回退使用 grep pattern\n- **异步注入**：结果排队到 `agent.inbox.nextStep`，下一个 pre-step 注入模型上下文，不阻塞当前工具调用\n- **防重复**：同一 agent 内相同（工具、路径、pattern）签名只补搜一次\n- **容错**：QMD 服务不可用或查询无结果时静默跳过，不影响原流程"
+    },
+    {
+      "section": "工作原理",
+      "text": "```\ngrep/glob 执行完成 → tools/result 钩子\n  → 路径在触发范围内（由 QMD status 解析的集合路径）？\n  → QMD query（collections 限定 + LLM 重排）\n  → 结果排队 agent.inbox.nextStep"
+    },
+    {
+      "section": "安装",
+      "text": "这是一个 `dsh.bundle` 包（`package.json` 的 `dsh.bundle` + `dsh.client`），推荐按 bundle 安装，这样它会在「插件」面板里出现并可启停/配置："
+    },
+    {
+      "section": "方式一：插件面板安装本地目录",
+      "text": "「插件 → 添加插件 → 安装第三方插件」填入本目录绝对路径（或由 agent 调 `plugin_manager install_bundle`）：\n\n```text\n/home/zhang/文档/DSH/plugins/qmd-autosearch\n```\n\n安装后插件以 `link:` 依赖挂在 profile 上，代码改动只需重启/重载即可生效。"
+    },
+    {
+      "section": "方式二：npm / git 安装（发布后可用）",
+      "text": "```bash\ndsh plugin --profile web add qmd-autosearch"
+    },
+    {
+      "section": "或",
+      "text": "dsh plugin --profile web add github:zhangzhenwen1/qmd-autosearch\n```"
+    },
+    {
+      "section": "方式三：裸 patch 引用（仅调试，不推荐）",
+      "text": "在 `~/.dsh/profiles/web/cordis.patch.yml` 的 insert 列表追加 `file://` 行。裸行不会出现在插件面板的「已安装插件」里，也无法使用可视化配置表单。"
+    },
+    {
+      "section": "配置",
+      "text": "所有字段都声明为 schemastery 的 volatile 配置，可在插件面板里可视化编辑、保存后立即生效（写入 profile 的 `cordis.patch.yml`）。\n`mcp*` 字段是 QMD MCP 连接参数的唯一真源：保存后 Host 半会把它们写回 `mcp-qmd` 行并重载该行（重连 MCP）。"
+    },
+    {
+      "section": "配置",
+      "text": "| 配置项 | 必填 | 默认值 | 说明 |\n|---|---|---|---|\n| `qmdUrl` | ✅ | `http://localhost:6179/mcp` | 补搜使用的 QMD MCP 服务地址 |\n| `collections` | ✅ | `[]` | 搜索范围：QMD 集合名列表（`qmd collection list` 可查） |\n| `limit` | 否 | `5` | 注入结果的条数上限 |\n| `minScore` | 否 | `25` | 最低匹配度过滤（百分数，低于此值的命中丢弃） |\n| `mcpServerName` | 否 | `qmd` | MCP 实例名；模型工具前缀为 `mcp__<名>__*` |\n| `mcpTransport` | 否 | `streamable-http` | MCP 传输方式；`stdio` 请直接改 patch |\n| `mcpUrl` | 否 | `http://localhost:6179/mcp` | 写入 `mcp-qmd` 行的连接地址 |\n| `mcpToolCallTimeoutMs` | 否 | `180000` | 单次 MCP 请求超时（毫秒） |\n| `triggerRoots` | 否 | 自动 | 触发判断的文件系统根路径列表（非可视化）；缺省时从 QMD `status` 动态解析集合路径 |"
+    },
+    {
+      "section": "配置",
+      "text": "> 未配置 `qmdUrl` / `collections` 时插件禁用并输出 warn 日志。"
+    },
+    {
+      "section": "可视化配置",
+      "text": "安装为 bundle 后：\n\n1. 打开「插件」面板 → **已安装插件** → `qmd-autosearch`；\n2. 在「包含的组件」里点 `qmd-autosearch` 行的**配置**按钮；\n3. 表单分「自动补搜」和「QMD MCP 连接」两组；改动可保存/放弃，覆盖过的字段可「恢复默认」；\n4. 保存写入 profile 的 `cordis.patch.yml`；补搜参数即时生效，MCP 连接参数会让 `mcp-qmd` 行重载重连。\n\n> 代码层面的改动（JS 模块）只有 dsh 重启后才会重载：HMR 只跟踪 profile 目录内的模块，`link:` 到工作区的插件源码不在比较范围内。配置项变更不需要重启。"
+    },
+    {
+      "section": "使用",
+      "text": "插件**全自动运行，无需手动调用**。配置完成后，正常使用 DSH 即可：\n\n1. 让模型在知识库目录内搜索（如 `grep 某个概念`）\n2. 插件检测到搜索发生在 QMD 集合目录内，自动补充一次语义检索\n3. 结果作为补充提示注入模型的下一步上下文，模型可据此用 `read` 读取命中文档正文"
+    },
+    {
+      "section": "效果示例",
+      "text": "模型执行 `grep 内需` 后，下一步上下文中会出现：\n\n```text\n<system-reminder>\nQMD 语义检索补充：你在知识库目录执行了「grep 内需」，系统已自动用语义检索（范围限定 QMD 集合，LLM 重排）补搜，查询词「内需」。结果如下（docid 映射为绝对路径后用 read 读取正文）：\n\nFound 3 results for \"内需\":"
+    },
+    {
+      "section": "验证插件已生效",
+      "text": "- 让模型在集合目录内 grep 一个词，观察下一步是否出现上述补充消息\n- 或查看宿主日志中的 `qmd-autosearch: 触发路径池（来自 QMD 集合）N 个`（插件启动后首次触发时输出）"
+    },
+    {
+      "section": "前置条件",
+      "text": "- 运行中的 QMD MCP 服务（`qmd mcp --http --port 6179`）\n- 已建立至少一个 collection（`qmd collection add <name> <path>`）"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

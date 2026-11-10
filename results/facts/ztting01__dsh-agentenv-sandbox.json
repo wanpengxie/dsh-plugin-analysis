@@ -1,0 +1,438 @@
+{
+  "repo": "ztting01/dsh-agentenv-sandbox",
+  "commit": "565f1befa69f66e13798c331b4699cd2d8f3abb5",
+  "extracted_at": "2026-11-10T22:30:00.291532+00:00",
+  "tree": {
+    "files": 21,
+    "bytes": 129899,
+    "lines_by_language": {
+      "JSON": 1980,
+      "JavaScript": 143,
+      "Markdown": 222,
+      "Other": 33,
+      "TypeScript": 1065,
+      "YAML": 86
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "sandbox/Dockerfile",
+      "scripts/agentenv-smoke.mjs",
+      "src/compat.ts",
+      "src/config.ts",
+      "src/index.ts",
+      "src/workspace.ts",
+      "tests/bundle.spec.ts",
+      "tests/compat.spec.ts",
+      "tests/config.spec.ts",
+      "tests/runtime.spec.ts",
+      "tests/workspace.spec.ts",
+      "tsconfig.build.json",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-agentenv-sandbox",
+    "version": "0.1.5",
+    "description": "AgentENV execution-world bundle for DeepSeek Harness",
+    "homepage": "https://github.com/ztting01/dsh-agentenv-sandbox#readme",
+    "bugs": {
+      "url": "https://github.com/ztting01/dsh-agentenv-sandbox/issues"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ztting01/dsh-agentenv-sandbox.git"
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./workspace": {
+        "types": "./lib/workspace.d.ts",
+        "default": "./lib/workspace.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/**/*.js",
+      "lib/**/*.d.ts",
+      "cordis.patch.yml",
+      "sandbox/Dockerfile",
+      "scripts/agentenv-smoke.mjs",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "scripts": {
+      "build": "tsc -p tsconfig.build.json",
+      "test": "vitest run",
+      "typecheck": "tsc -p tsconfig.json --noEmit",
+      "check": "npm run typecheck && npm run test && npm run build",
+      "smoke:agentenv": "node scripts/agentenv-smoke.mjs",
+      "pack:check": "npm pack --dry-run"
+    },
+    "dependencies": {
+      "@deepseek-ai/dsh-e2b": "0.1.0-rc.7",
+      "@deepseek-ai/dsh-fs-e2b": "0.1.0-rc.7",
+      "@deepseek-ai/dsh-subprocess-e2b": "0.1.0-rc.7",
+      "@deepseek-ai/schemastery": "^3.18.1",
+      "e2b": "2.29.1"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@types/node": "^22.20.0",
+      "typescript": "^6.0.3",
+      "vitest": "^4.1.8"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Replace the host execution world with one AgentENV sandbox. The generic Bash,\n# file, terminal, and LSP consumers remain unchanged above these providers.\n- id: subprocess\n  name: '@deepseek-ai/dsh-subprocess-local'\n  disabled: true\n\n- id: sandbox\n  name: '@deepseek-ai/dsh-sandbox-local'\n  disabled: true\n\n- id: bash-sandbox\n  name: '@deepseek-ai/dsh-bash-sandbox'\n  disabled: true\n\n- id: fs-sandbox\n  name: '@deepseek-ai/dsh-fs-sandbox'\n  disabled: true\n\n# Harness confined modes currently resolve host paths and cannot truthfully\n# enforce a remote workspace. Full access here is scoped to the microVM.\n- id: sandbox-policy\n  name: '@deepseek-ai/dsh-sandbox-policy'\n  config:\n    mode: danger-full-access\n    workspaceRoot: !!js process.cwd()\n\n- id: approval\n  name: '@deepseek-ai/dsh-user-approval'\n  config:\n    policy: never\n\n# Permission presets require a host-confined Bash executor with a mutable\n# sandboxMode. AgentENV is the fixed isolation boundary, so that selector is\n# intentionally unavailable instead of advertising modes it cannot enforce.\n- id: permission\n  name: '@deepseek-ai/dsh-permission-presets'\n  disabled: true\n\n- insert:\n    - id: agentenv-runtime\n      name: dsh-agentenv-sandbox\n      config:\n        apiUrl: !!js process.env.E2B_API_URL ?? 'http://127.0.0.1:8000'\n        sandboxUrl: !!js process.env.E2B_SANDBOX_URL ?? process.env.E2B_API_URL ?? 'http://127.0.0.1:8000'\n        template: !!js process.env.AENV_TEMPLATE_ID\n        cwd: !!js process.cwd()\n        localCwd: !!js process.cwd()\n        timeoutMs: 3600000\n        secure: true\n        onDispose: kill\n        uploadWorkspace: true\n        symlinkPolicy: copy-internal\n\n    - id: subprocess-agentenv\n      name: '@deepseek-ai/dsh-subprocess-e2b'\n\n    - id: fs-agentenv\n      name: '@deepseek-ai/dsh-fs-e2b'\n\n    # Despite its historical name, this executor delegates every process to the\n    # mounted ctx.subprocess provider and therefore runs inside AgentENV.\n    - id: bash-agentenv\n      name: '@deepseek-ai/dsh-bash-local'\n      config:\n        timeoutMs: 60000\n"
+    }
+  ],
+  "entries": [
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "E2B_API_URL",
+      "kind": "env",
+      "where": "cordis.patch.yml:43"
+    },
+    {
+      "name": "E2B_SANDBOX_URL",
+      "kind": "env",
+      "where": "cordis.patch.yml:44"
+    },
+    {
+      "name": "E2B_API_URL",
+      "kind": "env",
+      "where": "cordis.patch.yml:44"
+    },
+    {
+      "name": "AENV_TEMPLATE_ID",
+      "kind": "env",
+      "where": "cordis.patch.yml:45"
+    },
+    {
+      "name": "E2B_API_URL",
+      "kind": "env",
+      "where": "scripts/agentenv-smoke.mjs:20"
+    },
+    {
+      "name": "E2B_API_KEY",
+      "kind": "env",
+      "where": "scripts/agentenv-smoke.mjs:21"
+    },
+    {
+      "name": "AENV_API_KEY",
+      "kind": "env",
+      "where": "scripts/agentenv-smoke.mjs:21"
+    },
+    {
+      "name": "AENV_CREDENTIALS_PATH",
+      "kind": "env",
+      "where": "scripts/agentenv-smoke.mjs:32"
+    },
+    {
+      "name": "AENV_TEMPLATE_ID",
+      "kind": "env",
+      "where": "scripts/agentenv-smoke.mjs:52"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "cordis.patch.yml:43"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "cordis.patch.yml:44"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ztting01/dsh-agentenv-sandbox#readme",
+      "where": "package.json:5"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ztting01/dsh-agentenv-sandbox/issues",
+      "where": "package.json:7"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ztting01/dsh-agentenv-sandbox.git",
+      "where": "package.json:11"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "src/config.ts:118"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/",
+      "where": "tests/config.spec.ts:8"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/proxy/",
+      "where": "tests/config.spec.ts:9"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/config.spec.ts:15"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/proxy",
+      "where": "tests/config.spec.ts:16"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:67"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:68"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:84"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:85"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:110"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:111"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:124"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:125"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:133"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "tests/runtime.spec.ts:134"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-e2b": "0.1.0-rc.7",
+      "@deepseek-ai/dsh-fs-e2b": "0.1.0-rc.7",
+      "@deepseek-ai/dsh-subprocess-e2b": "0.1.0-rc.7",
+      "@deepseek-ai/schemastery": "^3.18.1",
+      "e2b": "2.29.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@types/node": "^22.20.0",
+      "typescript": "^6.0.3",
+      "vitest": "^4.1.8"
+    }
+  },
+  "quality_raw": {
+    "test_files": 5,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 12,
+    "pushed_at": "2026-08-29T03:41:15Z",
+    "created_at": "2026-08-24T02:00:03Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "scripts/agentenv-smoke.mjs",
+    "src/index.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-agentenv-sandbox",
+      "text": "AgentENV execution-world bundle for DeepSeek Harness. It replaces the local filesystem and subprocess providers with the official Harness E2B adapters, backed by one AgentENV Firecracker microVM. Bash commands, file tools, persistent terminals, and provider-neutral LSP processes then share the same remote Linux world."
+    },
+    {
+      "section": "Status",
+      "text": "This is an MVP for DeepSeek Harness `0.1.0-rc.7`, the matching published E2B provider family `0.1.0-rc.7`, and E2B SDK `2.29.1`. It has live compatibility coverage for AgentENV `0.1.0` and `0.1.3`; the `0.1.3` test covers authenticated sandbox creation, workspace upload, filesystem operations, non-interactive commands, persistent PTYs, teardown, and a real Harness Web-profile startup. Its bundle composition has also been checked with a Harness `0.1.0-rc.8` source checkout. Run Harness inside WSL 2 or Linux. Native Windows execution is rejected because one Harness session cwd must be a valid path in both the host process and remote Linux world."
+    },
+    {
+      "section": "Status",
+      "text": "The bundle fails closed: it disables the local filesystem, local subprocess, and local shell-sandbox providers. AgentENV creation, setup, or workspace upload failure prevents the remote providers from loading; it never falls back to host execution."
+    },
+    {
+      "section": "What stays on the host",
+      "text": "The Harness process, model calls, Cordis services, session persistence, skills, UI, and SDK buffers remain on the host. The official Bash, file, PTY, and LSP consumers run their operating-system work through `ctx.fs` and `ctx.subprocess` inside AgentENV. A third-party plugin that directly imports Node.js `fs` or `child_process` can bypass these provider seams and is outside this guarantee."
+    },
+    {
+      "section": "Prerequisites",
+      "text": "- WSL 2 or Linux with Node.js 22.19+ or 24+. Native Windows execution is not supported.\n- DeepSeek Harness `0.1.0-rc.7`, installed and available as the `dsh` command.\n- AgentENV `0.1.3` installed, authenticated, and running (`0.1.0` remains supported). This plugin does not install or start AgentENV.\n- An AgentENV template built before the first Harness launch. This plugin creates sandboxes from an existing template; it does not build the template automatically."
+    },
+    {
+      "section": "Prerequisites",
+      "text": "In short, deploy AgentENV and DeepSeek Harness first, then build the template once, install this plugin into a Harness profile, and start Harness from the project directory.\n\nThese are separate products and are not bundled with this plugin. Install them from their official documentation before continuing:"
+    },
+    {
+      "section": "Prerequisites",
+      "text": "- [AgentENV v0.1.3 source and deployment documentation](https://github.com/kvcache-ai/AgentENV/tree/v0.1.3)\n- [DeepSeek Harness official quick start and source installation](https://deepseek.com/harness/en/)"
+    },
+    {
+      "section": "1. Verify AgentENV and DeepSeek Harness",
+      "text": "Confirm that the AgentENV CLI is available and that its server is running:\n\n```bash\ncommand -v aenv\ncurl -f http://127.0.0.1:8000/health\n```\n\nConfirm that the installed Harness CLI is available:\n\n```bash\ncommand -v dsh\ndsh --version\n```\n\nAgentENV authentication and server deployment are prerequisites supplied by AgentENV itself. Follow the AgentENV installation instructions for your platform before continuing. The plugin only connects to the resulting AgentENV API."
+    },
+    {
+      "section": "2. Build the AgentENV template once",
+      "text": "The template is the reusable base image from which AgentENV creates a fresh sandbox. It is not a running sandbox. This repository includes [`sandbox/Dockerfile`](./sandbox/Dockerfile), which installs Node.js 24, Bash, Git, ripgrep, Python, build tools, and the process utilities required by the official Harness E2B adapters.\n\nRun the following from the root of this repository after AgentENV is installed, authenticated, and running:"
+    },
+    {
+      "section": "2. Build the AgentENV template once",
+      "text": "```bash\naenv build ./sandbox/Dockerfile \\\n  --name dsh-agentenv-node24 \\\n  --cpu 2 \\\n  --memory 4096\n\nThis command uses the AgentENV `0.1.3` CLI syntax tested by this plugin. AgentENV `0.1.0` used `--tag` instead of `--name`; always use the CLI syntax matching the deployed server version."
+    },
+    {
+      "section": "2. Build the AgentENV template once",
+      "text": "The command registers `dsh-agentenv-node24` as the template alias in AgentENV. You normally run it only once. Rebuild the template when you change the Dockerfile, upgrade its tools, or deploy a new AgentENV server that does not already contain this template.\n\nIf you installed only the release tarball and do not have a source checkout, extract it to access the included Dockerfile:"
+    },
+    {
+      "section": "2. Build the AgentENV template once",
+      "text": "```bash\nmkdir dsh-agentenv-template\ntar -xzf dsh-agentenv-sandbox-0.1.5.tgz -C dsh-agentenv-template\ncd dsh-agentenv-template/package\naenv build ./sandbox/Dockerfile --name dsh-agentenv-node24 --cpu 2 --memory 4096"
+    },
+    {
+      "section": "3. Configure the AgentENV connection",
+      "text": "Set these values in every shell that starts Harness, or add them to the shell startup/configuration used to launch Harness:\n\n```bash\nexport AENV_API_KEY='<agentenv-api-key>'\nexport E2B_API_URL=http://127.0.0.1:8000\nexport E2B_SANDBOX_URL=\"$E2B_API_URL\"\nexport E2B_API_KEY=\"$AENV_API_KEY\""
+    },
+    {
+      "section": "3. Configure the AgentENV connection",
+      "text": "| Variable | Value | Meaning |\n| --- | --- | --- |\n| `AENV_API_KEY` | The secret API key generated by the AgentENV server | Host-side AgentENV credential. Keep it secret and do not commit it. |\n| `E2B_API_URL` | AgentENV control-plane URL, for example `http://127.0.0.1:8000` | The E2B-compatible API endpoint used to create, connect, renew, pause, and delete sandboxes. |\n| `E2B_SANDBOX_URL` | AgentENV sandbox data-plane URL; it is normally the same as `E2B_API_URL` for a local deployment | The endpoint used for sandbox command, filesystem, and terminal traffic. |\n| `E2B_API_KEY` | The same secret value as `AENV_API_KEY` | The credential name expected by the E2B SDK used inside this plugin. |\n| `AENV_TEMPLATE_ID` | An existing AgentENV template ID or alias, such as `dsh-agentenv-node24` | Selects the template from which the plugin creates the Harness sandbox. |"
+    },
+    {
+      "section": "3. Configure the AgentENV connection",
+      "text": "Use the API key generated by your AgentENV deployment. Running `aenv auth` configures the CLI, but the shell that starts Harness must also provide the key through `AENV_API_KEY` or `E2B_API_KEY`; the plugin does not read the CLI credential file. For a remote AgentENV deployment, replace the localhost URLs and template alias with the values supplied by that deployment. The `aenv` CLI is useful for setup and administration, but the plugin runtime talks to the AgentENV API through the E2B SDK and does not invoke `aenv` for each command."
+    },
+    {
+      "section": "4. Install the plugin into a Harness profile",
+      "text": "For normal use, download the prebuilt release tarball and add it to a Harness profile. Release users do **not** need to clone this repository, run `npm install`, or run `npm run check`; the tarball already contains the compiled `lib` files:\n\n```bash\ncurl -LO https://github.com/ztting01/dsh-agentenv-sandbox/releases/download/v0.1.5/dsh-agentenv-sandbox-0.1.5.tgz\ndsh plugin --profile web add \"$PWD/dsh-agentenv-sandbox-0.1.5.tgz\"\ndsh --profile web --dump-config\n```"
+    },
+    {
+      "section": "Plugin source development only",
+      "text": "The following commands are only for contributors who cloned or modified the plugin source. Run them from the plugin repository root — the directory containing this plugin's `package.json` — not from an ordinary project workspace:\n\n```bash\ncd /absolute/path/to/dsh-agentenv-sandbox\nnpm install\nnpm run check\ndsh plugin --profile web add /absolute/path/to/dsh-agentenv-sandbox"
+    },
+    {
+      "section": "Plugin source development only",
+      "text": "`npm install` reads this repository's `package.json` and lockfile, downloads the plugin's Node.js runtime and development dependencies from the npm registry, and places them under this repository's `node_modules`. Those dependencies include the E2B SDK, the official DSH E2B providers, TypeScript, Vitest, and their transitive packages. It does **not** install AgentENV, build the AgentENV template, install the DeepSeek Harness application, or install this plugin into a Harness profile."
+    },
+    {
+      "section": "Plugin source development only",
+      "text": "`npm run check` runs TypeScript type checking, unit tests, and the production build in sequence. It creates the compiled `lib` output required when installing directly from the source directory. It does not start AgentENV or perform the live AgentENV smoke test; use `npm run smoke:agentenv` separately for that after completing the AgentENV setup."
+    },
+    {
+      "section": "5. Start Harness from the project directory",
+      "text": "Start Harness from the project directory you want uploaded:\n\n```bash\ncd /absolute/path/to/project\ndsh --profile web\n```"
+    },
+    {
+      "section": "Required workspace-path invariant",
+      "text": "The workspace selected for the conversation in the Web client **must have exactly the same absolute path** as the directory from which the DSH process was started:\n\n```text\nDSH process.cwd()\n  = Web client conversation workspace path\n  = AgentENV sandbox cwd\n```\n\nThe workspace display name is irrelevant; the absolute path is what must match. For example, after starting DSH with:\n\n```bash\ncd /home/user/project-a\ndsh --profile web\n```"
+    },
+    {
+      "section": "Required workspace-path invariant",
+      "text": "select `/home/user/project-a` as the conversation workspace in the Web client and then create or open a conversation belonging to that workspace. Do not select `/home/user/project-b`, even if both workspaces are visible in the sidebar. Restarting DSH does not delete saved conversations or change the workspace recorded by an existing conversation."
+    },
+    {
+      "section": "Required workspace-path invariant",
+      "text": "This MVP owns one sandbox and one fixed cwd per DSH process. Switching the Web client to a different workspace does not recreate the sandbox or upload the newly selected directory. A mismatch commonly fails with an error such as:\n\n```text\nError: [invalid_argument] cwd '/different/workspace' does not exist\n```\n\nTo use several workspaces concurrently, start one DSH process per workspace on a different Web port, and use the matching workspace in each client page:"
+    },
+    {
+      "section": "Required workspace-path invariant",
+      "text": "```bash\ncd /home/user/project-a\ndsh --profile web --port 3080 --no-open\n\ncd /home/user/project-b"
+    },
+    {
+      "section": "Required workspace-path invariant",
+      "text": "The default configuration uploads the project, including `.git`, to the same absolute POSIX path inside a fresh microVM. It excludes `node_modules`, Python virtual environments, caches, and `.dsh-agentenv`. Symbolic links to files or directories inside the workspace are uploaded as regular copies. Links that are dangling, point outside the workspace, create directory cycles, resolve to unsupported file types, or target excluded paths abort startup. Set `symlinkPolicy: error` for strict rejection or `skip` only when omission is intentional."
+    },
+    {
+      "section": "Required workspace-path invariant",
+      "text": "After a successful initial upload, the plugin writes a non-secret completion summary to `.dsh-e2b/workspace-upload.json` inside the microVM. Its presence means the bounded scan and every upload batch completed; it is also useful for startup diagnostics."
+    },
+    {
+      "section": "Configuration",
+      "text": "Override the `agentenv-runtime` row in the profile's `cordis.patch.yml`. A later patch replaces the complete config, so restate every value you need."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n| --- | --- | --- |\n| `apiUrl` | `E2B_API_URL` or `http://127.0.0.1:8000` | AgentENV control plane |\n| `sandboxUrl` | `E2B_SANDBOX_URL` or `apiUrl` | AgentENV data plane |\n| `apiKey` | `E2B_API_KEY`, then `AENV_API_KEY` | Host-only API credential |\n| `template` | `AENV_TEMPLATE_ID` | Required template id or alias |\n| `sandboxId` | omitted | Reconnect instead of create |\n| `cwd` | Harness `process.cwd()` | Shared absolute remote cwd |\n| `timeoutMs` | `3600000` | Rolling sandbox lease, renewed while Harness runs |\n| `secure` | `true` | Secure envd control traffic |\n| `onDispose` | `kill` | `kill` or AgentENV `pause` |\n| `uploadWorkspace` | `true` | Initial bounded host-to-sandbox upload |\n| `uploadMaxFiles` | `50000` | Upload file-count bound |\n| `uploadMaxBytes` | `512 MiB` | Aggregate upload bound |\n| `uploadMaxFileBytes` | `256 MiB` | Per-file upload bound |\n| `symlinkPolicy` | `copy-internal` | Copy safe internal file/directory links, or use `error`/`skip` |"
+    },
+    {
+      "section": "Configuration",
+      "text": "To preserve a sandbox across Harness restarts, set `onDispose: pause`, then start with the recorded `sandboxId`. Automatic discovery and host write-back are intentionally not part of this MVP."
+    },
+    {
+      "section": "Security model",
+      "text": "Harness reports `danger-full-access` because its current confined modes resolve host paths and do not enforce remote filesystem paths. The access is full only inside the AgentENV microVM; the host workspace is not mounted. The bundle disables `permission-presets` because that service requires a host-confined Bash executor with a mutable `sandboxMode`; AgentENV is instead a fixed isolation boundary. The approval policy remains `never`, and the Web permission selector is intentionally unavailable. The API key stays in the host SDK connection and is not inserted into sandbox command environments by this plugin."
+    },
+    {
+      "section": "Security model",
+      "text": "The initial upload is an explicit control-plane exception: the plugin reads the selected host workspace once and sends bounded regular-file content to AgentENV. After setup, model-facing file and process operations use the remote providers. There is no automatic write-back to the host."
+    },
+    {
+      "section": "Live smoke test",
+      "text": "After building the package and template, verify the runtime owner plus the official FS, command, and PTY providers without a model API key:\n\n```bash\nexport AENV_TEMPLATE_ID=dsh-agentenv-node24\nnpm run smoke:agentenv\n```"
+    },
+    {
+      "section": "Live smoke test",
+      "text": "The script uses `E2B_API_URL` plus `E2B_API_KEY`/`AENV_API_KEY` when both are set. Otherwise it reads the existing `aenv auth` credential file, or the file named by `AENV_CREDENTIALS_PATH`. It never prints the API key. The test creates a short-lived sandbox, verifies bidirectional visibility between `ctx.fs` and `ctx.subprocess`, verifies PTY output, proves there is no host write-back, and deletes the sandbox during teardown."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- One DSH process owns one AgentENV sandbox with one fixed cwd. Web-client workspace switching is unsupported unless the selected workspace path is identical to the directory from which DSH was started.\n- No automatic sandbox discovery, reconnect retry, snapshot UI, or incremental synchronization.\n- No automatic download or merge of remote changes into the host workspace.\n- Symbolic links cannot be reproduced by the E2B filesystem API used by this MVP.\n- Harness `tool-fs-search` may still resolve its packaged host `rg` path in the current release. Use Bash with an `rg` binary installed in the AgentENV template until upstream makes search executable resolution provider-aware.\n- In-process workflow/code runtimes and third-party plugins that bypass `ctx.fs` or `ctx.subprocess` remain host-side.\n- The official E2B subprocess adapter retains SDK command transport buffers on the host and inherits its published PTY/process limitations.\n- AgentENV 0.1.0 and 0.1.3 ship envd 0.5.15, while the official FS provider requests file metadata introduced in envd 0.6.2. The plugin retries only that explicitly unsupported metadata write without metadata. Ordinary metadata fingerprints still detect ext"
+    }
+  ],
+  "skipped": []
+}
