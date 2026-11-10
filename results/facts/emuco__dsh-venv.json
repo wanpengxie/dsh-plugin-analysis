@@ -1,0 +1,182 @@
+{
+  "repo": "emuco/dsh-venv",
+  "commit": "5b1b7bbf1a9f3c39be775db7e7d6883ec4461e57",
+  "extracted_at": "2026-11-10T03:41:39.018101+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 46940,
+    "lines_by_language": {
+      "JSON": 49,
+      "JavaScript": 1037,
+      "Markdown": 74,
+      "Other": 7,
+      "YAML": 19
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "awesome-dsh-plugin-submission.yml",
+      "cordis.patch.yml",
+      "package.json",
+      "src/client.js",
+      "src/index.js",
+      "src/plugin.js",
+      "test/index.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-venv",
+    "version": "0.3.0",
+    "type": "module",
+    "description": "Per-project runtime environments for DeepSeek Harness: auto-adopt or create a project-local Python venv (.venv_local/python) and wire in the toolchains/env vars for the runtimes each project uses.",
+    "main": "src/plugin.js",
+    "exports": {
+      ".": "./src/plugin.js",
+      "./client": "./src/client.js",
+      "./core": "./src/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "scripts": {
+      "test": "node --test test/*.test.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-primitives"
+        ],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.0",
+      "@deepseek-ai/dsh-client-ui-primitives": "^0.1.2-alpha.1",
+      "@deepseek-ai/dsh-system-prompt": "^0.1.2-alpha.1",
+      "@deepseek-ai/dsh-tools": "^0.1.2-alpha.1",
+      "react": "^18.0.0"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-client-ui-primitives": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-system-prompt": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-tools": {
+        "optional": true
+      },
+      "react": {
+        "optional": true
+      }
+    },
+    "keywords": [
+      "dsh-plugin",
+      "python",
+      "venv",
+      "environment",
+      "virtualenv",
+      "project-env"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-venv bundle patch: mounts the venv plugin into the host\n# composition of a dsh profile. The plugin registers its `project_env_*` tools\n# (status/ensure/run), one usage section in the global system prompt, and a\n# host web API (/dsh-venv/api/*) consumed by the client management panel.\n#\n# Install: `dsh plugin --profile <name> add <this package>` (npm or a local\n# path). The `dsh plugin` command pnpm-installs the package into the profile\n# and reconciles it into the profile's `dsh.profile.bundles` layer list.\n- insert:\n    - id: venv\n      # Node-resolvable package name — must stay in sync with package.json\n      # `name`. Quoted because `@` is a reserved indicator in YAML.\n      name: 'dsh-venv'\n"
+    }
+  ],
+  "entries": [
+    "src/plugin.js",
+    "src/client.js",
+    "src/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/emuco/dsh-project-env",
+      "where": "awesome-dsh-plugin-submission.yml:1"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-07T03:15:26Z",
+    "created_at": "2026-09-06T17:33:44Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/client.js",
+    "src/index.js",
+    "src/plugin.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-venv",
+      "text": "> 为每个 DSH 工作区 / 项目提供独立的运行时环境。自动识别项目用了哪些运行时，自动创建/接管 python venv，并把各运行时的环境变量注入到工作区——`python`/`pip` 永远走项目环境，绝不静默落到系统 Python。\n\nDeepSeek Harness（DSH）项目环境管理插件。\n\n---"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "在 DSH 里打开多个项目时，如果所有会话共享系统 Python，容易出现：\n\n- 不同项目依赖互相污染（A 项目装了包，B 项目\"看到了\"）\n- 系统 Python 被项目改动弄得不可控\n- 换机器 / 换工作区，环境没法跟着项目走\n\n`dsh-venv` 给**每个项目一个独立环境**，让 agent 跑 Python 工具时永远用项目自己的解释器。"
+    },
+    {
+      "section": "设计理念",
+      "text": "- **有则接管，无则自动建**：目录存在就接管，不存在就 `python -m venv .venv_local/python` 自动创建——不需要任何配置步骤。\n- **一个文件夹承载多运行时**：`.venv_local/` 是环境容器，每种运行时一个子目录：\n  ```\n  项目根/\n  └── .venv_local/\n      ├── python/   ← Python（venv，自动创建/接管）\n      ├── node/     ← Node（检测到 package.json 时链接）\n- **自动识别，零配置**：检测到 `pyproject.toml`/`requirements.txt`→python、`package.json`→node、`go.mod`→go，把对应运行时的工具链 bin 前置 PATH 并注入专属变量（`VIRTUAL_ENV`、`NODE_PATH`、`GOBIN`）。\n- **安全优先**：缺少/无效的环境会报错，**绝不静默回退到系统 Python**；绝不覆盖已存在的环境。"
+    },
+    {
+      "section": "功能",
+      "text": "| 能力 | 说明 |\n|---|---|\n| 🎯 工具 | `project_env_status`（查看/自动接管）、`project_env_ensure`（缺失即自动建 venv）、`project_env_run`（在项目环境中执行命令） |\n| 🖥️ Web 面板 | 设置页新增「项目环境」区，列出所有会话工作区的环境，状态一目了然 |\n| 🧩 多运行时 | python（venv 真环境）+ node / go（工具链接入、变量注入） |\n| 🔒 安全 | 无 venv 即报错，不回落系统 Python；不覆盖已有环境 |"
+    },
+    {
+      "section": "安装",
+      "text": "```bash"
+    },
+    {
+      "section": "从 npm 安装：",
+      "text": "dsh plugin --profile web add dsh-venv"
+    },
+    {
+      "section": "或从 GitHub 源码安装：",
+      "text": "dsh plugin --profile web add github:emuco/dsh-venv\n```\n\n安装后**重启 DSH** 生效（重启是 DSH 加载新 plugin 层的条件）。"
+    },
+    {
+      "section": "使用",
+      "text": "装好即可用，无需配置。agent 在上述系统提示的引导下会自动调用 `project_env_*` 工具；你也随时可以在设置页的「项目环境」面板查看各工作区的环境状态。"
+    },
+    {
+      "section": "目录结构",
+      "text": "- `src/index.js` — 核心：路径、detect/status/environment、`resolveCommand`、`create`、`run`、多运行时 `environmentAll`\n- `src/plugin.js` — DSH host 插件：工具 + web API + 系统提示\n- `src/client.js` — DSH client 端：设置面板\n- `cordis.patch.yml` — DSH profile 插入补丁"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\ncd dsh-venv\nnpm test        # 运行测试（node --test）\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

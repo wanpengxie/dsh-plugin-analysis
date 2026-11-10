@@ -1,0 +1,384 @@
+{
+  "repo": "good-saltfish/dsh-auto-rerun",
+  "commit": "dce9517650c2808a702eee5f616a8e7ba953cf69",
+  "extracted_at": "2026-11-10T04:04:49.149468+00:00",
+  "tree": {
+    "files": 15,
+    "bytes": 619452,
+    "lines_by_language": {
+      "JSON": 95,
+      "JavaScript": 3557,
+      "Markdown": 681,
+      "Other": 46,
+      "YAML": 99
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "dev/smoke.mjs",
+      "docs/screenshots/panel.png",
+      "docs/screenshots/retry-inline.png",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "screenshots.json",
+      "test/inject-shape.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-auto-rerun",
+    "version": "1.8.5",
+    "description": "模型断连自动重跑：同一会话内守住当前模型一直重试直到跑通（免费模型易堵塞；退避封顶），只有订阅过期/key 失效这类死路报错才停；另可选回合级 followup 续跑与选模型重试（默认关），并在右侧栏提供运行状态与开关面板。Keep a turn alive across provider hiccups: retries the same model in-session until it succeeds, stops only on dead routes (expired subscription / bad key), with optional turn-level followup, model fallback and a right-sidebar panel.",
+    "type": "module",
+    "main": "index.js",
+    "types": "index.js",
+    "scripts": {
+      "test": "node --test"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./icon": "./icon.svg",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/en.json",
+      "locale/zh.json",
+      "test/inject-shape.test.mjs",
+      "README.md",
+      "LICENSE",
+      "screenshots.json",
+      "docs/screenshots/panel.png",
+      "docs/screenshots/retry-inline.png"
+    ],
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "retry",
+      "rerun",
+      "disconnect",
+      "network",
+      "resilience",
+      "model-fallback"
+    ],
+    "license": "MIT",
+    "author": "good-saltfish",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/good-saltfish/dsh-auto-rerun.git"
+    },
+    "homepage": "https://github.com/good-saltfish/dsh-auto-rerun#readme",
+    "bugs": {
+      "url": "https://github.com/good-saltfish/dsh-auto-rerun/issues"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      }
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true
+      },
+      "engines": {
+        "dsh": ">=0.1.7-rc.1"
+      },
+      "compatibility": {
+        "dshReleases": {
+          "0.1.7-rc.1": "compatible"
+        }
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-auto-rerun — 模型断连自动重跑\n#\n# Host-side only bundle. Registers one plugin row whose config is the single\n# source of truth; edit this entry (or the Plugins page row config) to tune.\n#\n# 分层设计（与内置 @deepseek-ai/dsh-llm-retry 互补，不冲突）：\n#   Layer A — agent/request-error 瀑布上，先 next() 委托内置重试；只有当下游\n#             让出终态且失败属于断连类时才接管，追加更长退避的 retry。\n#   Layer B — 请求仍终态失败（agent/error）后，按 cap 调度一次 followup，\n#             让 Agent 新开回合自动续跑未完成任务。该层会往会话里发消息，\n#             因此限流类（rerunExcludeCodes，默认 RATE_LIMIT / HTTP 429）\n#             不发消息，只交给 Layer A 静默重试。\n#\n# config 键见 index.js 顶部 DEFAULTS 与 README.md。\n- insert:\n    - id: auto-rerun\n      name: dsh-auto-rerun\n      config:\n        enabled: true\n        retries: 3\n        reruns: 1\n        rerunExcludeCodes: [RATE_LIMIT]\n        initialDelayMs: 5000\n        maxDelayMs: 60000\n        backoffFactor: 2\n        jitterRatio: 0.2\n        # 限流类（429/RATE_LIMIT）单独用的静默长退避：tpm 配额一分钟才清零，\n        # 短窗口硬撞必死；接入后可跨过限流。全程不发消息不打扰。\n        rateLimitInitialDelayMs: 30000\n        rateLimitMaxDelayMs: 180000\n        # provider 在失败文本里自带的退避指令（如 Qoder 的\n        # \"queued (retry in ~3s)\"）优先于上面的类窗口：队列忙类几秒就好，\n        # 用 30s 长窗口硬等只会白烧重试预算。\n        honorMessageRetryHint: true\n        # 从失败文本里解析出的等待时长夹在这个区间内：提示常写成 \"retry in ~3s\"，\n        # 直接采信会被小值带着空转，也会被离谱大值把回合挂死。\n        messageHintMinMs: 1000\n        messageHintMaxMs: 60000\n        # 路线\"忙\"不是网络断线：限流/队列忙会在几十秒到几分钟内恢复，用\n        # \"3 次就收工\"的计数预算必然把回合打断（实测某免费线 429 三次\n        # 26s/62s/103s 后直接 close the turn）。所以拥塞类（429/RATE_LIMIT，\n        # 或失败文本自带退避提示）改用时间预算：只要还在持续重连，就一直连下去；\n        # 只有连续这么久都没能发出一次重连尝试才放弃。计数预算只管普通断连。\n        # 注意：下面 retryUntilSuccess 为 true（默认）时，这条预算不生效，\n        # 只有把它关掉才回到这套计数/时间预算制。\n        busyRouteBudgetMs: 600000\n        # 老大的核心场景（原话）：\"同一个模型、同一个会话内，只要不是一定的报错\n        # 就一直重试 —— 用免费模型，容易堵塞，让它一直试到运行成功\"。\n        # 默认 true：非死路的断连类失败不再受 retries / busyRouteBudgetMs 拦截，\n        # 一直按封顶退避重连直到这一轮成功（限流 180s、提示 60s、普通断连 60s，\n        # 所以是礼貌节奏，不会打爆端点）。日志预算栏显示 until-success #N。\n        # \"一定的报错\"= 死路信号（401/403、订阅过期、key 无效、永久没额度），\n        # 由 deadRouteReason() 判定，仍然立刻停手把错误交还宿主 —— 重试一万次\n        # 也一样，继续等只会把会话钉死。\n        retryUntilSuccess: true\n        # 但\"一直重试\"必须有尽头：路线彻底坏掉时，无限静默重连等于把错误藏起来\n        # （用户看不到任何报错，只觉得卡住）。所以给一个天花板：连续这么久都没\n        # 跑通过一条请求，就把失败交还宿主，让用户看见真实错误。\n        # 0 = 不设天花板（真的永远重试，不推荐）。\n        retryUntilSuccessMaxMs: 7200000\n        # 选模型重试：1.6.0 起默认关（老大要的是守着一个模型硬扛，不是自动换模型；\n        # 实测会自动换出 \"[model changed: …]\" 通知，那不是他要的）。\n        # 想要就写 enabled: true。开启后换路线的时机有二：\n        #   ① 普通模式：一条路线把自己那份 retries 计数预算用完（且连败\n        #      fallbackAfterFailures 次）；\n        #   ② retryUntilSuccess 模式：计数预算永不耗尽，所以改用时间 —— 在同一\n        #      条路线上连续失败超过 fallbackAfterMs 才换（否则开关会静默失效）。\n        # 换完重置计数预算与新路线自己的时间窗口。走宿主的 model/selection 切换\n        # （会话里会出现 \"[model changed …]\" 通知，模型选择器也会跟着变），不偷偷改路由。\n        # fallbackRoutes 留空则按 llm 目录自动挑：优先\"同 model id 的另一 provider\"\n        # （行为不变、配额独立，才真能躲开限流）。单次事故最多换 fallbackMaxSwitches 次。\n        # 死路路线（401/403、订阅过期、key 失效、额度耗尽）不等计数预算立刻换，\n        # 换不动的路线进 30 分钟黑名单，见 README「死路信号」。\n        modelFallback:\n          enabled: false\n        fallbackRoutes: []\n        fallbackAfterFailures: 2\n        # retryUntilSuccess 模式下\"在这条路线上熬够多久才认输换路线\"。设太小会在\n        # 一次短暂拥塞里就换掉模型（换模型有代价：答复风格变、会话里留通知）；设太\n        # 大则长时间卡在坏路线上。5 分钟是\"已经明显跑不通\"的量级；现在默认关着\n        # 选模型重试，改这个值不会有任何影响。\n        fallbackAfterMs: 300000\n        fallbackMaxSwitches: 2\n        # true = 允许换到\"另一个模型\"（回合不中断，但答复质量会变，切换在会话里可见）。\n        # false = 只换\"同 model id 的另一 provider\"，答复质量绝不悄悄变化。\n        fallbackAnyModel: true\n        # 两次失败间隔超过这么久就算\"新事故\"，计数/空闲预算全部重来。别设太小，\n        # 否则持续拥塞会被切成一次次\"新事故\"。\n        incidentGapMs: 60000\n        rerunDelayMs: 3000\n        # 可选：把每次决策逐行写进日志文件（纯调试用，默认不写盘）。\n        # 打开就把下面这行的注释去掉，并把路径改成你自己机器上的绝对路径。\n        # 测试时另开一个终端：Get-Content \"<你的路径>\" -Wait -Tail 20\n        # logFile: C:\\path\\to\\auto-rerun.log\n        #\n        # 面板开关的落盘位置。留空 = 有 logFile 就放它同目录，否则放\n        # ${DSH_HOME:-~/.dsh}/auto-rerun-settings.json（宿主自己的数据目录）。\n        # 想让开关只活在内存里，就显式写 settingsFile: \"\"\n        # settingsFile: C:\\path\\to\\auto-rerun-settings.json\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "dev/smoke.mjs:1128"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "dev/smoke.mjs:1130"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "dev/smoke.mjs:1137"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "dev/smoke.mjs:1149"
+    },
+    {
+      "name": "DSH_AUTO_RERUN_LOG",
+      "kind": "env",
+      "where": "dev/smoke.mjs:1150"
+    },
+    {
+      "name": "DSH_AUTO_RERUN_LOG",
+      "kind": "env",
+      "where": "dev/smoke.mjs:1157"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "dev/smoke.mjs:1158"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:158"
+    },
+    {
+      "name": "DSH_AUTO_RERUN_LOG",
+      "kind": "env",
+      "where": "index.js:287"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/good-saltfish/dsh-auto-rerun.git",
+      "where": "package.json:47"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/good-saltfish/dsh-auto-rerun#readme",
+      "where": "package.json:49"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/good-saltfish/dsh-auto-rerun/issues",
+      "where": "package.json:51"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-10-31T07:18:00Z",
+    "created_at": "2026-10-30T06:44:15Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "package.json",
+    "test/inject-shape.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-auto-rerun — 模型断连自动重跑",
+      "text": "[](https://www.npmjs.com/package/dsh-auto-rerun)\n[](LICENSE)\n\nDeepSeek Harness 宿主插件。当模型请求因**断连类故障**（网络断开、代理/VPN 重启、\n限流、5xx 服务错误、流中断、超时）失败时自动恢复，不让任务死在一条红字上。"
+    },
+    {
+      "section": "它做什么",
+      "text": "- **同回合自动重试**：失败不抛给你，插件接管重试，任务从断点继续往下跑。\n- **限流长退避**：429 / `tpm exhausted` 这类分钟级配额，用 30s→60s→120s→180s 的\n  静默长窗口跨过去，而不是撞几次就放弃。\n- **听服务端的话**：provider 回 `Retry-After` 或失败文本里的 `retry in ~3s` /\n  `retry_after: 5` / `请 3 秒后重试`，就按它给的时刻等，不用自己的窗口。\n- **一直试到成功**（`retryUntilSuccess`，默认开）：同一个模型、同一个会话，\n  只要不是死路就一直重连，靠退避封顶而不是次数限制防打爆端点；配 2 小时天花板，\n  路线彻底坏掉时会把错误如实交还，不会假装还在努力。\n- **选模型重试**（`modelFallback`，默认关）：一条路线持续跑不通时，换备选路线\n  再试；死路（401/403、订阅过期、key 失效、欠费）立刻换并拉黑 30 分钟。\n- **看得见也改得动**：右侧栏面板显示当前路线、重试次数、事故计数，开关和数字\n  当场改、立刻生效、重启仍保留（默认仅内存，不写盘）。"
+    },
+    {
+      "section": "它做什么",
+      "text": "**能调的选项**（34 个，完整说明见[配置](#配置cordispatchyml-的-entry-config-或插件行配置)）：\n重试次数、初始/最大延迟、退避系数与抖动、限流专用延迟窗口、文本提示上下限、\n一直重试的天花板、换路线的触发条件（次数/时长）与次数上限、候选顺序（钉死/\n同模型换 provider/自动目录）、死路黑名单时长、事故间隔判定、续跑次数与延迟、\n哪些失败码不发可见消息、HTTP 状态集合、语言、调试日志、日志文件、设置文件路径。\n\n---"
+    },
+    {
+      "section": "与内置重试的关系（互补，不冲突）",
+      "text": "DSH 自带 `@deepseek-ai/dsh-llm-retry`，在每个供应商的 `retryPolicy.normal` 模式\n下已经覆盖短窗口抖动（默认 5 次、退避 0.5–10s、jitter 10%）。本插件只做它不想\n做的事："
+    },
+    {
+      "section": "与内置重试的关系（互补，不冲突）",
+      "text": "| 层 | 触发 | 行为 | 边界 |\n|---|---|---|---|\n| **Layer A** 请求级接管 | `agent/request-error` 瀑布下游让出终态（内置重试预算耗尽 / 无 provider policy），且失败属断连类 | 追加自己的长退避重试（默认 3 次、5s→60s 指数退避 + 20% jitter；**限流类单独用 30s→180s 长窗口**；provider 自带的 `Retry-After` 或失败文本里的 `retry in ~3s` 提示优先于类窗口），返回 `{kind:'retry'}` | 默认 `retryUntilSuccess`：**不是死路信号就一直重连**（退避有封顶，不会打爆端点），但最长 `retryUntilSuccessMaxMs`（2 小时）没跑通就把错误交还宿主——否则路线彻底坏掉时会永远静默重试、把错误藏起来；关掉 `retryUntilSuccess` 才回到计数/时间预算制 |\n| **Layer B** 回合级续跑 | 请求仍终态失败，`agent/error` 触发，且失败**不属于** `rerunExcludeCodes` | 延迟 3s 后自动 `agent.followup（继续任务）`，让 Agent 新开回合从中断处续跑 | 连续最多 1 次；回合成功 / 用户发新消息 / Agent 销毁即清零 |\n| **Layer C** 选模型重试 | **1.6.0 起默认关**（`modelFallback.enabled: false`，需要就打开）。开之后触发条件：① 普通模式下同一条 provider/model 路线把自己那份计数预算用完（且连续失败 ≥ `fallbackAfterFailures`）；② `retryUntilSuccess` 模式下同一条路线连续失败超过 `fallbackAfterMs`（计数预算在该模式下永不耗尽，时间才是唯一信号）；③ 该路线给出**死路信号**（401/403、订阅过期、key 无效、没额度）——死路不等预算，立刻换 | 换一条路线再试，并重置计数预算与新路线自己的时间窗口：优先 `fallbackRoutes` 里钉的，否则从 `ctx.llm` 目录里挑——**优先「同 model id、另一 provider」**（行为不变、配额独立，真能躲限流）；死掉的路线进 30 分钟黑名单，不再当候选 | 单次事故最多换 `fallbackMaxSwitches` 次；每候选都过 `resolveModelInfo` 校验；同一路线只试一次 |"
+    },
+    {
+      "section": "与内置重试的关系（互补，不冲突）",
+      "text": "Layer B 会**往会话里发一条消息**（用户可见），所以限流类默认被排除：`RATE_LIMIT`\n（含 HTTP 429）只走 Layer A 的静默重试，不打扰用户。限流（如免费线 `tpm exhausted`）\n是分钟级配额，短退避必死，Layer A 对它使用 30s→60s→120s 长窗口，足以跨过；\n而让它发续跑消息无意义——消息出去也是撞墙，还可能连环触发。"
+    },
+    {
+      "section": "与内置重试的关系（互补，不冲突）",
+      "text": "**Layer C 怎么换路线**：优先走宿主的模型选择通道\n`ctx.get(\"sessionController\").agents.selectForNextRequest(agent, {provider, model})`\n—— 这会落一条 `model/selection` 会话事件，于是会话里出现宿主自己的\n`[model changed: …]` 通知、界面上的模型选择器跟着变、重载后仍然生效，**没有任何\n偷偷骗人的地方**。拿不到该服务时（非 Web 宿主 / 端口改名）才退化为「只改下一次\n请求」：插件在 `agent/request` 瀑布最外层改写 `provider/model`（顺带丢掉从原模型\n继承的 `reasoningEffort`，避免新模型不认），并在这条事故结束前持续生效。两种情况\n都写一行 `model fallback: a/x → b/y (…)` 日志；用户在界面上自己换过模型时，\n尚未落地的临时改写会被丢弃并记日志（不跟用户抢方向盘）。\n候选顺序：钉死的 `fallbackRoutes` → **同 model id 的另一 provider** →\n**本进程已见过的路线**（宿主自己装配过，在这台机器上确定能跑）→ 目录里其余模型\n→ 目录完全拿不到时，只剩「见过的路线」这一级\n（同 provider 换个 model 名字通常还在同一个限流桶里，换 provider 才换桶）。"
+    },
+    {
+      "section": "与内置重试的关系（互补，不冲突）",
+      "text": "死路信号（`Provider 402/401/403`、`subscription … expired`、`invalid api key`、\n`no credits`、余额/额度不足/订阅过期）与拥塞信号（429、`tpm exhausted`、\n`retry in ~3s`）严格区分：前者重试无意义、立刻换路线；后者只是等一会儿，\n绝不能被当成死路把会话拖走。\n\n永不重试的失败：认证（401/403）、无效请求（400）、上下文超长、协议/代码错误\n——这些重试无用，插件会把它们如实交还宿主。只有打开 Layer C\n（`modelFallback: { enabled: true }`）时，「认证/订阅过期/额度耗尽」才会先尝试\n**换一条路线**，换不了才把错误交还。默认（1.6.0）不换路线：这类\"一定的报错\"\n直接停，别的断连类一直重试。"
+    },
+    {
+      "section": "断连类判定",
+      "text": "同时支持三种输入（任一命中即算断连类）：\n\n1. **loop 失败码**（默认）：`EMPTY_RESPONSE` `RATE_LIMIT` `SERVER` `TIMEOUT` `TRANSPORT`\n2. **POSIX errno**：`ECONNRESET` `ECONNREFUSED` `ETIMEDOUT` `EPIPE` `EHOSTUNREACH`\n   `ENETUNREACH` `EAI_AGAIN` 等\n3. **HTTP 状态**：408 / 425 / 429 / 500 / 502 / 503 / 504；以及消息文本正则\n   （socket hang up、fetch failed、network、disconnected、timed out、\n   rate limit、overloaded、service unavailable、bad gateway、gateway timeout 等）"
+    },
+    {
+      "section": "安装",
+      "text": "已发布到 npm，也可以直接从 GitHub 发布包装：\n\n```powershell"
+    },
+    {
+      "section": "推荐一：从 npm 安装（任意 DSH 会话里）",
+      "text": "plugin_manager install_bundle \"dsh-auto-rerun\""
+    },
+    {
+      "section": "推荐二：从 GitHub 发布包安装（不依赖 npm）",
+      "text": "plugin_manager install_bundle \"https://github.com/good-saltfish/dsh-auto-rerun/releases/download/v1.8.5/dsh-auto-rerun-1.8.5.tgz\"\n```\n\n```powershell"
+    },
+    {
+      "section": "或本地目录（开发调试用）：",
+      "text": "plugin_manager install_bundle \"<你本机的仓库路径>\"\n```\n\n或 Plugin Manager 页面手动安装本地目录。安装后新会话即生效；\n正在运行的会话建议重启 DSH 让宿主插件重新挂载。"
+    },
+    {
+      "section": "配置（`cordis.patch.yml` 的 entry config 或插件行配置）",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `enabled` | `true` | 总开关 |\n| `request.enabled` | `true` | Layer A 开关 |\n| `rerun.enabled` | `true` | Layer B 开关 |\n| `retries` | `3` | Layer A 每次事故最大接管重试次数 |\n| `initialDelayMs` / `maxDelayMs` / `backoffFactor` / `jitterRatio` | `5000` / `60000` / `2` / `0.2` | 普通断连退避参数 |\n| `rateLimitInitialDelayMs` / `rateLimitMaxDelayMs` | `30000` / `180000` | **限流类（429/RATE_LIMIT）单独用的静默长退避**；provider 给了 `Retry-After` 就照它等 |\n| `honorMessageRetryHint` | `true` | 读**失败文本里**的退避指令（`retry in ~3s` / `try again in 2.5s` / `retry_after: 5` / `请 3 秒后重试`）并按它等，优先于上面的类窗口 |\n| `messageHintMinMs` / `messageHintMaxMs` | `1000` / `60000` | 文本提示的取用窗口：太短的值会被抬到下限，过长的会被截断 |\n| `busyRouteBudgetMs` | `600000` | **仅 `retryUntilSuccess: false` 时生效**：拥塞类失败在计数预算之外按\"静默时长\"给时间预算——只要每隔不超过这么久就还能发出一次重连，就一直连；路线真正连续 10 分钟毫无响应才收工 |\n| `retryUntilSuccess` | `true` | **核心场景（免费模型容易堵）**：同一个模型、同一个会话内，只要失败不是\"一定的报错\"（死路：401/403、订阅过期、key 失效、永久没额度），就一直重连直到跑通，计数预算和时间预算都不拦（退避仍封顶：限流最长 180s、文本提示最长 60s 一次，不会打爆端点）。日志里预算栏显示 `until-success #N`。设 `false` 回到 1.5.x 的预算制 |\n| `retryUntilSuccessMaxMs` | `7200000` | **「一直重试」的天花板**：连续这么久都没跑通过任何一条请求，就把失败交还宿主（日志写 `until-success window spent (…s >= …s)`）。没有它，路线彻底坏掉时会永远静默重连、把错误藏起来，用户只"
+    },
+    {
+      "section": "操作面板（右侧栏）",
+      "text": "插件带一个浏览器半边（`client.js`），通过 `dsh-better-sidebar` 的服务在**右侧栏**注册\n一个「自动重跑」标签页。它只做两件事：把插件**正在做什么**显示出来，让你**当场改开关**。"
+    },
+    {
+      "section": "操作面板（右侧栏）",
+      "text": "- **状态区**：版本、已运行时长、是否挂载、当前路线、本次进程累计的\n  接管重连 / 拒绝重连 / 回合续跑 / 换路线 / 死路命中 计数，以及最近 60 条活动。\n- **开关区**：`retryUntilSuccess`（一直试到成功）、`modelFallback`（选模型重试）、\n  `debug`（调试日志）。\n- **数字区**：`retries`、`reruns`、`rerunDelayMs`、`incidentGapMs`、`retryUntilSuccessMaxMs`、\n  `fallbackAfterMs`、`busyRouteBudgetMs`（失焦或回车才提交）。前四个是预算，后三个是\n  **保险丝**：一直重试的尽头、换路线的时限、拥塞陪等的上限——它们就是「无限重试不会\n  把会话卡死」的依据，所以跟开关放在一起，而不是只留在 yml 里。\n- 面板读写的都是**运行中那份 cfg**，不是另一份副本：改完立刻对下一次失败生效，\n  并写进 `settingsFile`（有的话），重启后仍在。"
+    },
+    {
+      "section": "操作面板（右侧栏）",
+      "text": "实现上是两条宿主路由，走 `ctx.connection.requestRejection` 的信任围栏\n（非本机 GUI 的请求直接 401/403）：\n\n| 路由 | 方法 | 作用 |\n|---|---|---|\n| `/auto-rerun/api/status` | GET | 返回版本、配置快照、计数、当前路线、最近活动 |\n| `/auto-rerun/api/config` | POST | 收 `{ \"patch\": { ... } }`，只接受白名单键（其余返回 400 `unknown setting`） |\n\n面板依赖 `dsh-better-sidebar`。没装它时浏览器半边只打一条警告，宿主半边照常重试——\n**面板是可选的眼睛，不是插件工作的前提**。"
+    },
+    {
+      "section": "容错设计",
+      "text": "- **不双跑**：Layer A 每次先 `next()`，内置重试接住就绝不插手；下游已给出\n  `retry` 决策时直接透传。\n- **不越权**：用户点停止 / 会话归档 / 插件卸载时，所有等待与定时器经\n  `AbortController` + `ctx.effect` 统一清理。\n- **防死循环**：默认一直重连，但拦圈的是**性质**而不是次数——只认断连类失败（认证\n  失败、400、上下文超长这类根本不进接管）；死路信号（订阅过期 / key 无效 / 没额度）\n  立刻停手并把错误交还宿主；每轮退避都有封顶（限流 180s、普通断连 60s），所以\n  「无限重试」是礼貌的节奏，不是打爆端点。关掉 `retryUntilSuccess` 才退回\n  计数 / 时间预算制；换路线另有 per-agent 次数预算。User 一旦自己说话立即清零事故态；\n  `always` 模式会话完全不管。\n- **无侵入**：不 append 与「消息」无关的自定义会话事件（Layer C 只在换路线时按宿主自己的\n  `model/selection` 协议写，界面/重载都认它），默认不写磁盘\n  （`logFile` 是唯一可选落盘项），崩溃即恢复为原生行为。\n- **可降级**：所有 payload 字段读取都是防御式可选链；判定不到的失败一律\n  按「非断连」处理，宁可不重跑也不乱重跑。\n- **注入消息必须带身份（硬不变量）**：所有写进会话的消息只经唯一注入口\n  `admitFollowup()`——构造完整 `UserMessage` → 断言 `id`/`role`/`content`/`source.kind`\n  → 才 `followup()`。宿主写入时不校验、冷启动重放才校验，一条缺 id 的 `user/message`\n  会让**整份会话加载不出来**；断言不过就抛错（宁可这次续跑失败，绝不写坏会话）。\n  回归测试见 `test/inject-shape.test.mjs`（复刻宿主校验规则）。"
+    },
+    {
+      "section": "手动测试（三步）",
+      "text": "`ctx.logger` 的输出不进任何文件（DSH 不落盘），所以静默的 Layer A 在界面里看不见。\n要亲眼验证，先把 `cordis.patch.yml` 里被注释掉的 `logFile` 打开（或设环境变量\n`DSH_AUTO_RERUN_LOG`，两者都不用改文件），然后另开一个终端跟着看：\n\n```powershell"
+    },
+    {
+      "section": "终端 1：实时看插件决策（路径换成你自己的 logFile）",
+      "text": "Get-Content \"C:\\path\\to\\auto-rerun.log\" -Wait -Tail 20\n```\n\n右侧栏面板也是同样用途：它把最近 60 条活动直接显示出来，不写盘也能看。\n\n**测 Layer B（可见续跑，最省事）**：临时把 `rerunExcludeCodes` 改成 `[]`，用它跑\n一个长任务直到撞限流 → 会话里应出现一条 `[auto-rerun 1] 刚才与模型的连接中断…`，\n并自动接着干。测完改回 `[RATE_LIMIT]`。\n\n**测 Layer A（静默接管，最真实）**：起一个长任务，中途**关掉代理/VPN 或拔网线\n60–90 秒**再恢复。预期：不报错、回合自己扛过去；日志里出现\n`taking over a disconnect-class failure ... retry 1/3 in 5s` 之类的行。\n\n**测长限流窗口**：撞上限流后日志应出现 `retry 1/3 in 30s`（而不是 5s），说明\n限流走的是 30s/60s/120s 长窗口。"
+    },
+    {
+      "section": "终端 1：实时看插件决策（路径换成你自己的 logFile）",
+      "text": "改完 `cordis.patch.yml` 需要在插件页把 `auto-rerun` **关一次再开**，新配置才生效。"
+    },
+    {
+      "section": "验证方式",
+      "text": "1. 安装后让它处理一个长任务；途中断开代理/VPN 几十秒再恢复：应看到\n   `auto-rerun: taking over a disconnect-class failure ...` 日志并在恢复后自动继续。\n2. 设 `debug: true` 可观察每个事件的判定路径。\n3. **验证 Layer C**：先看第一次请求后那行\n   `model fallback preview for a/x: would switch to b/y (catalog), llm catalog: readable`\n   —— 这是**不发请求、零副作用**的预演，直接告诉你真出事时会换到哪条路线。若写成\n   `no candidate available …`，说明这台宿主上找不到候选，请在 `fallbackRoutes` 里钉\n   1–2 条可用路线。再看第一次接管时的\n   `model fallback wiring: llm catalog reachable|missing, session selection reachable|missing, pinned routes: N`。\n   然后让一条路线持续失败（或直接把 `fallbackRoutes` 钉成另一条可用路线）。日志应出现\n   `model fallback: a/x → b/y (…)`，界面模型选择器跟着变；走宿主 controller 时还会在\n   会话里看到宿主的 `[model changed: …]` 通知。若最终换不了，会看到\n   `no fallback route available for … (pinned: 0, llm catalog: missing); staying on this route`。\n4. 单元层面：在插件目录跑 `node --test`（即 `npm test`，7 条注入不变量用例）与\n   `node --check index.js` 语法自检；行为级冒烟套件共 201 条断言，覆盖 Layer A/B/C、\n   面板路由、白名单与路径可移植性。"
+    },
+    {
+      "section": "回归测试（改代码前后都请跑）",
+      "text": "仓库带 7 条注入不变量单测，外加一套行为级冒烟套件：它用一个假 `ctx` 把三层决策全部\n跑一遍，不连网、不发真请求、秒级结束。\n\n```powershell\ncd <插件目录>\nnode --check index.js\nnode --check client.js\nnode --test                                              # 7 passed / 0 failed\n\n`dev/` 不随 npm 包发布（`files` 里没有它），只给改代码的人用。套件覆盖的关键不变量："
+    },
+    {
+      "section": "回归测试（改代码前后都请跑）",
+      "text": "- 非断连类失败（400、上下文超长、协议错误）绝不接管；\n- 死路信号（401/403、订阅过期、key 失效、永久没额度）**即便开着无限重试也立刻停手**；\n- 拥塞类（429、文本自带退避提示）走时间预算一直重连，不再 `close the turn`；\n- `retryUntilSuccess` 开/关两套语义都成立，换路线不越过死路判定；\n- 换路线的三级降级（宿主 controller → 会话事件 → 下一次请求）、候选顺序与归属；\n- 面板白名单拒绝 `constructor`/`__proto__`/`toString` 这类原型键，超大 body 与\n  已断开的 socket 都不抛异常；\n- `settingsFile` / `logFile` 的默认值不带作者机器路径（发布后的可移植性回归）。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- Layer A 等待期间若整个宿主进程被杀（崩溃/强退），本次等待丢失；会话恢复后\n  该回合停留在失败状态，需要手动继续一句话（内置重试同样受此约束，它的\n  持久化只服务自身预算记账）。\n- 回合级续跑会把「继续任务」的提示送进模型历史（一条 user-role 消息），断连\n  恢复后这是语义正确的上下文，但会占用少量 token。\n- Layer C 的持久切换优先走 Web 宿主的 `sessionController`；拿不到时退到自行 append\n  `model/selection` 会话事件（界面选择器读它，重载后仍在），再拿不到才是「只对下一次\n  请求生效」。三级都会在日志里写明。\n- 若宿主既没暴露 `llm` 目录也没暴露 `sessionController`，Layer C 仍能工作：候选退到\n  「本进程见过的路线」（至少要有一个别的路线在这台机器上跑过），持久化退到自行\n  append `model/selection` 或下一次请求的强制改写；两者都没有时只剩这一行\n  `no fallback route available …`，此时请在 `fallbackRoutes` 里显式钉 1–2 条。\n- 宿主在创建 agent 时才装自己的 `agent/request` 监听，而 cordis 的 prepend 监听是\n  「后注册者最外层」。因此换路线用的守卫**不能在 mount 时注册**（那会被宿主的监听\n  套回去），必须在真正换路线的那一刻注册到该 agent 自己的 ctx 上——这是 1.4.1 修的\n  关键点。\n- 换路线后会话里会出现宿主自己的 `[model changed: …]` 通知（一条 user-role 消息，\n  这是宿主对「路由变了」的如实记录），token 开销与上面同类。\n- 换过去之后**这条会话就留在新路线上**（和你在界面里手选模型同一个语义），不会因为\n  原路线的限流恢复而自动切回。想回去就在界面里把模型选回原路线——插件会立刻让路\n  （守卫检测到别处改了路线就丢弃 override，不跟你抢）。"
+    },
+    {
+      "section": "1.8.5 — 发布到 npm，README 与徽章同步",
+      "text": "- 包已发布到 npm：`npm i dsh-auto-rerun` 或 `plugin_manager install_bundle \"dsh-auto-rerun\"`。\n  之前的 1.8.4 tarball 里带的是加 npm 安装说明之前的旧 README，这一版把 README\n  原样重新发一遍，保证 registry 上看到的就是仓库里的内容。\n- README 顶部加 npm 版本与许可证徽章；安装段改为「npm 优先、GitHub 发布包次之、\n  本地目录用于开发」，并写明三种方式各自适用场景。\n- 无代码改动：`index.js` / `client.js` 与 1.8.4 完全一致。"
+    },
+    {
+      "section": "1.8.4 — 截图进仓库与插件市场（纯文档/元数据，无行为改动）",
+      "text": "- 新增 `docs/screenshots/panel.png`（右侧栏面板）与 `docs/screenshots/retry-inline.png`\n  （会话时间线里的连续重试记录），README 顶部一并引用。\n- 新增 `screenshots.json`：声明这两张图为插件市场条目截图（市场的抓取脚本只读插件仓库\n  根目录的这个文件，不需要改目录仓库，也不需要 PR；下一夜构建生效）。\n- `package.json` 的 `files` 白名单补上截图与 `screenshots.json`，否则 npm 包缺图、\n  npm 页 README 会显示裂图。\n- 截图做了隐私清洗：裁掉宿主侧栏与壁纸、抹掉面板上的具体模型路线名、切掉会话里与插件\n  无关的私密对白与自定义头像，只保留插件自身的功能画面。"
+    },
+    {
+      "section": "1.8.3 — 发布前代码审计：换路线指令真的会生效（阻塞级）+ 三处记账修复",
+      "text": "- **【阻塞级】`selectForNextRequest` 接管切换后，重试请求仍会被宿主用**旧的装配路线**\n  盖回去**。宿主的 `selection.assembled` 只在每次 step 开头的 `system-prompt/assemble`\n  里刷新，而重试循环内只调 `refreshContext`（其 waterfall 明确「不重跑」）——插件原来在\n  宿主接管切换（`hostOwned`）时把自己的 `agent/request` override 清掉，于是\n  `agent/request` 监听器把**过期的 assembled 路线**重新套上每一次重试：换路线动作被静默\n  撤销，`fallbackMaxSwitches` 次机会全部烧在刚离开的路线上。现在 override 在两种切换\n  （宿主接管 / 自建事件）下都保持武装，直到外发请求真的带上目标路线（宿主追上了）才自清，\n  或路线被别人移动（用户手动改回）时立刻让路——与「不跟用户抢路线」的既有语义一致。\n  新增 case 49 回归（装配过期时仍强制新路线；目标路线到达时守卫自退役；他人移动路线被尊重）。\n- **死路切换的立即重试原来完全不记账**：不推进 `retries`、不记 `lastFailAt`、不进\n  `stats.takeovers`，面板与日志都看不见这次接管。现在补齐三处记账，并加一拍首步退避\n  （`localDelay(cfg, 1)`）：换到的新路线没有失败记录，长退避只会拖延恢复，但全死目录下\n  一拍退避能避免请求循环空转打热；总次数仍由 `fallbackMaxSwitches` 封顶。等待可被\n  abort（agent 关闭 / 插件卸载），中断时把决定权交还宿主。\n- **一条成功答复原来只清事故时钟和连败计数，不清 `retries` / `busyLastAt`**：下一次\n  事故开局预算就已经被上次事故花掉，第一拍退避也被乘到 4×。现在 `assistant/message`\n  到达时把计数预算与拥塞时钟一并清零（case 44 的「从头计预算」断言同时覆盖此路径）。\n- **`previewFallbackOnce` 的\"只打一次\"原来是进程级闭包变量**：一个 agent 打过预览，\n  其它 agent 这辈子都不再打印。改为 per-agent（`st.previewLogged`）+ 进程级双保险。\n- **顺带**：`fallbackRouteFor` 的 pinned 白名单分支补注释（人工白名单**有意**越过自动\n  守卫，与 `allowed()` 的显式信任同级）；冒烟 case 11 补 `settingsFile: \"\"`——原用例会\n  读到开发者本机被面板写过的真实"
+    },
+    {
+      "section": "1.8.1 — 容错收口：给「一直重试」装上尽头，让选模型重试真的会触发",
+      "text": "- **`retryUntilSuccess` 没有尽头**。它的卖点就是「一直重试到跑通」，但当一条路线彻底坏掉\n  （端点不通、模型下线、provider 侧持续 5xx）时，无限静默重连等于**把错误藏起来**：用户看不到\n  任何报错，只看到会话卡着不动，而日志里每 30 秒一行重试。新增 `retryUntilSuccessMaxMs`\n  （默认 2 小时）：连续这么久没跑通过一条请求，就把失败交还宿主，日志写\n  `until-success window spent (2h >= 2h) with no completed request`。0 = 不设上限。\n- **选模型重试在 `retryUntilSuccess` 下静默失效**。旧触发条件是「把这条路线那份 `retries`\n  计数预算用完」，可 `retryUntilSuccess: true` 时计数预算**永远不会耗尽** ⇒ 面板上打开开关\n  也不会有任何事发生。现在改为双触发：普通模式看计数预算，`retryUntilSuccess` 模式看\n  **时间**（`fallbackAfterMs`，默认 5 分钟同路线连续失败）。换完路线重置新路线自己的窗口。\n- 新增 `humanMs()`：日志里的时长按量级选单位。`Math.round(40/1000)` 会打成 `0s`，短窗口\n  会看成「已经过期」——排查时最容易误判的地方。\n- **事故时钟原来会被插件自己的退避清零**（第三个真问题，最隐蔽）。判定「旧事故已结束」\n  只看了「两次失败间隔 > `incidentGapMs`」，但插件自己的限流退避默认可以到 180s，\n  比 `incidentGapMs`（60s）还长 ⇒ **每一次自己安排的长时间重试都被当成新事故**，\n  `incidentStartedAt` 被反复清零，于是上面两个新机制（`retryUntilSuccessMaxMs`、\n  `fallbackAfterMs`）在真实场景里永远不会触发。现在复位必须同时满足「间隔够久」\n  **和**「这条路线在**这次失败之后**真的答过一条请求」：`servedAt` 由持久事件\n  `assistant/message` 打戳，且必须 `servedAt > lastFailAt` —— 失败前的那次成功不算数\n  （换路线时也清零，新路线不认旧路线的功劳）。\n- **顺手修掉一个从未生效的监听器**：`session/event` 在宿主里是\n  `'session/event'(session, event)` **两个位置参数**，插件原来按单个\n  `{ session, event }` 包装对象读取 ⇒ 真实宿主上永远匹配不到，「回合完成即重置」这条\n  规则一直是死代"
+    },
+    {
+      "section": "1.8.2 — 真实宿主跑通后修的三个缺陷：切了路线却还报旧模型",
+      "text": "1.8.1 的所有结论都来自离线冒烟。为了做到「无 bug、无风险」的验收，另外建了一个临时\nprofile（`autorerun-verify`）把插件挂进真实 DSH 宿主，用 `--patch` 注入一个指向\n`127.0.0.1:9`（关闭端口）的假 provider 构造真实 `ECONNREFUSED`，第一次真的跑通了\nLayer A 的接管、`retryUntilSuccessMaxMs` 的收手与 Layer C 的换路线。过程中暴露了三个\n**离线永远打不到**的缺陷："
+    },
+    {
+      "section": "1.8.2 — 真实宿主跑通后修的三个缺陷：切了路线却还报旧模型",
+      "text": "- **切换路线后仍然用旧模型的标签记账**（最严重）。`agent/request` 的 override 生效时\n  立刻返回了新 config，但 `st.seenRoute`（下一次失败用来判断「是哪条路线出的事」的快照）\n  是在 override **之前**记的 ⇒ 真实日志写成\n  `model fallback: deadroute/dead-model → deadroute2/dead-model2` 之后，紧接着的接管行还是\n  `provider=deadroute2 model=dead-model`：provider 换了，model 是旧的。后果不只是日志难看：\n  下一次失败会把一条**从没被请求过**的路线当成元凶，拉黑它、再「从」它换走。现在先算出\n  实际要发的 config，再按它记 `seenRoute` / `rememberRoute` / `previewFallbackOnce`。\n- **日志标签把两个来源拼在一起**。接管行原来是 `provider=${payload.provider}\n  model=${seenRoute.model}`：provider 来自失败载荷、model 来自路由快照，两者可以属于不同\n  路线，于是打出了现实中不存在的 `deadroute2/dead-model`。现在整行统一用 `routeKey(route)`，\n  provider 与 model 一定同源。\n- **亚秒退避打印成 `in 0s`**。活体日志里 400ms 的退避写成 `in 0s`，读起来像「立刻重试」，\n  排查时最容易误判。现在所有时长都走 `humanMs()`。\n- **验证**：`node --check index.js` / `client.js` exit 0；`node --test` 7 passed / 0 failed；\n  行为级冒烟 **201 passed / 0 failed**，新增 case 47（亚秒时长不得打成 0s，拒绝原因同理）、\n  case 48（被强制改写的请求，下一次失败必须记在新路线上，不许甩给刚离开的那条）；case 27\n  的断言从 `model=<id>` 改成 `route <provider>/<model>`。\n- **活体复跑日志**（改完后）：`retry 1/3 in 172ms` → `retry 2/3 in 400ms` →\n  `retry 3/3 in 400ms` → `model fallback: deadroute/dead-model → deadroute2/dead-model2` →\n  `route deadroute2/dead-model2` → `until-success win"
+    },
+    {
+      "section": "1.8.0 — 可发布版本：换机器也不写错路径 + 审计收尾",
+      "text": "- **`settingsFile` 有了可移植默认值**：以前它只能由 `logFile` 推导，而 `logFile` 没设时\n  面板开关只活到进程结束。现在缺省落在 `${DSH_HOME:-~/.dsh}/auto-rerun-settings.json`\n  （宿主自己的数据目录，和 DSH 解析数据的规则一致），显式写 `settingsFile: \"\"` 才回到\n  纯内存。解析逻辑内联在 `dshHome()` 里，不 import 宿主的 `@deepseek-ai/dsh-home-paths`——\n  纯宿主插件不能假定那个包在它的安装目录里解析得到。\n- **`logFile` 默认不再写盘**：`cordis.patch.yml` 里原来钉的是作者本机的一个绝对路径，\n  别人装会往不存在的目录写。现在这一行被注释掉，\n  并新增环境变量 `DSH_AUTO_RERUN_LOG` —— 手动测试时设个路径就能开日志，不用改配置。\n- **发布元数据**：`package.json` 补 `repository` / `homepage` / `bugs` / `author`，\n  `files` 带上 `LICENSE`；仓库补 `LICENSE`（MIT）与 `.gitignore`（忽略日志、面板状态文件、\n  `npm pack` 产物）。\n- **挂载行多了 `settingsFile`**，一眼能看出面板开关落在哪。\n- **审计结论（承接 m02626 的「有无崩溃、有无 bug」）**：日志里 **0 次崩溃**（无栈、无\n  `uncaught`），另修 9 个真实缺陷：面板 `modelFallback` 开关被 400 拒、`constructor` /\n  `__proto__` 绕过白名单、重复注册路由的异常逃出 `apply()`、`void handleApi` 的\n  unhandled rejection、超限 body 越界缓冲、`pluginVersion()` 每 2s 读盘、跨源 `urlFor`、\n  面板渲染崩溃无错误边界、折叠时仍在轮询。\n- **验证**：`node --check index.js` exit 0；`node --test` 7 passed / 0 failed；\n  行为级冒烟套件 **160 passed / 0 failed**。"
+    },
+    {
+      "section": "1.7.0 — 右侧栏操作面板：看得见，也能当场改",
+      "text": "- **新增浏览器半边 `client.js`**，通过 `dsh-better-sidebar` 的 `registerTab` 在右侧栏注册\n  「自动重跑」标签页（`package.json` 补 `exports[\"./client\"]`、`files`、`dsh.client`）。\n  之前插件是「看不见的黑盒」：到底接管没接管、卡在等多久、计数器还剩几次，只能翻日志。\n- **新增两条宿主路由** `/auto-rerun/api/status` 与 `/auto-rerun/api/config`，\n  走 `ctx.connection.requestRejection` 的信任围栏。面板读的、改的都是运行中那份 `cfg`，\n  不存在第二份状态：改完立刻对下一次失败生效。\n- **写入走白名单**（`SETTINGS`）：只有开关和几个数字可改，`messagePattern` / `codes` /\n  `fallbackRoutes` 这类会改变判定语义的键一律 400 拒绝——面板不能把插件的接线改坏。\n- **开关持久化**：改动写进 `settingsFile`（默认 `${DSH_HOME:-~/.dsh}/auto-rerun-settings.json`），\n  重载后仍在；写 `settingsFile: \"\"` 时只活到进程结束，符合「纯内存插件」的默认。\n- **新增计数**：接管重连 / 拒绝重连 / 回合续跑 / 换路线 / 死路命中，面板直接显示，\n  也是排查「到底有没有在重连」最快的一眼。\n- **验证**：smoke 套件 140 passed / 0 failed（新增 18 条面板断言：路由注册、围栏 403、\n  状态载荷、开关写入、白名单拒绝、方法/404、计数随真实接管前进、活动流带接管行）；\n  `node --test` 7/7；`node --check` 两个半边都 exit 0。"
+    },
+    {
+      "section": "1.6.0 — 默认「同一个模型一直试到成功」，换路线改为需要显式打开",
+      "text": "- **老大的要求**（原话）：「我只需要针对同一个模型 一个会话内 如果不是一定的报错信息\n  就一直重试（场景是使用免费模型 但容易堵塞 让他一直试 直到运行成功这样）」。\n  也就是说：1.4/1.5 加的 Layer C（换模型）**不是他要的默认行为** —— 他要的是守着\n  这一个免费模型硬扛堵塞，直到跑通。会话里真实出现过两条 `[model changed: …]`\n  通知（qoder-cn→qoder、qoder→qoder-cn）就是 Layer C 自己触发的，正是他不想要的。\n- **改动一：新增 `retryUntilSuccess`（默认 `true`）**。Layer A 在失败**不属于死路**\n  时不再受计数预算（`retries`）与空闲时间预算（`busyRouteBudgetMs`）限制，一直重连\n  直到这一轮成功。防打爆端点靠的是**退避封顶**（限流 180s / 文本提示 60s / 普通断连\n  60s），不是次数。日志里预算栏变成 `until-success #N (idle Xs)`，一眼看出这是\n  「无上限重连」而不是「第 3 次里的那 3 次」。\n- **改动二：`modelFallback.enabled` 默认改 `false`**。选模型重试变成**可选功能**，\n  想开就在配置里写 `modelFallback: { enabled: true }`（Layer C 的实现、候选顺序、\n  三级持久化、死路黑名单全部保留，未删）。\n- **保留的刹车**（这是「不是一定的报错就一直重试」里的\"一定的报错\"）：\n  `deadRouteReason()` 命中的失败（401/403、`AUTH`/`SUBSCRIPTION_EXPIRED`/\n  `INVALID_API_KEY`/`BILLING`/`INSUFFICIENT_CREDITS`、订阅/套餐过期、余额/额度不足）\n  仍然**立刻停手**把错误交还宿主——重试一万次也一样，继续等只是把会话钉死。\n  非断连类失败（400、上下文超长、协议/代码错误）也照旧不进接管。\n  死路判定在 Layer A 的最前面，所以 `retryUntilSuccess` 关不掉它。\n- **回退方式**：`retryUntilSuccess: false` 一行回到 1.5.x 的全部预算行为；\n  Layer C 想回来就 `modelFallback: { enabled: true }`。\n- **验证**：`node --check index.js` exit 0；冒烟套件新增 case 36–39（默认无限重连\n  8 次全放行且日志为 `until-success`、mount 行显示 `retry-until-succ"
+    },
+    {
+      "section": "1.5.1 — 注入消息的不变量加固（写坏会话的事故不再可能有第二次入口）",
+      "text": "- **不变量**：任何写进会话的消息必须是**带身份的完整 `UserMessage`**——\n  非空字符串 `id`、`role: \"user\"`、数组 `content`、`source.kind` 非空。宿主**写入时\n  不校验**（`agent.followup()` / `Session.append()` 照单全收），**冷启动重放时才校验**\n  （`assertMessageEventShape()`），一条缺 id 的 `user/message` 会让整份会话抛\n  `session event at seq N lacks an identified message` 并**一条都加载不出来**。\n- **触发场景**：上游断连 → Layer B 注入「继续任务」的续跑消息。1.1.1 及更早正是用裸\n  对象 `{ content, source }` 写坏过真实会话（1.1.2 修）。外部复核（另一 AI）确认诊断\n  属实；同类缺陷在官方 Discussions 也有报告：**#4819**、**#11216**（同一模式：写不校验、\n  读才校验）。\n- **本次加固**（不改行为，只堵入口 + 加断言 + 加测试）：\n  - 新增唯一注入口 `admitFollowup(agent, { content, source })`：内部构造 → 断言 → 才\n    `followup()`；断言不过就 `throw`（宁可这次续跑失败，也不写坏整份会话）。以后新增\n    注入点必须走它，不许再直接调 `followup`。\n  - `buildUserMessage` 不再「信任」宿主实现：若返回对象缺 `id`/`role`，用\n    `randomUUID()` 补齐后再返回；`source` 缺失或不是合法对象时归一成\n    `{ kind: \"auto-rerun\" }`（缺 kind 同样会被校验器整份拒绝）。\n  - 注入消息的 `source` 统一为 `{ kind: \"auto-rerun\", form: \"notice\", summary: \"auto-rerun attempt N\" }`。\n    `kind` 值未改（日志/测试都引用它）。`form: \"notice\"` 让界面把它渲染成可折叠的\n    通知，一行摘要就是 `summary`，正文是提示词——事后能从会话直接看出是哪一次重跑。\n  - `st.reruns = n` 移到注入**之前**：万一注入抛错，重跑上限依然生效，不会变成循环。\n  - 新增 `test/inject-shape.test.mjs`（`npm test`，即 `node --test`）：7 条用例，含\n    复刻宿主校验规则的 `assertM"
+    },
+    {
+      "section": "1.5.0 — 死路路线立刻换，不再干等",
+      "text": "- **问题**：认证失败、订阅过期、key 无效、额度耗尽这类失败**重试一万次也一样**，\n  插件以前把它们原样交还宿主，回合当场结束。历史会话里就有因为\n  `Your subscription has expired` 连续六轮 goal 空转最后死掉的例子。\n- **修复**：新增死路判定（HTTP 401/403、`AUTH`/`UNAUTHORIZED`/`FORBIDDEN`/\n  `SUBSCRIPTION*`/`INVALID_API_KEY`/`BILLING` 等失败码，以及 `subscription …\n  expired`、`invalid api key`、`no credits`、余额/额度不足、订阅/套餐过期等文本），\n  命中后**不等计数预算**直接换路线（Layer C），换成功就返回 `{kind:'retry'}`\n  让下一次请求走新路线；换不了才把失败交还宿主，并只警告一次。\n- **死路黑名单**：被判死的路线进 30 分钟黑名单（进程内、按 `provider/model`），\n  期间不再作为换路线候选——否则会换到一个同样过期的地方白烧一次配额。\n- **严格区分拥塞**：429 / `tpm exhausted` / `retry in ~3s` 不是死路，仍按 Layer A\n  的长退避等待，绝不因为「看起来像限流错误码」就把用户的会话拖到别的模型上。\n- **附带修正**：换路线后立即把 `seenRoute` 记成新路线，这样紧接着的失败日志与\n  死路记账不会还挂在刚离开的那条路线上（否则会出现「明明是 beta 挂了，日志写的\n  是 alpha」以及黑名单记错对象）。\n- **可预演的候选**：第一次请求后会打印一行\n  `model fallback preview for a/x: would switch to b/y (catalog)` —— 真正的候选搜索，\n  但不切换任何东西。换路线这一层从此**在出事之前就能验证**，不用等死一次回合。\n- **修掉一个同类隐患（事故边界）**：计数/空闲预算原来只在「回合结束 / 用户发消息」时清零。\n  长回合里 20 分钟前碰过一次限流，之后一次几秒的偶发抖动会被旧预算判成「预算已用完」\n  直接放行给宿主 → 回合又死。现在两次失败间隔超过 `incidentGapMs`（默认 60s）就当作\n  新事故，预算重新开始。（1.8.1 补上了这条规则缺的另一半：间隔之外还必须**有已服务的\n  证据**，否则插件自己的长退避会被误判成恢复——见上面 1.8.1 的第三条。）\n- **`fallbackAnyModel`**：默认 `true`（回合活命优先，切换在会话/选择器里可见）；\n  设 `false` 则只换「同 mo"
+    },
+    {
+      "section": "1.4.2 — 候选顺序更靠谱 + 日志不刷屏",
+      "text": "- **候选顺序**：钉死的 `fallbackRoutes` → 同 model id 的另一 provider → **本进程已经\n  见过的路线** → 目录里其余模型。第三级排到目录前面，是因为「宿主刚在这台机器上用它\n  跑通过」比「目录里写着有、但订阅可能早过期」更能保证换过去不会立刻再挂。\n- **已经交给宿主就不叠加 override**：`selectForNextRequest` 成功时不再同时留着\n  强制改写，避免和用户的模型选择器抢路线（抢的结果是日志说换了、实际还在原路线上）。\n- **`no fallback route available …` 每个事故只警告一次**（之前是每次失败都刷一行），\n  其余信息留在 `debug: true` 的 dbg 行。\n- **测试**：新增「同 model id 另一 provider 优先于见过的其它模型」用例；套件\n  **88 passed / 0 failed**。"
+    },
+    {
+      "section": "1.4.1 — 换路线真的生效（监听顺序）+ 服务探测",
+      "text": "- **问题（1.4.0 已挂载后暴露）**：日志里连一 `model fallback:` 都没有。两处原因叠加：\n  ① 这个宿主里 `ctx.get(\"llm\")` / `ctx.get(\"sessionController\")` 未必可达，目录为空\n  ⇒ 没有任何候选；② 即使钉了候选也可能白换——宿主是在**创建 agent 时**才安装自己的\n  `agent/request` 监听，而 cordis 对 prepend 监听是「后注册的在最外层」，插件 mount 时\n  注册的那个反而在**里层**，它设好的路线会被宿主在外层原样套回自己的 route。换路线\n  的效果就这样被静默吃掉。\n- **修复**：\n  - 换路线的那一刻注册 `agent/request` 守卫（`{ prepend: true }`），且**同时注册在\n    agent 的 scoped ctx 和插件自己的 ctx** 上——宿主自己的模型选择监听就是装在前者\n    里的，而 cordis 对 prepend 监听是「后注册的在最外层」（已在 app.asar 里核实：\n    `register(){ hooks[prepend?'unshift':'push'](...) }`），所以只有后注册才盖得住；\n    两处都注册就不必猜哪个被采纳。用户/宿主自己动路线时守卫立刻让路\n    （`fallback override dropped …`）。\n  - 持久化改成三级降级：`sessionController.agents.selectForNextRequest`（宿主通知 +\n    界面选择器同步，**这一级成功就不再叠加 override**，免得跟用户抢路线）→ 自行\n    append `model/selection` 会话事件（界面同样读它，重载后仍生效）→ 仅本插件强制改写\n    （整个事故期间有效，用户显式换路线即让路）。日志会写明这次实际走了哪一级。\n  - 候选来源同样不再只靠目录：目录拿不到时退到**本进程已经见过的路线**（宿主自己\n    装配过的 `provider/model`），所以哪怕这个宿主不给插件目录，只要这台机器上别的\n    会话跑过第二条路线，就能自动换过去；钉死的 `fallbackRoutes` 依旧优先。\n  - 一次性接线探测：第一次真正接管时打印\n    `model fallback wiring: llm catalog reachable|missing, session selection reachable|missing, pinned routes: N`\n    ——换路线没反应时先看这一行，别再猜。\n  - `routeGuard` 随 agent 一起销毁（`ag"
+    },
+    {
+      "section": "1.4.0 — 路线忙不再断线（时间预算）+ 选模型重试",
+      "text": "- **问题一（逻辑错误，不是 bug）**：1.3.0 给「拥塞类」加的是**事故时长**预算\n  （事故开始后 600s 就收工）。真实日志证明这个口径是错的：qoder-cn 的队列忙持续\n  45 分钟以上，期间上游一直在正常回答 `retry in ~2s`，而插件在\n  `busy for 658s > 600s` 之后就**永久**拒绝该 agent 的每一次重连\n  （`busy for 4170s/4326s/4748s/5114s/5314s/5565s > 600s; letting the failure\n  close the turn`，同一 `session-cbbad5a7` 连续 6 次）——上游已经恢复，插件却因为\n  「事故太老」再也不救。这就是老大说的「路线太忙就直接断了而不是重连」。\n- **修复一**：改成**空闲**时间预算（`busyRouteBudgetMs`）——只要还在持续发出重连\n  尝试就一直连下去；只有连续这么久都没发出一次尝试才放弃。持续拥塞⇒无限重连；\n  偶发抖动⇒照旧受 `retries` 计数约束；用户说话/回合成功⇒清零重来。\n- **问题二（新需求）**：一条路线彻底不可用（配额、封禁、供应商侧故障）时，等多久\n  都没用，需要**换模型重试**。\n- **修复二（Layer C）**：一条路线把自己那份计数预算用完（且连续失败 ≥\n  `fallbackAfterFailures`）就换路线，走宿主 `model/selection` 通道（见上文\n  「Layer C 怎么换路线」），换完重置计数预算，单次事故最多换 `fallbackMaxSwitches`\n  次。默认从 `ctx.llm` 目录挑，**优先换 provider**——配额是 per-provider 的，\n  同 provider 换个 model 名字通常还在同一个限流桶里；同 model id 的另一 provider\n  排最前，行为不变、配额独立。\n- **诊断改进**：处置日志的 `model=` 改取「宿主这次真正装配的路线」（`agent/request`\n  瀑布读到的配置，取不到就退到会话的 `requestHeader().config`），不再恒为\n  `unknown`；mount 行新增\n  `model fallback: after 2 failures, max 2 switch(es), pinned: …` 与\n  `busy-route budget: 600s`，重载后一眼能看出跑的是哪一版。"
+    },
+    {
+      "section": "1.3.0 — 尊重 provider 在失败文本里给的退避指令",
+      "text": "- **问题（真实日志证据）**：Qoder 用队列忙信号回答请求——\n  `Qoder is busy — the request was queued (retry in ~3s)`，`type: \"rate_limit\"`、\n  status 503，**退避指令写在文本里而不是 `Retry-After` 头**。插件只认结构化\n  `providerRetryAfterMs`，于是把它当成分钟级配额限流，套用 30s→60s→120s 长窗口：\n  实测日志 `retry 1/3 in 35s` / `retry 2/3 in 66s` / `retry 3/3 in 132s`\n  —— 上游 3 秒就恢复的队列忙，插件硬等 3 分半，还把 3 次重试预算全烧在\n  冷窗口上，最后 `layer A budget exhausted` 让回合死掉。**慢不等于稳，而是把\n  预算浪费在已经不忙的上游上。**\n- **修复**：Layer A 退避优先级变为\n  ① provider 结构化 `Retry-After`（`providerRetryAfterMs`）\n  → ② **失败文本里的提示**（`retry in ~3s`、`try again in 2.5s`、`retry_after: 5`、\n  `请 3 秒后重试`、`稍等 2 分钟后再试`；`ms`/`s`/`m`/`秒`/`分钟` 都认）\n  → ③ 类窗口（限流长窗 / 网络短窗）。\n  提示经 `messageHintMinMs`（默认 1s，挡住 \"retry in ~0s\" 之类的忙轮询）与\n  `messageHintMaxMs`（默认 60s）夹紧后再抖动；`honorMessageRetryHint: false`\n  可整体关掉。日志行会标出取值来源：`in 3s via=message-hint`。\n- **不影响的面**：没有文本提示的失败（`tpm exhausted`、`rate limit reached for RPM`）\n  照旧走长窗口；配额类语义没变，变的是「上游明确说几秒后回来」时不再硬等。\n- **诊断**：mount 行现在带真实版本号（`mounted v1.3.0 …`）并显示\n  `message hints: true|false`，用来区分「真的重新加载了」和「模块缓存里的旧副本」；\n  处置日志的 `model=` 也从 payload 的多个嵌套位置回退取值，不再恒为 `undefined`。"
+    },
+    {
+      "section": "1.2.0 — 限流静默长窗口",
+      "text": "- 限流类（`RATE_LIMIT` / HTTP 429）不再和网络抖动共用 5s→60s 短窗口：tpm/RPM\n  配额要几十秒到一分钟才清零，短窗口硬撞必死。新增\n  `rateLimitInitialDelayMs`（30s）/ `rateLimitMaxDelayMs`（180s），并继续尊重\n  provider 的 `Retry-After`。\n- 新增 `rerunExcludeCodes`（默认 `[\"RATE_LIMIT\"]`）：限流只走 Layer A 的静默重试，\n  **不发可见的续跑消息**（消息出去也是撞墙，还可能连环触发）。设 `[]` 可恢复\n  让限流也发续跑提示。"
+    },
+    {
+      "section": "1.1.2 — 修复会话被写坏（重要）",
+      "text": "- **问题**：1.1.1 及更早用裸对象调 `agent.followup({ content, source })`。宿主\n  会**原样持久化**传入的对象，于是落盘的 `user/message` 事件缺 `message.id`\n  与 `message.role`。冷启动重放时校验器 `assertMessageEventShape()` 抛\n  `session event at seq N lacks an identified message`，**整份会话直接判 corrupt、\n  一条历史都打不开**（不是丢某条消息，是整本打不开）。\n- **触发条件**：只有真的发生过断连自动续跑才会写坏，所以平时不显形，等重启\n  DSH 才炸。\n- **修复**：注入消息改为完整 `UserMessage` —— 优先用官方\n  `createUserMessage({ content, source })`（从 `@deepseek-ai/dsh-llm` 动态导入，\n  由宿主模块表解析），解析不到时按同一形状手工兜底\n  `{ id: randomUUID(), role: \"user\", content, source }`。动态导入保证即使该\n  specifier 不可用也不会让插件加载失败。\n- **同型 bug 参考**：DSH Discussions #4819（`dsh-agent-loop` 的 auto-continue\n  通知同样缺 `message.id`）、#11216（会话事件只读时校验、写时不校验）。\n- **已坏会话可救**：补 `id`/`role` 后逐帧重压即可恢复（`Session.append` 写时照收，\n  冷启动重放时才校验，所以修复脚本必须先备份原文件）。"
+    }
+  ],
+  "skipped": []
+}

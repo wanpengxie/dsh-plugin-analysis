@@ -1,0 +1,1114 @@
+{
+  "repo": "fno2010/dsh-web-search-ext",
+  "commit": "8574382d30adc5b7c0434298336a7fb7afc1bf9b",
+  "extracted_at": "2026-11-10T03:52:41.329339+00:00",
+  "tree": {
+    "files": 40,
+    "bytes": 664506,
+    "lines_by_language": {
+      "CSS": 425,
+      "JSON": 2095,
+      "JavaScript": 10060,
+      "Markdown": 1369,
+      "Other": 26,
+      "YAML": 345
+    },
+    "outline": [
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/ISSUE_TEMPLATE/config.yml",
+      ".github/ISSUE_TEMPLATE/feature_request.yml",
+      ".github/dependabot.yml",
+      ".github/pull_request_template.md",
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "ROADMAP.md",
+      "client/client.js",
+      "cordis.patch.yml",
+      "docs/settings-ui-plan.md",
+      "lib/health.js",
+      "lib/index.js",
+      "lib/verify.js",
+      "package-lock.json",
+      "package.json",
+      "scripts/wrap-client.mjs",
+      "src/client/card.module.css",
+      "src/client/command.js",
+      "src/client/health.js",
+      "src/client/index.js",
+      "src/client/locales.js",
+      "src/client/model.js",
+      "src/client/row.js",
+      "src/client/row.module.css",
+      "src/client/settings-model.js",
+      "test/composition.test.mjs",
+      "test/failover.test.mjs",
+      "test/health.test.mjs",
+      "test/settings.test.mjs",
+      "test/tool-registration.test.mjs",
+      "test/toolview.test.mjs",
+      "tsdown.config.js"
+    ]
+  },
+  "manifest": {
+    "name": "@fno2010/dsh-web-search-ext",
+    "version": "0.3.1",
+    "description": "Multi-backend web_search and web_fetch providers for the DeepSeek Harness web seam (ctx.web): Exa (REST with key, anonymous hosted MCP without) and Firecrawl (v2 search/scrape API) today, extensible to more backends (SearXNG, ...), with automatic failover when one backend rate-limits, result verification (liveness/content), and a keyless web_fetch path",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/fno2010/dsh-web-search-ext.git"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "web-search",
+      "exa",
+      "firecrawl",
+      "failover"
+    ],
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "scripts": {
+      "test": "node test/failover.test.mjs && node test/composition.test.mjs && node test/tool-registration.test.mjs && node test/toolview.test.mjs && node test/health.test.mjs && node test/settings.test.mjs",
+      "build:client": "tsdown && node scripts/wrap-client.mjs"
+    },
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json",
+      "./client": "./client/client.js"
+    },
+    "files": [
+      "lib",
+      "client",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "CONTRIBUTING.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=22",
+      "dsh": ">=0.2.1-rc.1 <0.3.0-0"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.5"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.5",
+      "@deepseek-ai/dsh-credentials": "^0.2.1-rc.1",
+      "@deepseek-ai/dsh-launch-environment": "^0.2.1-rc.1",
+      "@deepseek-ai/dsh-tool-web": "^0.2.1-rc.1",
+      "@deepseek-ai/dsh-web": "^0.2.1-rc.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-modules",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-connection",
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-tool",
+          "@deepseek-ai/dsh-client-ui-commands",
+          "@deepseek-ai/dsh-api-remotes"
+        ]
+      }
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis-plugin-include": "^1.0.10",
+      "@tsdown/css": "^0.22.14",
+      "js-yaml": "^4.3.1",
+      "tsdown": "^0.22.14"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-web-search-ext bundle patch.\n#\n# Mounts the multi-backend web providers (Exa + Firecrawl today, with\n# failover; the architecture admits further backends such as SearXNG) and\n# selects them as the web seam's search AND fetch providers.\n#\n# This patch deliberately does NOT touch the `tool-web` row. Model-facing\n# tools are owned by the agent-preset layer (every shipped preset ships\n# tool-web with `fetch: false`), and the `dsh web` profile disables the\n# profile-layer tool-web row — so a patch row here cannot enable web_fetch.\n# Instead, the plugin registers the stock web_fetch tool itself at apply()\n# time (lib/index.js → registerWebFetchToolIfAbsent), routing it through the\n# SSRF-guarded fetch provider pinned below. The official\n# `deepseek-official` provider may remain registered; with explicit\n# `searchProvider` / `fetchProvider` the seam never reports\n# WEB_PROVIDER_AMBIGUOUS.\n#\n# Keys are configured through this row's config (`web-search-ext` in the\n# profile patch, or the Web settings card) or the credentials service\n# (EXA_API_KEY / FIRECRAWL_API_KEY). No key is required: search falls back to Exa's\n# anonymous hosted MCP endpoint, and both fetch backends work keyless\n# (Firecrawl keyless scrape, Exa anonymous MCP fetch).\n#\n# To use the official DeepSeek backend for search instead, remove this `web`\n# row or set `searchProvider: deepseek-official` in the user's own profile\n# patch. The fetch provider has no official equivalent, so `fetchProvider`\n# stays as-is.\n\n- insert:\n    - id: web-search-ext\n      # `name` is the loader's import specifier and must be the scoped npm\n      # registry name: `dsh plugin add` installs under that key, and an\n      # unscoped specifier cannot resolve on a fresh host.\n      name: '@fno2010/dsh-web-search-ext'\n\n- id: web\n  name: '@deepseek-ai/dsh-web'\n  config:\n    searchProvider: web-search-ext\n    fetchProvider: web-search-ext\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json",
+    "client/client.js"
+  ],
+  "config": [
+    {
+      "name": "CI",
+      "kind": "env",
+      "where": "test/failover.test.mjs:1418"
+    },
+    {
+      "name": "exaApiKey",
+      "kind": "setting",
+      "where": "lib/index.js:216"
+    },
+    {
+      "name": "exaApiKeyEnv",
+      "kind": "setting",
+      "where": "lib/index.js:218",
+      "default": "EXA_API_KEY"
+    },
+    {
+      "name": "firecrawlApiKey",
+      "kind": "setting",
+      "where": "lib/index.js:220"
+    },
+    {
+      "name": "firecrawlApiKeyEnv",
+      "kind": "setting",
+      "where": "lib/index.js:222",
+      "default": "FIRECRAWL_API_KEY"
+    },
+    {
+      "name": "preferred",
+      "kind": "setting",
+      "where": "lib/index.js:214",
+      "default": "exa"
+    },
+    {
+      "name": "firecrawlKeyless",
+      "kind": "setting",
+      "where": "lib/index.js:242",
+      "default": "true"
+    },
+    {
+      "name": "verifyLevel",
+      "kind": "setting",
+      "where": "lib/index.js:249",
+      "default": "liveness"
+    },
+    {
+      "name": "freshness",
+      "kind": "setting",
+      "where": "lib/index.js:265",
+      "default": "any"
+    },
+    {
+      "name": "numResults",
+      "kind": "setting",
+      "where": "lib/index.js:236",
+      "default": "8"
+    },
+    {
+      "name": "fetchMaxChars",
+      "kind": "setting",
+      "where": "lib/index.js:273",
+      "default": "50000"
+    },
+    {
+      "name": "EXA_API_KEY",
+      "kind": "env",
+      "where": "lib/index.js:218"
+    },
+    {
+      "name": "FIRECRAWL_API_KEY",
+      "kind": "env",
+      "where": "lib/index.js:222"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "where": ".github/ISSUE_TEMPLATE/config.yml:4"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": ".github/workflows/ci.yml:111"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": ".github/workflows/ci.yml:114"
+    },
+    {
+      "host": "api.exa.ai",
+      "url": "https://api.exa.ai/search",
+      "where": "lib/index.js:224"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai/mcp",
+      "where": "lib/index.js:226"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev/v2",
+      "where": "lib/index.js:228"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/fno2010/dsh-web-search-ext.git",
+      "where": "package.json:7"
+    },
+    {
+      "host": "api.exa.ai",
+      "url": "https://api.exa.ai/search",
+      "where": "test/failover.test.mjs:33"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai/mcp",
+      "where": "test/failover.test.mjs:34"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev/v2",
+      "where": "test/failover.test.mjs:35"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1\\nPublished",
+      "where": "test/failover.test.mjs:89"
+    },
+    {
+      "host": "r.example",
+      "url": "https://r.example/old\\nHighlights:\\nRedirect",
+      "where": "test/failover.test.mjs:102"
+    },
+    {
+      "host": "f.example",
+      "url": "https://f.example/1",
+      "where": "test/failover.test.mjs:108"
+    },
+    {
+      "host": "x",
+      "url": "https://x/1.png",
+      "where": "test/failover.test.mjs:108"
+    },
+    {
+      "host": "f.example",
+      "url": "https://f.example/2",
+      "where": "test/failover.test.mjs:109"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:129"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1",
+      "where": "test/failover.test.mjs:138"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:151"
+    },
+    {
+      "host": "f.example",
+      "url": "https://f.example/",
+      "where": "test/failover.test.mjs:152"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev/v2/search",
+      "where": "test/failover.test.mjs:153"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:169"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:170"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1",
+      "where": "test/failover.test.mjs:175"
+    },
+    {
+      "host": "api.exa.ai",
+      "url": "https://api.exa.ai/search",
+      "where": "test/failover.test.mjs:239"
+    },
+    {
+      "host": "r.example",
+      "url": "https://r.example/1",
+      "where": "test/failover.test.mjs:245"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:262"
+    },
+    {
+      "host": "v1.example",
+      "url": "https://v1.example/",
+      "where": "test/failover.test.mjs:263"
+    },
+    {
+      "host": "v1.example",
+      "url": "https://v1.example/1",
+      "where": "test/failover.test.mjs:264"
+    },
+    {
+      "host": "v1.example",
+      "url": "https://v1.example/1",
+      "where": "test/failover.test.mjs:268"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:277"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:278"
+    },
+    {
+      "host": "api.exa.ai",
+      "url": "https://api.exa.ai/search",
+      "where": "test/failover.test.mjs:302"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai/mcp",
+      "where": "test/failover.test.mjs:302"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev/v2",
+      "where": "test/failover.test.mjs:302"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:316"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1",
+      "where": "test/failover.test.mjs:317"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/2",
+      "where": "test/failover.test.mjs:318"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:333"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:351"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:366"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1",
+      "where": "test/failover.test.mjs:368"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:383"
+    },
+    {
+      "host": "api.exa.ai",
+      "url": "https://api.exa.ai/search",
+      "where": "test/failover.test.mjs:411"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev/v2/search",
+      "where": "test/failover.test.mjs:425"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:441"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/final",
+      "where": "test/failover.test.mjs:462"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev/v2/scrape",
+      "where": "test/failover.test.mjs:473"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:474"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:480"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/final",
+      "where": "test/failover.test.mjs:481"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:494"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:495"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:500"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:501"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/missing",
+      "where": "test/failover.test.mjs:514"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/missing",
+      "where": "test/failover.test.mjs:517"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/admin",
+      "where": "test/failover.test.mjs:532"
+    },
+    {
+      "host": "10.1.2.3",
+      "url": "https://10.1.2.3/internal",
+      "where": "test/failover.test.mjs:536"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:552"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:561"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/long",
+      "where": "test/failover.test.mjs:574"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/long",
+      "where": "test/failover.test.mjs:577"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:587"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:588"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:592"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:605"
+    },
+    {
+      "host": "127.0.0.2",
+      "url": "http://127.0.0.2/",
+      "where": "test/failover.test.mjs:621"
+    },
+    {
+      "host": "127.1.2.3",
+      "url": "http://127.1.2.3/",
+      "where": "test/failover.test.mjs:621"
+    },
+    {
+      "host": "0.0.0.0",
+      "url": "http://0.0.0.0:80/",
+      "where": "test/failover.test.mjs:621"
+    },
+    {
+      "host": "localhost.",
+      "url": "http://localhost./admin",
+      "where": "test/failover.test.mjs:622"
+    },
+    {
+      "host": "sub.localhost",
+      "url": "http://sub.localhost/x",
+      "where": "test/failover.test.mjs:622"
+    },
+    {
+      "host": "localhost..",
+      "url": "http://localhost../x",
+      "where": "test/failover.test.mjs:623"
+    },
+    {
+      "host": "127.0.0.1..",
+      "url": "http://127.0.0.1../x",
+      "where": "test/failover.test.mjs:623"
+    },
+    {
+      "host": "sub.localhost..",
+      "url": "http://sub.localhost../x",
+      "where": "test/failover.test.mjs:623"
+    },
+    {
+      "host": "10.1.2.3",
+      "url": "http://10.1.2.3/",
+      "where": "test/failover.test.mjs:624"
+    },
+    {
+      "host": "172.31.255.255",
+      "url": "http://172.31.255.255/",
+      "where": "test/failover.test.mjs:624"
+    },
+    {
+      "host": "169.254.1.1",
+      "url": "http://169.254.1.1/",
+      "where": "test/failover.test.mjs:624"
+    },
+    {
+      "host": "192.168.1.1",
+      "url": "http://192.168.1.1/",
+      "where": "test/failover.test.mjs:625"
+    },
+    {
+      "host": "100.64.0.1",
+      "url": "http://100.64.0.1/",
+      "where": "test/failover.test.mjs:625"
+    },
+    {
+      "host": "224.0.0.1",
+      "url": "http://224.0.0.1/",
+      "where": "test/failover.test.mjs:625"
+    },
+    {
+      "host": "2130706433",
+      "url": "http://2130706433/",
+      "where": "test/failover.test.mjs:626"
+    },
+    {
+      "host": "0x7f000001",
+      "url": "http://0x7f000001/",
+      "where": "test/failover.test.mjs:626"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/failover.test.mjs:630"
+    },
+    {
+      "host": "8.8.8.8",
+      "url": "https://8.8.8.8/",
+      "where": "test/failover.test.mjs:630"
+    },
+    {
+      "host": "localhost.com",
+      "url": "https://LOCALHOST.com/x",
+      "where": "test/failover.test.mjs:630"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:647"
+    },
+    {
+      "host": "r.example",
+      "url": "https://r.example/old",
+      "where": "test/failover.test.mjs:648"
+    },
+    {
+      "host": "r.example",
+      "url": "https://r.example/final",
+      "where": "test/failover.test.mjs:649"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:658"
+    },
+    {
+      "host": "r.example",
+      "url": "https://r.example/old",
+      "where": "test/failover.test.mjs:659"
+    },
+    {
+      "host": "127.0.0.2",
+      "url": "http://127.0.0.2:9/internal",
+      "where": "test/failover.test.mjs:659"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:680"
+    },
+    {
+      "host": "m.example",
+      "url": "https://m.example/1\\nHighlights:\\nOne.\\n\\n---\\n\\n",
+      "where": "test/failover.test.mjs:700"
+    },
+    {
+      "host": "m.example",
+      "url": "https://m.example/2\\nHighlights:\\nTwo.\\n\\n---\\n\\n",
+      "where": "test/failover.test.mjs:701"
+    },
+    {
+      "host": "m.example",
+      "url": "https://m.example/3\\nHighlights:\\nThree.\\n\\n---\\n\\n",
+      "where": "test/failover.test.mjs:702"
+    },
+    {
+      "host": "m.example",
+      "url": "https://m.example/4\\nHighlights:\\nFour",
+      "where": "test/failover.test.mjs:703"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:718"
+    },
+    {
+      "host": "m.example",
+      "url": "https://m.example/1",
+      "where": "test/failover.test.mjs:719"
+    },
+    {
+      "host": "m.example",
+      "url": "https://m.example/2",
+      "where": "test/failover.test.mjs:720"
+    },
+    {
+      "host": "m.example",
+      "url": "https://m.example/2",
+      "where": "test/failover.test.mjs:721"
+    },
+    {
+      "host": "m.example",
+      "url": "https://m.example/3",
+      "where": "test/failover.test.mjs:725"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:742"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:757"
+    },
+    {
+      "host": "f.example",
+      "url": "https://f.example/1",
+      "where": "test/failover.test.mjs:759"
+    },
+    {
+      "host": "f.example",
+      "url": "https://f.example/2",
+      "where": "test/failover.test.mjs:760"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:778"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:810"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:838"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:847"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:862"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:880"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:912"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:915"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:919"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:931"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:955"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:989"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:1020"
+    },
+    {
+      "host": "many.example",
+      "url": "https://many.example/${i",
+      "where": "test/failover.test.mjs:1057"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1068"
+    },
+    {
+      "host": "many.example",
+      "url": "https://many.example/9",
+      "where": "test/failover.test.mjs:1081"
+    },
+    {
+      "host": "many.example",
+      "url": "https://many.example/10",
+      "where": "test/failover.test.mjs:1082"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1092"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1113"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1133"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1154"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1175"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1194"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:1217"
+    },
+    {
+      "host": "f.example",
+      "url": "https://f.example/",
+      "where": "test/failover.test.mjs:1218"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1219"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1246"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:1247"
+    },
+    {
+      "host": "p.example",
+      "url": "https://p.example/a",
+      "where": "test/failover.test.mjs:1250"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:1291"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1292"
+    },
+    {
+      "host": "api.exa.ai",
+      "url": "https://api.exa.ai",
+      "where": "test/failover.test.mjs:1331"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1332"
+    },
+    {
+      "host": "api.firecrawl.dev",
+      "url": "https://api.firecrawl.dev",
+      "where": "test/failover.test.mjs:1348"
+    },
+    {
+      "host": "mcp.exa.ai",
+      "url": "https://mcp.exa.ai",
+      "where": "test/failover.test.mjs:1360"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/article",
+      "where": "test/tool-registration.test.mjs:119"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/article",
+      "where": "test/tool-registration.test.mjs:121"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/article",
+      "where": "test/tool-registration.test.mjs:124"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/x",
+      "where": "test/toolview.test.mjs:132"
+    },
+    {
+      "host": "a.example",
+      "url": "http://a.example",
+      "where": "test/toolview.test.mjs:133"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/x?y=1#z",
+      "where": "test/toolview.test.mjs:134"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1",
+      "where": "test/toolview.test.mjs:200"
+    },
+    {
+      "host": "b.example",
+      "url": "https://b.example/2",
+      "where": "test/toolview.test.mjs:201"
+    },
+    {
+      "host": "c.example",
+      "url": "https://c.example/3",
+      "where": "test/toolview.test.mjs:202"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1",
+      "where": "test/toolview.test.mjs:256"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1",
+      "where": "test/toolview.test.mjs:320"
+    },
+    {
+      "host": "a.example",
+      "url": "https://a.example/1",
+      "where": "test/toolview.test.mjs:336"
+    },
+    {
+      "host": "b.example",
+      "url": "https://b.example/2",
+      "where": "test/toolview.test.mjs:337"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.5"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis-plugin-include": "^1.0.10",
+      "@tsdown/css": "^0.22.14",
+      "js-yaml": "^4.3.1",
+      "tsdown": "^0.22.14"
+    }
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 42,
+    "pushed_at": "2026-10-30T18:15:12Z",
+    "created_at": "2026-08-17T13:33:08Z"
+  },
+  "runtime_files": [
+    "client/client.js",
+    "cordis.patch.yml",
+    "lib/health.js",
+    "lib/index.js",
+    "lib/verify.js",
+    "package.json",
+    "scripts/wrap-client.mjs",
+    "src/client/command.js",
+    "src/client/health.js",
+    "src/client/model.js",
+    "src/client/settings-model.js",
+    "test/composition.test.mjs",
+    "test/failover.test.mjs",
+    "test/health.test.mjs",
+    "test/settings.test.mjs",
+    "test/tool-registration.test.mjs",
+    "test/toolview.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-web-search-ext",
+      "text": "English | [中文](README.zh.md)\n\nMulti-backend `web_search` **and** `web_fetch` provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). **Works with no API keys at all**; add keys to unlock higher limits. Registered into the web capability seam (`ctx.web`) under one stable provider id (`web-search-ext`)."
+    },
+    {
+      "section": "Why",
+      "text": "The built-in `web_search` tool is backend-pluggable; the in-box default provider (`deepseek-official`) requires a DeepSeek API key. This plugin is a key-free-capable alternative: it works out of the box via Exa's anonymous MCP endpoint, and **fails over automatically** when one backend saturates. It also registers a keyless `web_fetch` provider, and verifies what it hands to the model (dead links, changed pages, which backend actually answered — all visible in the result)."
+    },
+    {
+      "section": "Features",
+      "text": "- **Two backends today**: Exa (REST with key, anonymous hosted MCP without) and Firecrawl (v2 search + scrape API, keyed or keyless)\n- **Keyless `web_fetch`**: fetch a URL through Firecrawl scrape, falling back to Exa's anonymous MCP `web_fetch_exa`; no API key required, output capped by `fetchMaxChars`\n- **Automatic failover**: on any backend failure (429, 401/402/403, 5xx, network, malformed body) the search — and the fetch — falls through to the next backend in order\n- **Per-backend 429 cooldown**: a saturated backend is skipped on subsequent calls; the cooldown honors the window the backend itself reports (`Retry-After` header or `retry_after_seconds` in the body), clamped by `maxCooldownSec`; when all backends fail, the error lists every failure including cooldown state\n- **Result verification** (L0 liveness, on by default): every returned source is probed locally and each snippet tagged `[alive]` / `[dead 404]` / `[blocked]` / `[timeout]` / `[unreachable]` / `[skipped]` — no result is ever dropped; experimental L1 content check via `verifyLevel: \"content\"` adds `[verified]` / `[verified·changed]` / `[unverified]` (page live but no snippet to compare)\n- **Provenance receipt**:"
+    },
+    {
+      "section": "Backends",
+      "text": "| Backend | Search | Fetch |\n|---|---|---|\n| **Exa** | With key: REST `POST https://api.exa.ai/search` (higher limits, highlight snippets). Without: anonymous hosted MCP `POST https://mcp.exa.ai/mcp` (JSON-RPC 2.0, documented public fallback, rate-limited → HTTP 429) | Keyless: hosted MCP `web_fetch_exa` tool (fallback path) |\n| **Firecrawl** | `POST https://api.firecrawl.dev/v2/search` (Bearer with key; keyless requests when `firecrawlKeyless: true` — unofficial, may be rate-limited or removed) | `POST {base}/scrape` (keyed or keyless; preferred fetch path — markdown + metadata) |"
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add @fno2010/dsh-web-search-ext"
+    },
+    {
+      "section": "or from a local checkout:",
+      "text": "dsh plugin --profile web add ./path/to/dsh-web-search-ext\n```\n\nInstalling a plugin requires restarting the running `dsh web` process (the profile bundle list is resolved at boot). Config changes afterwards are hot — no restart."
+    },
+    {
+      "section": "or from a local checkout:",
+      "text": "The bundle patch selects this provider for the `web_search` tool (`web.searchProvider: web-search-ext`) and for `web_fetch` (`web.fetchProvider: web-search-ext`). The official `deepseek-official` provider stays registered but unused; the explicit selection also prevents `WEB_PROVIDER_AMBIGUOUS`."
+    },
+    {
+      "section": "or from a local checkout:",
+      "text": "The plugin also makes the model-facing `web_fetch` tool available out of the box. The stock tool is normally registered by the agent-preset layer (`tool-web`); harness lines before 0.2 shipped that row with `fetch: false`, and the `dsh web` profile still disables the profile-layer `tool-web` row — so a composition can end up with no `web_fetch` at all, leaving the model with `unknown tool \"web_fetch\"` even with a working fetch provider installed. This plugin closes the gap at apply time: when `web_fetch` is not already registered, it registers the stock tool by reusing `@deepseek-ai/dsh-tool-web`'s own `applyWebFetchTool` (same schema, prompt, and presentation as the harness). The tool's execution routes through `ctx.web.fetch` — the seam pinned to this provider — whose fetch path is guarded by a fail-closed SSRF check (public http(s) targets only; the base's reason for disabling the tool). A preset that enables `tool-web.fetch` registers its own agent-scoped tool, which takes precedence; if the tool is already registered, this plugin's step is a no-op. To keep `web_fetch` off entirely, uninstall the plugin."
+    },
+    {
+      "section": "Configuration",
+      "text": "Config lives in this plugin's row in the active profile patch, `$DSH_HOME/profiles/<profile>/cordis.patch.yml` (edit it directly, or use the settings card). The row is hot-reloaded: the plugin reads its volatile fields on every call."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Description |\n|---|---|---|\n| `preferred` | `exa` | Backend to try first: `exa` \\| `firecrawl` |\n| `numResults` | `8` | Result count to request; also a hard cap on results returned (context budget) — a larger `maxResults` request is clamped to it and the receipt says so |\n| `maxSnippetChars` | `500` | Snippet length bound |\n| `rateLimitCooldownSec` | `60` | Fallback 429 cooldown when the backend reports no window; `0` disables |\n| `firecrawlKeyless` | `true` | Allow keyless Firecrawl requests (search + fetch) |\n| `exaApiKey` / `firecrawlApiKey` | — | Literal API key per backend |\n| `exaApiKeyEnv` / `firecrawlApiKeyEnv` | `EXA_API_KEY` / `FIRECRAWL_API_KEY` | Env var names for key resolution |\n| `exaApiUrl` / `exaMcpUrl` / `firecrawlBaseUrl` | `https://api.exa.ai/search` / `https://mcp.exa.ai/mcp` / `https://api.firecrawl.dev/v2` | Endpoint overrides |\n| `verifyLevel` | `liveness` | Result verification tier: `off` \\| `liveness` (HEAD every source) \\| `content` (experimental: also word-match the snippet against the live page) |\n| `livenessTimeoutMs` | `3000` | Per-URL timeout for L0 HEAD probes |\n| `contentCheckBytes` | `10240` | L1: max bytes read from each page "
+    },
+    {
+      "section": "Configuration",
+      "text": "```yaml\n- id: web-search-ext\n  name: '@fno2010/dsh-web-search-ext'\n  config:\n    preferred: exa\n\nOr select this provider without the bundle patch: `DSH_WEB_SEARCH_PROVIDER=web-search-ext`."
+    },
+    {
+      "section": "Keys (optional but recommended)",
+      "text": "Any of these, in order of precedence per backend:\n\n1. Literal key in the plugin's config row (`exaApiKey` / `firecrawlApiKey`)\n2. Credentials service: the `EXA_API_KEY` / `FIRECRAWL_API_KEY` entries in `~/.dsh/.credentials.yaml` (or a `.env` file)\n3. Launch environment variable of the same name"
+    },
+    {
+      "section": "Keys (optional but recommended)",
+      "text": "**Settings UI (Web)**: this plugin has a **Web Search (ext)** tab on **Settings → Plugins** that edits the six config fields (including the verification tier) and both API keys; writes persist to the profile patch row. Key state is auto-discovered from the layers above — the configured/not-configured badges update live when `~/.dsh/.credentials.yaml` changes — and a key supplied by the live process environment is rendered read-only, because the host rejects UI writes that an environment value would shadow. (The \"Models\" page manages LLM provider credentials only.)"
+    },
+    {
+      "section": "Keys (optional but recommended)",
+      "text": "No keys at all still works: Exa uses its anonymous MCP endpoint and Firecrawl is tried keyless."
+    },
+    {
+      "section": "How failover works",
+      "text": "Each search (and each fetch) builds an ordered plan from the backends that are available under the current key situation — preferred backend first for search; Firecrawl scrape first for fetch (richer markdown), with the keyless Exa MCP fetch as fallback. The first backend whose request fails is reported as the failure only if every later backend also fails — a 429 additionally starts that backend's cooldown, sized by the window the backend itself reports (`Retry-After` header, or `retry_after_seconds` in the response body; clamped by `maxCooldownSec`), so it is skipped on subsequent calls until the window expires."
+    },
+    {
+      "section": "How failover works",
+      "text": "`web_search` results also carry a one-line provenance receipt (`web-search-ext: <backend> · <elapsed>s · <n> results · liveness: …`): which backend actually answered, and whether the freshness window or verification tier was honored or had to be skipped. Nothing is silently dropped."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```sh\ndsh plugin --profile web remove @fno2010/dsh-web-search-ext   # then restart dsh web\n```"
+    },
+    {
+      "section": "Security notes",
+      "text": "- The only outbound requests are to the configured Exa and Firecrawl endpoints (plus the local verification probes described below); nothing else is contacted.\n- API keys travel only in the `authorization` header of their own backend's requests — never in bodies, never to the other backend, never in error messages.\n- No install-time scripts: plain ESM JavaScript, no build step, no `postinstall`/`prepare`.\n- One search's context is bounded: results are clamped to `numResults` (when a request's `maxResults` exceeds it, the receipt carries the `(numResults cap)` marker — `N of M results` when the backend also over-delivered) and snippets are bounded to `maxSnippetChars`; Firecrawl's page-markdown descriptions are stripped of image links before entering model context.\n- Verification probes (L0/L1) only fetch URLs that appear in backend results, with bounded bytes/timeouts; redirects are followed manually and every hop is re-validated against the same SSRF rules (public http(s) only; loopback, private, link-local, and CGNAT ranges are refused — including IPv6 literal and trailing-dot spellings; addresses that cannot be confidently classified are refused, fail closed).\n- The `web_fetch` "
+    },
+    {
+      "section": "Development",
+      "text": "- Tests: `npm test` — mocked failover/mapping/verification/fetch scenarios (deterministic, no network) plus live keyless smoke calls (smoke is skipped in CI).\n- Adding a backend, branch/PR conventions, and the release process: [CONTRIBUTING.md](CONTRIBUTING.md)."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,366 @@
+{
+  "repo": "jinsiyu/dsh-safemode-profile",
+  "commit": "a22c4266f870fe12aade0f3a650bb060a0352660",
+  "extracted_at": "2026-11-10T04:47:19.841122+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 39141,
+    "lines_by_language": {
+      "JSON": 38,
+      "JavaScript": 417,
+      "Markdown": 463,
+      "Other": 29,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/ensure.js",
+      "lib/guard.js",
+      "lib/index.js",
+      "package.json",
+      "scripts/ensure-safemode.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-safemode-profile",
+    "version": "0.3.12",
+    "description": "Safemode profile enforcer: force-restores ~/.dsh/profiles/safemode to a clean whitelist (dsh-base + dsh-web-app) on start and continuously guards it against modification, so `dsh --profile safemode` always boots with zero third-party plugins. No build scripts: the bundle row does all work.",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/jinsiyu/dsh-safemode-profile.git"
+    },
+    "homepage": "https://github.com/jinsiyu/dsh-safemode-profile",
+    "bugs": {
+      "url": "https://github.com/jinsiyu/dsh-safemode-profile/issues"
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "lib/index.js",
+      "lib/ensure.js",
+      "lib/guard.js",
+      "scripts/ensure-safemode.mjs",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=18"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-safemode-profile bundle patch layer.\n# One host row: on apply it ensures the safemode profile exists (idempotent,\n# no-op once ~/.dsh/profiles/safemode/package.json is present).\n- insert:\n    - id: safemode-profile-writer\n      name: dsh-safemode-profile\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "default": "~/.dsh",
+      "where": "lib/ensure.js:58-62"
+    },
+    {
+      "name": "DSH_SAFEMODE_BUNDLES",
+      "kind": "env",
+      "default": "@deepseek-ai/dsh-base,@deepseek-ai/dsh-web-app",
+      "where": "lib/ensure.js:64-74"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/jinsiyu/dsh-safemode-profile`",
+      "where": "lib/index.js:45"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/jinsiyu/dsh-safemode-profile.git",
+      "where": "package.json:7"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/jinsiyu/dsh-safemode-profile",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/jinsiyu/dsh-safemode-profile/issues",
+      "where": "package.json:11"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 15,
+    "pushed_at": "2026-09-02T11:27:01Z",
+    "created_at": "2026-08-19T11:54:03Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/ensure.js",
+    "lib/guard.js",
+    "lib/index.js",
+    "package.json",
+    "scripts/ensure-safemode.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-safemode-profile",
+      "text": "> [English](README.en.md)\n\n**唯一职责：让 `dsh --profile safemode` 永远是干净的——启动即强制还原，\n运行期持续守护，任何时刻都只含白名单核心 bundle。**\n\n```\ndsh --profile safemode        # 零第三方插件启动（建议: dsh --profile safemode --port 3081）\n```"
+    },
+    {
+      "section": "1. 启动时：强制还原（不管 profile 有没有、改没改过）",
+      "text": "DSH 每次启动加载本插件行时，无条件把 `$DSH_HOME/profiles/safemode/`\n写回白名单模板：\n\n| 文件 | 强制内容 |\n|---|---|\n| `package.json` | `dsh.profile.bundles` = 白名单（默认 `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-web-app`），`dependencies` 清空 |\n| `cordis.patch.yml` | 空用户 patch 层（`[]` 模板） |\n| `pnpm-workspace.yaml` | 与官方 profile 相同的 pnpm 设置 |\n\n与模板一致时不动（避免自触发死循环），不一致一律重写。"
+    },
+    {
+      "section": "2. 运行期：持续守护（平时检查）",
+      "text": "插件行存活期间双通道监控 profile 是否被改动：\n\n- **fs.watch 实时监听**：`package.json` / `cordis.patch.yml` / `pnpm-workspace.yaml`\n  任何变更 → 防抖 300ms → 立即还原；\n- **30s 轮询兜底**：`detectDrift()` 全量比对（覆盖 watch 不可靠的挂载场景、\n  文件被外部整体替换的场景）。\n\n发现漂移（bundle 被加/删、patch 层被写入内容、dependencies 被加东西）→\n自动还原，并记录 warn 日志：`safemode profile was modified (...); restored to whitelist template`。"
+    },
+    {
+      "section": "触发机制（无构建脚本，一次装好）",
+      "text": "**本包没有 postinstall / 任何构建脚本**——pnpm 永远不会拦截它，\n`dsh plugin add` 一次成功、退出码 0、reconcile 正常执行，不需要\n`approve-builds` / `allowBuilds` 配置。\n\n全部工作由**插件行**（`lib/index.js` → `lib/guard.js`）承担：\nDSH 每次启动加载本插件时强制还原一次，并进入常驻守护。\n\n另附手动工具（可选）：`node scripts/ensure-safemode.mjs` 立即强制还原\n一次（不想重启 DSH 或排障时用）。"
+    },
+    {
+      "section": "安装",
+      "text": "前置：已安装 DSH（`@deepseek-ai/dsh`）与 Node.js（≥18）。\n\n**方式 A（推荐，npm 一条命令）** — 本插件已发布到 npm 并声明 `dsh.bundle` manifest，直接用官方插件命令安装：\n\n```powershell\ndsh plugin --profile web add dsh-safemode-profile\n```\n\n**方式 B（GitHub 直装）** — 从源码仓库直接安装（显式指定默认分支 `main`，npm 与 pnpm 均兼容）：\n\n```powershell\ndsh plugin --profile web add github:jinsiyu/dsh-safemode-profile#main\n```\n\n**方式 C（本地打包/未发布）** — 本地构建 tgz 安装：\n\n```powershell"
+    },
+    {
+      "section": "在插件目录打包",
+      "text": "npm pack                          # → dsh-safemode-profile-0.3.5.tgz"
+    },
+    {
+      "section": "安装进目标 profile（例如 web）",
+      "text": "dsh plugin --profile web add .\\dsh-safemode-profile-0.3.5.tgz\n```\n\n装完重启 DSH，插件行生效后 safemode 进入\"强制还原 + 常驻守护\"状态。\n启动时插件会打印一行简短横幅（守护状态、启动命令、白名单、仓库链接）。"
+    },
+    {
+      "section": "自定义白名单",
+      "text": "白名单是**唯一的**定制入口，请通过环境变量设置（**不要**手动改 safemode\nprofile 文件——任何改动都会被守护逻辑还原）：\n\n```powershell"
+    },
+    {
+      "section": "只想留纯 CLI（无 GUI）",
+      "text": "$env:DSH_SAFEMODE_BUNDLES = \"@deepseek-ai/dsh-base\"\n```\n\n`dsh` 启动时继承该环境变量即生效（本插件读取 `process.env`，守护与还原\n都用同一个白名单）。"
+    },
+    {
+      "section": "加固建议：把 safemode 的三个受管文件设为只读",
+      "text": "**推荐**将 `~/.dsh/profiles/safemode/` 下三个受管文件设为只读，从文件\n系统层面阻止 `dsh plugin --profile safemode add <包>` 向 safemode 安装\n任何插件（pnpm 写这些文件失败 → 安装报错、插件进不去；DSH 启动不受\n影响，它只读这些文件、只写 cordis.yml）：\n\n- `package.json`（dependencies + bundles，安装的必经关卡）\n- `cordis.patch.yml`（用户 patch 层）\n- `pnpm-workspace.yaml`（pnpm 管理文件）\n\n> ⚠️ **不要锁整个目录**：DSH 每次启动都会**重写** `cordis.yml`\n> （`prepareProfile` 无条件 writeFileSync），目录或其内文件被锁成只读\n> 会导致 safemode 启动失败（实测 exit 1）。Windows 的\n> `attrib +R <目录> /S` 会递归锁住所有文件（含 cordis.yml），**不要用**。"
+    },
+    {
+      "section": "加固建议：把 safemode 的三个受管文件设为只读",
+      "text": "```powershell"
+    },
+    {
+      "section": "Windows：只锁三个文件（不要 /S 递归）",
+      "text": "attrib +R \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\package.json\" `\n         \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\cordis.patch.yml\" `\n         \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\pnpm-workspace.yaml\""
+    },
+    {
+      "section": "POSIX：三个文件设为 444（目录仍需可读可执行，不能被锁）",
+      "text": "chmod 444 ~/.dsh/profiles/safemode/package.json \\\n          ~/.dsh/profiles/safemode/cordis.patch.yml \\\n          ~/.dsh/profiles/safemode/pnpm-workspace.yaml\n```\n\n解除锁定："
+    },
+    {
+      "section": "POSIX：三个文件设为 444（目录仍需可读可执行，不能被锁）",
+      "text": "```powershell\nattrib -R \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\package.json\" `\n         \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\cordis.patch.yml\" `\n         \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\pnpm-workspace.yaml\"  # Windows\nchmod 644 ~/.dsh/profiles/safemode/package.json \\\n          ~/.dsh/profiles/safemode/cordis.patch.yml \\\n          ~/.dsh/profiles/safemode/pnpm-workspace.yaml                 # POSIX\n```"
+    },
+    {
+      "section": "POSIX：三个文件设为 444（目录仍需可读可执行，不能被锁）",
+      "text": "注意：\n- **先让插件创建/还原 profile，再锁定**——锁定前内容必须与白名单模板\n  一致（守护启动时检测到 drift 才写文件；一致则完全不碰，锁定与之共存\n  无冲突）。若锁定后发现 drift，守护还原会因只读失败并记 warn——这正是\n  锁定的预期行为：锁住 = 不该有漂移。\n- 锁定后要改白名单需先解锁再操作；本插件的守护逻辑不受影响（它读\n  package.json 检测漂移，一致则不写）。"
+    },
+    {
+      "section": "更深的防护：ACL（Windows）与 chattr +i（Linux）",
+      "text": "上面 `attrib +R` / `chmod 444` 属于\"**基础只读**\"，两个平台语义不同，且\n都不能阻止**删除**文件（删除取决于父目录权限，root 更是无视一切权限位）。\n以下两种是\"**强锁**\"，按需选择："
+    },
+    {
+      "section": "Windows：ACL 拒绝（icacls）——可精确到\"写\"与\"删\"",
+      "text": "```powershell"
+    },
+    {
+      "section": "拒绝当前用户对三个文件的写入（W=写数据）",
+      "text": "icacls \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\package.json\" /deny \"$env:USERNAME:(W)\"\nicacls \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\cordis.patch.yml\" /deny \"$env:USERNAME:(W)\"\nicacls \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\pnpm-workspace.yaml\" /deny \"$env:USERNAME:(W)\""
+    },
+    {
+      "section": "更进一步：连删除也拒绝（DE=删除；WD=写数据/创建文件）",
+      "text": "icacls \"...\\package.json\" /deny \"$env:USERNAME:(WD,DE)\"\n```\n\n解除（删除该用户的 deny 条目）：\n\n```powershell\nicacls \"...\\package.json\" /remove:d \"$env:USERNAME\"\n```\n\n要点：\n- `(W)` 挡内容修改，`(DE)` 挡删除，`(WD)` 挡写+创建——比 attrib 更精确，\n  可以只挡写入、保留\"管理员能删\"的余地；\n- **仍挡不住管理员**：Administrators / SYSTEM 默认有完全控制（F），\n  管理员可以夺回所有权或清除 deny。要连管理员一起挡，需对\n  `BUILTIN\\Administrators` 也加 deny，但管理员仍能通过\"取得所有权\"绕开；\n- icacls 需要对该文件有修改 ACL 的权限（文件所有者默认有）。"
+    },
+    {
+      "section": "Linux：immutable 属性（chattr +i）——root 也动不了",
+      "text": "```bash"
+    },
+    {
+      "section": "加锁：文件不可修改、不可删除、不可改名（包括 root）",
+      "text": "sudo chattr +i ~/.dsh/profiles/safemode/package.json \\\n              ~/.dsh/profiles/safemode/cordis.patch.yml \\\n              ~/.dsh/profiles/safemode/pnpm-workspace.yaml"
+    },
+    {
+      "section": "查看",
+      "text": "lsattr ~/.dsh/profiles/safemode/package.json     # 输出含 i 即已锁定"
+    },
+    {
+      "section": "解锁",
+      "text": "sudo chattr -i ~/.dsh/profiles/safemode/package.json \\\n              ~/.dsh/profiles/safemode/cordis.patch.yml \\\n              ~/.dsh/profiles/safemode/pnpm-workspace.yaml\n```\n\n要点：\n- `+i`（immutable）是最强锁：**任何人（含 root）都不能改、删、改名**，\n  必须先 `-i` 才能操作——比 chmod/ACL 都硬；\n- 需要 `sudo`（root 权限）执行，且文件系统要支持该属性（ext4/xfs 支持；\n  某些网络/容器文件系统不支持）；\n- **对 safemode 有副作用**：文件被删后守护插件本可自动重建\n  （detectDrift 发现 missing → force 还原），`+i` 会连守护的重建也挡住；\n  升级插件、改白名单也都要先 `-i`。所以建议只在\"完全不想被任何人动\"\n  的场景使用，日常用基础只读（attrib/chmod 444）即可。"
+    },
+    {
+      "section": "三级防护对比",
+      "text": "| 方案 | 挡内容修改 | 挡删除 | 挡 root | 需要权限 | 对守护自愈的影响 |\n|---|---|---|---|---|---|\n| `attrib +R` / `chmod 444`（基础只读） | ✅ 普通用户 | ❌ | ❌ | 无 | 无（守护一致则不写） |\n| icacls deny（ACL） | ✅ | ✅（加 DE） | ❌（管理员可绕） | 文件所有者 | 无 |\n| `chattr +i`（immutable） | ✅ | ✅ | ✅ | sudo | ⚠️ 挡住守护重建，需先 `-i` |\n\n建议：**日常用基础只读即可**（pnpm 以普通用户运行，444 已完全拦截安装）；\n要防误删再加 ACL `(DE)`；只有\"这台机器上的任何账号（含 root）都不能动\nsafemode 配置\"才算刚需 chattr +i。"
+    },
+    {
+      "section": "注意",
+      "text": "- **端口**：safemode 也带 webServer，默认 3080。与 web profile 同时跑会\n  冲突（`EADDRINUSE` 导致启动失败），用 `--port` 错开：\n  `dsh --profile safemode --port 3081`。\n- **会话/凭据不隔离**：sessions、settings.yaml、.env 是 home 级共享，\n  safemode 隔离的只有插件。\n- **home patch 串层**：`~/.dsh/cordis.patch.yml` 对每个 profile 生效，\n  别往里面挂插件（守护逻辑只盯 safemode 自己的目录，管不到 home patch）。\n- **cordis.yml 勿手改**：DSH 每次启动自动重写，要改改 cordis.patch.yml\n  ——但 safemode 的 patch 层会被本插件还原为空，定制请走白名单环境变量。"
+    },
+    {
+      "section": "dsh-safemode-profile",
+      "text": "**One job: keep `dsh --profile safemode` clean — force-restore on startup,\ncontinuously guard at runtime, so the profile only ever contains the\nwhitelisted core bundles.**\n\n```\ndsh --profile safemode        # boot with zero third-party plugins (suggest: dsh --profile safemode --port 3081)\n```"
+    },
+    {
+      "section": "1. On startup: force-restore (regardless of whether the profile exists or was modified)",
+      "text": "Every time DSH boots and loads this plugin row, it unconditionally rewrites\n`$DSH_HOME/profiles/safemode/` back to the whitelist template:\n\n| File | Forced content |\n|---|---|\n| `package.json` | `dsh.profile.bundles` = whitelist (default `@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-web-app`), `dependencies` emptied |\n| `cordis.patch.yml` | empty user patch layer (`[]` template) |\n| `pnpm-workspace.yaml` | same pnpm settings as an official profile |"
+    },
+    {
+      "section": "1. On startup: force-restore (regardless of whether the profile exists or was modified)",
+      "text": "If the files already match the template, nothing is written (avoids a\nself-triggering watch loop); anything that drifted is rewritten."
+    },
+    {
+      "section": "2. At runtime: continuous guard (drift checking)",
+      "text": "While the plugin row is alive, two channels watch the profile for modification:\n\n- **fs.watch realtime**: any change to `package.json` / `cordis.patch.yml` /\n  `pnpm-workspace.yaml` → debounced 300ms → immediate restore;\n- **30s polling fallback**: full `detectDrift()` comparison (covers\n  unreliable watch mounts and files replaced wholesale externally)."
+    },
+    {
+      "section": "2. At runtime: continuous guard (drift checking)",
+      "text": "On drift (bundle added/removed, patch layer written to, `dependencies` added)\nthe guard restores the profile and logs a warning:\n`safemode profile was modified (...); restored to whitelist template`."
+    },
+    {
+      "section": "Activation (no build scripts — installs cleanly in one shot)",
+      "text": "**This package has no postinstall / no build scripts of any kind** — pnpm\nnever blocks it, `dsh plugin add` succeeds with exit code 0 and reconcile runs\nnormally. No `approve-builds` / `allowBuilds` configuration needed.\n\nAll work is done by the **plugin row** (`lib/index.js` → `lib/guard.js`):\nevery DSH start force-restores once, then the guard stays resident."
+    },
+    {
+      "section": "Activation (no build scripts — installs cleanly in one shot)",
+      "text": "Optional manual tool: `node scripts/ensure-safemode.mjs` force-restores\nimmediately (handy without a DSH restart, or for troubleshooting)."
+    },
+    {
+      "section": "Install",
+      "text": "Prerequisites: DSH (`@deepseek-ai/dsh`) and Node.js (>=18) installed.\n\n**Method A (recommended, one command from npm)** — the package is published on\nnpm with a `dsh.bundle` manifest; install directly with the official plugin\ncommand:\n\n```powershell\ndsh plugin --profile web add dsh-safemode-profile\n```\n\n**Method B (from GitHub)** — install straight from the source repository\n(commit-ish pinned to the default branch `main`, works with both npm and pnpm):"
+    },
+    {
+      "section": "Install",
+      "text": "```powershell\ndsh plugin --profile web add github:jinsiyu/dsh-safemode-profile#main\n```\n\n**Method C (local tarball / unpublished)** — pack and install a local build:\n\n```powershell"
+    },
+    {
+      "section": "pack inside the plugin directory",
+      "text": "npm pack                          # → dsh-safemode-profile-0.3.5.tgz"
+    },
+    {
+      "section": "install into a target profile (e.g. web)",
+      "text": "dsh plugin --profile web add .\\dsh-safemode-profile-0.3.5.tgz\n```\n\nRestart DSH; once the plugin row is active, safemode enters\n\"force-restore + resident guard\" mode. On startup the plugin prints a short\nusage banner (guard status, start command, whitelist, repo link)."
+    },
+    {
+      "section": "Custom whitelist",
+      "text": "The whitelist is the **only** customization entry point — set it via the\nenvironment variable (do **not** hand-edit the safemode profile files; any\nedit is restored by the guard):\n\n```powershell"
+    },
+    {
+      "section": "pure CLI only (no GUI)",
+      "text": "$env:DSH_SAFEMODE_BUNDLES = \"@deepseek-ai/dsh-base\"\n```\n\nThe variable is read from `process.env` by both the guard and the restore\nlogic, and takes effect the next time `dsh` starts with it set."
+    },
+    {
+      "section": "Hardening: make the three managed files read-only",
+      "text": "**Recommended**: set the three managed files under\n`~/.dsh/profiles/safemode/` read-only to block\n`dsh plugin --profile safemode add <pkg>` at the filesystem level — pnpm\nfails when it cannot write them, so the plugin never gets in (DSH startup\nis unaffected: it only reads them and writes `cordis.yml`):\n\n- `package.json` (dependencies + bundles — the choke point of any install)\n- `cordis.patch.yml` (the user patch layer)\n- `pnpm-workspace.yaml` (pnpm-managed file)"
+    },
+    {
+      "section": "Hardening: make the three managed files read-only",
+      "text": "> ⚠️ **Never lock the whole directory**: DSH rewrites `cordis.yml` on every\n> boot (`prepareProfile` unconditionally writeFileSync), so a read-only\n> directory or read-only `cordis.yml` makes safemode fail to start (verified:\n> exit 1). Windows `attrib +R <dir> /S` recursively locks every file\n> including `cordis.yml` — **do not use it**.\n\n```powershell"
+    },
+    {
+      "section": "Windows: lock only the three files (no /S recursion)",
+      "text": "attrib +R \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\package.json\" `\n         \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\cordis.patch.yml\" `\n         \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\pnpm-workspace.yaml\""
+    },
+    {
+      "section": "POSIX: the three files to 444 (the directory still needs r-x and must stay writable)",
+      "text": "chmod 444 ~/.dsh/profiles/safemode/package.json \\\n          ~/.dsh/profiles/safemode/cordis.patch.yml \\\n          ~/.dsh/profiles/safemode/pnpm-workspace.yaml\n```\n\nTo unlock:"
+    },
+    {
+      "section": "POSIX: the three files to 444 (the directory still needs r-x and must stay writable)",
+      "text": "```powershell\nattrib -R \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\package.json\" `\n         \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\cordis.patch.yml\" `\n         \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\pnpm-workspace.yaml\"  # Windows\nchmod 644 ~/.dsh/profiles/safemode/package.json \\\n          ~/.dsh/profiles/safemode/cordis.patch.yml \\\n          ~/.dsh/profiles/safemode/pnpm-workspace.yaml                 # POSIX\n```"
+    },
+    {
+      "section": "POSIX: the three files to 444 (the directory still needs r-x and must stay writable)",
+      "text": "Notes:\n- **Let the plugin create/restore the profile first, then lock** — the\n  content must match the whitelist template before locking (the guard only\n  writes when it detects drift; template-matching content is left untouched,\n  so locking coexists with the guard). If drift is found while locked, the\n  guard's restore fails with a warning — that is the expected behavior of a\n  lock: locked means no drift should exist.\n- Unlock before changing the whitelist. The guard itself is unaffected — it\n  reads `package.json` to detect drift and only writes when a drift is found."
+    },
+    {
+      "section": "Deeper protection: ACL (Windows) and chattr +i (Linux)",
+      "text": "The `attrib +R` / `chmod 444` above is \"**basic read-only**\": the two\nplatforms treat it differently, and neither can stop **deletion** (deleting\na file depends on the parent directory's permissions; root ignores all\npermission bits anyway). The following are \"**hard locks**\", pick as needed:"
+    },
+    {
+      "section": "Windows: ACL deny (icacls) — precise control over write vs delete",
+      "text": "```powershell"
+    },
+    {
+      "section": "Deny the current user write access to the three files (W = write data)",
+      "text": "icacls \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\package.json\" /deny \"$env:USERNAME:(W)\"\nicacls \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\cordis.patch.yml\" /deny \"$env:USERNAME:(W)\"\nicacls \"$env:USERPROFILE\\.dsh\\profiles\\safemode\\pnpm-workspace.yaml\" /deny \"$env:USERNAME:(W)\""
+    },
+    {
+      "section": "Stronger: also deny deletion (DE = delete; WD = write data / create file)",
+      "text": "icacls \"...\\package.json\" /deny \"$env:USERNAME:(WD,DE)\"\n```\n\nTo unlock (remove that user's deny entries):\n\n```powershell\nicacls \"...\\package.json\" /remove:d \"$env:USERNAME\"\n```"
+    },
+    {
+      "section": "Stronger: also deny deletion (DE = delete; WD = write data / create file)",
+      "text": "Key points:\n- `(W)` blocks content modification, `(DE)` blocks deletion, `(WD)` blocks\n  write + create — more precise than attrib: you can block writes while\n  leaving admins able to delete;\n- **Still does not stop administrators**: Administrators / SYSTEM have Full\n  Control (F) by default and can take ownership or clear the deny. To block\n  them too, deny `BUILTIN\\Administrators` as well — but admins can still\n  bypass via \"take ownership\";\n- icacls requires permission to modify the file's ACL (the file owner has it\n  by default)."
+    },
+    {
+      "section": "Linux: immutable attribute (chattr +i) — root cannot touch it either",
+      "text": "```bash"
+    },
+    {
+      "section": "Lock: file cannot be modified, deleted, or renamed (root included)",
+      "text": "sudo chattr +i ~/.dsh/profiles/safemode/package.json \\\n              ~/.dsh/profiles/safemode/cordis.patch.yml \\\n              ~/.dsh/profiles/safemode/pnpm-workspace.yaml"
+    },
+    {
+      "section": "Inspect",
+      "text": "lsattr ~/.dsh/profiles/safemode/package.json     # output containing \"i\" = locked"
+    },
+    {
+      "section": "Unlock",
+      "text": "sudo chattr -i ~/.dsh/profiles/safemode/package.json \\\n              ~/.dsh/profiles/safemode/cordis.patch.yml \\\n              ~/.dsh/profiles/safemode/pnpm-workspace.yaml\n```"
+    },
+    {
+      "section": "Unlock",
+      "text": "Key points:\n- `+i` (immutable) is the strongest lock: **nobody (root included) can\n  modify, delete, or rename** — you must `-i` first for any operation,\n  harder than chmod or ACL;\n- Requires `sudo` (root), and the filesystem must support the attribute\n  (ext4/xfs do; some network/container filesystems do not);\n- **Side effect for safemode**: the guard normally rebuilds a deleted file\n  (detectDrift finds \"missing\" → force-restore), but `+i` blocks even that;\n  upgrading the plugin or changing the whitelist also needs `-i` first. Use\n  it only when \"no account on this machine (root included) may touch the\n  safemode config\" is a real requirement; basic read-only\n  (attrib / chmod 444) is enough for everyday use."
+    },
+    {
+      "section": "Three levels compared",
+      "text": "| Option | Blocks content edit | Blocks delete | Blocks root | Requires | Impact on guard self-heal |\n|---|---|---|---|---|---|\n| `attrib +R` / `chmod 444` (basic) | ✅ for normal users | ❌ | ❌ | none | none (guard skips writes when clean) |\n| icacls deny (ACL) | ✅ | ✅ (with DE) | ❌ (admins can bypass) | file owner | none |\n| `chattr +i` (immutable) | ✅ | ✅ | ✅ | sudo | ⚠️ blocks guard rebuild; `-i` first |"
+    },
+    {
+      "section": "Three levels compared",
+      "text": "Suggestion: **basic read-only is enough for everyday use** (pnpm runs as a\nnormal user, 444 already blocks installs completely); add ACL `(DE)` if you\nwant to guard against accidental deletion; only choose `chattr +i` when\n\"no account (root included) may touch the safemode config\" is a hard\nrequirement."
+    },
+    {
+      "section": "Notes",
+      "text": "- **Port**: safemode also carries the webServer, default 3080. Running it\n  alongside the web profile conflicts (`EADDRINUSE` fails the boot) — use\n  `--port` to separate them: `dsh --profile safemode --port 3081`.\n- **Sessions/credentials are NOT isolated**: sessions, `settings.yaml` and\n  `.env` are home-level shared; safemode only isolates plugins.\n- **Home patch leaks in**: `~/.dsh/cordis.patch.yml` applies to every profile\n  — don't mount plugins there (the guard only watches the safemode directory\n  itself, not the home patch).\n- **Don't hand-edit `cordis.yml`**: DSH rewrites it on every boot; edit\n  `cordis.patch.yml` instead — but safemode's patch layer is restored to empty\n  by this plugin, so customize through the whitelist env var."
+    }
+  ],
+  "skipped": []
+}

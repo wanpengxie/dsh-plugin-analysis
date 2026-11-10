@@ -1,0 +1,286 @@
+{
+  "repo": "highland0971/dsh-native-memory",
+  "commit": "98c4a49a75cf22bb63edf52c1981ddb104437558",
+  "extracted_at": "2026-11-10T04:18:57.527876+00:00",
+  "tree": {
+    "files": 52,
+    "bytes": 368601,
+    "lines_by_language": {
+      "JSON": 99,
+      "JavaScript": 223,
+      "Markdown": 1364,
+      "Other": 39,
+      "TypeScript": 5161,
+      "YAML": 1565
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "docs/contributing.md",
+      "docs/design.md",
+      "docs/ecosystem-analysis.md",
+      "docs/handoff.md",
+      "docs/install.md",
+      "docs/review-prompt.md",
+      "docs/security.md",
+      "docs/upgrade-0.2.0-rc.2-compat.md",
+      "package.json",
+      "pnpm-lock.yaml",
+      "preset/README.md",
+      "scripts/build-client.mjs",
+      "scripts/verify-bundle.mjs",
+      "src/approval.ts",
+      "src/client.js",
+      "src/config.ts",
+      "src/domain.ts",
+      "src/errors.ts",
+      "src/export.ts",
+      "src/guard.ts",
+      "src/index.ts",
+      "src/prompt.ts",
+      "src/propose.ts",
+      "src/redaction.ts",
+      "src/tools.ts",
+      "src/types.ts",
+      "src/web.ts",
+      "tests/client.spec.ts",
+      "tests/config.spec.ts",
+      "tests/domain.spec.ts",
+      "tests/export.spec.ts",
+      "tests/guard.spec.ts",
+      "tests/helpers/harness.ts",
+      "tests/helpers/memory-backend.ts",
+      "tests/index.spec.ts",
+      "tests/prompt.spec.ts",
+      "tests/propose.spec.ts",
+      "tests/redaction.spec.ts",
+      "tests/tools.spec.ts",
+      "tests/web.spec.ts",
+      "tsconfig.json",
+      "tsdown.config.ts",
+      "vitest.config.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-native-memory",
+    "description": "Native, per-workspace long-term memory for DeepSeek Harness: facts and profiles on DSH's own storage-domain, cross-session recall through session-query FTS, approval-gated writes, and cited provenance — no external server, no extra runtime dependency.",
+    "version": "0.2.0",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.mjs",
+    "types": "lib/index.d.mts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.mts",
+        "default": "./lib/index.mjs"
+      },
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml"
+    },
+    "files": [
+      "lib/index.mjs",
+      "lib/index.d.mts",
+      "lib/client.js",
+      "cordis.patch.yml"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/highland0971/dsh-native-memory.git"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "memory",
+      "long-term-memory",
+      "agent"
+    ],
+    "scripts": {
+      "build": "tsdown && node scripts/build-client.mjs",
+      "typecheck": "tsc --noEmit",
+      "test": "vitest run",
+      "lint": "oxlint .",
+      "prepublishOnly": "npm run build && npm test"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime"
+        ],
+        "platform": "web"
+      }
+    },
+    "dependencies": {
+      "zod": "^4.4.3"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      }
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-storage": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-storage-domain": "0.1.0-rc.6",
+      "@types/node": "^22.0.0",
+      "js-yaml": "^4.1.0",
+      "oxlint": "^1.78.0",
+      "tsdown": "^0.22.14",
+      "typescript": "^5.8.0",
+      "vitest": "^4.1.10"
+    },
+    "publishConfig": {
+      "access": "public"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-native-memory bundle patch.\n#\n# Applied as one layer after the profile's shipped bundles (dsh-base and the\n# mode bundle) and before the user's own profile cordis.patch.yml — the user's\n# layer wins. Two changes:\n#\n#   1. session-query-sqlite config override: enable full-text search so\n#      cross-session recall works. The shipped default is `openAt: never`\n#      (search calls fail with SESSION_QUERY_SEARCH_DISABLED); `first-search`\n#      defers the node:sqlite import and index open to the first search call.\n#      The durable index lives next to the other storage units.\n#\n#   2. One host-plane plugin row: the memory service. Memory is a\n#      cross-session capability, so its row belongs to the HOST composition\n#      (plane rule: anything crossing sessions stays host-side), never loose\n#      inside an agent preset. It publishes no service — it consumes the\n#      host's registries — so it needs no isolate realm.\n#\n# Config note: a patch REPLACES a targeted row's whole `config` rather than\n# merging into it. Any field the deployment customized on\n# `session-query-sqlite` is therefore overridden here and must be restated\n# in the user's own cordis.patch.yml, which always applies last.\n\n- id: session-query-sqlite\n  config:\n    path: !!js dshHomePath('storages/session-search.sqlite')\n    openAt: first-search\n\n- insert:\n    - id: dsh-native-memory\n      name: 'dsh-native-memory'\n      config:\n        # Bounded workspace profile injected into the system prompt of every\n        # session (order 88, before tool guidance). Disable here or in a\n        # later patch layer when prompt overhead matters more than recall.\n        injectProfile: true\n        # Durable facts per workspace. Hard caps keep recall deterministic\n        # and the always-on profile bounded.\n        maxFactsPerWorkspace: 300\n        maxFactChars: 2000\n        # The always-injected workspace profile: few, dense entries.\n        maxProfileEntries: 8\n        maxProfileEntryChars: 240\n        # Write tools (remember / edit / forget) pass the host approval\n        # stack; every ask/outcome pair lands on the requesting session log.\n        approvalWrites: true\n        # Writes reject secret-shaped text (tokens / keys / passwords).\n        # 'mask' stores them masked; 'off' stores as-is (injection always masks).\n        secretPolicy: reject\n        # Session-end memory proposal (OFF by default): the LLM distills the\n        # finished session into candidate facts shown in the NEXT sessions'\n        # prompt; they become facts only through the approval-gated\n        # memory_remember. The LLM proposes, the human approves.\n        proposeOnSessionEnd: false\n        proposalProvider: deepseek\n        proposalModel: deepseek-v4-flash\n        proposalMaxFacts: 8\n        proposalMaxPending: 16\n        proposalTtlDays: 7\n        # Compaction drift guard (ON): anchors a summary dropped surface as\n        # DATA to verify in the next sessions' prompt. Deterministic, no LLM.\n        compactionGuard: true\n        guardAlarmTtlHours: 24\n        guardAlarmMax: 3\n"
+    }
+  ],
+  "entries": [
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "injectProfile",
+      "kind": "setting",
+      "default": "true",
+      "where": "src/config.ts:8-10"
+    },
+    {
+      "name": "approvalWrites",
+      "kind": "setting",
+      "default": "true",
+      "where": "src/config.ts:19-20"
+    },
+    {
+      "name": "proposeOnSessionEnd",
+      "kind": "setting",
+      "default": "false",
+      "where": "src/config.ts:35-46"
+    },
+    {
+      "name": "compactionGuard",
+      "kind": "setting",
+      "default": "true",
+      "where": "src/config.ts:52-57"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/highland0971/dsh-native-memory.git",
+      "where": "package.json:26"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "zod": "^4.4.3"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-storage": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-storage-domain": "0.1.0-rc.6",
+      "@types/node": "^22.0.0",
+      "js-yaml": "^4.1.0",
+      "oxlint": "^1.78.0",
+      "tsdown": "^0.22.14",
+      "typescript": "^5.8.0",
+      "vitest": "^4.1.10"
+    }
+  },
+  "quality_raw": {
+    "test_files": 13,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 28,
+    "pushed_at": "2026-10-01T16:38:12Z",
+    "created_at": "2026-08-15T05:52:15Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "scripts/build-client.mjs",
+    "src/approval.ts",
+    "src/config.ts",
+    "src/domain.ts",
+    "src/errors.ts",
+    "src/export.ts",
+    "src/guard.ts",
+    "src/index.ts",
+    "src/prompt.ts",
+    "src/propose.ts",
+    "src/redaction.ts",
+    "src/tools.ts",
+    "src/types.ts",
+    "src/web.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-native-memory",
+      "text": "[](https://awesome-dsh-plugin.com) [](LICENSE)\n\nNative, per-workspace long-term memory for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`): facts and profiles stored on the harness's **own** storage-domain, cross-session recall through **session-query FTS**, **approval-gated** writes, and cited provenance — no external server, no extra runtime dependency."
+    },
+    {
+      "section": "dsh-native-memory",
+      "text": "> ⚠️ Installing a plugin runs third-party code on your machine with your own\n> permissions. Review the source ([`src/`](src)) and [the security model](docs/security.md)\n> before installing."
+    },
+    {
+      "section": "Why this one",
+      "text": "| | dsh-hermes-memory | dsh-native-memory |\n|---|---|---|\n| Storage | `~/.dsh/settings.yaml` namespace | dedicated storage-domain unit (`~/.dsh/storages/dsh_memory.json`) |\n| Scope | user-global, all projects | **per workspace** (exact-cwd authorization) |\n| Write safety | silent, model-only | **human approval gate** + session-log audit |\n| Recall | everything always injected (hard caps) | bounded always-on profile **plus** on-demand recall + FTS over past sessions |\n| Dependencies | vendored imports into the harness checkout | none beyond zod + the harness itself |"
+    },
+    {
+      "section": "Why this one",
+      "text": "See [docs/design.md](docs/design.md) for the full architecture and the\ncompetitive landscape analysis."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add dsh-native-memory   # npm after release\ndsh plugin --profile web add /path/to/this/repo  # from a checkout\n```\n\nRestart `dsh web`. The bundle enables session-query full-text search and adds\nthe memory tools to every session. Details and configuration:\n[docs/install.md](docs/install.md)."
+    },
+    {
+      "section": "Tools",
+      "text": "| Tool | Kind | Gate |\n|---|---|---|\n| `memory_remember` | add/update a fact in this workspace (secrets rejected by default) | approval |\n| `memory_edit` | replace a fact | approval |\n| `memory_forget` | archive a fact (soft delete) | approval |\n| `memory_recall` | deterministic three-tier keyword scan (tags > text > fuzzy; freshness/access tie-breaks) | none |\n| `memory_search` | FTS over this workspace's past sessions (caller excluded) | none |\n| `memory_expand` | expand a fact's citation to the original log excerpt | none |\n| `memory_consolidate` | near-duplicate merge suggestions + cap budget | none |\n| `memory_import` | import candidate facts from a past session's log | approval (per fact) |\n| `memory_profile` | read the always-injected workspace profile | none |\n| `memory_export` | write a git-friendly Markdown mirror (`.dsh-memory/memory.md`, masked, idempotent) | none |"
+    },
+    {
+      "section": "Tools",
+      "text": "Every fact records its origin `(sessionId, seq)` — memory stays\nreconstructable from the lossless session log.\n\nWrites reject secret-shaped text (tokens / keys / passwords) by default;\n`secretPolicy: \"mask\" | \"off\"` in the bundle patch relaxes that. The\ncredential-assignment detector can flag benign `token: …` values of ≥16\ncharacters. Prompt injection and tool output always mask secrets."
+    },
+    {
+      "section": "Tools",
+      "text": "A read-only browser page (settings → 记忆) lists every workspace's facts with\nsecrets masked; deletions are copied as a `memory_forget` instruction and land\nin the chat through the approval gate.\n\nOpt-in session-end proposals (`proposeOnSessionEnd: true`): one cheap LLM call\ndistills a finished session into candidate facts shown in the next sessions;\nthey become facts only through the approval-gated `memory_remember`."
+    },
+    {
+      "section": "Tools",
+      "text": "A compaction drift guard (`compactionGuard: true`, on by default) surfaces\nliteral anchors a compaction summary dropped, as data to verify in the next\nsessions — deterministic, no LLM."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\npnpm install\npnpm build && pnpm typecheck && pnpm test\n```\n\nNew contributors start at [docs/handoff.md](docs/handoff.md) and\n[docs/contributing.md](docs/contributing.md). Chinese docs:\n[README.zh.md](README.zh.md)."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

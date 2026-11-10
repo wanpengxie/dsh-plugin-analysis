@@ -1,0 +1,312 @@
+{
+  "repo": "lemonhall/dsh-media-dock",
+  "commit": "e4148fb30046abd4bfa4907f87a9d677f2a0d6aa",
+  "extracted_at": "2026-11-10T05:12:55.617760+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 101917,
+    "lines_by_language": {
+      "JSON": 55,
+      "JavaScript": 1843,
+      "Markdown": 227,
+      "Other": 11,
+      "YAML": 58
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/wechat-article.md",
+      "icon.svg",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/state.js",
+      "lib/url.js",
+      "package.json",
+      "test/media.test.mjs",
+      "test/state.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-media-dock",
+    "version": "0.1.1",
+    "description": "DSH 右侧栏的媒体台：把抖音/YouTube 链接丢进来，本机 yt-dlp 下载、ffmpeg 转 16k 单声道 WAV、官方 speechToText（SenseVoice）转写，字幕进面板，Agent 一键总结。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "icon.svg"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "dsh-bundle",
+      "deepseek-harness",
+      "yt-dlp",
+      "transcribe",
+      "speech-to-text",
+      "douyin",
+      "youtube",
+      "sidebar"
+    ],
+    "author": "lemonhall",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/lemonhall/dsh-media-dock.git"
+    },
+    "homepage": "https://github.com/lemonhall/dsh-media-dock#readme",
+    "bugs": {
+      "url": "https://github.com/lemonhall/dsh-media-dock/issues"
+    },
+    "meta": {
+      "title": "媒体台",
+      "description": "右侧栏一个 tab：抖音/YouTube 链接进来，本机下载 → 本地转写 → 字幕进面板 → 让 Agent 总结。"
+    },
+    "icon": "./icon.svg",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-sidebar-right"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# ============================================================================\n# dsh-media-dock —— DSH bundle patch\n# ============================================================================\n# 右侧栏「媒体台」：抖音/YouTube 链接进来 → 本机下载 → 转写 → 字幕 → Agent 总结。\n#\n# 三段流水线，每段都用本机已有的东西：\n#   ① yt-dlp（本机已装，走 127.0.0.1:7897 代理）下载；优先抓现成字幕（零成本）\n#   ② 没字幕才 ffmpeg 转 16kHz 单声道 PCM16 WAV —— 这是官方 speechToText 唯一接受的格式\n#   ③ ctx.speechToText.transcribe()（SenseVoice，本地跑，中文强）\n#\n# ⚠️ 关于 STT：按官方契约用 **optional access**（`ctx.get('speechToText')` + undefined 检查），\n#    所以**装不装语音输入插件都能用** —— 没 STT 就只抓现成字幕。契约见：\n#      SpeechRequest { audio: Uint8Array; providerId?; language? }\n#      transcribe(resolve(request), signal) → Transcript { text; audioSeconds; inferenceSeconds }\n#    注意宿主 Service 收的是 **Uint8Array**（base64 只在浏览器 Remote 那层）。\n#    另外它「有界」（maxAudioBytes/maxDurationSeconds）且**不留转写历史** —— 所以长视频\n#    由本插件自己切段，字幕由本插件自己存。\n#\n# 安装：\n#   plugin_manager install_bundle  target=link:E:\\development\\dsh-media-dock\n# ⚠️ 客户端半边改动要重启应用；新增宿主路由也要重启（实测）。\n# ============================================================================\n\n- insert:\n    - id: dsh-media-dock\n      name: dsh-media-dock\n      config:\n        # 下载产物放哪儿。**留空** = 落 $DSH_HOME/dsh-media。\n        # ⚠️ 别写死某台机器的绝对路径：这个文件在 files 白名单里、**会随包发布**，\n        # 而在 macOS/Linux 上 mkdirSync('E:\\development\\dsh-media') 会建出一个怪目录\n        #（维护者在 PR #18 上本机复现）。要用别的目录就填**当前机器上真实存在**的路径。\n        outputDir: ''\n        # 本机工具；留空则用 PATH 里的（有 pickExecutable 兜底，这两项安全）\n        ytDlpPath: 'C:\\Users\\lemon\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe'\n        ffmpegPath: 'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe'\n        # ⚠️ 代理默认**关**。原来这里写死 http://127.0.0.1:7897 且 useProxy: true，\n        # 而 useProxy=true 是**对所有站点**生效（proxyForSite），别人装上后 yt-dlp\n        # 一律带这个代理，端口不在就整条流水线失败。\n        # 代码里的默认值 'auto' 才是安全档（只对 proxySites 里列的站点走代理）。\n        # 要用就显式打开，并把 proxySites 限定到确实需要代理的站点。\n        proxy: ''\n        useProxy: 'auto'\n        # 登录墙站点（抖音/X）需要 cookie 时打开；对应 SKILL 里的\n        # `--cookies-from-browser chrome`（注意 Chrome 运行时 cookie 库被锁，\n        # 要先复制一份，见 video-download SKILL）\n        cookiesFromBrowser: ''\n        # 优先抓现成字幕（零成本），支持的语言按优先级\n        preferSubtitles: true\n        subtitleLangs: 'zh-Hans,zh-CN,zh,en'\n        # 没有字幕才转写；每段多少秒（官方 API 是有界的，别一次喂太长）\n        transcribeChunkSeconds: 240\n        # 转写语言：默认 auto（让 SenseVoice 自己判）。硬编码 zh 会把英文音频按中文解码，\n        # 实测会冒出\"那那s错\"这种混合垃圾；抖音里中英夹杂更是常态。\n        transcribeLanguage: 'auto'\n        # 一次最多并行几个下载\n        maxConcurrent: 1\n        # 队列里最多留多少条历史\n        keepItems: 50\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:78"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "lib/index.js:308"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "cordis.patch.yml:36"
+    },
+    {
+      "host": "www.youtube.com",
+      "url": "https://www.youtube.com",
+      "where": "lib/client.js:16"
+    },
+    {
+      "host": "www.douyin.com",
+      "url": "https://www.douyin.com",
+      "where": "lib/client.js:25"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com",
+      "where": "lib/client.js:267"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com",
+      "where": "lib/client.js:273"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "lib/index.js:40"
+    },
+    {
+      "host": "${raw",
+      "url": "https://${raw",
+      "where": "lib/url.js:12"
+    },
+    {
+      "host": "www.youtube.com",
+      "url": "https://www.youtube.com/watch?v=${youtubeId",
+      "where": "lib/url.js:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lemonhall/dsh-media-dock.git",
+      "where": "package.json:33"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lemonhall/dsh-media-dock#readme",
+      "where": "package.json:35"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lemonhall/dsh-media-dock/issues",
+      "where": "package.json:37"
+    },
+    {
+      "host": "www.youtube.com",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "where": "test/media.test.mjs:23"
+    },
+    {
+      "host": "www.youtube.com",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "where": "test/media.test.mjs:24"
+    },
+    {
+      "host": "youtu.be",
+      "url": "https://youtu.be/dQw4w9WgXcQ",
+      "where": "test/media.test.mjs:25"
+    },
+    {
+      "host": "www.youtube.com",
+      "url": "https://www.youtube.com/shorts/abc123XYZ",
+      "where": "test/media.test.mjs:26"
+    },
+    {
+      "host": "m.youtube.com",
+      "url": "https://m.youtube.com/watch?v=abc123&t=42s",
+      "where": "test/media.test.mjs:27"
+    },
+    {
+      "host": "youtu.be",
+      "url": "https://youtu.be/abc123",
+      "where": "test/media.test.mjs:28"
+    },
+    {
+      "host": "www.youtube.com",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "where": "test/media.test.mjs:28"
+    },
+    {
+      "host": "v.douyin.com",
+      "url": "https://v.douyin.com/iRNBho6/",
+      "where": "test/media.test.mjs:29"
+    },
+    {
+      "host": "v.douyin.com",
+      "url": "https://v.douyin.com/iRNBho6/",
+      "where": "test/media.test.mjs:30"
+    },
+    {
+      "host": "www.douyin.com",
+      "url": "https://www.douyin.com/video/7123456789012345678",
+      "where": "test/media.test.mjs:31"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/BV1xx411c7mD",
+      "where": "test/media.test.mjs:32"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/someone/status/1234567890",
+      "where": "test/media.test.mjs:33"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/v/1",
+      "where": "test/media.test.mjs:34"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 15,
+    "pushed_at": "2026-10-08T03:01:07Z",
+    "created_at": "2026-10-03T03:16:46Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/state.js",
+    "lib/url.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-media-dock 📺",
+      "text": "DSH 右侧栏的**媒体台** —— 把抖音 / YouTube 链接丢进来，本机下载、本机转写，字幕进面板，**一键让 Agent 总结**。\n\n> 这是给 [DSH（DeepSeek Harness）](https://github.com/deepseek-ai/deepseek-harness) 右侧栏做的一排日常插件之一。\n> 右侧栏本来就是 DSH 的「apps 入口」—— 官方的文件/终端/浏览器和第三方插件走**完全同一套机制**。"
+    },
+    {
+      "section": "它解决的是什么",
+      "text": "看一个 11 分钟的长视频，我想要的是**它的文字**，不是那 11 分钟。\n\n而\"视频 → 文字 → 总结\"这条链，**别人做不成**：下载要本机 `yt-dlp`，转写要本机模型，总结要一个能读文件的 Agent —— 三样凑齐才有意义。所以它天然是个 DSH 插件，而不是一个网页工具。"
+    },
+    {
+      "section": "流水线（每一步都踩过坑）",
+      "text": "```\n贴链接 / 按「📋 扒剪贴板」\n   ↓ ① yt-dlp 下载（走 video-download SKILL 那套：代理按站点、cookie 阶梯、重试）\n   ↓    优先抓现成字幕（零成本、最准）\n   ↓ ② 没字幕才 ffmpeg → 16kHz 单声道 PCM16 WAV（按官方上限切段）"
+    },
+    {
+      "section": "效果",
+      "text": "（图只截右侧栏面板。我这台机器桌面左下角有真名，所以截图从来不整屏。）"
+    },
+    {
+      "section": "它能干什么",
+      "text": "- **抖音 / YouTube / B站 / X 等**（认不出站点也照样交给 yt-dlp —— 它支持 1000+ 站点）\n- **两段式**：先抓现成字幕（YouTube 大多有），没有才本地转写\n- **长视频自动切段** —— 段长**问官方要**（`maxAudioBytes` / `maxDurationSeconds`），不拍脑袋\n- **「📋 扒剪贴板」**：刷抖音时点「分享 → 复制链接」，回来按一下直接开工\n- **「让 Agent 总结」**：走客户端 `ISession.prompt`，**按下就在对话里开始**（不是写个留言等我发现）\n- `media_panel` 工具：`add` / `list` / `read` / `status` / `retry` / `remove` / `clear` —— **Agent 能直接读字幕全文**"
+    },
+    {
+      "section": "依赖（三样）",
+      "text": "| 依赖 | 作用 | 备注 |\n| --- | --- | --- |\n| `yt-dlp` | 下载 + 抓字幕 | 本机已装（`WinGet\\Links\\yt-dlp.exe`） |\n| `ffmpeg` | 转 16kHz 单声道 PCM16 WAV | 本机已装（chocolatey） |\n| 官方 `speechToText` | 本地转写 | **可选** —— 没装就只能抓现成字幕 |\n\n**STT 是可选接入**（按官方契约用 `ctx.get('speechToText')` + undefined 检查）：\n装了就用 SenseVoice 本地转写，没装就只抓现成字幕，**不会因为缺它而报错**。"
+    },
+    {
+      "section": "装",
+      "text": "```"
+    },
+    {
+      "section": "或者 CLI：",
+      "text": "dsh plugin --profile desktop add dsh-media-dock"
+    },
+    {
+      "section": "开发者想用本地目录直接挂：",
+      "text": "plugin_manager install_bundle target=link:E:\\development\\dsh-media-dock\n```\n\n装完**重启一次**（界面半边在启动时固化），然后右侧栏点「**+**」选「媒体台」。"
+    },
+    {
+      "section": "它是怎么work的",
+      "text": "```\nlib/index.js    宿主半：yt-dlp/ffmpeg 流水线 + 路由 + media_panel 工具\nlib/url.js      纯函数：URL 解析 / 时长 / 切段 / 字幕清洗（36 项单测）\nlib/state.js    本地状态（原子写）\nlib/client.js   右侧栏 tab（整个模块包在 IIFE 里 —— DSH 把所有客户端插件拼成一个脚本，"
+    },
+    {
+      "section": "已知限制",
+      "text": "| 试的路 | 结果 |\n  | --- | --- |\n  | 侧栏 webview 开桌面版 | 页面外壳能加载、播放器一直\"加载中\" —— 它认出了 Electron 的 UA |\n  | 启动参数 `--user-agent=<普通 Chrome>` | **被应用自己的 `setUserAgent` 覆盖**（UA 字符串里带 `dsh-desktop`），无效 |\n  | 插件里 `import('electron')` 改 `session.defaultSession` | 只拿到 npm 空壳包；`createRequire` 也 `Cannot find module 'electron'` |\n  | `m.douyin.com` / `?is_from_mobile_home=1` | **404**（TLB）—— 移动页要移动 UA，同一把锁 |\n  | 换开发版的 web profile（那边是 `<iframe>`） | 抖音回 `X-Frame-Options: DENY` + CSP `frame-ancestors` 白名单，**连页面都不给** |"
+    },
+    {
+      "section": "已知限制",
+      "text": "根因只有一个：**webview 的 User-Agent 由应用主进程设死，插件改不到**。官方那个 browser tab 不归第三方管，\n  而第三方自己渲染 `<webview>` 会白屏（实测）。所以：**抖音走系统浏览器刷 + 「📋 扒剪贴板」扒字幕**。\n  YouTube 完全不受影响 —— 能嵌、能播、直播都能播，可以真\"边看边扒\"。\n- **抖音必须带 cookie**（`Fresh cookies (not necessarily logged in) are needed`）。默认会自动把 Chrome 的\n  cookie 库**复制成迷你 profile** 再读（绕开 issue 7271 的锁，Chrome 开着也行）；也可以配 `cookiesFile`\n  指向导出的 `cookies.txt`（最稳，不受 Chrome 运行状态影响）。\n- **转写是有界的**：官方限制 `maxAudioBytes=4MB` / `maxDurationSeconds=120`，所以长视频必然切段\n  （11 分钟 = 7 段）。段与段是独立识别的，**跨段的一句话可能被切断**。\n- **转写有听错**：`SenseVoiceSmall (INT8)` 日常叙述很准，专业术语容易错\n  （实测：共沸物 → \"供废物\"、辛烷值 → \"锌烷值\"、蔗渣 → \"热扎\"、葡语 → \"普语\"）。\n  要更准要么换更大的模型，要么加术语纠正表。\n- **不做**：视频摘要之外的二次加工（剪辑/翻译/配音）、播放列表批量、字幕时间轴对齐。"
+    },
+    {
+      "section": "踩过的坑（都写进代码注释了）",
+      "text": "1. **`client.download()` 不是 async iterable**（那是 imapflow 的坑）—— 类似地，`yt-dlp --print` 的路径在这台\n   机器上**压根没给出可用路径**，得扫目录兜底；这个 bug 藏了很久，因为\"现成字幕\"那条路**提前 return** 了。\n2. **`Invalid speech WAV`**：ffmpeg 默认往 WAV 里塞 `LIST/INFO/ISFT \"Lavf…\"` 元数据 chunk，\n   官方校验的是**规范** PCM16 —— 加 `-fflags +bitexact -map_metadata -1`。\n3. **`Invalid speech audio size`**：我把段长拍成 180 秒（5.8MB），而官方上限是 4MB / 120 秒 ——\n   **得问它要，不能猜**。\n4. **一个漏掉的 cookie 换了两张脸**：探元数据那步没走 cookie 阶梯 → `durationSec` 变 0 →\n   切段算出空方案 → 退化成\"整段当一段\" → 又报大小错。**看起来是大小问题，其实是探测问题。**\n5. **代理按站点**：抖音/B站这类国内站点**绝不能走代理**；而且即使不走代理也要**显式传 `--proxy \"\"`**，\n   否则 yt-dlp 会读环境变量里的 `HTTP_PROXY`，等于偷偷走了。\n6. **\"关窗口 ≠ 退进程\"**：Chrome 关了窗口还剩 12 个进程，锁着 cookie 库 —— 所以要复制成迷你 profile。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
