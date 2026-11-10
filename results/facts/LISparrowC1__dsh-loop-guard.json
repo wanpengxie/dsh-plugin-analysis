@@ -1,0 +1,209 @@
+{
+  "repo": "LISparrowC1/dsh-loop-guard",
+  "commit": "fc7f334591aa2995667eb1ef29f34c26865605ce",
+  "extracted_at": "2026-11-10T00:04:33.956479+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 75531,
+    "lines_by_language": {
+      "JSON": 43,
+      "JavaScript": 1293,
+      "Markdown": 294,
+      "Other": 21,
+      "YAML": 5
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "lib/detector.js",
+      "lib/guard.js",
+      "lib/index.js",
+      "lib/messages.js",
+      "package.json",
+      "test/detector-performance.test.mjs",
+      "test/detector.test.mjs",
+      "test/guard.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-loop-guard",
+    "version": "0.1.0",
+    "private": true,
+    "description": "DSH plugin that stops a stalled agent: cuts off repeated model output, catches near-duplicate tool calls, and can cap runaway turns.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --test"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "loop-guard",
+      "repetition"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/LISparrowC1/dsh-loop-guard.git"
+    },
+    "homepage": "https://github.com/LISparrowC1/dsh-loop-guard#readme",
+    "bugs": {
+      "url": "https://github.com/LISparrowC1/dsh-loop-guard/issues"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-loop-guard bundle patch: inserts the loader entry. A manual install\n# appends the same entry to its own profile patch instead of listing this bundle.\n- insert:\n    - id: loop-guard\n      name: 'dsh-loop-guard'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:101"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/LISparrowC1/dsh-loop-guard.git",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LISparrowC1/dsh-loop-guard#readme",
+      "where": "package.json:34"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LISparrowC1/dsh-loop-guard/issues",
+      "where": "package.json:36"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-18T05:12:10Z",
+    "created_at": "2026-10-18T03:49:57Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/detector.js",
+    "lib/guard.js",
+    "lib/index.js",
+    "lib/messages.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-loop-guard",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that stops an agent from spinning: it cuts off repeated model output, catches near-duplicate tool calls, and can cap a runaway turn.\n\nChinese documentation: [README.zh.md](README.zh.md)."
+    },
+    {
+      "section": "The problem",
+      "text": "Long-running agents fail in ways that look the same from the outside — the agent keeps working while making no progress:"
+    },
+    {
+      "section": "The problem",
+      "text": "| Failure | What it looks like |\n| --- | --- |\n| Output degeneration | The model repeats the same phrase until it hits the response limit. More likely as the context grows. |\n| Tool spinning | The same tool keeps running against the same target with slightly different arguments: a file re-read at new offsets, the same command retried, an A→B→A→B cycle. |\n| Runaway turn | Steps, minutes or output keep growing with no convergence. |"
+    },
+    {
+      "section": "The problem",
+      "text": "DSH ships `dsh-repeat-tool-reminder`, which detects only **exactly identical** tool calls, and only advises the model. `dsh-loop-guard` covers the rest."
+    },
+    {
+      "section": "How it works",
+      "text": "Only documented DSH extension seams are used; the agent loop itself is untouched."
+    },
+    {
+      "section": "How it works",
+      "text": "| Seam | Use |\n| --- | --- |\n| `llm/stream` (waterfall) | Wraps the chunk stream, detects repetition live, ends the attempt with a terminal error chunk |\n| `agent/request-error` (waterfall) | Owns recovery for the guard's own failure codes — re-runs the step, bounded |\n| `agent/pre-step` (waterfall) | Tracks turn boundaries |\n| `tools/post-execute` (waterfall) | Tracks near-duplicate tool chains, injects a model-visible notice, cancels past the hard threshold |"
+    },
+    {
+      "section": "How it works",
+      "text": "Two independent detectors scan a rolling window of streamed text:\n\n- a **periodic detector** — a unit of any length repeated to the end of the window (catches one short sentence repeated forever);\n- a **rolling-hash shingle detector** — one 64-character slice covering most of the window (catches a repeated paragraph, including repeats that do not reach the tail).\n\nTool-call arguments are never counted as model output: writing a file or running a long command is real work, not degeneration."
+    },
+    {
+      "section": "Install",
+      "text": "Both paths need the profile name you run DSH with (for example `web`).\n\n**Bundle install (recommended).** From a git URL, tarball or local checkout:\n\n```bash\ndsh plugin --profile <profile> add github:LISparrowC1/dsh-loop-guard\n```\n\nDSH adds the package to the profile and applies its `cordis.patch.yml`, which inserts the loader entry."
+    },
+    {
+      "section": "Install",
+      "text": "**Manual install.** Copy this package into `$DSH_HOME/profiles/<profile>/node_modules/dsh-loop-guard/`, then append to `$DSH_HOME/profiles/<profile>/cordis.patch.yml`:\n\n```yaml\n- insert:\n    - id: loop-guard\n      name: 'dsh-loop-guard'\n```\n\nUse one path or the other — two entries would mount the plugin twice. The manual copy is not recorded in the profile's lockfile, so a later `pnpm install` in that profile may remove it."
+    },
+    {
+      "section": "Install",
+      "text": "Profile patches are read when DSH starts, so restart DSH after installing."
+    },
+    {
+      "section": "Configuration",
+      "text": "The entry accepts an optional `config` block. Every field falls back to the defaults below.\n\n```yaml\n- insert:\n    - id: loop-guard\n      name: 'dsh-loop-guard'\n      config:\n\n`locale` only affects the strings a person reads: the error that ends a turn, the guard's notices in the transcript, and the `reason` field of logged events. Text sent to the model is always English, so model behaviour does not depend on the configured language."
+    },
+    {
+      "section": "Configuration",
+      "text": "The defaults are deliberately conservative: a repetition hit requires most of the window to be the same text, so ordinary long answers, tables and code are not touched."
+    },
+    {
+      "section": "Live overrides",
+      "text": "The profile patch is read at startup. For changes that must apply immediately, write `$DSH_HOME/loop-guard/config.json`; it is merged over the patch config and picked up by the next model call, with no restart:\n\n```json\n{ \"dryRun\": true, \"brake\": { \"enabled\": false } }\n```"
+    },
+    {
+      "section": "Live overrides",
+      "text": "Top-level keys are `enabled`, `dryRun`, `locale`, `repetition`, `toolLoop` and `brake`; the three sections merge field by field. Delete the file to return to the patch configuration. Changes are logged as `overrides-applied`, `overrides-absent` and `overrides-invalid`."
+    },
+    {
+      "section": "What you will see",
+      "text": "- **Cut and retry** — a repeating response stops within a few hundred characters and the step is re-run automatically.\n- **Retry exhausted** — the turn ends with an error naming the repeated snippet and the retry count. Send the request again.\n- **Tool spinning** — a `Near-duplicate tool calls detected` notice appears in the transcript, and at the hard threshold the turn is cancelled.\n- **Event log** — `$DSH_HOME/loop-guard/events.jsonl`, one JSON object per line. `kind` values include `plugin-loaded`, `repetition`, `repetition-retry`, `repetition-stop`, `budget-refused`, `budget-output`, `tool-advisory`, `tool-stop`, `overrides-applied`, `overrides-absent`, `overrides-invalid`. The file is append-only and grows; delete it when you no longer need the history."
+    },
+    {
+      "section": "Tuning",
+      "text": "If a normal answer is ever cut:\n\n1. Read the `reason` field of the `repetition` event — it quotes the text that was judged repetitive.\n2. Write `{\"dryRun\": true}` to the override file to observe without enforcing.\n3. Raise `minRepeats` / `minSpanChars` / `minShingleCoverage`, or set `{\"repetition\": {\"enabled\": false}}`.\n\nIf the spend brakes interrupt legitimate work, disable them with `{\"brake\": {\"enabled\": false}}` — the two loop guards keep working."
+    },
+    {
+      "section": "Disable and uninstall",
+      "text": "- Temporarily off, immediately: `$DSH_HOME/loop-guard/config.json` → `{\"enabled\": false}`.\n- Off after a restart: `enabled: false` in the entry config.\n- Disabled: remove the `loop-guard` entry from the profile's `cordis.patch.yml`.\n- Uninstalled: reverse the install (remove the dependency or the `node_modules` copy, then the entry)."
+    },
+    {
+      "section": "Development",
+      "text": "```bash\nnode --test     # 22 tests: detectors, stream wrapping, retry budget, budget accounting, tool chains, dry run, live overrides, locales\n```\n\nThe code is in four layers: `lib/detector.js` (pure repetition detection), `lib/messages.js` (every human-facing string, per locale), `lib/guard.js` (decisions and listeners, no cordis imports), and `lib/index.js` (cordis wiring, config schema, override-file reader)."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](LICENSE)."
+    }
+  ],
+  "skipped": []
+}
