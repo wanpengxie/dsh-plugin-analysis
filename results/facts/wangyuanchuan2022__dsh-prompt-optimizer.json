@@ -1,0 +1,117 @@
+{
+  "repo": "wangyuanchuan2022/dsh-prompt-optimizer",
+  "commit": "f6d241bd62c99d78e9132dfde8e50ed6c42574fc",
+  "extracted_at": "2026-11-10T07:36:58.643650+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 31182,
+    "lines_by_language": {
+      "JSON": 30,
+      "JavaScript": 578,
+      "Markdown": 48,
+      "Other": 51,
+      "YAML": 23
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "package.json",
+      "scripts/smoke-test.mjs",
+      "src/index.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-prompt-optimizer",
+    "version": "0.1.0",
+    "description": "One-click prompt-optimization button in the composer tool row, plus long-text input/editing support for the DeepSeek Harness web UI.",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation",
+          "@deepseek-ai/dsh-client-ui-primitives"
+        ],
+        "platform": "web"
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-prompt-optimizer bundle patch: one host row providing the /optimize\n# command. The command is log-only (never model history) and executes a single\n# auxiliary LLM call that returns the rewritten prompt to the caller.\n- insert:\n    - id: dsh-prompt-optimizer\n      name: dsh-prompt-optimizer\n      config:\n        # Optional explicit model route (both must be supplied together).\n        # When absent, the route comes from the session's current selection\n        # (passed by the client), the latest logged request/header, or the\n        # first provider that advertises a model.\n        # provider: deepseek-official\n        # model: deepseek-chat\n        # Reasoning effort for the optimization call. Default \"low\" keeps the\n        # rewrite fast; \"off\" disables thinking entirely (fastest). \"high\" /\n        # \"max\" trade speed for more careful restructuring.\n        # reasoningEffort: low\n        # Reject drafts longer than this many characters.\n        maxInputChars: 200000\n        # Output cap for the rewritten prompt.\n        maxOutputTokens: 8192\n        # Wall-clock budget for one optimization call.\n        timeoutMs: 120000\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-08-24T04:29:53Z",
+    "created_at": "2026-08-23T05:44:39Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "package.json",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-prompt-optimizer",
+      "text": "DeepSeek Harness (DSH) Web 插件：输入框工具栏的「一键优化提示词」按钮 + 长文本输入/编辑增强。"
+    },
+    {
+      "section": "功能",
+      "text": "1. **一键优化提示词**：在输入框工具行（发送按钮左侧）新增「优化」按钮。\n   - 点击后读取当前草稿，通过宿主端 `/optimize` 命令执行**一次辅助 LLM 调用**（不进入会话模型历史），把草稿重写为结构更清晰的提示词，并**直接写回输入框**。\n   - 优化面向 **DSH coding agent 场景**：重写目标是「agent 可在工作区内可靠执行的指令」——文件路径/标识符等语境细节逐字保留，U+FFFC 附件/引用占位符原位透传（宿主会重新绑定，改写会破坏绑定），结构惯例跟随草稿作者语言而非强加英文范式，并要求指令带有 agent 可校验的完成判据。\n   - 优化调用默认使用**低思考等级（`reasoningEffort: low`）**以加快速度；可在配置中设为 `off` 完全关闭思考（最快），或 `high` / `max` 换取更细致的重写质量。\n   - 模型路由按优先级解析：会话当前选择的模型 → 会话日志中最近一次请求的路由（`request/header`）→ 第一个可用 provider。也可在 `cordis.patch.yml` 中显式固定 `provider` + `model`。\n   - 也可以手动使用：`/optimize <草稿文本>`。\n2. **长文本支持**（输入框架构修复）：\n   - 修复 composer 的长文本缺陷：框架的 `<textarea>` 用了 `height:100%`，但 textarea 是 replaced 元素，在高度为 auto 的父容器里会回退到固有 2 行高度（约 52px），导致长文本只有顶部两行可编辑。本插件用 `ResizeObserver` 把 textarea 的显式像素高度同步为隐藏 mirror 元素（框架用来精确撑高的镜像）的高度，恢复「textarea 铺满全文 → 滚动容器裁切/滚动」的预期架构；\n   - 输入框文本区最大高度由 336px 提升到 `min(55vh, 600px)`；\n   - 输入框内 **Tab / Shift+Tab** 插入/删除两空格缩进，多行选择时按块整体缩进/反缩进，便于编辑结构化长文本。"
+    },
+    {
+      "section": "配置（cordis.patch.yml）",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `provider` / `model` | 未设置 | 显式固定优化调用的模型路由（需成对提供） |\n| `reasoningEffort` | `low` | 优化调用的思考等级：`off`（不思考，最快）/ `low` / `high` / `max` |\n| `maxInputChars` | 200000 | 草稿最大字符数 |\n| `maxOutputTokens` | 8192 | 重写结果输出上限 |\n| `timeoutMs` | 120000 | 单次优化调用超时 |"
+    },
+    {
+      "section": "安装（web profile）",
+      "text": "1. 通过 GitHub 仓库地址安装（自动完成安装并加入 profile 的 bundles 层列表）：\n   ```sh\n   dsh plugin --profile web add github:wangyuanchuan2022/dsh-prompt-optimizer\n   ```\n2. 重启 `dsh web` 并刷新页面。\n\n> 也可使用完整 Git URL：`dsh plugin --profile web add https://github.com/wangyuanchuan2022/dsh-prompt-optimizer.git`。\n> 后续更新：`dsh plugin --profile web update dsh-prompt-optimizer`。"
+    },
+    {
+      "section": "结构",
+      "text": "- `src/index.js` — 宿主端：注册 `/optimize` 命令，`ctx.llm.stream` 单次辅助调用。\n- `lib/client.js` — 浏览器端：`conversation.input.right` 槽按钮 + CSS/键盘长文本增强。\n- `cordis.patch.yml` — 宿主行与配置。"
+    },
+    {
+      "section": "局限",
+      "text": "- 草稿包含附件/引用占位符（U+FFFC chip）时按钮禁用（重写会破坏 chip 与 occurrence 表的对应关系）。\n- 优化结果通过 `inputActions.setDraft` 整体替换草稿；撤销（输入机 undo）可回退。"
+    }
+  ],
+  "skipped": []
+}

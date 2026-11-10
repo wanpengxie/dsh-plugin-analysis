@@ -1,0 +1,276 @@
+{
+  "repo": "tia-forge/dsh-tiaforge",
+  "commit": "f688a3c5f986bfe028be63ea8cf6598cb816cd8a",
+  "extracted_at": "2026-11-10T07:28:05.364353+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 90430,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 73,
+      "Markdown": 1204,
+      "Other": 21,
+      "Shell": 63,
+      "YAML": 70
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "assets/icon-180.png",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "skills/lad-render-cloud/SKILL.md",
+      "skills/laddoc-cloud/SKILL.md",
+      "skills/plc-cloud-sim/SKILL.md",
+      "skills/tia-portal-docs/SKILL.md",
+      "skills/tialink-tia-portal/SKILL.md"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tiaforge",
+    "version": "0.2.2",
+    "description": "TIA Forge for DeepSeek Harness: 5 skills (TIA Portal docs / LadDoc ladder generation / ladder rendering / PLC cloud simulation / TiaLink gateway) + 5 MCP endpoints wired as one bundle.",
+    "type": "module",
+    "main": "index.js",
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "skills"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "tia-portal",
+      "siemens",
+      "plc",
+      "scl",
+      "lad",
+      "mcp"
+    ],
+    "license": "MIT",
+    "author": {
+      "name": "汇智网 (hubwiz.com)",
+      "email": "support@hubwiz.com",
+      "url": "https://tia.hubwiz.com/"
+    },
+    "homepage": "https://tia.hubwiz.com/?utm_source=dsh&utm_medium=plugin",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/tia-forge/dsh-tiaforge.git"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "dsh": ">=0.2.0-rc.0 <0.2.1-rc.0 || >=0.2.1-rc.0 <0.3.0",
+      "node": ">=22"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tiaforge 的 patch 层：把五个技能与五个 MCP 端点接进 profile。\n#\n# 由 dsh.profile.bundles 依序应用；后应用的行按 id 覆盖前面的行。\n# 本层只插入新行，不改任何已有行，因此与 dsh-base / web-app 的升级兼容性最好。\n#\n# 所有 MCP 行都设 failOnStartupError: false —— 端点没起来（本机没装 TiaLink、\n# 没配 API Key）时，插件仍然加载，只是不出现对应工具，不会拖垮整个 profile。\n\n- insert:\n    # ① 技能：本包 index.js 读取 skills/*/SKILL.md 并注册进 ctx.skills\n    - id: tiaforge-skills\n      name: dsh-tiaforge\n\n    # ② TiaLink —— 本机网关（博途同机）。未授权时只读可用。\n    - id: tiaforge-mcp-tialink\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: tialink\n        transport: streamable-http\n        url: !!js process.env.TIALINK_URL ?? 'http://127.0.0.1:8080/mcp'\n        headers:\n          Authorization: !!js '`Bearer ${process.env.TIALINK_TOKEN ?? \"\"}`'\n        toolCallTimeoutMs: 600000\n        failOnStartupError: false\n\n    # ③ 博途编程文档检索（2800+ 章节，get_docs）\n    - id: tiaforge-mcp-docs\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: tia-docs\n        transport: streamable-http\n        url: https://tia.hubwiz.com/ai-coding-docs/mcp\n        headers:\n          Authorization: !!js '`Bearer ${process.env.TIA_DOCS_KEY ?? \"\"}`'\n        failOnStartupError: false\n\n    # ④ PLC 云仿真（逐扫描 + 场景 PASS/FAIL）\n    - id: tiaforge-mcp-sim\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: plc-sim\n        transport: streamable-http\n        url: https://tia.hubwiz.com/sim/mcp\n        headers:\n          Authorization: !!js '`Bearer ${process.env.TIA_SIM_KEY ?? \"\"}`'\n        failOnStartupError: false\n\n    # ⑤ LadDoc Cloud（梯形图 JSON → 博途可导入 SimaticML）\n    - id: tiaforge-mcp-laddoc\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: laddoc\n        transport: streamable-http\n        url: https://tia.hubwiz.com/lad/mcp\n        headers:\n          Authorization: !!js '`Bearer ${process.env.TIA_LAD_KEY ?? \"\"}`'\n        failOnStartupError: false\n\n    # ⑥ 梯形图渲染（SimaticML → PNG，导入前先看一眼）\n    #    注意：这是唯一**计费**的端点 —— render_simaticml 每次扣 1 次额度（先扣后执行），\n    #    render_version 免费。没有 TIA_RENDER_KEY 时 401，工具不出现，不会白扣额度。\n    - id: tiaforge-mcp-render\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: lad-render\n        transport: streamable-http\n        url: https://tia.hubwiz.com/render/mcp\n        headers:\n          Authorization: !!js '`Bearer ${process.env.TIA_RENDER_KEY ?? \"\"}`'\n        failOnStartupError: false\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "TIALINK_URL",
+      "kind": "env",
+      "where": "cordis.patch.yml:20"
+    },
+    {
+      "name": "TIALINK_TOKEN",
+      "kind": "env",
+      "where": "cordis.patch.yml:22"
+    },
+    {
+      "name": "TIA_DOCS_KEY",
+      "kind": "env",
+      "where": "cordis.patch.yml:34"
+    },
+    {
+      "name": "TIA_SIM_KEY",
+      "kind": "env",
+      "where": "cordis.patch.yml:45"
+    },
+    {
+      "name": "TIA_LAD_KEY",
+      "kind": "env",
+      "where": "cordis.patch.yml:56"
+    },
+    {
+      "name": "TIA_RENDER_KEY",
+      "kind": "env",
+      "where": "cordis.patch.yml:69"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/mcp",
+      "where": "cordis.patch.yml:20"
+    },
+    {
+      "host": "tia.hubwiz.com",
+      "url": "https://tia.hubwiz.com/ai-coding-docs/mcp",
+      "where": "cordis.patch.yml:32"
+    },
+    {
+      "host": "tia.hubwiz.com",
+      "url": "https://tia.hubwiz.com/sim/mcp",
+      "where": "cordis.patch.yml:43"
+    },
+    {
+      "host": "tia.hubwiz.com",
+      "url": "https://tia.hubwiz.com/lad/mcp",
+      "where": "cordis.patch.yml:54"
+    },
+    {
+      "host": "tia.hubwiz.com",
+      "url": "https://tia.hubwiz.com/render/mcp",
+      "where": "cordis.patch.yml:67"
+    },
+    {
+      "host": "tia.hubwiz.com",
+      "url": "https://tia.hubwiz.com/",
+      "where": "package.json:26"
+    },
+    {
+      "host": "tia.hubwiz.com",
+      "url": "https://tia.hubwiz.com/?utm_source=dsh&utm_medium=plugin",
+      "where": "package.json:28"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/tia-forge/dsh-tiaforge.git",
+      "where": "package.json:31"
+    },
+    {
+      "host": "192.168.1.78",
+      "url": "http://192.168.1.78:8080/mcp",
+      "where": "skills/tialink-tia-portal/scripts/tialink-check.sh:5"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/mcp",
+      "where": "skills/tialink-tia-portal/scripts/tialink-check.sh:13"
+    },
+    {
+      "host": "host",
+      "url": "http://host:8080/mcp）",
+      "where": "skills/tialink-tia-portal/scripts/tialink-check.sh:18"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-11-01T13:01:30Z",
+    "created_at": "2026-11-01T12:28:51Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tiaforge —— DeepSeek Harness 插件",
+      "text": "把 TIA Forge 的**五个技能**和**五个 MCP 端点**打成**一个组合包（bundle）**：\n装一次，DSH 里就有「查文档 → 生成梯形图 → 看图核对 → 跑仿真 → 操作真实工程」这条链。\n\n> **为什么需要它**：DSH 本身支持 skill（`ctx.skills` + 文件系统提供方，扫 `<project>/.dsh/skills`、`.agents/skills`、`~/.dsh/skills`），\n> 但**没有 `dsh skill add` 这类命令** —— skill 只能靠\"把文件放到扫描目录\"或\"插件注册\"进来。\n> 这个包用后者：`index.js` 在 `apply()` 里读包内 `skills/*/SKILL.md`，直接 `ctx.skills.register()`。\n> 所以你不需要拷文件、也不需要配 `customSkillDirs`。"
+    },
+    {
+      "section": "A. 桌面端界面装（推荐，三步）",
+      "text": "1. 点 DSH 左上角【插件】；\n2. 输入 `dsh-tiaforge`；\n3. 点安装 → **完全退出并重开** DSH（MCP 连接是在启动时建立的）。\n\n装完模型侧就能看到 **五个技能 + 五个已接入的服务**，全程不用开终端、不用改配置文件。"
+    },
+    {
+      "section": "B. 命令行（写脚本、批量装、或 `dsh web` 里找不到插件入口时）",
+      "text": "```sh"
+    },
+    {
+      "section": "从 npm（预构建，推荐）",
+      "text": "dsh plugin --profile web add dsh-tiaforge"
+    },
+    {
+      "section": "从 GitHub（本仓库的 dsh-plugin 目录）",
+      "text": "dsh plugin --profile web add github:tia-forge/dsh-tiaforge\n```\n\n装完重启 `dsh web`，并强刷浏览器。"
+    },
+    {
+      "section": "它装了什么",
+      "text": "| 类型 | 名称 | 说明 |\n|---|---|---|\n| 技能 | `tialink-tia-portal` | AI 操作博途工程（V19/V20；未授权只读） |\n| 技能 | `plc-cloud-sim` | 云端逐扫描仿真 + 场景 PASS/FAIL |\n| 技能 | `laddoc-cloud` | LadDoc → 博途可导入 SimaticML |\n| 技能 | `lad-render-cloud` | SimaticML → PNG，导入前先看一眼（**计费**，每次渲染扣 1 次） |\n| 技能 | `tia-portal-docs` | 博途编程文档检索（`get_docs`） |\n| MCP | `tialink` | `http://127.0.0.1:8080/mcp`（本机网关） |\n| MCP | `tia-docs` | `https://tia.hubwiz.com/ai-coding-docs/mcp` |\n| MCP | `plc-sim` | `https://tia.hubwiz.com/sim/mcp` |\n| MCP | `laddoc` | `https://tia.hubwiz.com/lad/mcp` |\n| MCP | `lad-render` | `https://tia.hubwiz.com/render/mcp`（**计费**，见下） |"
+    },
+    {
+      "section": "它装了什么",
+      "text": "MCP 行全部设 `failOnStartupError: false`：端点没起来（没装 TiaLink、没配 Key）时插件照常加载，只是对应的工具不出现，**不会拖垮 profile**。"
+    },
+    {
+      "section": "桌面端（Desktop）",
+      "text": "Desktop 是 dsh Web 应用的 Electron 壳，**插件语义完全一致**（同一个共享插件管理器、同一个 profile runner），\n只是 profile 目录不同：`$DSH_HOME/profiles/desktop`，且**由 Electron 独占**。\n\n> **走 A（界面安装）不会碰到下面这两条** —— 它们只在你用**命令行**往 Desktop 里装时才有关。\n\n两个硬约束（官方 `apps/desktop/README.zh.md`）：\n\n1. **先用 npm 装的 dsh 管不了它** —— 必须用 Desktop 自带的 CLI：菜单 →「检查更新…」下方「**管理 dsh 命令…**」→ 安装，然后新终端里 `dsh --version`。\n2. **第一次要先用 Desktop 启动一次**（初始化 profile），然后**完全退出应用**，再执行安装命令。\n\n```sh"
+    },
+    {
+      "section": "2) 装好 Desktop 自带 CLI 后：",
+      "text": "dsh plugin --profile desktop add dsh-tiaforge"
+    },
+    {
+      "section": "3) 重新打开 Desktop",
+      "text": "```\n\nDesktop 里没有\"技能\"页面——这不是缺功能：**技能是模型调用的**（`skill` 工具 + 目录注入），\n本插件在 `apply()` 里注册，所以桌面端一样能用到，不需要任何 UI。\n\n若安装被拒且报 `engines.dsh` 不匹配：Desktop 的 dsh 版本与打包版本严格一致，\n升级 Desktop，或把 `package.json` 的 `engines.dsh` 放宽到覆盖你的版本。"
+    },
+    {
+      "section": "配 token（三选一，按需）",
+      "text": "```sh"
+    },
+    {
+      "section": "① TiaLink 本机网关（默认 127.0.0.1:8080，装了 token 就填）",
+      "text": "export TIALINK_TOKEN=...\nexport TIALINK_URL=http://192.168.1.78:8080/mcp   # 网关在另一台机器时"
+    },
+    {
+      "section": "② 四个云端服务各自一把 Key（微信扫码，各 100 次免费）",
+      "text": "export TIA_DOCS_KEY=...\nexport TIA_SIM_KEY=...\nexport TIA_LAD_KEY=...\nexport TIA_RENDER_KEY=...   # 唯一计费的：每次渲染扣 1 次，先扣后执行\n```\n\n四个云端服务的大致分工：\n\n| Key | 端点 | 免费额度 | 技能 |\n|---|---|---|---|\n| `TIA_DOCS_KEY` | `/ai-coding-docs/mcp` | 100 次 | `tia-portal-docs` |\n| `TIA_SIM_KEY` | `/sim/mcp` | 100 次 | `plc-cloud-sim` |\n| `TIA_LAD_KEY` | `/lad/mcp` | 100 次 | `laddoc-cloud` |\n| `TIA_RENDER_KEY` | `/render/mcp` | 100 次 | `lad-render-cloud`（`render_version` 免费，渲染扣 1） |"
+    },
+    {
+      "section": "② 四个云端服务各自一把 Key（微信扫码，各 100 次免费）",
+      "text": "不配的话对应 MCP 不出现工具（没 Key = `initialize` 就 401），但**技能仍然可用**（技能正文本身就是可读的知识，不依赖工具）。\n`TIA_RENDER_KEY` 不配也不会白扣额度——这一点跟另三个一样，靠 key 门控。"
+    },
+    {
+      "section": "验证",
+      "text": "```sh"
+    },
+    {
+      "section": "1) 组合后的配置里应该有这 6 行",
+      "text": "dsh --profile web --dump-config | grep -n tiaforge"
+    },
+    {
+      "section": "2) 起来之后，模型侧应该能用 skill 工具看到五个技能",
+      "text": "dsh web"
+    },
+    {
+      "section": "对话里问：「列出你能用的 TIA 相关技能」",
+      "text": "```"
+    },
+    {
+      "section": "结构",
+      "text": "```\ndsh-plugin/\n├── package.json          # dsh.bundle.patch = ./cordis.patch.yml；engines.dsh = >=0.2.0 <0.3.0\n├── cordis.patch.yml      # 1 行技能注册插件 + 5 行 mcp-client\n├── index.js              # 读 skills/*/SKILL.md → ctx.skills.register()\n\n`cordis.patch.yml` 只 `insert` 新行、**不覆盖任何已有行**，所以 dsh-base / web-app 升级时这个包最不容易坏。"
+    },
+    {
+      "section": "兼容性",
+      "text": "- `engines.dsh: \">=0.2.0-rc.0 <0.2.1-rc.0 || >=0.2.1-rc.0 <0.3.0\"`（0.1.1 起）。**两个分支是必需的**：node-semver 只允许某个比较符元组与版本 tuple 完全一致且自带预发布标签时才放行预发布版，单个 `>=0.2.1-rc.1 <0.3.0` 会把 `0.2.0-rc.2` 这类版本静默排除。\n- 实测环境：**dsh desktop 0.2.0-rc.2** 可安装并加载（桌面端未强制 engines，但其它安装路径会校验）。\n- 升级 DSH 后先跑一次 `--dump-config`，确认 6 行还在，再开始用。"
+    },
+    {
+      "section": "许可",
+      "text": "插件代码 MIT；技能正文 CC BY 4.0（见各 `SKILL.md`）。TiaLink 网关与四个云端服务是商业软件/服务，不在本许可范围内。"
+    }
+  ],
+  "skipped": []
+}

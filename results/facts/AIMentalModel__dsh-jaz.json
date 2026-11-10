@@ -1,0 +1,321 @@
+{
+  "repo": "AIMentalModel/dsh-jaz",
+  "commit": "2db41fb36610c352b089b6e133436d521ff9016b",
+  "extracted_at": "2026-11-10T09:03:46.881708+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 121623,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 1013,
+      "Markdown": 778,
+      "Other": 39,
+      "YAML": 235
+    },
+    "outline": [
+      ".gitignore",
+      "DESIGN.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/VERIFICATION.md",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "mode.js",
+      "package.json",
+      "test-mock.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-jaz-invoke",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "JAZ for DeepSeek Harness (arXiv:2609.26891): the invoke primitive with a persistent code REPL, JAZ mode, and two presets — one installable bundle.",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json",
+      "./mode": "./mode.js"
+    },
+    "files": [
+      "index.js",
+      "mode.js",
+      "locale/*.json",
+      "icon.svg"
+    ],
+    "icon": "./icon.svg",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# One bundle, one install: the core module (index.js) provides the `jaz` tool and\n# the `invoke` primitive; the mode module (mode.js) provides JAZ mode tools and\n# the scoped restriction a preset mounts; the two agent presets below are the\n# user-facing \"modes\" a new session can select.\n#\n#   preset-jaz          — JAZ style + the SHIPPED base tools (rows copied verbatim\n#                         from the shipped `standard` preset, config included).\n#   preset-jaz-minimal  — the paper's experimental setting: only `jaz`.\n- insert:\n    - id: dsh-jaz-invoke\n      name: '@local/dsh-jaz-invoke'\n      config: {}\n    - id: dsh-jaz-mode\n      name: '@local/dsh-jaz-invoke/mode'\n      config: {}\n    - id: preset-jaz\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: jaz\n        name: JAZ\n        description: JAZ 风格（写 cell + invoke 递归委托）+ 常用 base 工具（文件/终端/网络/待办）\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                # JAZ MODE — you work by writing cells (arXiv:2609.26891)\n\n                Your environment is a code REPL, not a list of tools. Everything you can do goes through the `jaz` tool, and everything you can see is a variable.\n\n                ## The primitive\n                `invoke(inputs, opts?)` is a function whose implementation is provided AT CALL TIME by another LLM. It treats every input uniformly — data, specification, state, or a description of a tool:\n                ```js\n                const out = await invoke({ task: 'summarize these notes', notes });              // -> text\n                const obj = await invoke({ text }, { schema: { type: 'object', properties: { score: { type: 'integer' } }, required: ['score'] } }); // -> validated object\n                ```\n                Sub-invokes may call `invoke` again, so recursive delegation is the default; a delegation-depth cap applies.\n\n                ## The variables (this is the point)\n                - `__inputs__` — the named inputs of the current `jaz` call. Put the user's request and any guidance in `inputs` on the first cell, then reuse those names.\n                - `__history__` — every invoke of this session: `{seq, inputs, output, ms, childId}`. Filter it, slice it, pass it into later invokes.\n                - `__scope__` — mutable object merged into every later invoke (dynamic scoping).\n                - State persists across cells by BARE ASSIGNMENT (`facts = [...]`) or `globalThis.x = ...`; `let`/`const`/`var` live only inside one cell.\n\n                ## Protocol\n                1. One meaningful step per cell. Pass `session` on every call so state persists; never re-derive what a variable already holds.\n                2. Delegate with `invoke` instead of reasoning harder: sub-problems, extraction, verification, drafting.\n                3. To recall earlier details, search `prev_history` (an earlier agent's history handed to you), NOT `__history__` (already fully visible to you). Use targeted search terms and show surrounding context.\n                4. When your history grows large (roughly more than 20 entries or 40k characters), stop working in this session and delegate the rest:\n                   ```js\n                   return invoke({ instructions, guidance,\n                     prev_history: (typeof prev_history === 'undefined' ? [] : prev_history).concat(__history__),\n                     prev_progress_summary, next_steps });\n                   ```\n                   Later cells must carry `prev_history` forward so nothing is lost.\n                5. A per-session invoke budget applies. An over-budget call raises `JazInvokeError`: catch it and finish with what you have instead of failing the run.\n                6. Finish by returning a JSON value from your final cell and reporting that value as your answer.\n\n                ## Style\n                Write compact code. Do not narrate; a cell either returns a value or it does not.\n\n                ## Capabilities\n                You work in JAZ style, but this session ALSO has the usual harness tools: read / write / edit / glob / grep / bash / web_search / web_fetch / todo / skills.\n                Use the dedicated tools for ordinary file, shell and network work — do NOT reimplement them inside cells.\n\n                ## Which harness (decide this BEFORE you pick a tool)\n                Open a `jaz` cell first when the work has one of these shapes — the straight tools cannot carry it:\n                - **Stepwise convergence** — each round's result decides the next round, so no script can be written up front. `invoke` moves that reasoning into a child and returns only the answer.\n                - **Long-horizon follow-up** — spans many rounds and intermediate findings must survive. State held in REPL variables (bare assignment / `__scope__`) is not lost when this conversation is compacted; it DOES die when the process restarts, so durable memory belongs to the memory system instead.\n                - **Batch audit under one rule** — many unfamiliar items judged by the same rule until a table emerges: rule in `__scope__`, rows by bare assignment, reduce over `__history__`.\n                Keep the straight path otherwise: one-off reads / writes / searches, and one-shot fan-outs that a written script already expresses.\n                `jaz_agent` children hold the `jaz` tool alone — no read / write / bash / web — so send file or network work to `subagent`, never to `jaz_agent`.\n              suffix: Your working directory is {{cwd}}.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n                  backgroundMode: continuable\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n    - id: preset-jaz-minimal\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: jaz-minimal\n        name: JAZ (minimal)\n        description: 论文的最简 harness：只有 invoke REPL，无文件/终端/网络工具（实验复现用）\n        order: 6\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                # JAZ MODE — you work by writing cells (arXiv:2609.26891)\n\n                Your environment is a code REPL, not a list of tools. Everything you can do goes through the `jaz` tool, and everything you can see is a variable.\n\n                ## The primitive\n                `invoke(inputs, opts?)` is a function whose implementation is provided AT CALL TIME by another LLM. It treats every input uniformly — data, specification, state, or a description of a tool:\n                ```js\n                const out = await invoke({ task: 'summarize these notes', notes });              // -> text\n                const obj = await invoke({ text }, { schema: { type: 'object', properties: { score: { type: 'integer' } }, required: ['score'] } }); // -> validated object\n                ```\n                Sub-invokes may call `invoke` again, so recursive delegation is the default; a delegation-depth cap applies.\n\n                ## The variables (this is the point)\n                - `__inputs__` — the named inputs of the current `jaz` call. Put the user's request and any guidance in `inputs` on the first cell, then reuse those names.\n                - `__history__` — every invoke of this session: `{seq, inputs, output, ms, childId}`. Filter it, slice it, pass it into later invokes.\n                - `__scope__` — mutable object merged into every later invoke (dynamic scoping).\n                - State persists across cells by BARE ASSIGNMENT (`facts = [...]`) or `globalThis.x = ...`; `let`/`const`/`var` live only inside one cell.\n\n                ## Protocol\n                1. One meaningful step per cell. Pass `session` on every call so state persists; never re-derive what a variable already holds.\n                2. Delegate with `invoke` instead of reasoning harder: sub-problems, extraction, verification, drafting.\n                3. To recall earlier details, search `prev_history` (an earlier agent's history handed to you), NOT `__history__` (already fully visible to you). Use targeted search terms and show surrounding context.\n                4. When your history grows large (roughly more than 20 entries or 40k characters), stop working in this session and delegate the rest:\n                   ```js\n                   return invoke({ instructions, guidance,\n                     prev_history: (typeof prev_history === 'undefined' ? [] : prev_history).concat(__history__),\n                     prev_progress_summary, next_steps });\n                   ```\n                   Later cells must carry `prev_history` forward so nothing is lost.\n                5. A per-session invoke budget applies. An over-budget call raises `JazInvokeError`: catch it and finish with what you have instead of failing the run.\n                6. Finish by returning a JSON value from your final cell and reporting that value as your answer.\n\n                ## Style\n                Write compact code. Do not narrate; a cell either returns a value or it does not.\n\n                ## Capabilities (read this before choosing an approach)\n                You have exactly one tool: `jaz`. There is NO web search, NO file system, NO shell, and NO delegation tool in this session. If the task needs them (searching the web, reading files, running commands), say so immediately and tell the user to switch to the `JAZ + web` preset or back to `Standard` — do not spend a long cell-by-cell detour reimplementing them in Node unless the user asks for that.\n              suffix: Your working directory is {{cwd}}.\n          # Restriction-only mount of this package's mode entry: it registers\n          # no tools and filters everything this session inherits (host-level\n          # jaz_mode/jaz_agent and any preset-scope tools), leaving only `jaz`.\n          # Tools another plugin registers DIRECTLY into each agent's own scope\n          # cannot be filtered — see docs/VERIFICATION.md §6.\n          - id: jaz-restrict\n            name: '@local/dsh-jaz-invoke/mode'\n            config:\n              mode: jaz\n              restrictionOnly: true\n              allowTools: []\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "mode.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "provider",
+      "kind": "setting",
+      "default": "spawn",
+      "where": "index.js:25"
+    },
+    {
+      "name": "maxDepth",
+      "kind": "setting",
+      "default": "4",
+      "where": "index.js:27"
+    },
+    {
+      "name": "maxInvokes",
+      "kind": "setting",
+      "default": "32",
+      "where": "index.js:29"
+    },
+    {
+      "name": "model",
+      "kind": "setting",
+      "default": "未设置",
+      "where": "index.js:37"
+    },
+    {
+      "name": "maxInvokeInputChars",
+      "kind": "setting",
+      "default": "24000",
+      "where": "index.js:31"
+    },
+    {
+      "name": "maxHistoryEntryChars",
+      "kind": "setting",
+      "default": "8000",
+      "where": "index.js:33"
+    },
+    {
+      "name": "runTimeoutMs",
+      "kind": "setting",
+      "default": "900000",
+      "where": "index.js:35"
+    },
+    {
+      "name": "mode",
+      "kind": "setting",
+      "default": "native",
+      "where": "mode.js:344"
+    },
+    {
+      "name": "allowTools",
+      "kind": "setting",
+      "default": "[]",
+      "where": "mode.js:345"
+    },
+    {
+      "name": "restrictionOnly",
+      "kind": "setting",
+      "default": "false",
+      "where": "mode.js:347"
+    }
+  ],
+  "endpoints": [],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "jaz",
+      "description": "Run one cell in a JAZ-style persistent code REPL; supports invoke, named inputs, named sessions and reset.",
+      "where": "index.js:60"
+    },
+    {
+      "kind": "tool",
+      "name": "jaz_mode",
+      "description": "Enter, leave, or inspect JAZ mode for this agent.",
+      "where": "mode.js:165"
+    },
+    {
+      "kind": "tool",
+      "name": "jaz_agent",
+      "description": "Run one JAZ-mode child agent whose only tool is jaz.",
+      "where": "mode.js:213"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-10-04T01:36:46Z",
+    "created_at": "2026-09-28T15:33:24Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "mode.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-jaz — JAZ 框架的 DeepSeek Harness 实现",
+      "text": "> 论文：*Harness as a Language: A Minimalist Agent Framework With Maximal Expressivity*（[arXiv:2609.26891](https://arxiv.org/abs/2609.26891)，MIT CSAIL）\n> 复刻 JAZ 的两条定义性质：`invoke` 是\"实现由 LLM 在每次调用时提供\"的语言原语；一切对 LLM 可见的东西（含 REPL 历史）都是代码环境里的变量。\n\n本仓库包含两个 Harness bundle：\n\n**一个可安装实体**（`@local/dsh-jaz-invoke`），内含两个入口 + 两个预设："
+    },
+    {
+      "section": "dsh-jaz — JAZ 框架的 DeepSeek Harness 实现",
+      "text": "| 组成 | 位置 | 提供 |\n|---|---|---|\n| 核心 | [`index.js`](./index.js) | `jaz` 工具 + `invoke` 原语 + 持久 REPL + hooks（预算/深度/trace） |\n| 模式 | [`mode.js`](./mode.js)（入口 `@local/dsh-jaz-invoke/mode`） | `jaz_agent`（JAZ 子代理）、`jaz_mode`（运行时切入/退出）、部署默认 JAZ 模式、以及 preset 用的 restriction 挂载 |\n| 预设 | [`cordis.patch.yml`](./cordis.patch.yml) | 新会话可选的两个模式：`JAZ`（JAZ 风格 + base 工具）、`JAZ (minimal)`（论文设定） |\n\n> 为什么是一个包：核心与模式共享同一套配置与守卫，preset 只是声明；拆成三个包只会多两次安装、多两次\"改代码要重启\"的重载。`mode` 采用**同包第二入口**，代码仍是分模块的。"
+    },
+    {
+      "section": "快速开始",
+      "text": "```bash\ngit clone https://github.com/AIMentalModel/dsh-jaz.git ~/Code/dsh-plugins/dsh-jaz"
+    },
+    {
+      "section": "1) 装包：dsh plugin 只代理 pnpm（<profile> 换成你的 profile，如 web）",
+      "text": "dsh plugin --profile web add ~/Code/dsh-plugins/dsh-jaz"
+    },
+    {
+      "section": "· 或让 Agent 调用 plugin_manager 工具（action: install_bundle / set_bundle）",
+      "text": "```\n\n> **注意别混淆两个东西**：`dsh plugin` 是**你在终端敲的** CLI 命令（只装包）；`plugin_manager` 是 **Agent 工具**（负责 bundle 选择与启用）。前者不会自动选中 bundle，所以第 2 步不能省。\n>\n> 依赖：`ctx.ptcRuntime`（`@deepseek-ai/dsh-ptc-runtime-node`）与 `ctx.subagents`（`dsh-subagent-spawn-in-process`），DSH 默认 profile 已具备。包名保留 `@local/` 前缀是刻意的：它们作为本机 profile bundle 安装，不发布到 npm。"
+    },
+    {
+      "section": "JAZ 模式（三种入口）",
+      "text": "论文的 harness 只有一条 `invoke` 原语——没有工具列表、没有文件系统、没有记忆系统。本仓库提供三种入口，从\"最省事\"到\"最细粒度\"："
+    },
+    {
+      "section": "方式 A：JAZ preset —— 新会话直接就是 JAZ 风格（两种口味）",
+      "text": "安装本 bundle 后，**新建会话时在 preset 选择器里二选一**：\n\n| preset | 内容 | 什么时候用 |\n|---|---|---|\n| **`JAZ`**（推荐） | JAZ 协议 persona + **随 DSH 一起发的 base 工具**（read/write/edit/glob/grep/bash/jobs/web_search/web_fetch/todo/skill/present/compaction/subagent/workflow）+ `jaz` | 日常使用：要 JAZ 风格（写 cell + `invoke` 递归委托），但**照常保留文件和网络工具**，什么都不拿走 |\n| **`JAZ (minimal)`** | 只有 `jaz`（用 restriction 把继承层工具全滤掉） | 复现论文的实验设定（prompt-only、无文件系统、无记忆系统） |"
+    },
+    {
+      "section": "方式 A：JAZ preset —— 新会话直接就是 JAZ 风格（两种口味）",
+      "text": "preset 的工具行是**从 shipped `standard` 预设原样复制的**（连必填 config 一起），所以不会因为漏配置而挂载失败；想加减工具就在 preset 的 `config.plugins` 里改。"
+    },
+    {
+      "section": "方式 A：JAZ preset —— 新会话直接就是 JAZ 风格（两种口味）",
+      "text": "> preset 是**新会话**才生效的：已存在的会话保持它启动时的插件集（DSH 的规则）。装完/改完新 bundle 后请开新会话验证；选择器里没看到就刷新一次页面。\n>\n> `JAZ (minimal)` 的诚实说明：restriction 通过 `@local/dsh-jaz-invoke/mode`（`restrictionOnly: true`）挂载，能滤掉**继承层**工具（含 host 级 `jaz_mode`/`jaz_agent`），但 DSH 注册表**不过滤本层注册**——像 `dsh-experimental-agent-team-profile` 那样直接往每个 agent 注入工具的 bundle 仍会残留 `spawn_teammate`/`team_task_*`。实测见 [docs/VERIFICATION.md](./docs/VERIFICATION.md) §6。"
+    },
+    {
+      "section": "方式 B：让一个子代理跑 JAZ 模式（当前会话里按需用）",
+      "text": "```\njaz_agent({ task: \"把这三篇材料的要点整理成对比表\", session: \"compare-1\" })\n```\n\n子代理的工具表被 `toolFilter` 收窄到**只有 `jaz`**，系统提示装入同一套 JAZ 协议。它除了写 cell 什么也做不了。结果以文本返回，并在 DSH 会话轨迹里生成子代理记录。"
+    },
+    {
+      "section": "方式 C：把当前会话切成 JAZ 模式（运行时、可逆）",
+      "text": "```\njaz_mode({ action: \"enter\" })            # 隐藏除 jaz / jaz_mode 之外的全部工具，并装入 JAZ 协议提示\njaz_mode({ action: \"enter\", allow: [\"bash\"] })   # 想保留个别工具就加白名单\njaz_mode({ action: \"exit\" })             # 恢复原工具表\njaz_mode({ action: \"status\" })           # 查看当前状态\n\n收窄是**该 agent 作用域**的（`agent.ctx`），不影响其他会话；下一个模型步生效，退出后恢复。实测：进入后 `read`/`write`/`bash`/`web_search`/`subagent` 全部消失、技能目录清空，退出后全部恢复。"
+    },
+    {
+      "section": "方式 D：部署默认（所有会话）",
+      "text": "```yaml\n- insert:\n    - id: jaz-mode\n      name: '@local/dsh-jaz-invoke/mode'\n      config:\n\n部署级配置改动需重启 Harness 生效。\n\n**注意**：JAZ 模式下 agent 只能写 cell，因此它也无法调用 `write`/`bash` 等工具——这是论文\"无外部系统\"的设计，不是缺陷；需要落地文件时用 `allow: [...]` 放行。\n\n---"
+    },
+    {
+      "section": "dsh-jaz-invoke 使用手册",
+      "text": "> JAZ 风格 `invoke` 语言原语 + 持久代码 REPL，为 DeepSeek Harness 实现。\n> 设计与取舍：[DESIGN.md](./DESIGN.md)"
+    },
+    {
+      "section": "1. 一句话理解",
+      "text": "`jaz` 是**模型可调用的一个工具**：你（LLM）写一段 JS（一个 REPL cell），在沙箱里执行；cell 里可以调用 `invoke({...})`——这是一个**\"函数实现由 LLM 在每次调用时现场提供\"**的原语（每次调用 = 启动一个子代理，把命名输入渲染成 JSON 给它，子代理的最终回答就是返回值）。\n\n两条定义性质：\n1. **可写任意代码、可递归 invoke** —— cell 里能写控制流，子代理自己也能再调 `jaz`，递归委托是默认行为；\n2. **一切可见皆是变量** —— `__inputs__`、`__history__`、`__scope__` 以及你写的变量，都是代码环境里的普通 JS 变量（\"代码即上下文\"，不需要外部记忆库）。"
+    },
+    {
+      "section": "2. 工具参数",
+      "text": "| 参数 | 必填 | 说明 |\n|---|---|---|\n| `program` | ✅ | REPL cell：纯 JavaScript（不是 TS），按 async 函数体执行，支持顶层 `await`/`return`；`return` 的 JSON 值即工具结果的 `result` |\n| `inputs` | | 本次调用的命名输入，cell 内以 `__inputs__` 访问（prompt 也是变量） |\n| `session` | | 命名 REPL 会话。同名 cell 共享持久变量、`__history__`、`__scope__` 与预算计数；省略 = 一次性无状态运行 |\n| `reset` | | 先清空该 session（变量/历史/作用域/预算）再执行 |\n\n**cell 内可用全局量**"
+    },
+    {
+      "section": "2. 工具参数",
+      "text": "```js\nawait invoke(inputs, opts?)   // opts: { schema?, provider?, model?, scope? }\n__inputs__                    // 本次工具调用的 inputs\n__history__                   // 本 session 内每次 invoke 的记录数组：{seq, ok, ms, stopReason, childId, inputs, output}\n__scope__                     // 可变对象；每次 invoke 前会把它合并进该次输入（动态作用域）"
+    },
+    {
+      "section": "3.1 单次生成（替代一次 subagent 调用）",
+      "text": "```js\nconst idea = await invoke({ task: '给这个插件起 3 个中文名，每个不超过 6 字', tone: '技术向' });\nreturn { idea };\n```"
+    },
+    {
+      "section": "3.2 扇出 + 汇总（map-reduce 风格）",
+      "text": "```js\nfiles = ['a.ts', 'b.ts', 'c.ts'];\nreports = [];\nfor (const f of files) {\n  reports.push(await invoke({ task: `审查 ${f} 的边界条件`, file: f }));"
+    },
+    {
+      "section": "3.3 结构化返回（`opts.schema`）",
+      "text": "```js\nconst score = await invoke(\n  { text: '这家餐厅环境好但上菜慢，价格偏高。' },\n  { schema: {\n      type: 'object',"
+    },
+    {
+      "section": "3.4 长程记忆 / 尾递归委托（论文的核心场景）",
+      "text": "上下文快满时，把**整个 REPL 历史按引用传给子代理**，让它接着干——历史是普通变量，可无损传递：\n\n```js\n// cell 1：记录\nledger = [];\nfor (let i = 1; i <= 12; i++) {\n  ledger.push({ round: i, fact: await invoke({ round: i, instruction: '虚构一条含人名/数字/地点的事实，一句话' }) });"
+    },
+    {
+      "section": "3.5 会话内跨 cell 累计状态",
+      "text": "```js\n// cell A\nnotes = [];\nnotes.push(await invoke({ task: '总结刚才的讨论要点' }));\nreturn notes.length;"
+    },
+    {
+      "section": "4. 持久化规则（重要）",
+      "text": "```js\nfacts = [];                 // ✅ 裸赋值 → 落 globalThis → 跨 cell 存活\nglobalThis.summary = '...'; // ✅ 显式全局 → 存活\nlet tmp = 1;                // ❌ cell 局部（const/var 同理），下个 cell 取不到\n```\n\n- `__history__` / `__scope__` 与预算计数**随 session 自动持久**；\n- 不可 JSON 序列化的变量（函数、Symbol、循环结构）不会持久，会出现在结果的 `skippedVars` 里；\n- **cell 抛错时**：该 cell 的变量/作用域变更不落盘（不污染后续），但它**花掉的 invoke 会补记进历史**（标记 `cellFailed: true`）；\n- session 存在插件内存里：插件重载 / Harness 重启即清空（有意为之——\"记忆即状态\"，不引入外部存储）。"
+    },
+    {
+      "section": "5. 约束与监控（hooks）",
+      "text": "| 机制 | 默认 | 表现 |\n|---|---|---|\n| 调用预算（BudgetPool） | 每 session 32 次 invoke | 超限时 `invoke` 抛 `JazInvokeError`，**可 catch 优雅收尾** |\n| 递归深度（RecursionLimit） | `maxDepth: 4` | 映射到 subagent 委派深度上限，超限的子代理启动被拒绝 |\n| 单 cell 墙钟 | 15 分钟 | 由 PTC 运行时执行；超时 kind=`timeout` |\n| 调用追踪（TrajectoryRecorder） | 始终开启 | 工具结果里的 `## invoke trace` 表（seq / ms / stopReason / childId / 输入字符数 / 返回类型），另有全局 `subagent/start`·`end` 事件进会话轨迹 |\n| 历史条目上限 | 每条 8000 字符 | 超出转成 `{__jazTruncated, chars, preview}`，不会撑爆运行输出 |\n\n预算内优雅降级的写法："
+    },
+    {
+      "section": "5. 约束与监控（hooks）",
+      "text": "```js\nconst partial = [];\ntry {\n  for (let i = 0; i < 100; i++) partial.push(await invoke({ i }));\n} catch (e) {"
+    },
+    {
+      "section": "6. 什么时候用 jaz / workflow / subagent",
+      "text": "| 场景 | 用什么 |\n|---|---|\n| 一两次独立委托、要读文件或跑命令 | `subagent` / `subagent_fork` |\n| 确定性大规模扇出（审计 N 个文件、多角度调研、pipeline） | `workflow`（写死的编排脚本，同质工人，`parallel`/`pipeline`） |\n| **LLM 现场决定递归结构**、需要跨上下文窗口的记忆、自我改进循环 | **`jaz`**（每次 invoke 的实现由 LLM 现场写，状态就是变量） |\n\n一句话：workflow 是\"写好的乐谱\"，jaz 是\"会自己写谱的指挥\"。"
+    },
+    {
+      "section": "7. 配置与运维",
+      "text": "**调整默认值**（provider / maxDepth / maxInvokes / 超时 / 模型）——编辑插件行的 `config`：\n\n```yaml\n- insert:\n    - id: dsh-jaz-invoke\n      name: '@local/dsh-jaz-invoke'\n      config:\n\n**安装 / 卸载**\n\n```bash"
+    },
+    {
+      "section": "安装（幂等）",
+      "text": "plugin_manager install_bundle  target=~/Code/dsh-plugins/dsh-jaz-invoke"
+    },
+    {
+      "section": "卸载",
+      "text": "plugin_manager remove_bundle   target=@local/dsh-jaz-invoke\n```\n\n> 注意：**替换已安装 bundle 的代码需要重启 Harness**（`application: restart-required`）；首次安装才通过 HMR 即时生效。\n\n**本地回归测试**（不需要 Harness，mock 掉 PTC 与 subagent 两条缝）：bash\ncd ~/Code/dsh-plugins/dsh-jaz-invoke && node test-mock.mjs"
+    },
+    {
+      "section": "__history__ 自引用传参 / 预算熔断 / 失败 cell 的 journal 合并",
+      "text": "```"
+    },
+    {
+      "section": "8. 已知边界",
+      "text": "- 子代理是**完整 agent**（有工具、独立会话），不是论文里\"纯 LLM 写代码在同一 REPL 执行\"——因此跨 invoke 边界只能传无损 JSON，函数不能当输入传；\n- 变量持久是**插件内存**级，进程重启即失（有意取舍）；\n- 预算按**调用次数**而非美元计（subagent 缝不返回 token 计量）；\n- `invoke` 是**顺序**的；要并发扇出请用 `workflow` 的 `parallel`，或在 cell 里 `Promise.all([...])`（注意 PTC 绑定的并发限制）。"
+    },
+    {
+      "section": "9. 照着论文用（两种 case study 的复刻配方）",
+      "text": "论文是 **prompt-only** 的：不给工具、不给文件系统、不给记忆系统，全靠把 `invoke` 当函数 + 把状态当变量。对应到本插件，论文里的\"顶层 invoke\"由 DSH 主 Agent 承担（它写 cell），\"sub-invoke\"就是 cell 里的 `invoke()`。"
+    },
+    {
+      "section": "9.1 长程记忆（论文 §4.1 StuLife）",
+      "text": "论文的提示词要点（Appendix E.1.1）：\n- **把 `prev_history` 当\"上一任 agent 的 REPL 历史\"**，需要回忆时**检索它**，而不是看 `__history__`——论文原话：`prev_history` 与你自己的 `__history__` 不同，`__history__` 已完整可见，检索它无意义；\n- 检索规则：用**具体、独特**的检索词；命中时**显示上下文窗口**而不是只给前缀；**这一步只做检索**，把后续工作留给下一轮；\n- 上下文将满时（E.1.2）：**把剩余工作全部委托给子代理**，并且 `prev_history + __history__` 都传过去，保证已有工作不丢。\n\n本插件等价写法（`prev_history` 由 session 持久化天然承担）："
+    },
+    {
+      "section": "9.1 长程记忆（论文 §4.1 StuLife）",
+      "text": "```js\n// 第一次调用：instructions / guidance 作为变量落进 REPL（论文的 instructions、guidance 变量）\n// inputs: {\"instructions\": \"...\", \"guidance\": \"...\"}\ninstructions = __inputs__.instructions;\nguidance = __inputs__.guidance;\n\n> 论文里这步写 `return invoke(...)`（尾递归、由 harness 做尾调用优化）。本插件里 `return await invoke(...)` 即是同一件事；跨 cell 时用 `prev_history` 变量接力，效果等价。"
+    },
+    {
+      "section": "9.2 持续自我改进（论文 §4.2 AppWorld）",
+      "text": "论文方法论（Appendix E.2）：\n1. **按批次**解题，一个子代理负责一个任务；\n2. 先用 **~5 个任务的种子批次**跑起来并分析结果；\n3. 之后**交替**做「prompt/tool 优化」与「下一批验证」，直到任务队列耗尽；\n4. prompt 是**主杠杆**；编辑必须是**跨任务通用的模式**，不许针对单个任务的失败形状；\n5. 表现好就加大批次、减小改动；几乎全对就**别改**，直接换批验证；\n6. 错误信息是有价值的反馈，让工具/子代理该报错就报错；要**观测工具使用率**，不可靠的工具删掉。\n\n本插件等价写法（把 prompt 当被优化的状态变量，`opts.schema` 让改进结果结构化）：\n\n```js\nprompt = globalThis.prompt || { text: '你是解题子代理，先规划再用工具执行。', notes: [] };\nqueue = globalThis.queue || ['t1', 't2', 't3', 't4', 't5'];\nbatch = queue.slice(0, 3);"
+    },
+    {
+      "section": "9.3 hooks 的 local vs scoped（论文 §3）",
+      "text": "论文：`with BudgetPool(max_cost=5):` 是 **scoped**（覆盖块内所有调用含递归子调用）；`invoke(ReturnType(float), ...)` 是 **local**（只管这一次）。翻译：\n\n| 论文 | 本插件 |\n|---|---|\n| `invoke(ReturnType(float), ...)`（local 校验） | 该次调用传 `opts.schema`，只约束这一次 |\n| `with BudgetPool(max_cost=5):`（scoped 预算） | 用 `session` —— 预算在该 session 内累计（`maxInvokes`） |\n| `with scope(web_search=tool):`（scoped 能力可见） | 写 `__scope__`，自动合并进之后每一次 invoke 的输入 |\n| `with ConfigOverride(llm=...):` | 子代理模型：插件 config `model`，或单次 `opts.model` |"
+    },
+    {
+      "section": "9.3 hooks 的 local vs scoped（论文 §3）",
+      "text": "论文的成本策略是**顶层用强模型、sub-invoke 用便宜模型**：\n\n```js\nconst draft = await invoke({ task: '...' }, { model: 'deepseek-flash' });      // 便宜模型批量干\nconst final = await invoke({ task: '审校并定稿', draft });                      // 默认模型定稿\n```"
+    },
+    {
+      "section": "9.4 论文有、本插件暂缺的 hook（以及替代）",
+      "text": "| 论文 hook | 状态 | 替代做法 |\n|---|---|---|\n| `ContextWindowWarning` | ❌ 未实现 | cell 内自测 `__history__` 体量并触发 §9.1 的委托分支 |\n| `BudgetForcing`（强制收尾） | ❌ | `try { ... } catch (e) { if (e.name === 'JazInvokeError') return 收尾结果 }` |\n| `TrajectoryReplay`（可重放） | ❌ | `session` + `__history__` 已保存全部输入输出，足以自行重放，未提供 replay driver |\n| `ValidateREPLCode`（校验 cell） | ❌ | 无（PTC 沙箱本身是隔离边界） |\n| `PrintLogger` / `FileLogger` | ✅ 部分 | PTC `logs` + 结果里的 trace 表（不写文件，符合论文\"无外部系统\"） |\n| `TrajectoryRecorder` | ✅ | trace 表 + `subagent/start`·`end` 会话事件 |"
+    }
+  ],
+  "skipped": []
+}

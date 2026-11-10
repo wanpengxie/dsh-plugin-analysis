@@ -1,0 +1,132 @@
+{
+  "repo": "yongshuai0314/dsh-readcache",
+  "commit": "f4657b76bb786059426ba275a7619804c30841c8",
+  "extracted_at": "2026-11-10T07:53:51.666102+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 13893,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 201,
+      "Markdown": 75,
+      "Other": 26,
+      "YAML": 28
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      ".npmrc",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-readcache",
+    "version": "1.0.1",
+    "description": "为 DSH read 工具提供版本令牌校验的进程内结果缓存：未变更文件的重复读取跳过文件 I/O 与重渲染，并附带 readcache 工具查看统计与清空缓存。",
+    "author": "shuailiu",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/yongshuai0314/dsh-readcache.git"
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "cordis",
+      "plugin",
+      "cache",
+      "read",
+      "performance"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-readcache — bundle 补丁层。\n#\n# 把本包装进某个 profile（`dsh plugin --profile <name> add dsh-readcache`）后，\n# 它会被追加到 `dsh.profile.bundles`；下面的行随后作为该 bundle 的层被应用，\n# 将包的主入口作为宿主半侧（普通 Cordis 插件）加载。按设计仅宿主侧：\n# 缓存包装 tools/execute 瀑布，不需要浏览器半侧。\n- insert:\n    - id: dsh-readcache\n      name: dsh-readcache\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/yongshuai0314/dsh-readcache.git",
+      "where": "package.json:8"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-08-23T15:39:44Z",
+    "created_at": "2026-08-23T15:39:29Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-readcache",
+      "text": "⚡ **给 DSH `read` 工具的版本令牌校验结果缓存。**\n\n长会话会反复重读未变更的文件——上下文压缩后的恢复、并行子代理、编辑前后的对比，每一次重复都要重新做文件 I/O 和行号渲染，读到的却是字节完全相同的内容。`dsh-readcache` 包装了 `tools/execute` 事件瀑布，让这些重复读取直接命中进程内缓存，**且每一次命中都对照文件系统自己的版本令牌重新校验**。"
+    },
+    {
+      "section": "为什么它是安全的",
+      "text": "朴素的缓存会吐旧内容，这个插件不会：\n\n| 性质 | 机制 |\n|---|---|\n| **绝不吐旧内容** | 每次命中都重新 stat 文件，要求版本令牌精确匹配（本地后端为 `dev:ino:size:mtimeNs:ctimeNs`）。任何写路径——`edit`/`write` 工具、`bash`、外部编辑器——都会改变令牌并立即失效对应条目。 |\n| **无写入竞态** | 未命中时，执行结果只有在二次 stat 仍报告执行前令牌的情况下才会入缓存（双 stat 防护）。 |\n| **保留\"先读后改\"约束** | 缓存键包含代理 id。文件系统的观察门（fs-observation-policy）要求每个代理编辑前必须自己读过该文件；按代理隔离键值保证每次命中都以该代理自己的先前观察为凭据。 |\n| **内存有界** | LRU 上限：300 条 / 总量 16 MiB / 单条 4 MiB。 |\n\n只有 `read` 工具的成功、非中止、可无损 JSON 序列化的结果才会入缓存；失败结果原样透传。"
+    },
+    {
+      "section": "`readcache` 工具",
+      "text": "插件注册一个模型可见的工具：\n\n- `readcache`（action：`\"stats\"` | `\"clear\"`）— 汇报命中/未命中等计数与已节省字符数、条目数；或清空缓存。\n\nstats 输出示例：\n\n```json\n{\n  \"hits\": 2,\n  \"misses\": 4,\n  \"hitRatio\": 33.3,"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile web add dsh-readcache\n```\n\n或从本地检出安装：\n\n```bash\ncd dsh-readcache && npm pack\ndsh plugin --profile web add ../dsh-readcache/dsh-readcache-1.0.1.tgz\n```\n\n安装后重启 DeepSeek Harness 生效。"
+    },
+    {
+      "section": "设计说明",
+      "text": "- **拦截点**：`tools/execute` 的 around 分发瀑布——官方超时策略用的同一条缝。调用身份保持不变，只有结果被复用。\n- **声明 `inject`，不和加载器赛跑**：插件导出 `inject = [\"fs\", \"tools\"]`，Cordis 会把它保持在等待态，直到基础 bundle 提供这两个服务。若用软性 `ctx.get(\"fs\")` 提前返回，可能在启动竞态中抢跑并让整个缓存静默失效——这正是 1.0.1 修复的 bug。\n- **为什么用 stat 而不是 fs 观察事件**：`fs.stat` 是无副作用的纯探测；观察事件依赖触发顺序，且命中时无法复核。\n- **仅宿主侧**：缓存完全活在宿主进程里。客户端仪表盘（经 Remote service）在 v1.1 路线图上。\n- 入缓存的对象是冻结的 `ToolExecutionResult`；一次无损 JSON 往返（`JSON.parse(JSON.stringify(...))`）保证存下的副本不持有任何指向运行时的活引用。"
+    },
+    {
+      "section": "已验证行为",
+      "text": "- 同参数重读未变更文件 → `hits +1`，省掉 I/O。\n- 两次读取之间文件被外部修改 → 返回新内容（不吐旧内容），`stale +1`。\n- 另一个代理首次读取已缓存文件 → `misses +1`（按代理隔离成立）。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

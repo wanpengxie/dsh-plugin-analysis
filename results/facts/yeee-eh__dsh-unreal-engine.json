@@ -1,0 +1,576 @@
+{
+  "repo": "yeee-eh/dsh-unreal-engine",
+  "commit": "4b8b56536bdabd207352ac62593206d8cef1c9b1",
+  "extracted_at": "2026-11-10T07:52:48.303869+00:00",
+  "tree": {
+    "files": 23,
+    "bytes": 139777,
+    "lines_by_language": {
+      "JSON": 91,
+      "JavaScript": 2013,
+      "Markdown": 1579,
+      "Other": 43,
+      "YAML": 81
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LESSONS.md",
+      "LICENSE",
+      "MIGRATION.md",
+      "NOTICE.md",
+      "README.md",
+      "RECOVERY.md",
+      "client/client.js",
+      "cordis.patch.yml",
+      "lib/client-bundle.test.mjs",
+      "lib/config.test.mjs",
+      "lib/endpoint.mjs",
+      "lib/endpoint.test.mjs",
+      "lib/index.js",
+      "lib/js-expr-probe.mjs",
+      "lib/mcp-client-loader.mjs",
+      "lib/probe.mjs",
+      "package.json",
+      "skills/unreal-mcp/SKILL.md",
+      "tools/ue5-dsh-doctor.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-unreal-engine",
+    "version": "0.1.0",
+    "description": "把 Unreal Engine 5.8+ 的 MCP 服务接入 DeepSeek Harness：在设置里一键探测/配置端点，附连接诊断与 UE 操作规范",
+    "type": "module",
+    "main": "lib/index.js",
+    "license": "MIT",
+    "keywords": [
+      "dsh-plugin",
+      "dsh-bundle",
+      "deepseek-harness",
+      "unreal-engine",
+      "unreal-engine-5",
+      "ue5",
+      "mcp",
+      "model-context-protocol"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./client/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "client",
+      "tools",
+      "skills",
+      "cordis.patch.yml",
+      "README.md",
+      "RECOVERY.md",
+      "MIGRATION.md",
+      "LESSONS.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "NOTICE.md"
+    ],
+    "scripts": {
+      "test": "node --test lib/endpoint.test.mjs lib/config.test.mjs lib/client-bundle.test.mjs",
+      "probe": "node lib/js-expr-probe.mjs",
+      "doctor": "node tools/ue5-dsh-doctor.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-modules",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    },
+    "comment:dependencies": [
+      "刻意没有 dependencies —— 两个运行时依赖都由 DSH 自己提供：",
+      "  @modelcontextprotocol/sdk  随 @deepseek-ai/dsh-mcp-client 一起装好（探测功能要用）",
+      "  react                     由客户端模块系统的冻结模块表提供（PLATFORM_MODULES）",
+      "把 react 写成 dependencies 会让 profile 里多出第二份 React 实例，",
+      "有 hooks 崩溃的风险 —— dsh-client-ui-renderer 明确要求客户端插件共用 shell 那一份。",
+      "所以两者都放 peerDependencies 且标 optional，避免重复安装。",
+      "参考：dshmarket 的 peerDependenciesMeta 用法。"
+    ],
+    "peerDependencies": {
+      "@modelcontextprotocol/sdk": "*",
+      "react": "^18.0.0"
+    },
+    "peerDependenciesMeta": {
+      "@modelcontextprotocol/sdk": {
+        "optional": true
+      },
+      "react": {
+        "optional": true
+      }
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/yeee-eh/dsh-unreal-engine.git"
+    },
+    "bugs": {
+      "url": "https://github.com/yeee-eh/dsh-unreal-engine/issues"
+    },
+    "homepage": "https://github.com/yeee-eh/dsh-unreal-engine#readme"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# ============================================================================\n# dsh-unreal-engine — bundle 补丁\n#\n# 这是本插件【自己的】挂载层。当本包出现在 profile 的\n# dsh.profile.bundles 列表里时，dsh-app-boot 会自动应用本文件，\n# 用户不需要在自己的 cordis.patch.yml 里写任何东西。\n#\n# 参考实现：dshmarket / dsh-chat-manager / dsh-better-sidebar 都是这个结构。\n#\n# 根节点是【顶层 YAML 数组】。挂载插件必须用 `- insert:` 嵌套形态：\n# 直接写 `- id: xxx` 会被当作「修改已有行」，找不到就静默跳过。\n# ============================================================================\n\n# ---------------------------------------------------------------------------\n# 宿主半（Node 进程内）\n#\n# 注册两个精确路由，供设置页调用：\n#   POST /unreal-engine/config   读 / 写端点配置（$DSH_HOME/unreal-engine.json）\n#   POST /unreal-engine/detect   自动探测 / 手动测试 MCP 端点\n#\n# 注意：本插件刻意不声明 inject: ['webServer']。\n# home 级补丁对所有 profile 生效，而 webServer 只在 web profile 里存在；\n# 若声明 inject，在 sdk / headless 上会永远 pending，报\n#   dsh: plugin tree failed to load: 1 entry did not activate\n# 所以改用 ctx.inject(['webServer'], cb) 做可选注入（见 lib/index.js）。\n# ---------------------------------------------------------------------------\n- insert:\n    - id: unreal-engine\n      name: 'dsh-unreal-engine'\n\n# ---------------------------------------------------------------------------\n# 浏览器半【刻意不写 loader 条目】\n#\n# client/client.js 是 window.__ModuleLoader__.load(...) 形态的浏览器 bundle，\n# 不是 Node 插件。Node import 它只会得到一个普通对象、没有 apply，于是报：\n#   invalid plugin, expect function or object with an \"apply\" method\n#\n# 它靠 package.json 里的声明被发现，无需 loader 行：\n#   \"exports\":  { \"./client\": \"./client/client.js\" }\n#   \"dsh\":      { \"client\": { \"inject\": [...], \"platform\": \"web\" } }\n#\n# ⚠️ 并且 bundle 里 load({ id }) 必须等于【包名】dsh-unreal-engine，\n#    写成别的会让前端报 \"loaded without registering ... via __ModuleLoader__.load\"。\n# ---------------------------------------------------------------------------\n\n# ---------------------------------------------------------------------------\n# MCP 客户端：把 UE 5.8 内置 MCP server 的工具注册成 DSH 原生工具。\n#\n# URL 用 !!js 读环境变量，缺省回落到 UE 的默认端点。\n# 这样改端口不用编辑 YAML —— 设一个环境变量即可：\n#     DSH_UNREAL_MCP_URL=http://127.0.0.1:8123/mcp\n#\n# ⚠️ Loader 求值 !!js 是【同步】的，作用域里没有 import。\n#    所以绝不要写 `!!js \"(await import('file:///...'))...\"` —— 会直接报错。\n#    只写同步表达式（process.env.xxx 这类）。\n# ---------------------------------------------------------------------------\n- insert:\n    - id: mcp-unreal\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        # 工具命名空间 —— 最终呈现为 mcp__unreal__<toolName>\n        serverName: unreal\n\n        # UE 官方 MCP 走 Streamable HTTP（不是 stdio）\n        transport: streamable-http\n\n        # 端点：环境变量优先，否则回落到 UE 5.8 的默认端口\n        url: !!js \"process.env.DSH_UNREAL_MCP_URL || 'http://127.0.0.1:8000/mcp'\"\n\n        # UE 的编译 / Cook / PIE / 批量导入经常远超默认 60 秒，放宽到 10 分钟\n        toolCallTimeoutMs: 600000\n\n        # 编辑器没开时也让 DSH 正常启动，只是暂时没有 unreal 工具\n        failOnStartupError: false\n\n        # 断线自动重连：编辑器重启后无需重启 DSH\n        reconnect:\n          enabled: true\n          initialDelayMs: 500\n          maxDelayMs: 30000\n          maxAttempts: 10\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "client/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "xxx",
+      "kind": "env",
+      "where": "cordis.patch.yml:55"
+    },
+    {
+      "name": "DSH_UNREAL_MCP_URL",
+      "kind": "env",
+      "where": "cordis.patch.yml:68"
+    },
+    {
+      "name": "DSH_UNREAL_MCP_URL",
+      "kind": "env",
+      "where": "lib/js-expr-probe.mjs:6"
+    },
+    {
+      "name": "DSH_UNREAL_MCP_URL",
+      "kind": "env",
+      "where": "lib/js-expr-probe.mjs:18"
+    },
+    {
+      "name": "DSH_UNREAL_MCP_URL",
+      "kind": "env",
+      "where": "lib/js-expr-probe.mjs:22"
+    },
+    {
+      "name": "DSH_UNREAL_MCP_URL",
+      "kind": "env",
+      "where": "lib/js-expr-probe.mjs:26"
+    },
+    {
+      "name": "DSH_UNREAL_MCP_URL",
+      "kind": "env",
+      "where": "lib/js-expr-probe.mjs:30"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/mcp-client-loader.mjs:52"
+    },
+    {
+      "name": "DSH_UNREAL_MCP_URL",
+      "kind": "env",
+      "where": "tools/ue5-dsh-doctor.mjs:19"
+    },
+    {
+      "name": "DSH_UNREAL_DOCTOR_TIMEOUT_MS",
+      "kind": "env",
+      "where": "tools/ue5-dsh-doctor.mjs:20"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/ue5-dsh-doctor.mjs:353"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123/mcp",
+      "where": "cordis.patch.yml:51"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "cordis.patch.yml:68"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123/mcp",
+      "where": "lib/config.test.mjs:49"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123/mcp",
+      "where": "lib/config.test.mjs:54"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9000",
+      "where": "lib/config.test.mjs:62"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9000/mcp",
+      "where": "lib/config.test.mjs:64"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/endpoint.mjs:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "lib/endpoint.mjs:63"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "lib/endpoint.mjs:71"
+    },
+    {
+      "host": "。",
+      "url": "http://。",
+      "where": "lib/endpoint.mjs:79"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "lib/endpoint.mjs:102"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "lib/endpoint.mjs:109"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/endpoint.test.mjs:32"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/endpoint.test.mjs:40"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123/mcp",
+      "where": "lib/endpoint.test.mjs:44"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123/mcp",
+      "where": "lib/endpoint.test.mjs:47"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123",
+      "where": "lib/endpoint.test.mjs:51"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123/mcp",
+      "where": "lib/endpoint.test.mjs:53"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9001/mcp",
+      "where": "lib/endpoint.test.mjs:60"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/endpoint.test.mjs:98"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000",
+      "where": "lib/endpoint.test.mjs:99"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${DEFAULT_PORT",
+      "where": "lib/endpoint.test.mjs:111"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${DEFAULT_PORT",
+      "where": "lib/endpoint.test.mjs:112"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9000/mcp",
+      "where": "lib/endpoint.test.mjs:119"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9001/mcp",
+      "where": "lib/endpoint.test.mjs:120"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9002/mcp",
+      "where": "lib/endpoint.test.mjs:121"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/endpoint.test.mjs:126"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123/mcp",
+      "where": "lib/endpoint.test.mjs:127"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/mcp",
+      "where": "lib/endpoint.test.mjs:136"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/mcp",
+      "where": "lib/endpoint.test.mjs:143"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/js-expr-probe.mjs:6"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/js-expr-probe.mjs:19"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:59999/mcp",
+      "where": "lib/js-expr-probe.mjs:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:59999/mcp",
+      "where": "lib/js-expr-probe.mjs:23"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/js-expr-probe.mjs:27"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "lib/js-expr-probe.mjs:31"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/yeee-eh/dsh-unreal-engine.git",
+      "where": "package.json:85"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/yeee-eh/dsh-unreal-engine/issues",
+      "where": "package.json:88"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/yeee-eh/dsh-unreal-engine#readme",
+      "where": "package.json:90"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "tools/ue5-dsh-doctor.mjs:19"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-15T08:19:03Z",
+    "created_at": "2026-10-14T16:03:22Z"
+  },
+  "runtime_files": [
+    "client/client.js",
+    "cordis.patch.yml",
+    "lib/client-bundle.test.mjs",
+    "lib/config.test.mjs",
+    "lib/endpoint.mjs",
+    "lib/endpoint.test.mjs",
+    "lib/index.js",
+    "lib/js-expr-probe.mjs",
+    "lib/mcp-client-loader.mjs",
+    "lib/probe.mjs",
+    "package.json",
+    "tools/ue5-dsh-doctor.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-unreal-engine",
+      "text": "把 **Unreal Engine 5.8+** 的 MCP 服务接入 **DeepSeek Harness** —— 在 DSH 的设置里\n一键探测并配置端点，装上、接上、就能用。\n\n```\nDSH agent  ──[dsh-mcp-client]──>  UE 5.8 内置 MCP server  ──>  编辑器\n             DSH 官方自带           Epic 官方自带\n                    ↑\n          本插件：设置页 + 端点探测"
+    },
+    {
+      "section": "命令里的两个占位符",
+      "text": "本文档的命令用到两个变量，先设好再用：\n\n| 占位符 | 含义 | 怎么设 |\n|---|---|---|\n| `$env:DSH_HOME` | DSH 的配置根目录，通常 `C:\\Users\\<你的用户名>\\.dsh` | 见下 |\n| `$RepoRoot` | 本插件**源码目录**（从 GitHub 克隆后的仓库目录） | 见下 |\n\n```powershell"
+    },
+    {
+      "section": "DSH_HOME：普通 PowerShell 里它可能是空的 —— DSH 只在自己的子进程里注入它",
+      "text": "if (-not $env:DSH_HOME) { $env:DSH_HOME = \"$env:USERPROFILE\\.dsh\" }"
+    },
+    {
+      "section": "RepoRoot：把下面这行改成你克隆下来的目录",
+      "text": "$RepoRoot = 'C:\\path\\to\\dsh-unreal-engine'\n```\n\n> 两个变量都只对**当前终端会话**有效。想永久生效就写进用户环境变量。\n\n---"
+    },
+    {
+      "section": "它解决什么问题",
+      "text": "不装本插件时，接入 UE 要手写这段 YAML（改 `cordis.patch.yml`）：\n\n```yaml\n#- insert:"
+    },
+    {
+      "section": "transport: streamable-http",
+      "text": "#       url: 'http://127.0.0.1:8000/mcp'\n #       ...\n```\n\n而且**端点写错、端口被占、编辑器没开**时，得到的只是一个空工具列表，没有线索。\n\n装本插件后，这些变成一个设置页：**自动探测**，探不到就**手动粘贴日志行**。\n\n---"
+    },
+    {
+      "section": "安装(建议直接让dsh帮你安装，省时省力。文档文件里面有很多dsh安装时亲自踩过的坑，已总结出文字，方便ai查阅)",
+      "text": "本插件走 **bundle 频道**（和 `dshmarket`、`dsh-chat-manager`、`dsh-better-sidebar` 一样）：\n插件自己带 `cordis.patch.yml` 负责挂载，**你的 `~/.dsh/cordis.patch.yml` 保持为空**。\n\n这是卸载能安全的前提 —— 卸载不需要动用户文件。"
+    },
+    {
+      "section": "1. 让包能被 profile 解析到",
+      "text": "```powershell\ncd $env:DSH_HOME\\profiles\\web\npnpm add file:$RepoRoot\n```\n\n或者（不想让 pnpm 改 package.json 时）建一个目录连接：\n\n```powershell\nNew-Item -ItemType Junction `\n  -Path \"$env:DSH_HOME\\profiles\\node_modules\\dsh-unreal-engine\" `\n  -Target '$RepoRoot'\n```\n\n> ⚠️ 放 **`profiles/node_modules`**（共享层），不是 `profiles/web/node_modules`。\n> 原因见下面「为什么放共享层」。"
+    },
+    {
+      "section": "2. 登记到 profile 的 bundles 列表",
+      "text": "编辑 `$env:DSH_HOME\\profiles\\web\\package.json`，把包名加进 `dsh.profile.bundles`：\n\n```json\n\"dsh\": {\n  \"profile\": {\n    \"bundles\": [\n      \"@deepseek-ai/dsh-base\",\n\n**这一步是关键**：只有出现在 `bundles` 里，DSH 才会应用本包自己的 `cordis.patch.yml`。"
+    },
+    {
+      "section": "3. 确认 home 补丁是空的",
+      "text": "`$env:DSH_HOME\\cordis.patch.yml` 应该只有 `[]`。\n\n如果里面还有 `unreal-engine` / `mcp-unreal` 的 insert 块，**删掉**它们 ——\n否则同一组 id 会出现两次，加载失败。"
+    },
+    {
+      "section": "4. 校验 + 重启",
+      "text": "```powershell\ndsh --profile sdk        # 能安静退出（exit=0、无输出）= 插件树能加载\n```\n\n然后重启 DSH。\n\n---"
+    },
+    {
+      "section": "卸载",
+      "text": "因为走的是 bundle 频道，卸载**不需要手动改任何 YAML**："
+    },
+    {
+      "section": "1. 从 bundles 列表移除",
+      "text": "`$env:DSH_HOME\\profiles\\web\\package.json` → 删掉 `\"dsh-unreal-engine\"` 那一行。"
+    },
+    {
+      "section": "2. 移除包",
+      "text": "```powershell\ncd $env:DSH_HOME\\profiles\\web\ndsh plugin --profile web remove dsh-unreal-engine\n```\n\n（`dsh plugin` 只是把参数转发给 pnpm，所以 `pnpm remove dsh-unreal-engine` 等价。）\n\n如果当初用的是 junction，直接删掉它：\n\n```powershell\nRemove-Item \"$env:DSH_HOME\\profiles\\node_modules\\dsh-unreal-engine\" -Force\nRemove-Item \"$env:DSH_HOME\\profiles\\web\\node_modules\\dsh-unreal-engine\" -Force -EA SilentlyContinue\n```"
+    },
+    {
+      "section": "3. 清理插件数据（可选）",
+      "text": "```powershell\nRemove-Item \"$env:DSH_HOME\\unreal-engine.json\" -Force -EA SilentlyContinue\n```"
+    },
+    {
+      "section": "4. 重启 DSH",
+      "text": "---"
+    },
+    {
+      "section": "打包（你自己做）",
+      "text": "```powershell\ncd $RepoRoot\nnpm pack --pack-destination ..\\dist\n```\n\n产出 `dsh-unreal-engine-0.1.0.tgz`（约 30 KB）。把它发给对方即可。\n\n> 打包前建议跑一遍：`npm test` 和 `node lib/js-expr-probe.mjs`。"
+    },
+    {
+      "section": "对方怎么装",
+      "text": "假设对方把 `.tgz` 放在 `D:\\Downloads\\`：\n\n```powershell"
+    },
+    {
+      "section": "1. 装包",
+      "text": "cd $env:DSH_HOME\\profiles\\web\npnpm add D:\\Downloads\\dsh-unreal-engine-0.1.0.tgz"
+    },
+    {
+      "section": "3. 重启 DSH",
+      "text": "```\n\n**关于第 2 步为什么不能省**：DSH 有个 `reconcileProfilePlugins` 函数会读安装包里的\n`dsh.bundle` 声明并自动登记 bundles，但**在 0.1.5-rc 这套已安装的版本里它从未被调用**\n（只有定义和导出）。所以 bundles 那一行必须手动加。powershell\n> & \"$env:LOCALAPPDATA\\npm-cache\\_npx\\<hash>\\node_modules\\.bin\\dsh.ps1\" plugin --profile web add <包>\n> ```"
+    },
+    {
+      "section": "⚠️ 对方的环境必须有 MCP SDK",
+      "text": "本插件**不打包** SDK，而是复用 DSH 自带的。探测功能需要能解析到\n`@modelcontextprotocol/client`（新版）或 `@modelcontextprotocol/sdk`（旧版）。\n\n解析器（`lib/mcp-client-loader.mjs`）会依次尝试：\n1. 插件自己所在位置（Node 常规向上查找）\n2. `$env:DSH_HOME/profiles` 与 `$env:DSH_HOME`\n3. **DSH 自己的安装目录**（从 `process.argv[1]` 定位，覆盖 npx 缓存运行的情形）\n4. 从 node 可执行文件位置向上找 `node_modules`\n\n全失败时它会**列出每一次尝试的具体原因**，而不是甩一个 `MODULE_NOT_FOUND`。\n\n**所以如果对方探测报「无法解析 MCP 客户端模块」**，把那段诊断贴出来就能定位。\n\n---"
+    },
+    {
+      "section": "为什么放共享层（`profiles/node_modules`）",
+      "text": "`profiles/web/node_modules` 看起来更自然，但会出问题：\n\n- bundle 是按 **profile** 解析的\n- 而同一个包可能被多个 profile 引用（web / sdk / …）\n- 放 `web/node_modules` 时，用 `dsh --profile sdk` 启动会报\n  `Cannot find package 'dsh-unreal-engine'`（已实测踩过）\n\n放 `profiles/node_modules` 则所有 profile 都能解析到。\n\n---"
+    },
+    {
+      "section": "改端点端口",
+      "text": "MCP 端点的 URL 用 `!!js` 读环境变量，缺省回落到 UE 默认端口：\n\n```yaml\nurl: !!js \"process.env.DSH_UNREAL_MCP_URL || 'http://127.0.0.1:8000/mcp'\"\n```\n\n所以改端口**不用编辑 YAML** —— 设一个环境变量即可：\n\n```powershell\n$env:DSH_UNREAL_MCP_URL = 'http://127.0.0.1:8123/mcp'\ndsh --profile web\n```\n\n> ⚠️ Loader 求值 `!!js` 是**同步**的，作用域是 `new Function('ctx','expr',...)`，\n> **没有 `import`**。所以绝不能写 `!!js \"(await import('file:///...'))...\"` —— 会直接报错。\n> 只写同步表达式（`process.env.xxx` 这类）。\n\n---"
+    },
+    {
+      "section": "使用",
+      "text": "打开 **设置 → 虚幻引擎**。\n\n| 操作 | 说明 |\n|---|---|\n| **自动探测并保存** | 从 8000 端口起逐个尝试**真正的 MCP 握手**（不只是探端口），找到就保存 |\n| **手动输入** | 探测失败时用。粘贴 UE Output Log 整行，或直接填端口号 |\n| 结果区 | 显示 Toolset 数量、meta 工具名、协议版本 —— 都是真实握手得到的 |"
+    },
+    {
+      "section": "手动输入能识别哪些格式",
+      "text": "```\nLogModelContextProtocol: Starting MCP server on port 8000 (override with -ModelContextProtocolPort=N)\nLogHttpListener: Created new HttpListener on 127.0.0.1:8000\nhttp://127.0.0.1:8000/mcp\n8000\n\n全部会收敛到 `http://127.0.0.1:8000/mcp`。"
+    },
+    {
+      "section": "⚠️ 改完要重启 DSH",
+      "text": "`dsh-mcp-client` 在**启动时**连接 MCP 服务器并注册工具，没有运行时重配接口。\n保存设置后需要重启 DSH 才生效。\n\n---"
+    },
+    {
+      "section": "UE 侧准备（一次性）",
+      "text": "1. UE 编辑器 → **Edit → Plugins** → 搜索 `ModelContextProtocol` → 启用 → **重启编辑器**\n2. **Window → Output Log**，底部输入框执行：\n   ```\n   ModelContextProtocol.StartServer\n   ```\n3. 确认日志出现 `Created new HttpListener on 127.0.0.1:8000`\n\n---"
+    },
+    {
+      "section": "架构",
+      "text": "```\ndsh-unreal-engine/\n├── lib/\n│   ├── index.js               宿主半：/unreal-engine/* 路由 + 配置持久化\n│   ├── endpoint.mjs           端点解析（纯函数）"
+    },
+    {
+      "section": "MCP SDK 的解析为什么要单独一个文件",
+      "text": "DSH 的 MCP 桥接对 SDK 的依赖改名过一次：\n\n| | 包名 | 入口 |\n|---|---|---|\n| 旧 | `@modelcontextprotocol/sdk` | `/client/index.js`、`/client/streamableHttp.js` |\n| 新（v2） | `@modelcontextprotocol/client` | `.`、`/stdio`（另拆出 `core`） |\n\n本插件的探测功能复用同一份 SDK，但**不能假设**用的是哪一代、装在哪里 ——\n它可能被提升到 profile 的 `node_modules`，也可能只存在于 DSH 自己的安装目录里\n（从 npx 缓存运行的情形）。\n\n`mcp-client-loader.mjs` 按「包名 × 子路径 × 解析根」逐个尝试，覆盖四个位置：\n插件自身、`$env:DSH_HOME`、**DSH 自己的安装目录**（从 `process.argv[1]` 定位）、\nnode 可执行文件位置。全失败时列出每次尝试的具体原因，而不是甩一个 `MODULE_NOT_FOUND`。"
+    },
+    {
+      "section": "配置为什么落在 JSON 文件而不是 settings.yaml",
+      "text": "浏览器侧的 settings 文档在**启动时读不到** —— 而 MCP 客户端恰好在启动时连接。\n所以设置页把端点写进 `$env:DSH_HOME/unreal-engine.json`，宿主进程能直接读。\n\nMCP 行的 url 用 `!!js` 读环境变量（`DSH_UNREAL_MCP_URL`），缺省回落到 UE 默认端口：\n\n```yaml\nurl: !!js \"process.env.DSH_UNREAL_MCP_URL || 'http://127.0.0.1:8000/mcp'\"\n```\n\n> ⚠️ **已知缺口**：设置页保存的值和这一行**目前不联动**。\n> 探测到非 8000 的端口时，需要手动设 `DSH_UNREAL_MCP_URL`。\n> 这次的取舍是为了绕开「`!!js` 求值是同步的、作用域里没有 `import`」。\n\n---"
+    },
+    {
+      "section": "已知限制",
+      "text": "| 限制 | 说明 |\n|---|---|\n| **改设置需重启 DSH** | MCP 客户端只在启动时连接，没有运行时重配接口 |\n| **设置值 ←→ mcp 行不联动** | 见上；探测到非默认端口需设环境变量 |\n| **bundles 需手动登记** | DSH 的 `reconcileProfilePlugins` 本该自动做，但当前版本从未调用它 |\n| **客户端渲染未在浏览器实机验证** | 有 boot graph 证据 + 契约测试，但没在浏览器里点过 |\n| 只支持 UE 5.8+ | 官方 MCP 是 5.8 引入的；5.3–5.7 需改用第三方 stdio server |\n\n---"
+    },
+    {
+      "section": "测试与诊断",
+      "text": "```powershell\ncd $RepoRoot\nnpm test                              # 33 个单元测试\nnpm run probe                         # !!js 求值作用域探针（4 项）\nnpm run doctor                        # 连通性诊断（5 段链路）\n\n**单元测试覆盖**：\n- **端点解析** —— UE 真实日志行、URL 规范化、候选端口生成、越界拒绝\n- **探测** —— 失败归类（ECONNREFUSED / 超时）、自动扫描\n- **配置持久化** —— 读写、损坏容错、增量更新、临时文件不残留\n- **客户端 bundle 契约** —— 注册 id 必须等于包名、顶层无 import/export、\n  不引用 `node:` 内置模块、`exports[\"./client\"]` 指向真实文件"
+    },
+    {
+      "section": "测试与诊断",
+      "text": "**`npm run doctor` 会依次检查**：\n1. Node 版本（需 >= 20）\n2. UE 端点可达性\n3. MCP 握手（协议版本、会话 id）\n4. 工具枚举 + Toolset 注册表（防止「工具数恒为 3」造成的假通过）\n5. DSH 配置落位（包是否安装、bundles 是否登记、home 补丁是否干净）\n\n> **注意**：`doctor` 需要 UE 已开并执行过 `ModelContextProtocol.StartServer`。\n> 第 5 项与 UE 无关，任何时候都能跑。\n\n---"
+    },
+    {
+      "section": "UE 操作规范（Skill）",
+      "text": "`skills/unreal-mcp/` 是给模型看的操作规范：渐进式工具发现的三步法、\n风险分级、非幂等操作的重试纪律、安全边界。\n\n> ⚠️ **DSH 不会自动安装它** —— skill 只从固定路径扫描，且不扫 `node_modules`：\n> `<项目根>/.dsh/skills`、`<项目根>/.agents/skills`、`$env:DSH_HOME/skills`、`~/.agents/skills`。\n>\n> 手动拷过去（注意**只扫一层**）：\n> ```powershell\n> Copy-Item -Recurse \"$RepoRoot\\skills\\unreal-mcp\" \"$env:DSH_HOME\\skills\\unreal-mcp\"\n> ```\n\n---"
+    },
+    {
+      "section": "⚠️ 安全",
+      "text": "**UE 官方 MCP 默认只监听 loopback 且没有任何鉴权。**\n任何能访问该端口的人都能完全控制你的编辑器。\n\n- 绝不要暴露到公网或局域网，不要设 `0.0.0.0`\n- DSH 的审批门禁是唯一护栏，**不要关闭**\n\n---"
+    },
+    {
+      "section": "许可证",
+      "text": "本包以 **MIT** 发布 —— 见 [LICENSE](LICENSE)。\n\n不包含任何 Epic Games 或 DeepSeek 的代码。第三方组件归属、Unreal Engine EULA\n相关注意事项与商标声明见 [NOTICE.md](NOTICE.md)。"
+    }
+  ],
+  "skipped": []
+}

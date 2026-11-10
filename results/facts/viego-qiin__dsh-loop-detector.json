@@ -1,0 +1,216 @@
+{
+  "repo": "viego-qiin/dsh-loop-detector",
+  "commit": "9833097a205f2fff62acdf0ce91501e9960c3550",
+  "extracted_at": "2026-11-10T07:35:11.845425+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 86885,
+    "lines_by_language": {
+      "JSON": 47,
+      "Markdown": 509,
+      "Other": 26,
+      "TypeScript": 1369,
+      "YAML": 47
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "package.json",
+      "src/detector.ts",
+      "src/index.ts",
+      "src/intent.ts",
+      "test/cordis.test.ts",
+      "test/detector.test.ts",
+      "test/intent.test.ts",
+      "test/plugin.test.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-loop-detector",
+    "version": "2.0.0",
+    "description": "死循环/重复输出检测与硬中断插件 for DeepSeek Harness (dsh 0.2.x): 文本重复检测 + 工具调用意图级重复检测, 命中后 cancel 硬中断并 steer 引导重试",
+    "type": "module",
+    "main": "src/index.ts",
+    "exports": {
+      ".": "./src/index.ts",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "CHANGELOG.md"
+    ],
+    "engines": {
+      "node": ">=22.18.0"
+    },
+    "scripts": {
+      "test": "node --test",
+      "check": "node --input-type=module -e \"import('./src/index.ts').then(m => { if (typeof m.apply !== 'function') throw new Error('apply 缺失'); if (!m.name) throw new Error('name 缺失'); console.log('OK', m.name, 'v2') })\""
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "loop-detector",
+      "dead-loop",
+      "repetition",
+      "plugin",
+      "cordis"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*",
+      "@deepseek-ai/dsh-agent": "*",
+      "@deepseek-ai/dsh-llm": "*",
+      "@deepseek-ai/dsh-tools": "*",
+      "@deepseek-ai/schemastery": "*"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-loop-detector 的 bundle 自挂载 patch。\n#\n# 本文件由 package.json 的 `dsh.bundle.patch` 指认：只要包名出现在 profile 的\n# `dsh.profile.bundles` 里，dsh 就会自动读取它并把下面这条插件挂进 loader\n# （与 @local/* 那类本地 bundle 插件的做法一致），因此会出现在 GUI 的「已安装」列表里，\n# 并可以用那里的开关启停。\n#\n# 想改配置有两种方式：\n#   1. 直接在 profile 的 cordis.patch.yml 里按 id 覆盖（推荐，升级插件不会丢配置）：\n#        - id: loop-detector\n#          config:\n#            minLen: 1024\n#   2. 改本文件（会被下次升级覆盖）。\n#\n# 临时停用：在 profile 的 cordis.patch.yml 里写 `- id: loop-detector` + `disabled: true`，\n# 或直接用 GUI 插件页的开关。\n- insert:\n    - id: loop-detector\n      name: 'dsh-loop-detector'\n      config:\n        # ── 打断行为 ──────────────────────────────────────────────\n        minLen: 512             # 输出达 512 字符后才开始检测(防短文本误判)\n        maxRetries: 1           # 打断并引导重试 1 次, 再犯则强制中止\n        action: steer           # steer = 打断+引导重试; cancel = 命中直接中止\n        cooldownMs: 1500        # 命中后的冷却时间, 避免残余分片连环触发\n        # ── 检测范围 ──────────────────────────────────────────────\n        checkText: true         # 检测正文本(text-delta)\n        checkReasoning: true    # 检测思考内容(reasoning-delta)\n        # ── 工具调用意图级重复 ────────────────────────────────────\n        toolPatterns:\n          - web_search          # 支持通配符, 如 'mcp__*'; 空数组关闭该功能\n        historySize: 3          # \"主题词集\"取最近几次调用的关键词并集\n        noveltyThreshold: 0.25  # 新词占比低于该值算\"没有新信息\"\n        similarityThreshold: 0.5 # 与主题词集相似度高于该值也算同一主题(中文常用)\n        stallLimit: 2           # 连续几次\"没有新信息\"才判定为循环\n        # ── 文本检测器微调(一般不用改)────────────────────────────\n        # minPeriod: 8          # 周期扫描下限\n        # maxPeriod: 256        # 周期扫描上限\n        # periodRepeats: 4      # 周期至少重复几次\n        # ngramSize: 64         # n-gram 块长度\n        # ngramRepeats: 3       # n-gram 块至少出现几次\n        # anchorSize: 512       # 大段锚段长度(重写整个文件时容易被它拦, 可调大)\n        # checkEvery: 64        # 每新增多少字符跑一次检测(节流)\n        # bufferLimit: 16384    # 每个流保留的尾部字符数\n        # minDistinctChars: 2   # 重复块至少要有几种不同字符(拦 \"-----\")\n        # minSubstantiveRatio: 0.3 # 重复块实义字符最低占比(拦分隔线)\n        # legacySessionEvents: false # 旧版 dsh 兼容通道(监听 session/event)\n"
+    }
+  ],
+  "entries": [
+    "src/index.ts",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 4,
+    "pushed_at": "2026-10-14T21:05:11Z",
+    "created_at": "2026-08-15T01:35:22Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/detector.ts",
+    "src/index.ts",
+    "src/intent.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-loop-detector",
+      "text": "**Dead-loop / repetition detector with hard interrupt for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh).**\n\n[](LICENSE)"
+    },
+    {
+      "section": "dsh-loop-detector",
+      "text": "Local LLMs (especially quantized / RL-tuned reasoning models) sometimes get stuck:\nrepeating the same sentence forever, or re-running `web_search` with reworded queries\nfor the same topic without gaining any new information. This plugin watches the\nagent's stream in real time, detects both kinds of loops, and **interrupts them\nhard** — not a soft reminder the model can ignore.\n\n> 中文文档见 [README.zh.md](README.zh.md)."
+    },
+    {
+      "section": "dsh-loop-detector",
+      "text": "> **v2.0.0 targets dsh 0.2.x.** If you installed v1 on dsh 0.2.x and it never fired,\n> that is expected — see the next section."
+    },
+    {
+      "section": "Why v1 does not work on dsh 0.2.x",
+      "text": "| Problem | v1 | Reality on 0.2.x | v2 |\n|---|---|---|---|\n| Never sees streamed text | listened to `session/event` → `assistant/chunk` | `assistant/chunk` is no longer a live v2 session event (only the legacy-format migration packages read it) | listens to **`agent/assistant-stream`** |\n| Interrupt does not interrupt | used `agent.steer()` as the interrupt | `steer()` only queues a message for the **next step**; it does not abort the current generation | `agent.cancel(cause, { keepInbox: true })` first, then `steer()` to guide |\n| Retry budget never runs out | reset the counter on `turn/end` | every `steer()` opens a new turn, so the counter was cleared as soon as it grew | resets on **genuine user input** (plugin-injected messages are tracked by id and excluded) |"
+    },
+    {
+      "section": "Why v1 does not work on dsh 0.2.x",
+      "text": "v1's intent detector also tokenized on \"non-alphanumeric\", which collapses a whole\nChinese sentence into a single token — so **Chinese reworded-search loops were never\ndetected**. v2 uses \"stop-character splitting + CJK bigrams + Jaccard similarity\"."
+    },
+    {
+      "section": "Features",
+      "text": "- **Text-level repetition detection** — watches `agent/assistant-stream` for\n  `text-delta` and (optionally) `reasoning-delta`, with three layered detectors:\n  1. **Period scan**: the tail repeats with a fixed period (default 8–256 chars) ≥4 times\n  2. **n-gram**: the same 64-char block appears ≥3 times inside the last 2048 chars\n  3. **Large anchor**: the trailing 512 chars reappear earlier and extend backwards\n     (catches \"the whole plan printed twice\")\n- **Noise rejection**: a repeated unit needs ≥2 distinct characters and ≥30% substantive\n  characters (letters/digits/CJK), so markdown rules (`--------`, `|:---|:---|`) are not\n  mistaken for a loop.\n- **Tool-call intent-level detection** — watches `tools/post-execute`, extracts keywords\n  from each call's arguments, and compares them against the union of the last 3 calls.\n  A low novelty ratio **or** a high Jaccard similarity, twice in a row, means\n  \"same task, reworded\". `toolPatterns` takes wildcards, so `grep`, shell commands, etc.\n  can participate.\n- **Hard interrupt**: the current generation is actually aborted, then a guidance message\n  is handed to the model for one retry; after `maxRetries` the whole turn is cancelle"
+    },
+    {
+      "section": "Features",
+      "text": "dsh ships `@deepseek-ai/dsh-repeat-tool-reminder`, but it is **advisory only** (injected\nas context). In practice local models (e.g. Qwen / Ornith 35B MoE with reasoning off)\nignore it and keep looping — which is exactly why this plugin exists."
+    },
+    {
+      "section": "Quick start",
+      "text": "Prerequisite: a running dsh profile (dsh 0.2.x, Node ≥ 22.18 — the bundled runtime qualifies)."
+    },
+    {
+      "section": "Option 1: link it as a local dependency",
+      "text": "```powershell\ncd $env:USERPROFILE\\.dsh\\profiles\\desktop\npnpm add link:\"D:\\path\\to\\dsh-loop-detector\"\n```"
+    },
+    {
+      "section": "Option 1: link it as a local dependency",
+      "text": "> **Dependency-resolution contract**: every runtime dependency of this plugin\n> (`@deepseek-ai/cordis`, `dsh-agent`, `dsh-llm`, `dsh-tools`, `schemastery`) is declared in\n> **`peerDependencies`**. For a `link:`-ed plugin, dsh's profile resolver routes a bare\n> specifier to **dsh's own installed copy** only when the plugin's `package.json` lists that\n> name under `peerDependencies`. Do not move these into `dependencies`: Node would then look\n> inside the plugin's own `node_modules`, and a miss fails the whole plugin load."
+    },
+    {
+      "section": "Option 2: copy it in",
+      "text": "```powershell\nCopy-Item -Recurse -Force \"D:\\path\\to\\dsh-loop-detector\" `\n  \"$env:USERPROFILE\\.dsh\\profiles\\desktop\\node_modules\\dsh-loop-detector\"\n```"
+    },
+    {
+      "section": "Register it as a bundle (skip this and the GUI will not list it)",
+      "text": "The plugin ships `dsh.bundle.patch` (pointing at this repo's\n[`cordis.patch.yml`](cordis.patch.yml)), which *is* its self-mount patch. So all you need is to\nadd the package name to the profile's `dsh.profile.bundles`:\n\n```jsonc\n// $env:USERPROFILE\\.dsh\\profiles\\desktop\\package.json\n\"dsh\": {\n  \"profile\": {\n    \"bundles\": ["
+    },
+    {
+      "section": "Register it as a bundle (skip this and the GUI will not list it)",
+      "text": "**Restart dsh**: the plugin now shows up under Settings → Plugins → Installed, where the toggle\ncan enable or disable it. (`pnpm add link:` alone makes the plugin work, but it will **not**\nappear on the plugins page — that list is exactly this `bundles` array.)\n\nTo override defaults, put an id-targeted override at the end of the profile's\n`cordis.patch.yml`; it survives plugin upgrades:\n\n```yaml\n- id: loop-detector\n  config:\n    minLen: 1024\n    checkReasoning: false"
+    },
+    {
+      "section": "Register it as a bundle (skip this and the GUI will not list it)",
+      "text": "To disable temporarily, use the GUI toggle, or:\n\n```yaml\n- id: loop-detector\n  disabled: true\n```\n\nThen let a model loop on purpose. The log shows:\n\n```\n[loop-detector] session xxx 正文本命中: periodic repeat: period=8 x4｜片段 \"abcdefgh\"\n[loop-detector] session xxx 检测到死循环（重试 1/1）: periodic repeat: period=8 x4；已打断并引导重试\n[loop-detector] session xxx 意图级重复: repeated web_search intent: novelty=0.29 similarity=0.71\n```"
+    },
+    {
+      "section": "Interrupt behaviour",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `minLen` | `512` | Start detecting only after this many characters |\n| `maxRetries` | `1` | Interrupt-and-guide attempts; then the turn is cancelled |\n| `action` | `'steer'` | `'steer'` = interrupt + guided retry; `'cancel'` = cancel on first hit |\n| `cooldownMs` | `1500` | Cooldown after a hit (residual chunks must not re-trigger) |\n| `checkText` | `true` | Detect plain text output |\n| `checkReasoning` | `true` | Detect reasoning output |\n| `checkEvery` | `64` | Run the detector at most once per this many new characters |\n| `bufferLimit` | `16384` | Trailing characters kept per stream (bounded memory) |"
+    },
+    {
+      "section": "Tool-call intent-level detection",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `toolPatterns` | `['web_search']` | Tools to watch (wildcards); empty array disables the feature |\n| `historySize` | `3` | How many recent calls form the topic keyword set |\n| `noveltyThreshold` | `0.25` | Novel-keyword ratio below this counts as \"no new information\" |\n| `similarityThreshold` | `0.5` | Jaccard similarity at or above this counts as the same topic |\n| `stallLimit` | `2` | Consecutive stalled calls before it is a loop |"
+    },
+    {
+      "section": "Detector tuning (rarely needed)",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `minPeriod` / `maxPeriod` | `8` / `256` | Period scan range |\n| `periodRepeats` | `4` | How many identical periods make a loop |\n| `ngramSize` / `ngramRepeats` | `64` / `3` | n-gram block size and minimum repeats |\n| `ngramWindow` / `ngramStep` | `2048` / `16` | n-gram window and sampling stride |\n| `anchorSize` / `anchorWindow` | `512` / `8192` | Anchor length and window |\n| `minDistinctChars` | `2` | Minimum distinct characters in a repeated unit |\n| `minSubstantiveRatio` | `0.3` | Minimum substantive-character ratio in a repeated unit |\n| `legacySessionEvents` | `false` | Old-dsh compatibility channel (`session/event` → `assistant/chunk`) |"
+    },
+    {
+      "section": "Detector tuning (rarely needed)",
+      "text": "Invalid configuration (unknown `action`, `minLen < 1`, ratios outside `[0,1]`) fails loudly\nat mount time instead of silently falling back."
+    },
+    {
+      "section": "How it works",
+      "text": "Text level ([`src/detector.ts`](src/detector.ts)):\n\n```\n1) period scan  tail repeats a period of [minPeriod..maxPeriod] for periodRepeats times\n2) n-gram       the same ngramSize-char block appears >= ngramRepeats times in ngramWindow\n3) anchor       trailing anchorSize chars reappear earlier and extend >= anchorSize back\nevery layer additionally requires a \"meaningful\" unit: >= minDistinctChars distinct chars\n\nTool-intent level ([`src/intent.ts`](src/intent.ts)):"
+    },
+    {
+      "section": "How it works",
+      "text": "```\nkeywords   = latin words + CJK bigrams split on stop characters\ntopic      = union of the last historySize calls' keywords\nnovelty    = novel keywords / current keywords\nsimilarity = |intersection| / |union|            (Jaccard)\n\nCJK bigrams exist because whitespace tokenization is meaningless for Chinese; the extra\nsimilarity criterion exists because rewording in Chinese naturally introduces new bigrams."
+    },
+    {
+      "section": "Development and tests",
+      "text": "```powershell\nnpm test    # node --test runs .ts natively (Node >= 22.18 type stripping)\n```\n\n39 tests cover all three detectors (hits and non-hits: markdown rules, ordinary prose,\nshort text), Chinese/English keyword extraction and intent decisions, configuration\nvalidation, and — using a **real cordis Context and the real dsh-agent scoped dispatcher** —\nthe wiring of `agent/assistant-stream` / `agent/pre-step` / `tools/post-execute` plus the\n\"interrupt + guide, then cancel\" behaviour."
+    },
+    {
+      "section": "Development and tests",
+      "text": "Running the tests requires `@deepseek-ai/cordis`, `@deepseek-ai/dsh-agent` and\n`@deepseek-ai/dsh-llm` to be resolvable. A bare `node --test` never goes through dsh's\nprofile resolver, so this repo may contain a git-ignored `node_modules` junction pointing at\ndsh's installation `node_modules` — it exists **only for local tests**. At runtime dsh uses\nits own resolver and does not depend on it."
+    },
+    {
+      "section": "Development and tests",
+      "text": "```powershell\nNew-Item -ItemType Junction -Path .\\node_modules `\n  -Target \"$env:LOCALAPPDATA\\Programs\\dsh\\resources\\app\\dsh\\node_modules\"   # your dsh install dir\n```"
+    },
+    {
+      "section": "Limitations",
+      "text": "- Detection is heuristic; tune the thresholds for your model. For small local models try\n  `minLen` between 256 and 512.\n- Intent-level detection compares argument strings, not meaning. A very broad\n  `toolPatterns` (e.g. `'*'`) may false-positive on legitimately varied tool use.\n- Interrupts are in-process: counters restart from zero after a dsh restart or session resume.\n- Subagents are counted independently (keyed per agent); parent and child loops are never merged."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](LICENSE)."
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,141 @@
+{
+  "repo": "zhou914485/dsh-event-chime",
+  "commit": "a819f004203440ccce37913207f9b180066eb9a5",
+  "extracted_at": "2026-11-10T08:04:42.442985+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 44461,
+    "lines_by_language": {
+      "JSON": 34,
+      "JavaScript": 962,
+      "Markdown": 94,
+      "Other": 25,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "audio/.gitkeep",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-event-chime",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "DSH 事件提示音：完成 / 授权 / 提问 / 计划评审等事件各有独立音频池，池内洗牌轮换，没音频时用内置合成音兜底。",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "audio"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [],
+        "platform": "web"
+      }
+    },
+    "meta": {
+      "title": "事件提示音",
+      "description": "给 DSH 的完成 / 授权 / 提问 / 计划评审等事件配提示音，每类事件一个音频池，池内洗牌轮换。"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-event-chime bundle：Host half 为空，全部逻辑在 client。\n- insert:\n    - id: dsh-event-chime\n      name: '@local/dsh-event-chime'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-24T18:27:18Z",
+    "created_at": "2026-10-24T14:44:49Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-event-chime（事件提示音）",
+      "text": "给 DSH 的事件配提示音。**每类事件一个音频池**，池里有音频就洗牌轮换着播；池是空的就播内置的 Web Audio 合成音——所以还没录任何音频时，事件层就能先跑起来验证。"
+    },
+    {
+      "section": "事件",
+      "text": "事件来自客户端服务 `ctx.uiSession.sessionStatus`，它把三个事实合并成一张快照：\n\n```\nMap<sessionId, { running, pendingInteraction, completionUnread }>\n```\n\n| 事件 | 判据 |\n| --- | --- |\n| 回合完成 | `running` true → false，且是主视图会话 |\n| 后台会话完成 | `completionUnread` false → true（只对非主视图会话置位） |\n| 需要授权 | `pendingInteraction.kind === 'approval'` |\n| 需要回答 | `pendingInteraction.kind === 'question'` |\n| 计划评审 | `pendingInteraction.kind === 'plan-review'` |\n| 卡住 | `running` 持续超过阈值（默认关闭） |"
+    },
+    {
+      "section": "事件",
+      "text": "`kind` 只有这三个值：approval 域写死 `\"approval\"`；user-questions 域是\n`planReviewOf(questions) === undefined ? \"question\" : \"plan-review\"`。\n\n**待接入**：「任务失败」需要从会话快照里读终态，这一版没接。设置面板底部的「最近事件」日志就是为它准备的——先确认事件触发时机对不对，再决定从哪个字段取失败信号。"
+    },
+    {
+      "section": "音频池",
+      "text": "- 音频有两个来源：**随插件分发的内置包**（`audio/<事件>/*`，由 Host 的只读路由提供）和**本机导入**（存在浏览器 IndexedDB，不进仓库）\n- 面板顶部可以关掉「混入内置音频包」，只用自己导入的\n- 轮换模式：洗牌轮换（默认，一轮内不重复且不和上一条重复）/ 纯随机 / 顺序\n- 设置面板：每类事件一行——开关、试听、导入（可多选）、清空；池内条目点一下试听，本机条目可以 × 删掉\n- 免打扰时段、音量、卡住阈值都在同一页"
+    },
+    {
+      "section": "内置音频包",
+      "text": "仓库里的 `audio/` 目录会随插件一起分发，布局就是事件名：\n\n```\naudio/\n  completed/01.wav\n  approval/01.wav\n  question/01.wav\n\nHost 侧（`index.js`）把整个目录挂成只读路由：\n\n- `GET /dsh-event-chime/audio.json` —— 扫描各事件目录，返回这个包实际带了哪些文件\n- `GET /dsh-event-chime/audio/<事件>/<文件>` —— 音频字节，带缓存头\n\n加音频只需要往目录里放文件，不用改代码：`audio.json` 是每次请求实时扫描出来的。支持的扩展名：`.wav` `.mp3` `.ogg` `.opus` `.m4a`。没放任何音频时它返回空表，客户端自动退回合成音。"
+    },
+    {
+      "section": "把本机导入的音频导出成仓库结构",
+      "text": "设置面板底部有「导出全部音频（zip）」，导出内容就是 `audio/<事件>/<文件名>`，解压到仓库根目录即可。"
+    },
+    {
+      "section": "怎么录音频",
+      "text": "音频可以自己录，来源不限。想用 DeepSeek 官网那个音色（贝壳 / 白浪 / 海星 / 暗潮）：\n\n1. 在 `chat.deepseek.com` 里发一句「只输出这四个字，不要标点、不要解释：任务完成」\n2. 等它回，点回答下面的朗读小喇叭\n3. 用 [DeepSeek 朗读下载器](https://github.com/zhou914485/deepseek-tts-downloader) 把这条朗读存成 WAV——它支持连抽几版再挑最好的那条\n4. 回到这里的设置面板，导入到对应事件\n5. 想把这批音频随插件分发，点面板底部的「导出全部音频（zip）」，解压到仓库根目录\n\n一个短语一轮对话 + 一次朗读额度。想要变化感，就同一事件多录几条（换音色、换说法），丢进同一个池。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ngit clone https://github.com/zhou914485/dsh-event-chime.git\n```\n\n装进 DSH 有两种方式：\n\n- **推荐**：让 DSH 的 `plugin_manager` 执行 `install_bundle`，target 指向这个插件目录。\n- **手动**：改 profile 的 `package.json`（Windows 下是 `%USERPROFILE%\\.dsh\\profiles\\<profile>\\package.json`）：\n\n1. `dependencies` 加一行 `\"@local/dsh-event-chime\": \"link:<插件目录绝对路径>\"`\n  2. `dsh.profile.bundles` 数组加 `\"@local/dsh-event-chime\"`\n  3. 在 profile 的 `node_modules/@local/` 下建一个指向插件目录的链接（junction / symlink）"
+    },
+    {
+      "section": "安装",
+      "text": "改完**重启 DSH** 生效。重启后到 设置 页面找「事件提示音」那一栏。"
+    },
+    {
+      "section": "卸载",
+      "text": "删掉 profile `package.json` 里的 dependency 和 bundles 条目、删掉 `node_modules/@local/dsh-event-chime` 链接，重启即可。本机导入的音频存在浏览器的 IndexedDB 里，清站点数据就没了。"
+    },
+    {
+      "section": "隐私",
+      "text": "不外发任何数据。音频要么随插件在本地，要么只在你本机的浏览器存储里。"
+    }
+  ],
+  "skipped": []
+}

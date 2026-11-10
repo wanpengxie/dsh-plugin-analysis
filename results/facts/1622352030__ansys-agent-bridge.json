@@ -1,0 +1,724 @@
+{
+  "repo": "1622352030/ansys-agent-bridge",
+  "commit": "ed39bc46917148d16c673164bd478f14c9f7ca4e",
+  "extracted_at": "2026-11-10T08:23:35.277955+00:00",
+  "tree": {
+    "files": 70,
+    "bytes": 879628,
+    "lines_by_language": {
+      "JSON": 11803,
+      "JavaScript": 75,
+      "Markdown": 2425,
+      "Other": 77,
+      "Python": 10802,
+      "TOML": 54,
+      "YAML": 141
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "TROUBLESHOOTING.md",
+      "cordis.patch.yml",
+      "fluent/dev/README.md",
+      "fluent/docs/mcp-audit.md",
+      "package.json",
+      "screenshots.json",
+      "spaceclaim/dev/README.md",
+      "spaceclaim/docs/feature-coverage.md",
+      "spaceclaim/docs/verification.md",
+      "spaceclaim/python/README.md",
+      "spaceclaim/python/pyproject.toml",
+      "tools/verify-patch.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "ansys-agent-bridge",
+    "version": "0.1.0",
+    "private": false,
+    "description": "DSH plugin bundle and MCP client layer for the Ansys Agent Bridge (SpaceClaim geometry + Fluent handoff).",
+    "license": "MIT",
+    "type": "module",
+    "keywords": [
+      "dsh-plugin",
+      "mcp",
+      "ansys",
+      "spaceclaim",
+      "fluent",
+      "pyansys",
+      "cfd",
+      "cad"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/1622352030/ansys-agent-bridge.git"
+    },
+    "homepage": "https://github.com/1622352030/ansys-agent-bridge#readme",
+    "bugs": {
+      "url": "https://github.com/1622352030/ansys-agent-bridge/issues"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "spaceclaim/skills/",
+      "screenshots.json",
+      "README.md",
+      "README.zh-CN.md",
+      "TROUBLESHOOTING.md",
+      "LICENSE"
+    ],
+    "exports": {
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./spaceclaim/skills/*": "./spaceclaim/skills/*",
+      "./package.json": "./package.json"
+    },
+    "engines": {
+      "node": ">=20.6"
+    },
+    "scripts": {
+      "doctor": "uv run --directory python ansys-bridge-doctor",
+      "test": "uv run --directory python pytest -q"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch for ansys-agent-bridge.\n#\n# One `insert`: an MCP client layer that registers the bridge's tools under the\n# `ansys` namespace. There is no absolute path anywhere in this file, so the same\n# patch works on any machine and in any install location.\n#\n# ── Three install modes ──────────────────────────────────────────────────────\n#\n# A. Install from GitHub (this file as shipped). The row below launches the server\n#    with `uv tool run --from git+https://…#subdirectory=spaceclaim/python`, so\n#    every launch performs a `git fetch` first. Nothing to clone locally and it\n#    tracks upstream — but it needs a working route to GitHub on EVERY launch.\n#\n# B. Install from a local checkout (recommended when the route to GitHub is\n#    unreliable). Leave this file untouched and override the row from your own\n#    --patch layer, replacing the `--from <git url>` argument with\n#    `--from <clone>/spaceclaim/python`:\n#\n#      - id: mcp-ansys\n#        name: '@deepseek-ai/dsh-mcp-client'\n#        config:\n#          serverName: ansys\n#          transport: stdio\n#          command: uv\n#          args: [tool, run, --quiet, --from, C:/path/to/ansys-agent-bridge/spaceclaim/python, ansys-bridge-mcp]\n#          env: {PYTHONIOENCODING: 'utf-8', ANSYS_BRIDGE_LOG_LEVEL: 'WARNING'}\n#          toolCallTimeoutMs: 900000\n#          failOnStartupError: false\n#\n#    This is not cosmetic. When the fetch fails, `failOnStartupError: false` hides\n#    the error and the reconnect loop re-imports both heavy Ansys dependencies until\n#    DSH's single-threaded host event loop is saturated (the desktop appears hung);\n#    the plugin manager may then latch the plugin as disabled, after which the UI\n#    switch no longer brings it back. Full mechanics and the unlock procedure:\n#    TROUBLESHOOTING.md. Note the path is `<clone>/spaceclaim/python`, not\n#    `<clone>/python` — that older form no longer applies.\n#\n# C. Install the launcher into PATH. `uv tool install` the package once, and let the\n#    row start a bare command instead of `uv`:\n#\n#      uv tool install --editable --from <clone>/spaceclaim/python ansys-agent-bridge\n#\n#    The positional argument is the PACKAGE name (`[project].name`), NOT the command\n#    name `ansys-bridge-mcp`; uv rejects the command-name form with\n#    `Package name (…) provided with --from does not match install request (…)`.\n#    The console scripts then land on PATH — `uv tool dir --bin` prints the directory\n#    (Windows: %USERPROFILE%\\.local\\bin) — so the override becomes path-free and\n#    uv-free:\n#\n#      - id: mcp-ansys\n#        name: '@deepseek-ai/dsh-mcp-client'\n#        config:\n#          serverName: ansys\n#          transport: stdio\n#          command: ansys-bridge-mcp\n#          args: []\n#          env: {PYTHONIOENCODING: 'utf-8', ANSYS_BRIDGE_LOG_LEVEL: 'WARNING'}\n#          toolCallTimeoutMs: 900000\n#          failOnStartupError: false\n#\n#    Unlike B, a launch resolves no dependencies and rebuilds nothing; B hands every\n#    start to `uv tool run`, which re-resolves each time and re-materialises the\n#    environment whenever anything under `<clone>/spaceclaim/python` changes. Editing\n#    the source stays immediate here too, because `--editable` points the installed\n#    environment at the source tree. Undo with `uv tool uninstall ansys-agent-bridge`.\n#\n# ── Why there is no `!!js` here ──────────────────────────────────────────────\n#\n# This patch used `!!js` twice, and both were removed after they broke the\n# harness CLI (0.1.1-rc.1, which is what `npm i -g @deepseek-ai/dsh` gives you).\n# The Desktop app (0.1.5-rc.2) accepts more than the CLI does, so a patch can\n# boot on one and fail on the other:\n#\n#   * `createRequire(...)` — the CLI evaluates `!!js` with\n#     `new Function('ctx', 'expr', 'with (ctx) { return eval(expr) }')` from a\n#     module that does NOT expose `createRequire`. Result:\n#     `ReferenceError: createRequire is not defined`, which is a profile that\n#     will not boot.\n#   * an async IIFE — the CLI's `interpolate` is synchronous and does not await\n#     the returned promise. Result: `expected string but got [object Promise]`.\n#\n# `command: uv` needs neither: the MCP client resolves it through PATH. Set\n# ANSYS_BRIDGE_UV, or override this row with a `--patch` overlay, when `uv` is\n# not on the PATH the harness itself was launched with.\n\n- insert:\n    - id: mcp-ansys\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: ansys\n        transport: stdio\n        command: uv\n        args:\n          # `uv tool run` (alias `uvx`) is the subcommand that takes `--from`.\n          # `uv run` does NOT: measured against uv 0.11.29 it rejects `--from`\n          # with \"unexpected argument\", and the MCP client then reports only\n          # \"Connection closed\" with no hint of the cause. `--quiet` keeps uv's\n          # own progress off stderr; a real failure still prints.\n          - 'tool'\n          - 'run'\n          - '--quiet'\n          - '--from'\n          - 'git+https://github.com/1622352030/ansys-agent-bridge#subdirectory=spaceclaim/python'\n          - 'ansys-bridge-mcp'\n        env:\n          PYTHONIOENCODING: 'utf-8'\n          ANSYS_BRIDGE_LOG_LEVEL: 'WARNING'\n        # The bridge's own default is 60 s. A hidden SpaceClaim start measured\n        # 14-31 s, and an export of a large assembly runs longer still, so the\n        # short default would cut real calls in half.\n        toolCallTimeoutMs: 900000\n        failOnStartupError: false\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "AWP_ROOT",
+      "kind": "env",
+      "where": "spaceclaim/python/src/ansys_bridge_mcp/guards.py:337"
+    },
+    {
+      "name": "AWP_ROOT",
+      "kind": "env",
+      "where": "spaceclaim/python/src/ansys_bridge_mcp/guards.py:339"
+    },
+    {
+      "name": "PYFLUENT_FLUENT_ROOT",
+      "kind": "env",
+      "where": "spaceclaim/python/src/ansys_bridge_mcp/guards.py:366"
+    },
+    {
+      "name": "ANSYS_BRIDGE_LOG_LEVEL",
+      "kind": "env",
+      "where": "spaceclaim/python/src/ansys_bridge_mcp/server.py:85"
+    },
+    {
+      "name": "ANSYS_BRIDGE_TRANSPORT",
+      "kind": "env",
+      "where": "spaceclaim/python/src/ansys_bridge_mcp/server.py:810"
+    },
+    {
+      "name": "ANSYS_BRIDGE_PRELOAD",
+      "kind": "env",
+      "where": "spaceclaim/python/src/ansys_bridge_mcp/server.py:818"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "…",
+      "url": "https://…#subdirectory=spaceclaim/python`",
+      "where": "cordis.patch.yml:10"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge#subdirectory=spaceclaim/python",
+      "where": "cordis.patch.yml:103"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge.git",
+      "where": "package.json:20"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge#readme",
+      "where": "package.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge/issues",
+      "where": "package.json:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge#subdirectory=spaceclaim/python",
+      "where": "spaceclaim/dev/tests/t5b_uvfrom.py:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge",
+      "where": "spaceclaim/python/pyproject.toml:44"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge/issues",
+      "where": "spaceclaim/python/pyproject.toml:45"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge#subdirectory=python",
+      "where": "spaceclaim/python/src/ansys_bridge_mcp/doctor.py:31"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/1622352030/ansys-agent-bridge#subdirectory=python",
+      "where": "spaceclaim/python/src/ansys_bridge_mcp/scdm.py:1643"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "scdm_session_start",
+      "where": "spaceclaim/dev/tests/t18_open.py:36"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_open_file",
+      "where": "spaceclaim/dev/tests/t18_open.py:38"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_status",
+      "where": "spaceclaim/dev/tests/t18_open.py:48"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_close",
+      "where": "spaceclaim/dev/tests/t18_open.py:51"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_start",
+      "where": "spaceclaim/dev/tests/t19_ops.py:22"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_open_file",
+      "where": "spaceclaim/dev/tests/t19_ops.py:25"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_boolean",
+      "where": "spaceclaim/dev/tests/t19_ops.py:34"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_close",
+      "where": "spaceclaim/dev/tests/t19_ops.py:48"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_start",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:47"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_open_file",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:52"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_inspect_geometry",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:54"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_inspect_geometry",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:75"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_inspect_geometry",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:94"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_open_file",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:101"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_inspect_geometry",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:102"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_inspect_geometry",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:111"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_close",
+      "where": "spaceclaim/dev/tests/t26_mcp_inspect.py:115"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_start",
+      "where": "spaceclaim/dev/tests/t29_mcp_tools.py:51"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_open_file",
+      "where": "spaceclaim/dev/tests/t29_mcp_tools.py:58"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_close",
+      "where": "spaceclaim/dev/tests/t29_mcp_tools.py:135"
+    },
+    {
+      "kind": "tool",
+      "name": "ansys_bridge_doctor",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:43"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_start",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:51"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_open_file",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:56"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_collisions",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:65"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_boolean",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:70"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_open_file",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:79"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_boolean",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:80"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_open_file",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:88"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_share_topology",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:89"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_export",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:96"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_close",
+      "where": "spaceclaim/dev/tests/t5_mcp.py:102"
+    },
+    {
+      "kind": "tool",
+      "name": "ansys_bridge_doctor",
+      "where": "spaceclaim/dev/tests/t5a_doctor.py:23"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_status",
+      "where": "spaceclaim/dev/tests/t5a_doctor.py:29"
+    },
+    {
+      "kind": "tool",
+      "name": "ansys_bridge_doctor",
+      "where": "spaceclaim/dev/tests/t5b_uvfrom.py:29"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_start",
+      "where": "spaceclaim/dev/tests/t7_start.py:25"
+    },
+    {
+      "kind": "tool",
+      "name": "scdm_session_close",
+      "where": "spaceclaim/dev/tests/t7_start.py:28"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 42,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 17,
+    "pushed_at": "2026-10-16T11:26:53Z",
+    "created_at": "2026-09-19T09:07:13Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "ansys-agent-bridge",
+      "text": "An MCP server that drives **Ansys SpaceClaim** headlessly, plus a **DSH plugin\nbundle** that installs it into a DeepSeek Harness profile in one command."
+    },
+    {
+      "section": "ansys-agent-bridge",
+      "text": "The point of this project is not to wrap every API. It is to report what\nSpaceClaim actually did, in a place where the honest answer matters: two\noperations on SpaceClaim 2024 R2 **return success and change nothing**, and an\nagent that believes the return value will confidently describe geometry that\nwas never modified. This server measures the geometry before and after, and\nraises `no_geometry_change` instead of reporting a success it cannot see."
+    },
+    {
+      "section": "What it does",
+      "text": "| Tool | Read-only | What it does |\n|---|---|---|\n| `ansys_bridge_doctor` | yes | Reports detected Ansys releases, `SpaceClaim.exe`, Fluent root, Python, and package versions. Imports nothing heavyweight. |\n| `scdm_session_start` | no | Starts a SpaceClaim modeler (auto-detects the release; measured **14–31 s**). `hidden=false` by default, so you see the window. |\n| `scdm_attach` | no | Connects to a SpaceClaim the **user** started (ApiServer add-in + fixed `API_PORT`). Consumes no licence, and cannot close their window. |\n| `scdm_session_status` | yes | Whether a session is live, its mode, and whether a design is visible to it. |\n| `scdm_session_close` | no | Releases the session and its licence. Launch sessions only; refused when attached. |\n| `scdm_detach` | no | Drops the gRPC channel to a user-owned SpaceClaim. Nothing else. |\n| `scdm_open_file` | no | Opens `.scdoc`/`.scdocx`/`.dsco`/`.pmdb` and reports bodies, named selections, face counts, volumes. |\n| `scdm_list_bodies` | yes | Body names, face counts, volumes for the open design. |\n| `scdm_collisions` | yes | Pairwise collision state (`TOUCH`/`NONE`/…), all pairs or a chosen list. |\n| `scdm_min_distance` | yes | Minimum d"
+    },
+    {
+      "section": "Creating geometry",
+      "text": "Before `scdm_create_pipe` existed, **no tool in this server could create geometry**:\nevery one either read the model or operated on bodies that already existed, so\n\"model from scratch\" meant hand-writing IronPython. The route the creation tools use\nwas measured, and it deliberately contains **no boolean**:\n\n```python"
+    },
+    {
+      "section": "a ring section built from two semicircles per circle, then extruded",
+      "text": "Body.CreatePlanarBody(plane, profile, False, False, removeInnerRegions=True)   -> section\nExtrudeFaces.Execute(Selection.Create(section.Faces[0]), dir, MM(L), opts, None) -> tube\n```"
+    },
+    {
+      "section": "a ring section built from two semicircles per circle, then extruded",
+      "text": "Why not subtract a rod from a rod: on this kernel `Body.subtract` returns normally,\ndeletes the tool body and leaves the target untouched. And why **read the result\nback**: `removeInnerRegions=False` does not fail — it drops the inner loop silently\nand hands back a plain outer disc (`1963.495 mm²` where the ring is `706.858 mm²`),\nso an unguarded tool builds a solid rod and reports a tube. `scdm_create_pipe`\nchecks the section area and the volume against the analytic values and refuses\nanything else."
+    },
+    {
+      "section": "a ring section built from two semicircles per circle, then extruded",
+      "text": "Measured live, over MCP: a 50/40/200 mm pipe came back with 4 faces and\n`141367.72 mm³` against an analytic `141371.67 mm³`; a 20/10/30 mm pipe with\n`7068.394 mm³` against `7068.583 mm³`; an extrusion of a `235.6194 mm²` annulus by\n5 mm added `1178.081 mm³` against an analytic `1178.097 mm³`."
+    },
+    {
+      "section": "The two silent failures, measured",
+      "text": "On a stator + 27 windings + pipe + inlet assembly (31 bodies, 846 faces):\n\n**`subtract` fails, and the failure is easy to miss.** Target stator: 382 faces\nand volume `0.003314505208 m³` before; **382 faces and the same volume after**.\nThe only thing that moved is the body count, 31 → 30, because `keep_other=False`\ndeleted the tool."
+    },
+    {
+      "section": "The two silent failures, measured",
+      "text": "That matters for how you guard it. The obvious check — \"did anything change?\" —\nanswers *yes* here, so a guard built on it certifies the no-op. This server\ntherefore judges a boolean by **its target**: if the named target keeps the same\nface count and volume, the call failed, whatever the body count says. The same\nsymptom appears through raw IronPython `Shape.Subtract`, so it is a\nkernel/geometry problem with that model, not an API-path problem."
+    },
+    {
+      "section": "The two silent failures, measured",
+      "text": "**`share_topology` returns `True` and does nothing.** Stator stays at 382 faces,\nwinding 1 at 16, bodies at 31.\n\n**`unite` does work.** Stator faces `382 → 390`, volume\n`0.003314505208 → 0.003382973513` (delta `6.84683e-5`, exactly winding 1's own\nvolume), total faces `846 → 838`, bodies `31 → 30`. Both number sets match the\nraw IronPython result."
+    },
+    {
+      "section": "The two silent failures, measured",
+      "text": "Full measured record, including the raw-IronPython traps (`Body[](n)` is a\nparse-time error that kills a script silently; `Document.Load` breaks every\nlater `SaveAs`), is in [`spaceclaim/skills/ansys-spaceclaim/SKILL.md`](spaceclaim/skills/ansys-spaceclaim/SKILL.md)."
+    },
+    {
+      "section": "One trap before you build the CAD: Chinese names do not reach Fluent",
+      "text": "Measured when a SpaceClaim STEP was imported into Fluent Meshing: the import printed\n`Warning: ?????????` and **all three named collections were dropped**, leaving the\nmesh with no usable named selections. The geometry arrived; the names did not."
+    },
+    {
+      "section": "One trap before you build the CAD: Chinese names do not reach Fluent",
+      "text": "So name layers and named selections in **ASCII** — `inlet`, `outlet`, `wall`,\n`fluid` — if the model is going to Fluent. Named selections are what every\ndownstream boundary-condition assignment depends on, and they are cheap to get\nright at the CAD step and expensive to redo later."
+    },
+    {
+      "section": "Install",
+      "text": "Requires **Windows**, an Ansys installation with SpaceClaim (2024 R2 tested),\nand [`uv`](https://docs.astral.sh/uv/)."
+    },
+    {
+      "section": "Three ways to install",
+      "text": "There are three supported ways to install this in DSH. A and B differ only in\n**where the MCP server is loaded from**; C installs the launcher once and then\nstarts it from PATH, so **`uv` resolves nothing at launch**:"
+    },
+    {
+      "section": "Three ways to install",
+      "text": "| | Option A: install from GitHub | Option B: install from a local checkout | Option C: install the launcher into PATH |\n| --- | --- | --- | --- |\n| Plugin package | `github:1622352030/ansys-agent-bridge` | `link:<path to your clone>` | same as A or B — C replaces only the MCP row |\n| MCP launch source | `git+https://github.com/…#subdirectory=spaceclaim/python` | `<clone>/spaceclaim/python` | the installed console script `ansys-bridge-mcp` (no `uv`, no path) |\n| Network needed per launch | **yes** (a `git fetch` first) | **no** GitHub fetch; the PyPI index may be consulted when the environment is (re)materialised | **only once, at install time** |\n| Dependency resolution per launch | every launch | every launch, and any change under `<clone>/spaceclaim/python` re-materialises the environment | none — resolved once by `uv tool install` |\n| No VPN / GitHub unreachable | ⚠ fails, and can take the whole desktop app down | fine | fine |\n| After editing this repo | reinstall required | takes effect immediately | takes effect immediately, with no re-resolution and no rebuild |\n| Tracks upstream automatically | yes | no | no |\n| Undoing it | `dsh plugin … remove` | `dsh plugin … remove` | "
+    },
+    {
+      "section": "Three ways to install",
+      "text": "**If you are behind an unreliable route to GitHub, use Option B.** When Option A's\n`git fetch` fails, the bundled `failOnStartupError: false` hides the error, and the\nautomatic reconnect loop rebuilds the environment and re-imports\n`ansys.geometry.core` / `ansys.fluent.core` over and over, saturating DSH's\nsingle-threaded host event loop — every session history sits at \"loading\" and the\ndesktop stops responding. The plugin manager then decides that enabling it \"would\npersist a state that crashes at boot\" and **latches it as disabled**, after which\nthe UI switch will not bring it back. Mechanism, diagnostics and the unlock\nprocedure: [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)."
+    },
+    {
+      "section": "Option A: install from GitHub",
+      "text": "```sh\ndsh plugin --profile web add ansys-agent-bridge\n```\n\nThat installs the package, which declares `dsh.bundle`, so the loader applies\nits `cordis.patch.yml`: one MCP client layer registering the `ansys` server.\nRestart the profile and call `ansys_bridge_doctor`.\n\nTurning it off again is the same in reverse:\n\n```sh\ndsh plugin --profile web remove ansys-agent-bridge\n```"
+    },
+    {
+      "section": "Option A: install from GitHub",
+      "text": "The MCP row launches the server with `uv tool run --from <this repo>`, so no\nclone and no virtualenv is needed on the target machine — but the **first**\ncall pays for resolving and building `ansys-geometry-core`. If you keep a local\ncheckout and want a warm environment instead, use **Option B** below — note the\npath is `<clone>/spaceclaim/python` (the Python package lives under `spaceclaim/`);\nthe older `<clone>/python` form no longer applies."
+    },
+    {
+      "section": "Option B: install from a local checkout",
+      "text": "Two steps: point the plugin at your local directory, then override the MCP row's\nlaunch source with a `--patch` overlay.\n\n```sh"
+    },
+    {
+      "section": "1) point the plugin package at your local clone",
+      "text": "dsh plugin --profile web add link:C:/path/to/ansys-agent-bridge\n```\n\n```yaml"
+    },
+    {
+      "section": "%APPDATA%\\dsh-desktop\\harness\\profiles\\web\\cordis.patch.yml",
+      "text": "- id: mcp-ansys\n  name: '@deepseek-ai/dsh-mcp-client'\n  config:\n    serverName: ansys\n    transport: stdio\n    command: uv\n    args:\n      - 'tool'\n      - 'run'\n      - '--quiet'\n      - '--from'\n      - 'C:/path/to/ansys-agent-bridge/spaceclaim/python'\n      - 'ansys-bridge-mcp'\n    env:\n      PYTHONIOENCODING: 'utf-8'\n      ANSYS_BRIDGE_LOG_LEVEL: 'WARNING'\n    toolCallTimeoutMs: 900000\n    failOnStartupError: false\n```\n\nRestart DSH for it to take effect."
+    },
+    {
+      "section": "Option C: install the launcher into PATH",
+      "text": "Option B still hands every launch to `uv tool run`, which resolves dependencies and\nre-materialises the isolated environment each time — and redoes that work from\nscratch whenever anything under `<clone>/spaceclaim/python` changes (editing\n`src/…`, for one). Install the launcher **once** instead, and let DSH start a plain\ncommand:\n\n```sh\nuv tool install --editable --from <clone>/spaceclaim/python ansys-agent-bridge\n```"
+    },
+    {
+      "section": "Option C: install the launcher into PATH",
+      "text": "> ✅ Re-verified 2026-10-17: `uv tool list` reports `ansys-agent-bridge v0.1.0` with **both**\n> console scripts (`ansys-bridge-doctor`, `ansys-bridge-mcp`), and `ansys-bridge-mcp`\n> completes a real MCP `initialize` handshake over stdin (`protocolVersion` plus the full\n> tool list on stdout) — the install is not just on paper."
+    },
+    {
+      "section": "Option C: install the launcher into PATH",
+      "text": "The positional argument is the **package name** (`[project].name` in\n`pyproject.toml`), **not** the command name. `uv` rejects the command-name form\nitself, with no room for interpretation:\n`error: Package name (ansys-agent-bridge) provided with --from does not match install request (ansys-bridge-mcp)`."
+    },
+    {
+      "section": "Option C: install the launcher into PATH",
+      "text": "That installs an editable tool environment and puts the console scripts on PATH —\non Windows `%USERPROFILE%\\.local\\bin\\ansys-bridge-mcp.exe`, and `uv tool dir --bin`\nprints the exact directory. If that directory is on PATH, the DSH override becomes a\n**bare command name, with no path and no `uv`**:\n\n```yaml"
+    },
+    {
+      "section": "%APPDATA%\\dsh-desktop\\harness\\profiles\\web\\cordis.patch.yml",
+      "text": "- id: mcp-ansys\n  name: '@deepseek-ai/dsh-mcp-client'\n  config:\n    serverName: ansys\n    transport: stdio\n    command: ansys-bridge-mcp\n    args: []\n    env:\n      PYTHONIOENCODING: 'utf-8'\n      ANSYS_BRIDGE_LOG_LEVEL: 'WARNING'\n    toolCallTimeoutMs: 900000\n    failOnStartupError: false\n```"
+    },
+    {
+      "section": "%APPDATA%\\dsh-desktop\\harness\\profiles\\web\\cordis.patch.yml",
+      "text": "Restart DSH for it to take effect. Editing this repo keeps working immediately:\n`--editable` points the installed environment at `<clone>/spaceclaim/python/src`, so\n`uv`'s own help describes it as \"changes in the package's source directory aresh\nuv tool uninstall ansys-agent-bridge\n```"
+    },
+    {
+      "section": "Why the patch has neither `!!js` nor an absolute path",
+      "text": "That is deliberate: the harness CLI (0.1.1-rc.1) evaluates `!!js` in a scope without\n`createRequire` and does not await the result, so an expression using either boots on\nthe Desktop app (0.1.5-rc.2) and leaves the CLI with a profile that will not start.\nBoth were tried and both broke it; `command: uv` needs neither. Override that one\nline if `uv` is not on the PATH the harness was launched with:\n\n```yaml\n    command: C:/Users/you/.local/bin/uv.exe\n```"
+    },
+    {
+      "section": "The bundled skill",
+      "text": "The same `!!js` restriction is why `spaceclaim/skills/ansys-spaceclaim/` is **not** wired up\nby the patch. Registering it needs a path resolved at load time, which needs one\nof the two constructs above. Add it explicitly instead, in your profile's own\n`cordis.patch.yml` (next to the bundle's) — this runs inside the host, where\n`dshHomePath` is always available and no module resolution is involved:"
+    },
+    {
+      "section": "The bundled skill",
+      "text": "```sh\nmkdir -p \"$DSH_HOME/skills\"                      # or %APPDATA%\\dsh-desktop\\harness\\skills\ncp -r <repo>/spaceclaim/skills/ansys-spaceclaim \"$DSH_HOME/skills/\"\n```\n\n`$DSH_HOME/skills` is one of the host's default skill roots, so nothing else is\nneeded. Without it the MCP tools still work; what you lose is the measured\noperating notes and the trap list."
+    },
+    {
+      "section": "Any other MCP client",
+      "text": "The server is a plain stdio MCP server, so it is not tied to DSH. Generate the\nblock for your client:\n\n```sh\nuvx --from \"git+https://github.com/1622352030/ansys-agent-bridge#subdirectory=spaceclaim/python\" \\\n    ansys-bridge-doctor --config claude    # also: cursor, vscode, dsh\n```"
+    },
+    {
+      "section": "Any other MCP client",
+      "text": "`claude` and `cursor` emit an `mcpServers` block, `vscode` emits a `servers`\nblock with an explicit `\"type\": \"stdio\"`, and `dsh` emits the `insert` patch\nentry for a profile's `cordis.patch.yml`. Paste the result into the client's\nconfiguration.\n\nFor a client whose schema you would rather write by hand, the command is:\n\n```jsonc\n{\n  \"mcpServers\": {\n    \"ansys\": {\n      \"command\": \"uv\","
+    },
+    {
+      "section": "Any other MCP client",
+      "text": "Use `uv tool run`, not `uv run`: measured against uv 0.11.29, `uv run` rejects\n`--from` with `unexpected argument '--from' found`, and the MCP client shows\nonly `Connection closed`."
+    },
+    {
+      "section": "Check the environment first",
+      "text": "```sh\nuvx --from \"git+https://github.com/1622352030/ansys-agent-bridge#subdirectory=spaceclaim/python\" \\\n    ansys-bridge-doctor\n```\n\n```\nansys-agent-bridge 0.1.0\n  python        3.13.4  C:\\...\\python.exe\n  platform      Windows-11-10.0.26100-SP0\n\nAdd `--json` for the machine-readable report."
+    },
+    {
+      "section": "Environment variables",
+      "text": "| Variable | Default | Effect |\n|---|---|---|\n| `ANSYS_BRIDGE_UV` | — | Not read by the patch (which has no `!!js`). Override the `command:` line with a `--patch` overlay if `uv` is not on PATH. |\n| `ANSYS_BRIDGE_PRELOAD` | `1` | Import the Ansys clients at start-up. Set `0` for a fast start; the first SpaceClaim call then pays that import. |\n| `ANSYS_BRIDGE_TRANSPORT` | `stdio` | `stdio`, `sse`, or `streamable-http`. |\n| `ANSYS_BRIDGE_LOG_LEVEL` | `WARNING` | FastMCP request logging. `INFO` logs one line per request. |"
+    },
+    {
+      "section": "Why start-up preloads, and why tools are serialised",
+      "text": "FastMCP runs a synchronous tool **on the event loop thread**\n(`mcp/server/fastmcp/utilities/func_metadata.py`: `return fn(**args)` — there is\nno `to_thread`). Lazy-importing `ansys.geometry.core` from inside a tool call\nwas measured wedging the whole process inside numpy's C extension\n`create_module`, **with no exception and no timeout** — the client sees a tool\ncall that simply never returns:"
+    },
+    {
+      "section": "Why start-up preloads, and why tools are serialised",
+      "text": "```\n_call_with_frames_removed (<frozen importlib._bootstrap>:488)\ncreate_module (<frozen importlib._bootstrap_external>:1321)\n<module> (numpy\\_core\\multiarray.py:11)\n...\n\nThe identical import finishes in **0.9 s** at process start, so `main()`\nimports numpy and both Ansys clients before accepting a request. Stacks were\ncaptured with `py-spy dump`."
+    },
+    {
+      "section": "Why start-up preloads, and why tools are serialised",
+      "text": "The same fact means **long tools block the server**: a 30-second SpaceClaim\nstart holds the event loop, so a concurrent call queues behind it. That is\nacceptable here — SpaceClaim mutates one design, and serialising is what you\nwant — but it is why `toolCallTimeoutMs` in the DSH patch is 900 s rather than\nthe 60 s default."
+    },
+    {
+      "section": "Safety",
+      "text": "- **Never open a file a SpaceClaim GUI has open, and never write to a source\n  model.** Open, operate, export to a new path.\n- A session holds a licence; call `scdm_session_close`.\n- Package inspection is metadata-only. An earlier version imported\n  `ansys.fluent.core` inside a tool call to read its version; that library\n  prints during import, which corrupted the stdio JSON-RPC stream and killed\n  the session mid-call. `package_version()` now reads metadata without\n  importing."
+    },
+    {
+      "section": "Layout",
+      "text": "The repository is split by product domain, strictly. SpaceClaim material and\nFluent material never share a directory, down to the test scripts:\n\n```\npackage.json            DSH bundle manifest (`dsh.bundle.patch`) + npm entry\ncordis.patch.yml        the bundle's patch layer\nTROUBLESHOOTING.md      desktop install / hang / MCP-will-not-re-enable, and how to unlock\nscreenshots.json"
+    },
+    {
+      "section": "Layout",
+      "text": "`dev/` holds development-time material and stays inside the repository on\npurpose, so nothing is ever written into a user's model directory. Transcripts,\nexport dumps and the copied test models are gitignored; the test scripts and the\nAPI inventories are kept.\n\nThe root keeps only what must be at the root: npm reads `package.json` there, and\n`dsh.bundle.patch` resolves `./cordis.patch.yml` relative to it."
+    },
+    {
+      "section": "What is and is not implemented",
+      "text": "[`spaceclaim/docs/feature-coverage.md`](spaceclaim/docs/feature-coverage.md) is the item-by-item\ncomparison against the official API: every capability domain, whether it is\nimplemented, and — for the gaps — why. It is not a list of what the server does;\nit is the list a reader needs to find what it does not do."
+    },
+    {
+      "section": "What is and is not implemented",
+      "text": "The headline is that **the official client declares far more than this release\ncan run**. Of 286 public methods carrying a `@min_backend_version` gate, only\n**15 are callable on 24R2**; the other 271 need 25.1 through 27.1. That includes\nall 44 `GeometryCommands` modelling methods. The comparison therefore filters by\nversion first, which is what separates a real gap from a method that would only\nraise `GeometryRuntimeError`.\n\nTwo consequences worth knowing before you plan work:"
+    },
+    {
+      "section": "What is and is not implemented",
+      "text": "- **Geometric inspection is now the headline feature.** Eight `RepairTools.find_*`\n  methods carry no version gate at all, so they work on 24R2, and all eight are\n  behind `scdm_inspect_geometry`. On the assembly whose meshing failed, that tool\n  names the cause: two pairs of coincident faces, one on `stator` and one on\n  `pip` in each pair, with identical areas. Replacing \"the mesh failed\" with\n  \"these two faces are stacked\" is the whole point.\n- **An external flow enclosure cannot be built through this API.** The three\n  `create_*_enclosure` methods need 26.1.0. For external-flow CFD, build the\n  domain in the SpaceClaim UI or use Fluent Meshing's enclosure instead."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode tools/verify-patch.mjs        # no profile needed\nuv run --directory python pytest -q\n```\n\n`verify-patch.mjs` evaluates any `!!js` expression in the patch inside a bare\n`with (ctx) { eval(expr) }` scope — exactly what the CLI builds — and refuses a\npromise result, so a patch that would only boot on the newer harness fails here\ninstead of on a user's machine. It also checks that the console script the patch\nlaunches is the one `pyproject.toml` declares."
+    },
+    {
+      "section": "Licence",
+      "text": "MIT. See [LICENSE](LICENSE)."
+    },
+    {
+      "section": "ansys-agent-bridge",
+      "text": "一个驱动 **Ansys SpaceClaim** 的 MCP 服务器，外加一个 **DSH 插件包**——一条命令\n把它装进 DeepSeek Harness 的 profile。\n\n这个项目的重点不是把 API 逐个包一层，而是如实报告 SpaceClaim 到底做了什么。原因很\n具体：SpaceClaim 2024 R2 上有两个操作会**返回成功却什么都没改**，而相信返回值的\nagent 会一本正经地描述一个从未被修改过的几何体。这个服务器在操作前后测量几何，看\n不到变化就抛 `no_geometry_change`，而不是报一个它验证不了的\"成功\"。"
+    },
+    {
+      "section": "功能",
+      "text": "| 工具 | 只读 | 作用 |\n|---|---|---|\n| `ansys_bridge_doctor` | 是 | 报告探测到的 Ansys 版本、`SpaceClaim.exe`、Fluent 根目录、Python 与依赖包版本。不导入任何重库。 |\n| `scdm_session_start` | 否 | **我控**：启动 SpaceClaim。默认 `hidden=false`，即**用户看得见**的那个窗口（实测 21.8 s 到可用）。 |\n| `scdm_attach` | 否 | **你控**：接入用户自己启动的 SpaceClaim。不新增许可占用，且**关不掉用户的窗口**。 |\n| `scdm_session_status` | 是 | 会话是否存活、处于哪种模式（`launch`／`attach`）、后端类型/版本。 |\n| `scdm_session_close` | 否 | 关闭**本服务器启动的**会话并释放许可；attach 会话下**硬拒绝**（`attach_mode_refuses_close`）。 |\n| `scdm_detach` | 否 | 断开与用户 SpaceClaim 的连接：只关 gRPC 通道，进程与许可都不动。 |\n| `scdm_open_file` | 否 | 打开 `.scdoc`/`.scdocx`/`.dsco`/`.pmdb`，报告实体、命名选择、面数、体积。 |\n| `scdm_list_bodies` | 是 | 当前设计的实体名、面数、体积。 |\n| `scdm_collisions` | 是 | 两两碰撞状态（`TOUCH`/`NONE`/…），可全部配对或指定列表。 |\n| `scdm_min_distance` | 是 | 两实体最小间距（米），碰撞状态的连续量版本。 |\n| `scdm_insert_file` | 否 | 把另一个 CAD 文件并入当前设计（`open_file` 是打开文档，这个是加进已打开的）。 |\n| `scdm_transform` | 否 | `rotate`／`scale`／`mirror`，用变换前后的空间指纹验证是否真生效。 |\n| `scdm_inspect_geometry` | 是 | 官方八项几何体检：重复面、短边、小面、缺失面、待分割边、可缝合面、多余边、不精确边。 |\n| `scdm_boolean` | 否 | `unite`/`subtract`/`intersect`，带前后几何校验。 |\n| `scdm_share_topology` | 否 | Share Topology，同样带前后校验。 |\n| `scdm_run_script` | 否 | 对当前会话运行 headless IronPython 脚本。 |\n|"
+    },
+    {
+      "section": "两个静默失效，实测数据",
+      "text": "在\"定子 + 27 个绕组 + 管 + 入口\"这个装配体上：\n\n**`subtract` 会失败。** 目标体积 `0.003314505208 m³`、382 个面；操作后体积与面数\n**完全相同**，只有工具实体被删掉了（实体数 31 → 30）。用原生 IronPython\n`Shape.Subtract` 得到同样的症状，说明这是该模型的几何/内核问题，不是 API 路径问题。\n\n**`share_topology` 返回 `True` 却什么都没做。** 定子仍是 382 面，绕组 1 仍是 16 面，\n实体数仍是 31。\n\n**`unite` 是真的生效。** 定子体积 `0.003314505208 → 0.003382973513`（增量\n`6.84683e-5`，正好等于绕组 1 自身体积），面数 `382 → 390`，与原生 IronPython 结果\n一致。"
+    },
+    {
+      "section": "两个静默失效，实测数据",
+      "text": "完整的实测记录——包括原生 IronPython 的那些坑（`Body[](n)` 是**解析期**错误、会让\n脚本静默死掉；`Document.Load` 会让之后每一次 `SaveAs` 报错）——见\n[`spaceclaim/skills/ansys-spaceclaim/SKILL.md`](spaceclaim/skills/ansys-spaceclaim/SKILL.md)。"
+    },
+    {
+      "section": "两种 GUI 模式：我控 / 你控",
+      "text": "会话由**谁拥有进程**决定，这件事分成两个工具而不是一个开关——因为许可与所有权语义正好\n相反，选错的那一个会结束用户的会话。（与 Fluent 侧的 `ui_mode=\"gui\"` / `fluent_attach` /\n`fluent_detach` 对齐。）每个会话都在返回值里给出机器可读的 `mode` 字段。\n\n| | `mode=launch`（我控） | `mode=attach`（你控） |\n|---|---|---|\n| 工具 | `scdm_session_start` | `scdm_attach` |\n| 谁启动的进程 | 本服务器 | 用户 |\n| 许可 | 本服务器占一份 | **不新增**，复用用户那份 |\n| `process_ownership.owner` | `ai` | `user` |\n| 怎么结束 | `scdm_session_close` | `scdm_detach`（只关通道） |\n| 另一个工具 | `scdm_detach` → **被拒** | `scdm_session_close` → **被拒** |"
+    },
+    {
+      "section": "我控：默认就是看得见的窗口",
+      "text": "`hidden` 默认 `false`。实测（走真实 MCP stdio 传输）：返回\n`mode=\"launch\"`／`ui_visible=true`，**21.8 s** 到可用，主窗口\n`设计(D)1 - SpaceClaim`（1935×1047，可见、未最小化），内存工作集 **979 MB**，\n`scdm_session_close` 之后**残余进程 0 个**。\n\n两点实测提醒：\n\n- **`hidden=true` 不是\"最小化\"**，PyAnsys 把它映射成 `/Headless=True`，Ansys 的定义是\n  **无 UI 的批处理**；实测 40 个顶层窗口里只有 2 个 13×13 无标题小窗，没有主窗口。\n- **窗口可能落在副屏**：本机两次可见启动都在 `x = -1927`（副屏）。PyAnsys 不暴露窗口位置，\n  要锁主屏得自己往命令行里加 `/WindowLocation=`——**未实测**。"
+    },
+    {
+      "section": "你控：裸双击不行，必须用带参快捷方式",
+      "text": "**裸双击启动的 SpaceClaim 没有 gRPC 端点**，AI 接不上：实测它监听的三个端口\n（49013/49014/63186）对 gRPC 健康检查**全部** `UNAVAILABLE`。官方文档也是同一句话：\n\"Running a SpaceClaim or Discovery normal session does not suffice… Both products need\nthe ApiServer extension to be running.\"\n\n所以用户侧要双击的是这个快捷方式（本机已建好）："
+    },
+    {
+      "section": "你控：裸双击不行，必须用带参快捷方式",
+      "text": "```\n桌面：SpaceClaim 2024R2 (AI可接入).lnk\n  └─> spaceclaim/dev/launchers/start_spaceclaim_for_ai.bat\n        set API_PORT=51790            ← 固定端口，AI 侧才知道去哪连\n        SpaceClaim.exe /ADDINMANIFESTFILE=\"...\\Addins\\ApiServer\\Presentation.ApiServerAddIn.Manifest.xml\" /transport-mode=wnua\n\n环境变量写在 `.bat` 里而不是快捷方式里，因为 Windows 快捷方式**不能设环境变量**——\nFluent 侧的 `-sifile=` 启动器踩过同一个坑。\n\n用法："
+    },
+    {
+      "section": "你控：裸双击不行，必须用带参快捷方式",
+      "text": "1. 双击快捷方式，等窗口起来（和平时启动一样，20–30 s）；\n2. AI 侧调 `scdm_attach(port=51790)`（实测这类连接 **0.31 s** 就连上）；\n3. AI 侧结束时要调 `scdm_detach`，**不能**调 `scdm_session_close`——后者在 attach 会话下被\n   硬拒绝（`error=\"attach_mode_refuses_close\"`、`process_untouched=true`、\n   `licence_released=false`）；\n4. 用户想让 AI 下线：直接关掉 SpaceClaim，通道随进程终止。SpaceClaim 侧**没有** Fluent 那种\n   `server/shutdown-server` 命令，未找到任何等价入口。\n\n连不上时 `scdm_attach` 会直接给出上面那条**完整可粘贴的命令行**，并说明裸双击为什么不行。"
+    },
+    {
+      "section": "你控：裸双击不行，必须用带参快捷方式",
+      "text": "**风险（务必知道）**：`/ADDINMANIFESTFILE` 与 `API_PORT` **不在 Ansys 公开命令行文档里**，\n只出现在 PyAnsys Geometry 源码（`product_instance.py:92, 113-117, 401-404`）与实测中——\n属于**半公开接口**，将来版本可能改。端口也是**约定**而不是发现机制：SpaceClaim 没有 Fluent\n`-sifile=` 那样的端口文件。attach 下的**写操作（`open_file`／几何算子／`export`）与许可\n计数器均未实测**，详见\n[`spaceclaim/docs/verification.md`](spaceclaim/docs/verification.md)。"
+    },
+    {
+      "section": "安装",
+      "text": "需要 **Windows**、装了 SpaceClaim 的 Ansys（2024 R2 已实测），以及\n[`uv`](https://docs.astral.sh/uv/)。"
+    },
+    {
+      "section": "三种安装方式",
+      "text": "DSH 上有三种装法。A 与 B 的区别只在于 **MCP 服务器从哪里加载**；C 则是**先装一次，\n之后从 PATH 直接启动**，所以 `uv` 在每次拉起时**什么都不用解析**："
+    },
+    {
+      "section": "三种安装方式",
+      "text": "| | 方式 A：从 GitHub 安装 | 方式 B：从本地 checkout 安装 | 方式 C：把启动命令装进 PATH |\n| --- | --- | --- | --- |\n| 插件包 | `github:1622352030/ansys-agent-bridge` | `link:<本地 clone 路径>` | 与 A 或 B 相同 —— C 只替换 MCP 那一行 |\n| MCP 启动源 | `git+https://github.com/…#subdirectory=spaceclaim/python` | `<本地 clone>/spaceclaim/python` | 已装好的 console script `ansys-bridge-mcp`（不经过 `uv`，不带路径） |\n| 每次拉起是否联网 | **是**（先 `git fetch`） | **不 fetch GitHub；环境（重）物化时可能访问 PyPI 索引** | **只有安装那一次** |\n| 每次拉起是否解析依赖 | 每次都要 | 每次都要；`<本地 clone>/spaceclaim/python` 下任何改动都会重新物化环境 | 不用 —— 依赖只在 `uv tool install` 那一次解析 |\n| 无梯子／GitHub 不可达 | ⚠ 会失败，且可能拖垮整个桌面 | 正常 | 正常 |\n| 改了本仓库代码 | 需重装才生效 | 立即生效 | 立即生效，且不重新解析依赖、不重建环境 |\n| 自动跟随上游 | 是 | 否 | 否 |\n| 怎么卸 | `dsh plugin … remove` | `dsh plugin … remove` | `uv tool uninstall ansys-agent-bridge` |"
+    },
+    {
+      "section": "三种安装方式",
+      "text": "**在国内、或到 GitHub 的连通性不稳时，请直接用方式 B。** 方式 A 的 `git fetch` 一旦\n失败，包内的 `failOnStartupError: false` 会把错误藏起来，自动重连又反复重建环境、重复\n导入 `ansys.geometry.core` / `ansys.fluent.core`，占满 DSH 单线程 host 的事件循环——\n表现为所有会话历史一直「加载中」、桌面无响应；随后插件管理器会判定「启用它会写出开机\n即崩的状态」而把它**锁死为停用**，此后在界面上点开关也启用不回来。\n完整机制、诊断命令与解锁步骤见 [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)。"
+    },
+    {
+      "section": "方式 A：从 GitHub 安装",
+      "text": "```sh\ndsh plugin --profile web add ansys-agent-bridge\n```\n\n包内声明了 `dsh.bundle`，所以加载器会应用它的 `cordis.patch.yml`：一层 MCP client\n注册 `ansys` 服务器。重启 profile 后调用 `ansys_bridge_doctor` 即可。\n\n卸载就是反过来：\n\n```sh\ndsh plugin --profile web remove ansys-agent-bridge\n```"
+    },
+    {
+      "section": "方式 A：从 GitHub 安装",
+      "text": "MCP 那行用 `uv tool run --from <本仓库>` 启动服务器，所以目标机器**不需要 clone、\n也不需要预建虚拟环境**——但**第一次**调用要付解析并构建 `ansys-geometry-core` 的\n代价。如果你本机就有 clone、想要一个已经热好的环境，改用下面的**方式 B**——\n注意路径是 `<clone>/spaceclaim/python`（Python 包在 `spaceclaim/` 下），\n早期文档里写的 `<clone>/python` 已不再适用。"
+    },
+    {
+      "section": "方式 B：从本地 checkout 安装",
+      "text": "两步：把插件指向本地目录，再用 `--patch` 覆盖 MCP 行的启动源。\n\n```sh"
+    },
+    {
+      "section": "1) 插件包指向本地 clone（等价于把 profile 依赖写成 link:<path>）",
+      "text": "dsh plugin --profile web add link:C:/path/to/ansys-agent-bridge\n```\n\n```yaml"
+    },
+    {
+      "section": "%APPDATA%\\dsh-desktop\\harness\\profiles\\web\\cordis.patch.yml",
+      "text": "- id: mcp-ansys\n  name: '@deepseek-ai/dsh-mcp-client'\n  config:\n    serverName: ansys\n    transport: stdio\n    command: uv\n    args:\n      - 'tool'\n      - 'run'\n      - '--quiet'\n      - '--from'\n      - 'C:/path/to/ansys-agent-bridge/spaceclaim/python'\n      - 'ansys-bridge-mcp'\n    env:\n      PYTHONIOENCODING: 'utf-8'\n      ANSYS_BRIDGE_LOG_LEVEL: 'WARNING'\n    toolCallTimeoutMs: 900000\n    failOnStartupError: false\n```\n\n改完重启 DSH 生效。"
+    },
+    {
+      "section": "方式 C：把启动命令装进 PATH",
+      "text": "方式 B 仍然把每次拉起交给 `uv tool run`：它每次都要解析依赖、重新物化那份隔离环境，\n而且只要 `<本地 clone>/spaceclaim/python` 下有**任何**改动（比如改了 `src/…`），这套活\n就从头再来一遍。改成**只装一次**，之后让 DSH 直接启动一条普通命令：\n\n```sh\nuv tool install --editable --from <本地 clone>/spaceclaim/python ansys-agent-bridge\n```\n\n> ✅ **2026-10-17 复核**：`uv tool list` 里是 `ansys-agent-bridge v0.1.0` + **两个** console\n> script（`ansys-bridge-doctor`、`ansys-bridge-mcp`），且 `ansys-bridge-mcp` 能完成真正的\n> MCP `initialize` 握手（stdout 上有 `protocolVersion` 与完整工具表）—— 不是纸上安装。"
+    },
+    {
+      "section": "方式 C：把启动命令装进 PATH",
+      "text": "⚠️ 位置参数是**包名**（`pyproject.toml` 里的 `[project].name`），**不是**命令名。\n写成命令名会被 `uv` 自己拒绝，没有别的解释余地：\n`error: Package name (ansys-agent-bridge) provided with --from does not match install request (ansys-bridge-mcp)`。\n\n装好之后会得到一个 editable 的 tool 环境，命令脚本落到 PATH 上 —— Windows 上是\n`%USERPROFILE%\\.local\\bin\\ansys-bridge-mcp.exe`，确切目录可以用 `uv tool dir --bin` 查。\n只要那个目录在 PATH 里，DSH 侧的覆盖就可以写成**纯命令名：零路径、零 `uv`**：\n\n```yaml"
+    },
+    {
+      "section": "%APPDATA%\\dsh-desktop\\harness\\profiles\\web\\cordis.patch.yml",
+      "text": "- id: mcp-ansys\n  name: '@deepseek-ai/dsh-mcp-client'\n  config:\n    serverName: ansys\n    transport: stdio\n    command: ansys-bridge-mcp\n    args: []\n    env:\n      PYTHONIOENCODING: 'utf-8'\n      ANSYS_BRIDGE_LOG_LEVEL: 'WARNING'\n    toolCallTimeoutMs: 900000\n    failOnStartupError: false\n```"
+    },
+    {
+      "section": "%APPDATA%\\dsh-desktop\\harness\\profiles\\web\\cordis.patch.yml",
+      "text": "改完重启 DSH 生效。改了本仓库代码也照旧立即生效：`--editable` 把装好的环境指向\n`<本地 clone>/spaceclaim/python/src`，`uv` 自己的帮助里就是这么写的 ——\n\"changes in the package's source directory are reflected without reinstallation\"，sh\nuv tool uninstall ansys-agent-bridge\n```"
+    },
+    {
+      "section": "为什么 patch 里既没有 `!!js`、也没有绝对路径",
+      "text": "这是刻意的：实测 harness CLI（0.1.1-rc.1）求值 `!!js` 的作用域里**没有\n`createRequire`**，而且它的 `interpolate` 是同步的、**不会 await 返回值**。用上这两样\n中的任何一个，都会在桌面版（0.1.5-rc.2）正常启动，却让 CLI 的 profile 直接起不来——\n两条路都试过，都炸了。`command: uv` 两个都不需要。如果你的 harness 启动时的 PATH\n里没有 `uv`，把 `command` 换成绝对路径即可：\n\n```yaml\n    command: C:/Users/you/.local/bin/uv.exe\n```"
+    },
+    {
+      "section": "随包附带的 skill",
+      "text": "同样因为 `!!js` 的这个限制，`spaceclaim/skills/ansys-spaceclaim/` **没有**由 patch 自动挂载：\n挂载它需要在加载期解析出一个路径，就必然要用上面那两种写法之一。改成手动装，\n它属于宿主的默认 skill 根 `$DSH_HOME/skills`：\n\n```sh\nmkdir -p \"$DSH_HOME/skills\"                      # Windows 上是 %APPDATA%\\dsh-desktop\\harness\\skills\ncp -r <repo>/spaceclaim/skills/ansys-spaceclaim \"$DSH_HOME/skills/\"\n```\n\n不装也不影响 MCP 工具能用，少的是那份实测操作要点与陷阱清单。"
+    },
+    {
+      "section": "其他 MCP 客户端",
+      "text": "服务器本身就是一个普通的 stdio MCP 服务器，并不绑定 DSH。直接生成对应客户端的配置块：\n\n```sh\nuvx --from \"git+https://github.com/1622352030/ansys-agent-bridge#subdirectory=spaceclaim/python\" \\\n    ansys-bridge-doctor --config claude    # 也可用 cursor、vscode、dsh\n```\n\n`claude` 与 `cursor` 输出 `mcpServers` 块，`vscode` 输出带显式 `\"type\": \"stdio\"` 的\n`servers` 块，`dsh` 输出可直接粘进 profile 的 `cordis.patch.yml` 的 `insert` 条目。\n把结果贴进客户端的配置即可。\n\n想手写的话，命令就是：\n\n```jsonc\n{\n  \"mcpServers\": {\n    \"ansys\": {\n      \"command\": \"uv\","
+    },
+    {
+      "section": "其他 MCP 客户端",
+      "text": "要用 `uv tool run`，不要用 `uv run`。在 uv 0.11.29 上实测：`uv run` 会以\n`unexpected argument '--from' found` 拒绝，而 MCP 客户端那边只显示\n`Connection closed`，看不出真实原因。"
+    },
+    {
+      "section": "先体检",
+      "text": "```sh\nuvx --from \"git+https://github.com/1622352030/ansys-agent-bridge#subdirectory=spaceclaim/python\" \\\n    ansys-bridge-doctor\n```\n\n```\nansys-agent-bridge 0.1.0\n  python        3.13.4  C:\\...\\python.exe\n  platform      Windows-11-10.0.26100-SP0\n\n加 `--json` 得到机器可读的报告。"
+    },
+    {
+      "section": "环境变量",
+      "text": "| 变量 | 默认 | 作用 |\n|---|---|---|\n| `ANSYS_BRIDGE_UV` | 自动探测 | `uv` 的路径，供 DSH patch 的启动命令使用。 |\n| `ANSYS_BRIDGE_PRELOAD` | `1` | 启动时就把 Ansys 客户端导入好。设 `0` 可以快速启动，代价是第一次调用 SpaceClaim 时才付这个导入时间。 |\n| `ANSYS_BRIDGE_TRANSPORT` | `stdio` | `stdio`、`sse` 或 `streamable-http`。 |\n| `ANSYS_BRIDGE_LOG_LEVEL` | `WARNING` | FastMCP 请求日志；`INFO` 会每个请求打一行。 |"
+    },
+    {
+      "section": "为什么启动时要预导入、以及为什么工具是串行的",
+      "text": "FastMCP 的同步工具**跑在事件循环线程上**\n（`mcp/server/fastmcp/utilities/func_metadata.py`：`return fn(**args)`，没有\n`to_thread`）。实测在工具调用里惰性导入 `ansys.geometry.core`，会让整个进程卡死在\nnumpy 的 C 扩展 `create_module` 里，**既不抛异常也不超时**——客户端看到的是一个永远\n不返回的工具调用：\n\n```\n_call_with_frames_removed (<frozen importlib._bootstrap>:488)\ncreate_module (<frozen importlib._bootstrap_external>:1321)\n<module> (numpy\\_core\\multiarray.py:11)\n...\n\n同一个导入放在进程启动时只要 **0.9 s**，所以 `main()` 在接受请求之前就把 numpy 和两\n个 Ansys 客户端导入完。上面的栈是用 `py-spy dump` 抓的。"
+    },
+    {
+      "section": "为什么启动时要预导入、以及为什么工具是串行的",
+      "text": "同一件事也意味着**长工具会阻塞服务器**：启动 SpaceClaim 的 30 秒会占住事件循环，并发\n的调用只能排队。这在这里是可接受的——SpaceClaim 操作的是同一份设计，串行本来就是你\n想要的——也正是 DSH patch 里 `toolCallTimeoutMs` 设成 900 s 而不是默认 60 s 的原因。"
+    },
+    {
+      "section": "安全约定",
+      "text": "- **绝不要打开用户已经在 SpaceClaim GUI 里打开的文件，也绝不要写回源模型。**\n  打开、操作、导出到新路径。\n- 会话占用一个许可，用完调 `scdm_session_close`。\n- **attach 会话不占新许可，也不许被关掉。** 那是用户自己启动的 SpaceClaim：`scdm_session_close`\n  在该模式下被硬拒绝，断开只能用 `scdm_detach`。这条护栏在**工具层**实现，不依赖库的默认\n  行为（库只在 `product_instance` 非空时才关后端，而 `force_exit()` 之类路径并不看这个字段）。\n- 包版本探测只读元数据。早先的版本在工具调用里 `import` 了\n  `ansys.fluent.core` 来读版本号，而该库在导入时会打印内容，污染 stdio 的\n  JSON-RPC 流并导致会话中途断开；现在 `package_version()` 只读元数据、不导入。"
+    },
+    {
+      "section": "目录结构",
+      "text": "仓库按产品域严格二分：SpaceClaim 的东西和 Fluent 的东西不共用一个目录，连测试脚本都分开。\n\n```\npackage.json            DSH bundle 清单（`dsh.bundle.patch`）+ npm 入口\ncordis.patch.yml        bundle 的 patch 层\nTROUBLESHOOTING.md      桌面端装不上／把桌面卡死／MCP 关掉后无法启用回来的排查与解锁\nscreenshots.json\n\n`dev/` 放开发期材料，**刻意留在仓库内**，这样任何东西都不会写进你的模型目录。transcript、导出产物、复制的测试模型已被 gitignore；测试脚本与 API 盘点结果保留。\n\n根目录只留必须在根的东西：npm 只从根读 `package.json`，`dsh.bundle.patch` 的 `./cordis.patch.yml` 也是相对根解析。"
+    },
+    {
+      "section": "实现了什么、没实现什么",
+      "text": "[`spaceclaim/docs/feature-coverage.md`](spaceclaim/docs/feature-coverage.md) 是与官方 API 的逐项对照表：每个能力域、是否实现、以及未实现的原因。它不是\"服务器能做什么\"的清单，而是读者用来找\"它没做什么\"的清单。\n\n最要紧的一条结论是：**官方客户端声明的方法远多于这个版本能跑的**。286 个带 `@min_backend_version` 门槛的公开方法里，**只有 15 个能在 24R2 上调用**，另外 271 个需要 25.1 到 27.1，其中包括 `GeometryCommands` 全部 44 个建模方法。所以对照表先按版本过滤——这一步才分得清\"真缺漏\"和\"调了只会抛 `GeometryRuntimeError` 的方法\"。\n\n规划工作前需要知道的两条："
+    },
+    {
+      "section": "实现了什么、没实现什么",
+      "text": "- **几何体检现在是主打功能。** `RepairTools` 里有 8 个 `find_*` 方法完全没有版本门槛，24R2 可用，这 8 项现在都在 `scdm_inspect_geometry` 里。对着那个建网失败的装配体，它直接点名原因：两对完全重合的面，每对分别是 stator 和 pip 上的一个面，面积完全相同。把\"建网失败\"换成\"这两张面叠在一起了\"，就是它的全部意义。\n- **外流场计算域无法通过这个 API 生成。** 三个 `create_*_enclosure` 需要 26.1.0。做外部流场 CFD 时，计算域要在 SpaceClaim 界面建，或改用 Fluent Meshing 的 enclosure 功能。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\nnode tools/verify-patch.mjs        # 不需要任何 profile\nuv run --directory python pytest -q\n```\n\n`spaceclaim/python/tests/` 里的单测是**离线**的：不打 ANSYS、不占许可、不联网。它们用一个\n假的 PyAnsys 客户端记录\"服务器愿意发起哪些调用\"——这正是两种 GUI 模式的实质（`hidden` 默认值、\nattach 必须传 `transport_mode` 而**不能**传 `product_instance`、attach 下 `close()` 必须在碰到\n库之前就被拒、参数校验必须在联网之前完成）。当前 **70 项**。"
+    },
+    {
+      "section": "开发",
+      "text": "`verify-patch.mjs` 把 patch 里任何 `!!js` 表达式放在一个**只有 `ctx` 的裸作用域**里求值——这正是 CLI 的构造方式——并拒绝返回 Promise，所以\"只能在较新 harness 上启动\"的 patch 会在这里失败，而不是在用户机器上。它还会校验 patch 启动的 console script 确实是 `pyproject.toml` 里声明的那个。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT，见 [LICENSE](LICENSE)。"
+    }
+  ],
+  "skipped": []
+}
