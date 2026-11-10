@@ -26,6 +26,7 @@ def main():
  rows=load_rows(list_paths); selected=set(a.repo or [])
  out=ROOT/"work"/"_contexts";out.mkdir(parents=True,exist_ok=True)
  for p in sorted((ROOT/"results"/"facts").glob("*.json")):
+  if selected and p.stem not in {r.replace("/","__") for r in selected}: continue
   f=json.loads(p.read_text())
   if selected and f["repo"] not in selected: continue
   m=f.get("manifest",{})

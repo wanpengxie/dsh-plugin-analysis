@@ -43,6 +43,9 @@ def flatten(v):
 
 def resolve(raw,root):
  raw=raw.split("#",1)[0].strip()
+ # Import-like text inside bundled sourcemaps can be an entire source fragment
+ # rather than a path. Reject it before constructing a filesystem path.
+ if len(raw)>1024 or any(ch in raw for ch in ("\n","\r","\0")):return None
  if not raw or raw.startswith(("http://","https://","npm:")):return None
  if raw.startswith("./"):raw=raw[2:]
  cand=[root/raw]
