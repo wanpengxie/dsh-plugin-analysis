@@ -1,0 +1,138 @@
+{
+  "repo": "pureexe/dsh-image-base64",
+  "commit": "68abe65b03ec53bd306d08df8105fc58678f4f03",
+  "extracted_at": "2026-11-10T20:10:12.616099+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 8085,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 71,
+      "Markdown": 93,
+      "Other": 24,
+      "YAML": 16
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-image-base64",
+    "version": "0.1.0",
+    "description": "DeepSeek Harness plugin: transcodes images to a base64-safe format (PNG) before a vision request, fixing gateways like LM Studio that reject non-PNG/JPEG/GIF data URLs with \"'url' field must be a base64 encoded image.\"",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2",
+      "sharp": "^0.35.4"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin",
+      "image",
+      "base64",
+      "lm-studio",
+      "vision",
+      "webp"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Applied when a profile lists `dsh-image-base64` in its dsh.profile.bundles\n# (see the profile's package.json). Inserts the plugin as a single loader row\n# that patches the attachment store as soon as it's ready (`inject:\n# ['attachments']` in index.js), for every subsequent request in that\n# profile.\n#\n# To customize which media types pass through unchanged, override this row's\n# config in your own patch layer (profile or $DSH_HOME cordis.patch.yml),\n# e.g.:\n#\n#   - id: image-base64-compat\n#     config:\n#       acceptedMediaTypes: [image/png, image/jpeg, image/gif, image/webp]\n- insert:\n    - id: image-base64-compat\n      name: dsh-image-base64\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "acceptedMediaTypes",
+      "kind": "setting",
+      "default": "[image/png, image/jpeg, image/gif]",
+      "where": "index.js:26-30"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2",
+      "sharp": "^0.35.4"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-12T13:53:39Z",
+    "created_at": "2026-09-12T13:53:01Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-image-base64",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that fixes:\n\n```\nThis turn failed 400 \"'url' field must be a base64 encoded image.\"\nINVALID_REQUEST\n```\n\nwhen a vision-capable model (e.g. `meta/muse-glimmer`) is served through an\nOpenAI-compatible gateway that validates the image MIME type strictly, such\nas **LM Studio**."
+    },
+    {
+      "section": "Why this happens",
+      "text": "See [deepseek-ai/deepseek-harness#4615](https://github.com/deepseek-ai/deepseek-harness/discussions/4615)\nfor the full discussion. The short version:"
+    },
+    {
+      "section": "Why this happens",
+      "text": "- `dsh-attachment-local`'s request-image quality ladder re-encodes an image\n  as `image/webp` whenever the source has an alpha channel (JPEG has no\n  alpha channel to fall back to). A pasted screenshot or a PNG with\n  transparency very often has one.\n- LM Studio's OpenAI-compatible endpoint only accepts `image/png`,\n  `image/jpeg`, and `image/gif` inside a base64 `data:` URL. It rejects\n  `image/webp` (and anything else) at the protocol layer with `400`, before\n  the request reaches the model.\n- `dsh-llm-pi-ai` forwards whatever `mediaType` the attachment store gives\n  it straight into the request — there's no format negotiation between the\n  two, so the mismatch reaches LM Studio unchanged."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "It wraps the attachment store's `readImageRequest()` (the call\n`dsh-llm-pi-ai` makes to get the exact bytes/MIME type that go into the\nrequest) and transcodes the result to `image/png` with `sharp` whenever its\nmedia type isn't in an accepted list (`image/png`, `image/jpeg`, `image/gif`\nby default). Everything already in an accepted format passes through\nuntouched — only the images that would otherwise be rejected pay the\ntranscode cost."
+    },
+    {
+      "section": "Install",
+      "text": "From your DSH profile directory (or via `dsh plugin --profile <name> add`,\nwhich forwards to `pnpm` inside the profile):\n\n```sh\ndsh plugin --profile <name> add /home/pakkapon/dsh-image-base64\n```\n\nThen list it in that profile's `package.json` under `dsh.profile.bundles`:\n\n```json\n{\n  \"dsh\": {\n    \"profile\": {\n      \"bundles\": [\n\nRestart the profile (or let it pick it up automatically if\n`patchReload: live` is set) to load it."
+    },
+    {
+      "section": "Configuration",
+      "text": "Accepted media types default to `[image/png, image/jpeg, image/gif]` (LM\nStudio's whitelist). To widen or narrow that, target the plugin's `id` from\nyour own patch layer (profile `cordis.patch.yml` or `$DSH_HOME/cordis.patch.yml`):\n\n```yaml\n- id: image-base64-compat\n  config:\n    acceptedMediaTypes: [image/png, image/jpeg, image/gif, image/webp]\n```"
+    },
+    {
+      "section": "Caveats",
+      "text": "- This patches the attachment store's *request-image* projection only — it\n  doesn't touch how images are stored, just what's sent on the wire for a\n  model request.\n- Transcoding to PNG is lossless for the pixels it's given, but a PNG\n  re-encode of a large photo is bigger than an equivalent JPEG/WebP. If your\n  gateway actually accepts WebP, add it to `acceptedMediaTypes` instead of\n  relying on the default."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

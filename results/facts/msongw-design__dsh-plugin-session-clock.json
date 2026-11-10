@@ -1,0 +1,222 @@
+{
+  "repo": "msongw-design/dsh-plugin-session-clock",
+  "commit": "8292af4ddc1e565ab5fe9f686eab96c3c021818c",
+  "extracted_at": "2026-11-10T19:46:36.351622+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 28556,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 442,
+      "Markdown": 138,
+      "Other": 31,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "lib/client.js",
+      "lib/index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-session-clock",
+    "version": "0.1.0",
+    "description": "Rewrite the sidebar's relative session times as WeChat-style absolute times",
+    "license": "MIT",
+    "icon": "./icon.svg",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "dsh-plugin",
+      "session-list"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/msongw-design/dsh-plugin-session-clock.git"
+    },
+    "homepage": "https://github.com/msongw-design/dsh-plugin-session-clock#readme",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./client": {
+        "default": "./lib/client.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "client": {
+        "platform": "web"
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "~4.0.4"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The session-clock bundle: one browser row that rewrites the sidebar's\n# relative session times (\"3小时\", \"1天\") into absolute ones.\n#\n# The row names this package itself, so `dsh.client` in package.json supplies\n# the browser half (lib/client.js) and lib/index.js is the empty node half.\n\n- insert:\n    - id: ui-session-clock\n      name: 'dsh-plugin-session-clock'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_PROFILE_MODULES",
+      "kind": "env",
+      "where": "test/smoke.mjs:20"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/msongw-design/dsh-plugin-session-clock.git",
+      "where": "package.json:15"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/msongw-design/dsh-plugin-session-clock#readme",
+      "where": "package.json:17"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-31T16:16:08Z",
+    "created_at": "2026-10-31T16:14:50Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-session-clock",
+      "text": "把左侧栏会话列表里的相对时间（`刚刚`、`3小时`、`1天`、`2个月`）改成微信式的绝对时间。"
+    },
+    {
+      "section": "效果",
+      "text": "| 时间 | 显示 |\n|---|---|\n| 今天 | `21:12`（24 小时制，补零） |\n| 昨天 | `昨天21:12` |\n| 今年更早 | `10/27` |\n| 往年 | `25/12/31`（两位年份） |\n\n未来时间（时钟偏差）按今天处理，只显示 `HH:MM`。英文界面下「昨天」显示 `Yesterday `，并且同样接管内核原本的 `now` / `5min` / `3h` / `1d` / `2mo` / `2y`。\n\n格式跟随时区与系统时钟；跨过零点后每 30 秒自动刷新一次，所以 `21:12` 会在午夜变成 `10/29`。"
+    },
+    {
+      "section": "为什么是 DOM 补丁",
+      "text": "这段文案由内核包 `@deepseek-ai/dsh-client-ui-workspace` 的 `timeLabel()` 直接渲染，侧栏没有提供替换该文本的插槽：`sidebar.workspaces` 是单值插槽，替换它等于接管整个会话浏览器（搜索、分组、拖拽、重命名都要重写）。所以本插件走最小侵入路径：\n\n- 注册一个不可见的 `shell.overlay` 座位（只返回 `null`），拿到标准 `useSessions` 快照里的 `updatedAt`\n- 用 `MutationObserver` 跟随内核已经发布的 `[data-row-key=\"session:<id>\"]` 行，只改写第三列时间文本\n- 只处理两类文本：内核刚写下的相对标签，或本插件自己上一次写的文本；单元格里出现「进行中」这类状态文案时一律不动\n- 改写时直接改文本节点的 `nodeValue`，保留 React 持有的那个节点，避免下次重渲染写进已脱离文档的节点\n- 观察器把连续变更合并成每 100ms 至多一次重绘，流式回答时不会按帧空转"
+    },
+    {
+      "section": "为什么是 DOM 补丁",
+      "text": "**代价与失效表现**：这是 DOM 级补丁，不是插槽级扩展。如果内核改掉 `data-row-key` 属性、或调整行的子元素顺序，插件会静默失效——列表退回相对时间，不报错、也不弄坏列表。升级 DSH 后请看一眼列表时间是否还是绝对格式。"
+    },
+    {
+      "section": "方式一：Plugins 页（推荐）",
+      "text": "1. 左侧栏点 **Plugins**\n2. 点 **Add plugin**\n3. 填 Git 地址 `https://github.com/msongw-design/dsh-plugin-session-clock`，或本仓库克隆后的本地绝对路径\n4. 安装完成后在 **Installed** 组里启用"
+    },
+    {
+      "section": "方式二：写进 profile",
+      "text": "```bash"
+    },
+    {
+      "section": "在 profile 目录（~/.dsh/profiles/desktop）里",
+      "text": "pnpm add /path/to/dsh-plugin-session-clock\n```\n\n然后把包名加进 `package.json` 的 `dsh.profile.bundles`，重启应用。"
+    },
+    {
+      "section": "兼容性",
+      "text": "开发与使用环境：**DSH 0.2.1-rc.3**（macOS desktop profile）。行结构按该版本的 `SessionRow` 核对：第三个子元素是时间单元格，行上带 `data-row-key=\"session:<id>\"`。更早版本未逐一核对——按上面的失效表现，结构不符时只会退回相对时间。"
+    },
+    {
+      "section": "开发",
+      "text": "```\nnode test/smoke.mjs\n```\n\n无头冒烟测试：假的 `window.__ModuleLoader__`、假的 Cordis ctx、假的会话行，覆盖 `clockLabel` 的四种时间分支、中英文相对标签的接管与误判防护、状态文案保护、已绘制行的重绘、槽位注册。React 从 DSH 的 `~/.dsh/profiles/node_modules` 取，可用 `DSH_PROFILE_MODULES` 覆盖。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- 只改会话列表行；悬停卡片里的「创建于 …」和相对时间不动\n- 只改左侧栏会话行；搜索结果的元信息行不含时间\n- 不做本地化日期顺序：`MM/DD` 固定为月/日，不随语言切换\n- 不接管「进行中」这类状态文案，也不插入或隐藏行"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    },
+    {
+      "section": "dsh-plugin-session-clock",
+      "text": "Rewrites the relative times in the sidebar's session list (`刚刚`, `3小时`, `1天`, `2个月`) as WeChat-style absolute times."
+    },
+    {
+      "section": "What you get",
+      "text": "| When | Label |\n|---|---|\n| Today | `21:12` (24-hour, zero-padded) |\n| Yesterday | `昨天21:12` |\n| Earlier this year | `10/27` |\n| Earlier years | `25/12/31` (two-digit year) |\n\nA timestamp in the future (clock skew) reads as today's clock, `HH:MM`. In the English UI the yesterday word is `Yesterday `, and the shipped `now` / `5min` / `3h` / `1d` / `2mo` / `2y` labels are taken over as well."
+    },
+    {
+      "section": "What you get",
+      "text": "Labels follow the system clock and time zone and refresh every 30 seconds, so a `21:12` becomes `10/29` after midnight."
+    },
+    {
+      "section": "Why this is a DOM patch",
+      "text": "The label is rendered directly by the kernel package `@deepseek-ai/dsh-client-ui-workspace` through `timeLabel()`, and the sidebar offers no slot that replaces that text: `sidebar.workspaces` is a single-value slot, so taking it over means reimplementing the whole session browser (search, grouping, drag, rename). This plugin therefore takes the smallest invasive path:"
+    },
+    {
+      "section": "Why this is a DOM patch",
+      "text": "- registers an invisible `shell.overlay` seat (returns `null`) to read `updatedAt` from the standard `useSessions` snapshot\n- follows the row keys the kernel already publishes — `[data-row-key=\"session:<id>\"]` — and rewrites only the third column's text\n- touches only two kinds of text: a shipped relative label, or this plugin's own previous write; transient status text such as \"进行中\" is never touched\n- writes `nodeValue` on the existing text node, keeping the node React holds, so the next rerender does not write into a detached node\n- coalesces mutation bursts into at most one repaint per 100 ms, so a streaming answer does not spin the observer every frame"
+    },
+    {
+      "section": "Why this is a DOM patch",
+      "text": "**Cost and failure mode**: this is a DOM-level patch, not a slot-level extension. If the kernel renames `data-row-key` or reorders a row's children, the plugin silently stops working — the list falls back to relative times, with no error and no damage. After upgrading DSH, glance at the list to confirm the labels are still absolute."
+    },
+    {
+      "section": "From the Plugins page (recommended)",
+      "text": "1. Open **Plugins** in the left sidebar\n2. Click **Add plugin**\n3. Enter the Git URL `https://github.com/msongw-design/dsh-plugin-session-clock`, or the absolute path of a local clone\n4. Enable it under **Installed**"
+    },
+    {
+      "section": "Into a profile",
+      "text": "```bash"
+    },
+    {
+      "section": "inside the profile directory (~/.dsh/profiles/desktop)",
+      "text": "pnpm add /path/to/dsh-plugin-session-clock\n```\n\nThen add the package name to `dsh.profile.bundles` and restart."
+    },
+    {
+      "section": "Compatibility",
+      "text": "Developed and used against **DSH 0.2.1-rc.3** (macOS desktop profile). The row structure was checked against that version's `SessionRow`: the third child is the time cell, and the row carries `data-row-key=\"session:<id>\"`. Earlier versions were not checked one by one; per the failure mode above, a structural mismatch only falls back to relative times."
+    },
+    {
+      "section": "Development",
+      "text": "```\nnode test/smoke.mjs\n```\n\nA headless smoke test runs the real `lib/client.js` against a fake module loader, a fake Cordis context, and a synthetic session row. It covers all four `clockLabel` branches, Chinese and English relative labels plus the guard against false positives, protection of status text, repainting an already painted row, and the slot registration. React comes from `~/.dsh/profiles/node_modules` (override with `DSH_PROFILE_MODULES`)."
+    },
+    {
+      "section": "Known limits",
+      "text": "- Session rows only; the hover card's \"创建于 …\" and its relative time are untouched\n- Left sidebar session rows only; search-result metadata carries no time\n- Date order is not localized: `MM/DD` stays month/day regardless of language\n- Status text such as \"进行中\" is never taken over, and no row is inserted or hidden"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

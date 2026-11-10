@@ -1,0 +1,284 @@
+{
+  "repo": "oooplz/dsh-stitch-mcp",
+  "commit": "0d193ae316cb94aaebd547f09880eea9fbf8d8d5",
+  "extracted_at": "2026-11-10T19:59:31.563806+00:00",
+  "tree": {
+    "files": 17,
+    "bytes": 113948,
+    "lines_by_language": {
+      "JSON": 97,
+      "JavaScript": 1515,
+      "Markdown": 865,
+      "Other": 95,
+      "YAML": 55
+    },
+    "outline": [
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "market/listing.json",
+      "package.json",
+      "proxy.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-stitch-mcp",
+    "version": "0.6.3",
+    "description": "Google Stitch as native mcp__stitch__* tools in DeepSeek Harness: a direct remote MCP connection with an in-panel credential card for the API Key and OAuth access token.",
+    "type": "module",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "google-stitch",
+      "mcp",
+      "ui-design"
+    ],
+    "license": "MIT",
+    "author": "yangjiacheng",
+    "homepage": "https://github.com/oooplz/dsh-stitch-mcp#readme",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/oooplz/dsh-stitch-mcp.git"
+    },
+    "bugs": {
+      "url": "https://github.com/oooplz/dsh-stitch-mcp/issues"
+    },
+    "publishConfig": {
+      "access": "public",
+      "registry": "https://registry.npmjs.org"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "proxy.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "README.zh.md",
+      "LICENSE",
+      "CHANGELOG.md"
+    ],
+    "dependencies": {
+      "undici": "^7.29.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-plugin-manager",
+          "@deepseek-ai/dsh-api-remotes"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Google Stitch as an MCP server for DeepSeek Harness.\n#\n# Stitch is a remote MCP endpoint documented as:\n#\n#   { \"type\": \"http\", \"url\": \"https://stitch.googleapis.com/mcp\",\n#     \"headers\": { \"X-Goog-Api-Key\": \"AQ....\" } }\n#\n# The row talks to it directly. Nothing here routes the traffic:\n#\n# * direct is the default, so a network that reaches Google needs no configuration;\n# * a proxied network is the user's own choice. The Host half wraps undici's global\n#   dispatcher (index.js + proxy.js) and routes *only* `stitch.googleapis.com` through\n#   the address the card stored; with the switch off, nothing of ours is in the path and\n#   the harness policy (`HTTPS_PROXY` / `ALL_PROXY`, exported or in `$DSH_HOME/.env`)\n#   decides for every origin, this one included. Nothing is written to `$DSH_HOME/.env`\n#   any more, and a switch flip applies in the running process;\n# * an unreachable endpoint stays an honest transport error instead of a fake\n#   connection, and `~/.dsh/dsh-runtimes/stitch-mcp/status.json` records the reason.\n#\n# `headers` carries the credential, and config expressions are evaluated before any\n# plugin runs, so the value is read synchronously from the runtime `config.json` the\n# Host half maintains. When the card saves a new credential, that file changes and\n# the Host half asks the plugin manager to compose this entry again, which is how the\n# new header applies without restarting the harness.\n#\n# Keep the two rows in this order: the Host half is what writes `config.json`.\n- insert:\n    # Bundle's own Host entry: publishes stored credentials, keeps the proxy block in\n    # `$DSH_HOME/.env`, writes the status file and reloads the row below on a change.\n    - id: dsh-stitch-mcp\n      name: 'dsh-stitch-mcp'\n      config: {}\n    - id: stitch-mcp\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: stitch\n        transport: streamable-http\n        url: https://stitch.googleapis.com/mcp\n        # Only the credential headers are built, and only the ones that exist, so an\n        # empty value can never shadow a real one. File paths mirror index.js:\n        # `$DSH_HOME` or `~/.dsh`, then `dsh-runtimes/stitch-mcp/config.json`.\n        headers: !!js \"(() => { try { const fs = process.getBuiltinModule('fs'), path = process.getBuiltinModule('path'), os = process.getBuiltinModule('os'), home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), config = JSON.parse(fs.readFileSync(path.join(home, 'dsh-runtimes', 'stitch-mcp', 'config.json'), 'utf8')), headers = {}; if (typeof config.accessToken === 'string' && config.accessToken) headers.Authorization = 'Bearer ' + config.accessToken; else if (typeof config.apiKey === 'string' && config.apiKey) headers['X-Goog-Api-Key'] = config.apiKey; if (typeof config.projectId === 'string' && config.projectId) headers['X-Goog-User-Project'] = config.projectId; return headers; } catch (error) { return {}; } })()\"\n        # Keep the harness healthy while the endpoint is unreachable; the failure is\n        # logged instead of rejecting plugin activation.\n        failOnStartupError: false\n        # Large tool catalog and job-starting calls need more than the 60s default.\n        toolCallTimeoutMs: 120000\n        # A row that gave up stays dead (`maxAttempts` is one-way), so the Host half\n        # also reloads this entry when a credential or proxy appears. Until then, keep\n        # retrying with a bounded delay; a connection that survives 3s resets the budget.\n        reconnect:\n          enabled: true\n          initialDelayMs: 300\n          maxDelayMs: 3000\n          maxAttempts: 200\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "cordis.patch.yml:42"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:47"
+    },
+    {
+      "name": "STITCH_API_KEY",
+      "kind": "setting",
+      "where": "client.js:8"
+    },
+    {
+      "name": "STITCH_ACCESS_TOKEN",
+      "kind": "setting",
+      "where": "client.js:9"
+    },
+    {
+      "name": "STITCH_HTTPS_PROXY",
+      "kind": "setting",
+      "where": "client.js:10"
+    },
+    {
+      "name": "STITCH_PROJECT_ID",
+      "kind": "setting",
+      "where": "index.js:61"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "stitch.withgoogle.com",
+      "url": "https://stitch.withgoogle.com/settings",
+      "where": "client.js:11"
+    },
+    {
+      "host": "stitch.googleapis.com",
+      "url": "https://stitch.googleapis.com/mcp",
+      "where": "cordis.patch.yml:5"
+    },
+    {
+      "host": "stitch.googleapis.com",
+      "url": "https://stitch.googleapis.com/mcp",
+      "where": "cordis.patch.yml:38"
+    },
+    {
+      "host": "stitch.googleapis.com",
+      "url": "https://stitch.googleapis.com/mcp",
+      "where": "index.js:5"
+    },
+    {
+      "host": "stitch.googleapis.com",
+      "url": "https://stitch.googleapis.com/mcp",
+      "where": "index.js:44"
+    },
+    {
+      "host": "stitch.googleapis.com",
+      "url": "https://stitch.googleapis.com/mcp`",
+      "where": "market/listing.json:11"
+    },
+    {
+      "host": "host",
+      "url": "http://host:port`",
+      "where": "market/listing.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/oooplz",
+      "where": "market/listing.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/oooplz/dsh-stitch-mcp#readme",
+      "where": "package.json:16"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/oooplz/dsh-stitch-mcp.git",
+      "where": "package.json:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/oooplz/dsh-stitch-mcp/issues",
+      "where": "package.json:22"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "package.json:26"
+    },
+    {
+      "host": "stitch.googleapis.com`",
+      "url": "https://stitch.googleapis.com`",
+      "where": "proxy.js:24"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "undici": "^7.29.1"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 43,
+    "pushed_at": "2026-11-05T12:57:16Z",
+    "created_at": "2026-11-02T03:00:00Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "proxy.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-stitch-mcp",
+      "text": "English | [简体中文](README.zh.md)\n\nGoogle **Stitch** as native `mcp__stitch__*` tools inside [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness),\nwith an in-panel card for the API key and an optional proxy.\n\nStitch is a **remote MCP endpoint**. This plugin connects to it directly with the\nStreamable HTTP transport and authenticates with an API key header, which is the shape\nGoogle documents for MCP clients:"
+    },
+    {
+      "section": "dsh-stitch-mcp",
+      "text": "```json\n{\n  \"servers\": {\n    \"stitch\": {\n      \"url\": \"https://stitch.googleapis.com/mcp\",\n\nThere is no helper process, no local port and no launcher script: the plugin adds the row\nabove to the harness and reads the credential from the card."
+    },
+    {
+      "section": "Tools",
+      "text": "| Tool | Purpose |\n| :-- | :-- |\n| `list_projects` / `get_project` / `create_project` / `delete_project` | Projects |\n| `list_screens` / `get_screen` / `download_file` | Screens and their files |\n| `generate_screen_from_text` / `edit_screens` / `generate_variants` | Generate and edit UI |\n| `list_design_systems` / `create_design_system` / `create_design_system_from_design_md` / `update_design_system` / `apply_design_system` | Design systems |\n| `upload_design_md` | Upload a DESIGN.md |"
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add dsh-stitch-mcp@latest\n```\n\nUse your own profile name when the harness is launched with another one."
+    },
+    {
+      "section": "Credentials",
+      "text": "Settings → Plugins → **Google Stitch** → paste the key → **Save**. The widget has two\ntabs:\n\n- **API Key** — the documented shape, `X-Goog-Api-Key`.\n- **OAuth** — `Authorization: Bearer <access token>`, optionally pinned to a project\n  with `X-Goog-User-Project`.\n\nCreate a key at <https://stitch.withgoogle.com/settings> → **API key** → **Create key**.\nThe full key is shown only once. The OAuth tab takes an access token, e.g. the output of\n`gcloud auth print-access-token`."
+    },
+    {
+      "section": "Credentials",
+      "text": "Values are stored through the host `credentials` service; the Host half resolves them\ninto `~/.dsh/dsh-runtimes/stitch-mcp/config.json`, which the MCP row reads when its\n`headers` are composed. Saving in the card therefore triggers a reload of that one\nentry, so the new credential applies **without restarting the harness**."
+    },
+    {
+      "section": "Endpoint and proxy",
+      "text": "**The default is a direct connection, and a network that reaches Google needs no\nconfiguration at all.**"
+    },
+    {
+      "section": "Endpoint and proxy",
+      "text": "The card's **Use a proxy** switch is the only valve. Switching it on stores\n`http://<ip>:<port>` and routes **only this plugin's Stitch requests** through it:\neverything else in the harness — the model API, web search, other MCP servers — keeps\nthe route it already had. The change applies inside the running process within a few\nseconds, so there is no restart, and nothing is written to `~/.dsh/.env`."
+    },
+    {
+      "section": "Endpoint and proxy",
+      "text": "Switching it off stores nothing and takes the plugin out of the path again: Stitch then\nconnects directly, or follows the proxy policy you exported for the harness yourself.\n\nIf nothing can reach the endpoint, nothing is faked: the MCP row reports its own\ntransport error, and `~/.dsh/dsh-runtimes/stitch-mcp/status.json` says what failed:"
+    },
+    {
+      "section": "Endpoint and proxy",
+      "text": "```json\n{ \"ok\": false, \"endpoint\": \"https://stitch.googleapis.com/mcp\",\n  \"credential\": \"api-key\", \"proxy\": null, \"route\": \"direct\", \"reachable\": false,\n  \"error\": \"UND_ERR_CONNECT_TIMEOUT\", \"checkedAt\": \"...\" }\n```\n\nA healthy one looks like:\n\n```json\n{ \"ok\": true, \"endpoint\": \"https://stitch.googleapis.com/mcp\",\n  \"credential\": \"api-key\", \"proxy\": \"http://127.0.0.1:7897\", \"route\": \"proxy\",\n  \"reachable\": true, \"tools\": 16, \"checkedAt\": \"...\" }\n```"
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Symptom | Meaning |\n| :-- | :-- |\n| `server is disconnected` | The transport cannot reach `stitch.googleapis.com` at all. `status.json` → `error` names the reason (`UND_ERR_CONNECT_TIMEOUT`, `fetch failed`, …). Give the process a proxy and restart. |\n| Tools listed, calls answer “Request is missing required authentication credential” | No credential saved yet — paste an API key in the card. The handshake itself needs no key, which is why the tools appear first. |\n| `status.json` says `credential: null` | The card has nothing stored; the host `credentials` service is unreachable. |\n| Proxy on but still unreachable | Check the address in the card, then `status.json` → `proxyError` / `error`. Switching the proxy off hands Stitch back to the harness policy. |\n| `status.json` says `route: \"direct\"` with the switch on | `undici` could not be resolved in this profile, so the switch stays inert; `proxyError` says so. Reinstall the plugin. |\n| Row gave up after many attempts | The MCP client stops retrying permanently; saving a credential reloads the entry, and restarting the harness also re-arms it. |"
+    },
+    {
+      "section": "Layout",
+      "text": "| File | Role |\n| :-- | :-- |\n| `cordis.patch.yml` | Inserts the host entry and the `dsh-mcp-client` row (direct HTTPS transport, credential headers, reconnect) |\n| `index.js` | Host half: resolves credentials, keeps `config.json` / `status.json`, installs the per-origin proxy wrapper, reloads the row on a change |\n| `proxy.js` | Per-origin dispatcher wrapper: routes `stitch.googleapis.com` only, and only while the card's switch is on |\n| `client.js` | Client half: the credential card in `plugins.bundle.config`, with `I18N` dictionaries |\n| `locale/{en,zh}.json` | Plugin title and description per locale |\n| `CHANGELOG.md` | Release history |\n| `market/listing.json` | DSH Plugin Market submission entry |"
+    },
+    {
+      "section": "License",
+      "text": "MIT."
+    }
+  ],
+  "skipped": []
+}

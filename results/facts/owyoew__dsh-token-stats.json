@@ -1,0 +1,121 @@
+{
+  "repo": "owyoew/dsh-token-stats",
+  "commit": "b50ba1a18bd74d7cfd02bea55e4bb442ca48c473",
+  "extracted_at": "2026-11-10T20:02:12.568786+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 178035,
+    "lines_by_language": {
+      "JSON": 25,
+      "JavaScript": 1019,
+      "Markdown": 62,
+      "YAML": 6
+    },
+    "outline": [
+      "README.md",
+      "assets/screenshot-1.png",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@dsh-local/token-stats",
+    "description": "Daily token-consumption stats for the dsh web surface: aggregates provider-reported usage from every session log by local day, serves a /token-stats report page and /api/token-stats JSON, and adds a Token 用量 settings section to the web GUI",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-locale"
+        ]
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-token-stats plugin bundle layer.\n# Installed via `dsh plugin add` — this patch inserts the plugin into the\n# web profile's plugin list (id-targeted loader patch entries).\n- insert:\n    - id: token-stats\n      name: '@dsh-local/token-stats'"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-08-18T15:23:49Z",
+    "created_at": "2026-08-16T18:08:56Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-token-stats",
+      "text": "DSH（DeepSeek Harness）Web 界面的每日 token 消耗统计插件，类似 Claude Code 的 `/cost` 与 Codex CLI 的用量统计。"
+    },
+    {
+      "section": "功能",
+      "text": "- **Web 设置页**：打开设置（侧栏齿轮）→「Token 用量」：\n  - **周柱状图**：近 30 天按周分组（周一起始），每天一列，按模型分色（蓝色系，同模型颜色恒定），没有使用的天留空；\n  - **30 天点状图**：按周对齐的日历点阵，颜色越深用量越多（不区分模型），今日描边；\n  - KPI：今日 / 昨日 / 累计消耗、会话数；\n  - 每日明细表：总量、输入、输出、缓存、会话数；\n  - **估算费用**（最底部）：今日 / 累计，按 DeepSeek 官网低谷（闲时）价、2026-08-17 调价后：\n    - `deepseek-v4-flash`：缓存命中 0.05 元 / 未命中 1.5 元 / 输出 4.5 元（每百万 tokens）\n    - `deepseek-v4-pro`：缓存命中 0.15 元 / 未命中 4.5 元 / 输出 13.5 元（每百万 tokens）\n    - 缓存写入按未命中输入计（官网表无单独列，估算略保守）；未收录模型不计费\n  - 刷新按钮 + 生成时间。\n- **JSON API**：`GET /api/token-stats`（仅供设置页使用，含 `totals.cost` / `todayCost` / `pricing`）。"
+    },
+    {
+      "section": "统计口径",
+      "text": "- 数据来源：每个会话日志（`$DSH_HOME/sessions/**/session.jsonl.zstd`）里提供方报告的 usage 记录 + 内存中的活跃会话。\n- 按「(轮次, 步骤)」去重：同一步骤的多次 usage 样本只取最后一次（与内置 token-meter 语义一致）。\n- 按事件时间归属到**服务器本地时区**的日历日。\n- 模型 / 提供方取自该样本之前最近的 `request/header`。"
+    },
+    {
+      "section": "性能",
+      "text": "- **请求永不等待日志 I/O**：插件激活时后台预热折叠缓存；每次请求直接返回内存中的缓存视图，数据有变化时在后台（防抖 2s）增量刷新。\n- **增量折叠**：活跃会话只折叠内存中新增的事件尾巴；冷会话文件仅在 size/mtime 变化时重读，否则零磁盘 I/O。\n- **不阻塞事件循环**：冷读的解压与解析都分块让出事件循环（实测 Node 的 async zstd 实际仍占主线程，故用同步解压 + 分块让步）。\n- 实测（38+ 会话、日志持续增长）：连续请求全部 15~31ms，后台冷读刷新期间也不卡顿；冷读取只解析与用量相关的行。\n- 客户端刷新时保留旧数据展示，不闪「统计中…」。"
+    },
+    {
+      "section": "安装位置",
+      "text": "- 插件源码：`C:\\Users\\~\\Desktop\\dsh\\dsh-token-stats\\`\n- 加载器入口：`C:\\Users\\~\\.dsh\\profiles\\web\\node_modules\\@dsh-local\\token-stats`（junction → 源码目录）\n- Profile 补丁：`C:\\Users\\~\\.dsh\\profiles\\web\\cordis.patch.yml` 中的 `token-stats` 行"
+    },
+    {
+      "section": "修改后生效",
+      "text": "改动插件源码或补丁后，需要重启 `dsh web` 才会生效：\n\n```sh"
+    },
+    {
+      "section": "在原来的终端里 Ctrl+C 停止，然后重新启动",
+      "text": "dsh web"
+    },
+    {
+      "section": "或者",
+      "text": "npx @deepseek-ai/dsh web\n```"
+    },
+    {
+      "section": "本地测试",
+      "text": "```sh\nnode test-token-stats.mjs        # 用真实 session 日志跑一遍聚合，打印每日/每模型明细\nnode test-token-stats-perf.mjs   # 增量折叠等价性 + 冷/热路径性能测试\nnode test-token-stats-cost.mjs   # 费用估算数学校验\nnode test-client-render.mjs      # 客户端设置区块渲染结构测试"
+    }
+  ],
+  "skipped": []
+}

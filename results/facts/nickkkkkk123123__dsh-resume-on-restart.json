@@ -1,0 +1,153 @@
+{
+  "repo": "nickkkkkk123123/dsh-resume-on-restart",
+  "commit": "63281f8bf23dbcc48663fd7bea2c09e3796598b9",
+  "extracted_at": "2026-11-10T19:52:50.574609+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 18347,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 343,
+      "Markdown": 74,
+      "Other": 33,
+      "YAML": 28
+    },
+    "outline": [
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/detect.js",
+      "lib/detect.test.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-resume-on-restart",
+    "version": "0.1.0",
+    "description": "DSH 插件：检测 DSH 服务重启后自动唤醒主 agent，投递提示消息让中断的工作自动恢复。仅依赖 cordis ctx 服务，兼容 DSH Desktop 打包环境。",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "restart",
+      "resume",
+      "wake",
+      "cordis"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "files": [
+      "lib",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node --test lib/detect.test.js"
+    },
+    "engines": {
+      "node": ">=18"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/nickkkkkk123123/dsh-resume-on-restart.git"
+    },
+    "license": "MIT",
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch: inserts this plugin into a profile's layer stack.\n- insert:\n    - id: dsh-resume-on-restart\n      name: dsh-resume-on-restart\n      config:\n        enabled: true\n        stateDir: .resume-on-restart\n        target: primary\n        wakeup: true\n        notice: ''\n        shutdownGraceMs: 600000\n        ignoredSessionPrefixes:\n          - head-\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:41"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/nickkkkkk123123/dsh-resume-on-restart.git",
+      "where": "package.json:33"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 10,
+    "pushed_at": "2026-08-29T13:51:09Z",
+    "created_at": "2026-08-28T13:27:22Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/detect.js",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-resume-on-restart",
+      "text": "DSH 插件：检测 DSH 服务重启后，自动向主 agent 投递一条**信息性消息**（含中断时长、上次活跃会话等状态摘要），让 agent **自主决定**是否继续之前的工作或启动新任务。\n\n解决\"DSH 重启后会话中断、工作丢失\"的问题——重启后 agent 收到提示，可自行恢复。"
+    },
+    {
+      "section": "特性",
+      "text": "- 🔄 **重启检测**：通过 marker 文件（记录上次 pid / 启动时间）判断是否发生重启\n- 💬 **信息性消息**：重启后投递\"检测到重启 + 中断时长 + 上次活跃会话\"摘要，由 agent 自主决定下一步（而非命令式强制\"继续\"）\n- 🎯 **活动追踪**：运行期间通过 cordis 事件（`agent/session-start`、`agent/pre-step`）追踪最近活跃会话，供重启后参考\n- ✅ **兼容 DSH Desktop**：只依赖 cordis ctx 的 `agents` 服务，不 import 任何 `@deepseek-ai/dsh-*` 内部包，可在 DSH Desktop 打包环境（app.asar）运行"
+    },
+    {
+      "section": "安装",
+      "text": "```powershell"
+    },
+    {
+      "section": "用 dsh CLI 装到桌面 profile（DSH Desktop 默认用 desktop）",
+      "text": "dsh plugin --profile desktop add <本目录路径>"
+    },
+    {
+      "section": "重启 DSH Desktop 生效",
+      "text": "```"
+    },
+    {
+      "section": "运行逻辑",
+      "text": "每次 DSH 启动时：\n\n1. 读取 marker 文件（`~/.dsh/.resume-on-restart/marker.json`），记录上次的 `pid` / `lastBootAt`\n2. 判断是否重启：当前进程 `pid` ≠ marker 的 `pid` → 判定发生重启\n3. 写入新的 marker（更新为当前 pid / 时间）\n4. 若判定为重启，轮询等待主 agent 出现（最长 20 秒），投递信息性消息：\n   ```\n   [resume-on-restart] 检测到 DSH 服务已重启。\n   上次运行于 ...，本次于 ... 重启完成。\n   中断约 X 秒。\n   重启前最近活跃的会话：<session-id>\n\n运行期间通过 `agent/session-start` 和 `agent/pre-step` 事件持续记录最近活跃会话，下次重启时消息会包含它。"
+    },
+    {
+      "section": "配置（cordis.patch.yml）",
+      "text": "| 配置项 | 默认 | 说明 |\n|---|---|---|\n| `enabled` | `true` | 插件开关 |\n| `stateDir` | `.resume-on-restart` | marker/状态文件存放目录（相对 DSH_HOME） |\n| `target` | `primary` | 唤醒目标（`primary`=主 agent，或指定会话 id） |\n| `wakeup` | `true` | 是否真正唤醒（`false` 则只注入不唤醒） |\n| `notice` | `''` | 附加到消息末尾的自定义提示 |\n| `shutdownGraceMs` | `600000` | 关闭前\"活跃即视为任务相关\"的宽限窗口 |\n| `ignoredSessionPrefixes` | `['head-']` | 不追踪的会话 id 前缀（如多代理团队的根会话） |"
+    },
+    {
+      "section": "开发 / 测试",
+      "text": "```bash"
+    },
+    {
+      "section": "运行单元测试（重启检测、消息构建）",
+      "text": "npm test\n```\n\n测试覆盖 `lib/detect.js` 中的纯函数（重启判定、信息性消息构建），不依赖 DSH 运行时。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

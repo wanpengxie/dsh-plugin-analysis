@@ -1,0 +1,456 @@
+{
+  "repo": "monkey-sking/dsh-im-global",
+  "commit": "011047cc857ae458a0cb4d8b983123ca2b1bab18",
+  "extracted_at": "2026-11-10T19:43:21.130479+00:00",
+  "tree": {
+    "files": 39,
+    "bytes": 235877,
+    "lines_by_language": {
+      "JSON": 147,
+      "JavaScript": 5983,
+      "Markdown": 334,
+      "Other": 41,
+      "YAML": 79
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.json",
+      "lib/adapters/discord.js",
+      "lib/adapters/index.js",
+      "lib/adapters/matrix.js",
+      "lib/adapters/mattermost.js",
+      "lib/adapters/slack.js",
+      "lib/adapters/telegram.js",
+      "lib/adapters/zulip.js",
+      "lib/client.js",
+      "lib/core/allowlist.js",
+      "lib/core/bindings.js",
+      "lib/core/commands.js",
+      "lib/core/interactive.js",
+      "lib/core/reply.js",
+      "lib/discord/api.js",
+      "lib/discord/gateway.js",
+      "lib/format.js",
+      "lib/index.js",
+      "lib/settings-store.js",
+      "lib/telegram/api.js",
+      "lib/web-api.js",
+      "package.json",
+      "scripts/migrate-telegram-bindings.mjs",
+      "scripts/smoke-adapters.mjs",
+      "test/adapters.test.js",
+      "test/allowlist.test.js",
+      "test/bindings.test.js",
+      "test/commands.test.js",
+      "test/extra-adapters.test.js",
+      "test/format.test.js",
+      "test/gateway.test.js",
+      "test/interactive.test.js",
+      "test/settings.test.js",
+      "test/telegram.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-im-global",
+    "version": "0.10.2",
+    "private": true,
+    "type": "module",
+    "description": "Global IM channels for DeepSeek Harness — Telegram, Discord, Slack, Mattermost, Zulip and Matrix in one plugin, with a Settings page (add / test / save channels, live reload), per-conversation sessions that survive restarts, and platform-correct markdown.",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "discord",
+      "slack",
+      "matrix",
+      "channel",
+      "im",
+      "plugin"
+    ],
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./markdown": "./lib/format.js",
+      "./api": "./lib/discord/api.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "index.json",
+      "icon.svg",
+      "scripts"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ]
+      }
+    },
+    "scripts": {
+      "test": "node --test 'test/*.test.js'",
+      "smoke": "node scripts/smoke-adapters.mjs"
+    },
+    "dependencies": {
+      "ws": "^8.18.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": "*",
+      "@deepseek-ai/dsh-llm": "*",
+      "@deepseek-ai/dsh-agent": "*"
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/monkey-sking/dsh-im-global.git"
+    },
+    "homepage": "https://github.com/monkey-sking/dsh-im-global#readme",
+    "bugs": {
+      "url": "https://github.com/monkey-sking/dsh-im-global/issues"
+    },
+    "author": "monkey-sking"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# DSH bundle patch — dsh-im-global\n#\n# Global IM channels: one plugin, a `channels` list, one\n# adapter per platform. Mirrors the domestic gateway's shape\n# (@lijian-ui/dsh-im-gateway) so both halves are configured the same way.\n#\n# Channels that need no public URL:\n#   telegram Bot API long polling\n#   mattermost WebSocket + REST (self-hosted)\n#   zulip    event-queue long polling\n#   discord  Gateway WebSocket + REST\n#   slack    Socket Mode + Web API (needs bot *and* app-level token)\n#   matrix   client-server /sync long polling\n#\n# COEXISTENCE: one bot account must be mounted exactly once. Two clients on the\n# same token both receive every event, so a duplicate mounting double-answers.\n\n- insert:\n    - id: im-global\n      name: dsh-im-global\n      # Startup-critical services only. `ctx.get()` returns undefined while a\n      # providing fiber is still inactive, so anything read during boot — above\n      # all `credentials`, which holds the tokens — must be declared here.\n      inject:\n        - agents\n        - llm\n        - credentials\n        - userQuestions\n        - agentDefaultModel\n        - attachments\n        - workspaceRegistry\n      config:\n        enabled: true\n        streaming: true\n        showToolActivity: true\n        # Each channel names the credential holding its token; the token itself\n        # never appears here.\n        channels:\n          - id: telegram-main\n            type: telegram\n            name: Telegram\n            enabled: true\n            tokenRef: TELEGRAM_BOT_TOKEN\n\n          - id: discord-main\n            type: discord\n            name: Discord\n            enabled: false\n            tokenRef: DISCORD_BOT_TOKEN\n            # cwd: /Users/you/dev/workspace\n\n          - id: slack-main\n            type: slack\n            name: Slack\n            enabled: false\n            tokenRef: SLACK_BOT_TOKEN\n            appTokenRef: SLACK_APP_TOKEN\n\n          - id: mattermost-main\n            type: mattermost\n            name: Mattermost\n            enabled: false\n            tokenRef: MATTERMOST_TOKEN\n            baseUrl: https://chat.example.com\n\n          - id: zulip-main\n            type: zulip\n            name: Zulip\n            enabled: false\n            # Credential value is \"<bot email>:<api key>\".\n            tokenRef: ZULIP_BOT_TOKEN\n            baseUrl: https://chat.example.com\n\n          - id: matrix-main\n            type: matrix\n            name: Matrix\n            enabled: false\n            tokenRef: MATRIX_ACCESS_TOKEN\n            homeserverUrl: https://matrix.org\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/format.js",
+    "lib/discord/api.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "chat.example.com",
+      "url": "https://chat.example.com",
+      "where": "cordis.patch.yml:64"
+    },
+    {
+      "host": "chat.example.com",
+      "url": "https://chat.example.com",
+      "where": "cordis.patch.yml:72"
+    },
+    {
+      "host": "matrix.org",
+      "url": "https://matrix.org",
+      "where": "cordis.patch.yml:79"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/monkey-sking/dsh-im-global#readme",
+      "where": "index.json:42"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/monkey-sking/dsh-im-global",
+      "where": "index.json:44"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/monkey-sking/dsh-im-global",
+      "where": "index.json:66"
+    },
+    {
+      "host": "slack.com",
+      "url": "https://slack.com/api",
+      "where": "lib/adapters/slack.js:19"
+    },
+    {
+      "host": "matrix.org",
+      "url": "https://matrix.org",
+      "where": "lib/client.js:120"
+    },
+    {
+      "host": "chat.example.com",
+      "url": "https://chat.example.com",
+      "where": "lib/client.js:121"
+    },
+    {
+      "host": "chat.example.com",
+      "url": "https://chat.example.com",
+      "where": "lib/client.js:122"
+    },
+    {
+      "host": "discord.com",
+      "url": "https://discord.com/api/v10",
+      "where": "lib/discord/api.js:15"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/dsh",
+      "where": "lib/discord/api.js:18"
+    },
+    {
+      "host": "api.telegram.org",
+      "url": "https://api.telegram.org",
+      "where": "lib/telegram/api.js:10"
+    },
+    {
+      "host": "api.telegram.org",
+      "url": "https://api.telegram.org/bot${token",
+      "where": "lib/web-api.js:156"
+    },
+    {
+      "host": "discord.com",
+      "url": "https://discord.com/api/v10/users/@me",
+      "where": "lib/web-api.js:161"
+    },
+    {
+      "host": "slack.com",
+      "url": "https://slack.com/api/auth.test",
+      "where": "lib/web-api.js:167"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/monkey-sking/dsh-im-global.git",
+      "where": "package.json:64"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/monkey-sking/dsh-im-global#readme",
+      "where": "package.json:66"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/monkey-sking/dsh-im-global/issues",
+      "where": "package.json:68"
+    },
+    {
+      "host": "matrix.org",
+      "url": "https://matrix.org",
+      "where": "scripts/smoke-adapters.mjs:13"
+    },
+    {
+      "host": "chat.example.com",
+      "url": "https://chat.example.com",
+      "where": "scripts/smoke-adapters.mjs:14"
+    },
+    {
+      "host": "chat.zulip.org",
+      "url": "https://chat.zulip.org",
+      "where": "scripts/smoke-adapters.mjs:15"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "test/extra-adapters.test.js:84"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "ws": "^8.18.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 10,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 37,
+    "pushed_at": "2026-10-31T14:02:43Z",
+    "created_at": "2026-10-20T19:55:17Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/adapters/discord.js",
+    "lib/adapters/index.js",
+    "lib/adapters/matrix.js",
+    "lib/adapters/mattermost.js",
+    "lib/adapters/slack.js",
+    "lib/adapters/telegram.js",
+    "lib/adapters/zulip.js",
+    "lib/client.js",
+    "lib/core/allowlist.js",
+    "lib/core/bindings.js",
+    "lib/core/commands.js",
+    "lib/core/interactive.js",
+    "lib/core/reply.js",
+    "lib/discord/api.js",
+    "lib/discord/gateway.js",
+    "lib/format.js",
+    "lib/index.js",
+    "lib/settings-store.js",
+    "lib/telegram/api.js",
+    "lib/web-api.js",
+    "package.json",
+    "scripts/smoke-adapters.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-im-global",
+      "text": "<!-- badges:start -->\n[](https://github.com/monkey-sking/dsh-im-global/blob/main/LICENSE) [](https://github.com/monkey-sking/dsh-im-global/commits/main) [](https://github.com/monkey-sking/dsh-im-global/search?l=JavaScript) [](https://github.com/monkey-sking/dsh-im-global/stargazers) [](https://github.com/monkey-sking/dsh-im-global/network/members)\n<!-- badges:end -->"
+    },
+    {
+      "section": "dsh-im-global",
+      "text": "**Global IM channels for DeepSeek Harness** — Telegram, Discord, Slack, Mattermost, Zulip and Matrix in one plugin, with per-conversation sessions that survive restarts.\n\n> ⚠️ **Security: closed by default.** A channel with no allowlist configured\n> rejects every message (fail-closed) and shows as locked until you add the\n> sender's user ids. See [Security: the allowlist is fail-closed](#security-the-allowlist-is-fail-closed)\n> before connecting a bot."
+    },
+    {
+      "section": "dsh-im-global",
+      "text": "It shares its shape with the DingTalk / QQ / WeChat / Feishu / WeCom gateway\n([`@lijian-ui/dsh-im-gateway`](https://www.npmjs.com/package/@lijian-ui/dsh-im-gateway)):\none plugin, a `channels: [...]` list, one adapter per platform."
+    },
+    {
+      "section": "Why this exists",
+      "text": "`dsh-telegram` proved the model but is a single-platform channel owned by a\nthird party: a single hard-coded language, one platform per package, and no way\nto add a second one without a second copy of the same session plumbing.\n\nThis package factors that plumbing out:"
+    },
+    {
+      "section": "Why this exists",
+      "text": "```\nlib/index.js            plugin: config, channel lifecycle, routing, commands\nlib/core/bindings.js    conversation -> session (durable, restart-safe)\nlib/core/reply.js       turn -> message delivery (streaming, platform-agnostic)\nlib/core/commands.js    /new /status /help parsing\n\nAdding a platform is one adapter file. Nothing in `core/` changes."
+    },
+    {
+      "section": "Platforms",
+      "text": "| type | inbound | needs a public URL? | credentials |\n|---|---|---|---|\n| `telegram` | Bot API long polling | no | bot token (`@BotFather`) |\n| `discord` | Gateway WebSocket | no | bot token |\n| `slack` | Socket Mode WebSocket | no | bot token `xoxb-…` + app token `xapp-…` |\n| `matrix` | `/sync` long polling | no | access token (+ homeserver URL) |\n| `mattermost` | WebSocket + REST | no | personal access token + base URL |\n| `zulip` | event-queue long polling | no | `<bot email>:<api key>` + base URL |"
+    },
+    {
+      "section": "Platforms",
+      "text": "WhatsApp / Teams / LINE / Messenger are **not** covered: they only deliver events\nto a public HTTPS callback, which is a different hosting shape rather than\nanother adapter."
+    },
+    {
+      "section": "From the plugin market",
+      "text": "Add this index under **Plugins → Discover → Manage index sources**:\n\n```\nhttps://raw.githubusercontent.com/monkey-sking/dsh-im-global/main/index.json\n```"
+    },
+    {
+      "section": "From a local checkout",
+      "text": "```\nplugin_manager({ action: \"install_bundle\", target: \"/Users/you/.local/share/dsh-im-global\" })\n```\n\nThe bundle inserts one row, `im-global`, into the profile composition."
+    },
+    {
+      "section": "Settings page (no YAML, no restart)",
+      "text": "Enable the bundle once, then open **Settings → Chat channels**. The page manages the\nchannel list: add/remove a channel, pick its type, name the credential, set the\nserver URL, **test** the credential against the platform, and save. Saving\nrestarts the affected channels in place — the process is not restarted.\n\nCredentials are never edited there. The page only stores the credential *name*;\nthe secret stays in the credential store."
+    },
+    {
+      "section": "Saving a token directly (builds without a credentials page)",
+      "text": "Each channel card also has a **Token（可选，直接保存）** field. Paste the token and\npress **保存 token** — the plugin writes it to `~/.dsh/dsh-im-global/secrets.json`\n(mode 0600) and resolves it as a fallback after `ctx.credentials` and the\nenvironment variable of the same name. Useful when the host has no credentials UI:\nthe channel then starts without touching the host credential store."
+    },
+    {
+      "section": "`cordis.patch.yml`",
+      "text": "`## Configure` below documents the file-based route, which stays the floor: a\nvalue pinned there is used until the settings page saves a channel list of its\nown."
+    },
+    {
+      "section": "Configure",
+      "text": "Tokens live in `ctx.credentials`, never in the config file. Create them first —\nvia the credentials settings page or the host's credential store — under the\nnames the channel references:"
+    },
+    {
+      "section": "Configure",
+      "text": "| platform | default credential | what to paste |\n|---|---|---|\n| Telegram | `TELEGRAM_BOT_TOKEN` | BotFather → `/newbot` → the token it prints |\n| Discord | `DISCORD_BOT_TOKEN` | Bot → Token (Developer Portal → Bot → Reset Token) |\n| Slack | `SLACK_BOT_TOKEN` | OAuth & Permissions → Bot User OAuth Token (`xoxb-…`) |\n| Slack | `SLACK_APP_TOKEN` | Basic Information → App-Level Tokens (`xapp-…`, scope `connections:write`) |\n| Matrix | `MATRIX_ACCESS_TOKEN` | any account's access token |\n| Mattermost | `MATTERMOST_TOKEN` | Profile → Security → Personal Access Tokens |\n| Zulip | `ZULIP_BOT_TOKEN` | `<bot email>:<api key>` from Settings → Bots |"
+    },
+    {
+      "section": "Configure",
+      "text": "Then edit the `im-global` row in the profile's `cordis.patch.yml`:\n\n```yaml\n- id: im-global\n  config:\n    channels:\n      - id: telegram-main"
+    },
+    {
+      "section": "Settings storage",
+      "text": "The page writes `~/.dsh/dsh-im-global/settings.json` (atomic temp-file + rename).\nWhen that file exists its `channels` list wins over the composition's; delete it\nto fall back to `cordis.patch.yml`."
+    },
+    {
+      "section": "Security: the allowlist is fail-closed",
+      "text": "A chat bridge turns anyone who can reach the bot into an agent driver, so this\nplugin is **closed by default**. A channel with no allowlist configured accepts\nnothing — not even the owner — and shows as **locked** on the Settings page with\nevery inbound message dropped and logged.\n\nTo open a channel, put the sender's platform user ids on the list, either in the\nSettings page (**允许的用户 id** field, comma separated) or in the composition:"
+    },
+    {
+      "section": "Security: the allowlist is fail-closed",
+      "text": "```yaml\n- id: im-global\n  config:\n    allowedUsers: [123456789]          # plugin-level default for every channel\n    channels:"
+    },
+    {
+      "section": "Security: the allowlist is fail-closed",
+      "text": "A per-channel `allowedUsers` wins; otherwise the plugin-level `allowedUsers`\napplies; if neither is set the channel stays locked. How to find a user id:\nTelegram = the numeric id a bot sees, Discord = the numeric snowflake, Slack =\nthe member id, Matrix = the full `@user:server`, Mattermost/Zulip = the numeric\nuser id. The bot reads them from the `userId` it logs per inbound message."
+    },
+    {
+      "section": "Security: the allowlist is fail-closed",
+      "text": "This is the *only* gate between the platform and your agent. Treat it like a\nfirewall rule: configure it before exposing a bot, and keep it populated as you\nadd users.\n\nThe gate covers **both** ways a chat can drive the agent:"
+    },
+    {
+      "section": "Security: the allowlist is fail-closed",
+      "text": "- a typed message, checked in the router before any session work;\n- a **button press** answering a pending question, checked in the adapter before\n  the choice is emitted. A press from an off-list sender is refused with\n  \"你不在允许名单上，无法回答\" and never reaches the question broker — otherwise\n  anyone in a group could answer for the owner just by seeing the keyboard."
+    },
+    {
+      "section": "Telegram specifics",
+      "text": "- Create the bot with [@BotFather](https://t.me/BotFather) and copy the token.\n- **Only one process may long-poll a token.** A second `getUpdates` gets\n  409 Conflict, so disable any other Telegram channel on the same bot before\n  starting this one (the profile patch does that with\n  `- id: telegram` / `disabled: true`).\n- Coming from another Telegram plugin? Carry the conversation over:\n\n```\n  node scripts/migrate-telegram-bindings.mjs telegram-main\n  ```"
+    },
+    {
+      "section": "Telegram specifics",
+      "text": "It copies the old `chat -> session` mapping, so the same chat resumes the\n  same Harness session instead of starting from zero."
+    },
+    {
+      "section": "Mattermost / Zulip specifics",
+      "text": "- Both are self-hosted, so `baseUrl` is required (`https://chat.example.com`).\n- Mattermost needs a **personal access token** and the socket authenticates with\n  it; the adapter pings every 30 s because the socket goes quiet otherwise.\n- Zulip's event queue expires on its own schedule; `BAD_EVENT_QUEUE_ID` is\n  handled by re-registering rather than surfacing an error.\n- Zulip replies go to the same stream and topic; a DM replies to the sender."
+    },
+    {
+      "section": "Discord specifics",
+      "text": "- Enable the **Message Content** privileged intent (Bot → Privileged Gateway\n  Intents). Without it the bot receives every message with empty `content`.\n- Invite the bot with `bot` scope and the *Send Messages* / *Read Message\n  History* / *Attach Files* permissions.\n- Use `!new` in chat: a leading `/` is reserved by Discord's own slash-command\n  UI, so `/new` may be swallowed by the client. `!new`, `!status`, `!help` work\n  everywhere; `/…` is accepted too in DMs and other platforms."
+    },
+    {
+      "section": "Slack specifics",
+      "text": "- Enable **Socket Mode**, create an app-level token with `connections:write`.\n- Event subscriptions: `message.channels`, `message.im` (and `message.groups`\n  for private channels).\n- Reinstall the app after changing scopes or the bot will silently stop\n  receiving events."
+    },
+    {
+      "section": "Matrix specifics",
+      "text": "- Any account works; the bot answers in any room it can read.\n- The adapter carries `since` forward, so a restart does not replay history."
+    },
+    {
+      "section": "In chat",
+      "text": "| command | effect |\n|---|---|\n| `!new` / `/new` | rotate to a new session (the old one stays readable in the Web UI) |\n| `!status` | session id, state, working directory |\n| `!help` | command list |\n\nPlain messages go to the agent. Images are attached for the model when the\nplatform lets the adapter download them."
+    },
+    {
+      "section": "Design notes",
+      "text": "- **Session identity is platform identity.** The session id is derived from\n  `type:conversationId` (`discord:1234…`), so a restart resumes the same\n  conversation instead of starting a blank one.\n- **Create-collision falls back to resume.** If the log is on disk but the\n  existence probe missed it, the create path retries as a resume instead of\n  failing every message — the exact bug that broke the Telegram channel.\n- **One preview message per turn.** Streaming edits one message in place on a\n  1.6 s cadence rather than posting a message per token.\n- **Bots never answer themselves.** Adapters drop `bot` authors, webhooks and\n  their own user id before routing.\n- **Platform-correct markdown.** Tables become aligned monospace blocks,\n  headings become bold, mass mentions are neutralized — a raw pipe table on a\n  phone reads as corruption."
+    },
+    {
+      "section": "Quoted messages",
+      "text": "A reply that quotes an earlier message is passed to the model as a short prefix,\nso \"这个怎么改\" has a referent:\n\n```\n[引用 你 的消息]\n> 配置文件在 ~/.dsh/ 下面\n这个怎么改\n```"
+    },
+    {
+      "section": "Quoted messages",
+      "text": "| Platform | Quoted content on the wire | Status |\n|---|---|---|\n| Telegram | `reply_to_message` (full message) | ✅ inline |\n| Discord | `referenced_message` (full message) | ✅ inline |\n| Slack | not inlined; `thread_ts` → `conversations.replies` | ✅ thread parent (1 call, cached 2 min) |\n| Matrix | event id only; `m.in_reply_to` → `/context` | ✅ exact quoted event (cached 2 min) |\n| Mattermost | `root_id` → `GET /posts/{id}` | ✅ thread root (cached 2 min) |\n| Zulip | markdown blockquote in the body | ✅ parsed inline, no extra call |"
+    },
+    {
+      "section": "Quoted messages",
+      "text": "Telegram, Discord and Zulip need no extra request. Slack, Matrix and Mattermost\nfetch the referenced message once and cache it for two minutes, because their\nprotocols only carry an id."
+    },
+    {
+      "section": "Interactive questions",
+      "text": "When the agent asks (`ask_user_question`), the question is answered **in the\nchat** instead of only in the Web UI: the harness exposes questions through the\n`user-questions/request` waterfall, and this channel claims the ones belonging\nto its own sessions (anything else falls through to the Web UI).\n\nPlatform support for interactive answers:"
+    },
+    {
+      "section": "Interactive questions",
+      "text": "| Platform | Native controls it offers | In this plugin |\n|---|---|---|\n| Telegram | Inline keyboards (callback buttons, URL buttons, web_app). Rows ≤8, ≤100 buttons | ✅ **Buttons** — `callback_query` + `answerCallbackQuery`, keyboard collapsed after the answer |\n| Discord | Message components: buttons (≤5/row, ≤25/message), select menus, modals. Replies need an interaction ACK within 3 s | ⏳ Text fallback (`1) … 2) …`) |\n| Slack | Block Kit actions: buttons (≤25/block), select menus, overflow, modals. Arrives over Socket Mode — no public URL | ⏳ Text fallback |\n| Mattermost | Interactive message attachments (`actions`), but the click posts to an integration URL | ⏳ Text fallback |\n| Matrix | No buttons; emoji reactions or plain text | ⏳ Text fallback |\n| Zulip | No buttons; reactions and plain text | ⏳ Text fallback |"
+    },
+    {
+      "section": "Interactive questions",
+      "text": "The text fallback works everywhere and needs nothing from the platform: the\nquestion is posted numbered, and a reply of `2` (or the option label) answers it.\nWhile a question is open it owns the next message — typing `2` answers instead of\nstarting a new turn.\n\nApprovals (`user-approval`) are a separate service and are **not** routed to chat\nyet; a tool that needs approval still surfaces in the Web UI."
+    },
+    {
+      "section": "Reliability notes",
+      "text": "Four failure modes are handled explicitly, because each one looked like \"the bot\nis broken\" from the chat side:"
+    },
+    {
+      "section": "Reliability notes",
+      "text": "- **Archived session.** The kernel rejects every step of an archived session\n  (`archived-session-gate`), which surfaces as a `blocked` turn: the message is\n  accepted and answered with silence. The channel detects that, unarchives the\n  session, and falls back to a fresh session only if unarchiving is refused.\n- **Long tool-using turns.** This harness publishes finished step messages\n  rather than raw deltas, so the streaming preview is driven from both. Without\n  that a multi-step turn shows nothing until it ends.\n- **Plugin reloads.** The disposer is registered synchronously and marks the\n  instance dead before stopping adapters. An async effect hands cordis its\n  disposer only after startup resolves, so a reload during startup left the old\n  poller alive: two pollers on one bot token fight over `getUpdates` (409\n  Conflict) and silently eat each other's messages.\n- **Missing model wiring.** `agentOptions` alone leaves the agent without a\n  provider/model at prompt assembly time; `installModelSelection` couples it to\n  both assembly and request routing. Without it a turn ends in milliseconds."
+    },
+    {
+      "section": "Test",
+      "text": "```\nnode --test test/*.test.js\n```"
+    }
+  ],
+  "skipped": []
+}
