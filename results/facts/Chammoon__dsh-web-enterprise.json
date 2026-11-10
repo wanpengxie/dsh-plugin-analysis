@@ -1,0 +1,399 @@
+{
+  "repo": "Chammoon/dsh-web-enterprise",
+  "commit": "380c7f06317119e2bbfe8c7908931e8032f86bf7",
+  "extracted_at": "2026-11-10T09:46:36.358354+00:00",
+  "tree": {
+    "files": 88,
+    "bytes": 1218324,
+    "lines_by_language": {
+      "CSS": 1131,
+      "JSON": 68,
+      "JavaScript": 21044,
+      "Markdown": 51,
+      "Other": 3,
+      "TypeScript": 10455,
+      "YAML": 55
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/core/auth.invariant.js",
+      "lib/core/auth.js",
+      "lib/core/session-access.invariant.js",
+      "lib/core/session-access.js",
+      "lib/host/api-enterprise-remotes.invariant.js",
+      "lib/host/api-enterprise-remotes.js",
+      "lib/host/auth-local.invariant.js",
+      "lib/host/auth-local.js",
+      "lib/host/connection-enterprise.invariant.js",
+      "lib/host/connection-enterprise.js",
+      "lib/host/session-access.js",
+      "lib/host/ui-enterprise.invariant.js",
+      "lib/host/ui-enterprise.js",
+      "lib/index.js",
+      "lib/invariant.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@duiba/dsh-web-enterprise",
+    "version": "0.1.0-rc.5",
+    "description": "dsh enterprise plugin: local-accounts authentication, session ownership/sharing, RBAC, and the enterprise /api carrier layered over the web profile as one out-of-tree bundle",
+    "license": "MIT",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./invariant": "./lib/invariant.js",
+      "./client": "./lib/client.js",
+      "./host/*": "./lib/host/*",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./src/*": "./src/*",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "src",
+      "cordis.patch.yml"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Chammoon/web-enterprise.git"
+    },
+    "dependencies": {
+      "ws": "^8.21.0",
+      "zod": "^4.4.3"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*",
+      "@deepseek-ai/cordis-plugin-loader": "*",
+      "@deepseek-ai/dsh-api-remotes": "*",
+      "@deepseek-ai/dsh-attachment": "*",
+      "@deepseek-ai/dsh-auth": "*",
+      "@deepseek-ai/dsh-client-connection": "*",
+      "@deepseek-ai/dsh-client-runtime": "*",
+      "@deepseek-ai/dsh-client-schema-form": "*",
+      "@deepseek-ai/dsh-client-ui-conversation": "*",
+      "@deepseek-ai/dsh-client-ui-primitives": "*",
+      "@deepseek-ai/dsh-client-ui-settings": "*",
+      "@deepseek-ai/dsh-client-ui-sidebar": "*",
+      "@deepseek-ai/dsh-client-ui-slots": "*",
+      "@deepseek-ai/dsh-client-ui-workspace": "*",
+      "@deepseek-ai/dsh-commands": "*",
+      "@deepseek-ai/dsh-host-apiproxy": "*",
+      "@deepseek-ai/dsh-host-webserver": "*",
+      "@deepseek-ai/dsh-invariants": "*",
+      "@deepseek-ai/dsh-llm": "*",
+      "@deepseek-ai/dsh-session": "*",
+      "@deepseek-ai/dsh-session-access": "*",
+      "@deepseek-ai/dsh-storage-domain": "*",
+      "@deepseek-ai/dsh-tools": "*",
+      "@deepseek-ai/dsh-typert-protocol": "*",
+      "@deepseek-ai/schemastery": "*"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": []
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The duiba enterprise bundle patch: admission control layered over the web\n# profile (dsh-base + dsh-web-app). One out-of-tree package: host halves mount\n# through ./host/* subpath rows, the browser roster finds the merged client\n# bundle through the root row (exports[\"./client\"]).\n#\n# Transport admission (authentication fence, RPC authorization, stream\n# filtering) lives in the enterprise connection carrier; it fails closed when\n# the auth service is absent.\n\n# The stock /api carrier has no admission control; the enterprise carrier\n# below replaces it wholesale.\n- id: connection\n  disabled: true\n\n- insert:\n    # enterprise: /api carrier with the authentication fence, pre-dispatch RPC\n    # authorization policies, index-read visibility projection, ownership\n    # ledger hooks, and per-principal stream filtering.\n    - id: connection-enterprise\n      name: '@duiba/dsh-web-enterprise/host/connection-enterprise.js'\n      inject: [webRuntime]\n      config:\n        trustedHosts: !!js ctx.webRuntime.trustedHosts\n\n    # Local accounts: scrypt passwords, cookie sessions, the /login page, and\n    # the self-serve auth routes. `bootstrapAdminPassword` is optional — when\n    # omitted on a fresh domain, a one-time password is generated and logged.\n    - id: auth-local\n      name: '@duiba/dsh-web-enterprise/host/auth-local.js'\n      config:\n        sessionIdleSeconds: 604800\n        sessionAbsoluteSeconds: 2592000\n        bootstrapAdminPassword: !!js process.env.DSH_BOOTSTRAP_ADMIN_PASSWORD\n\n    # Generated browser Remote descriptors for the optional Host providers.\n    - id: enterprise-remotes\n      name: '@duiba/dsh-web-enterprise/host/api-enterprise-remotes.js'\n\n    # The enterprise browser surface: identity badge with sign-out plus the\n    # account, sharing, and RBAC controls under the standard Settings page.\n    - id: ui-enterprise\n      name: '@duiba/dsh-web-enterprise/host/ui-enterprise.js'\n\n    # Session visibility: the ownership ledger and group-namespaced sharing.\n    # Composed after auth-local so the write-verb guard registers against a\n    # settled auth seam.\n    - id: session-access\n      name: '@duiba/dsh-web-enterprise/host/session-access.js'\n      config:\n        personalWorkspaceRoot: !!js dshHomePath('personal-workspaces')\n\n    # The root row: no-op on the host, but it is how the client roster scan\n    # discovers the merged browser bundle (exports[\"./client\"]).\n    - id: enterprise-client\n      name: '@duiba/dsh-web-enterprise'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_BOOTSTRAP_ADMIN_PASSWORD",
+      "kind": "env",
+      "where": "cordis.patch.yml:33"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/paralleldrive/cuid",
+      "where": "lib/client.js:1109"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/paralleldrive/cuid",
+      "where": "lib/client.js:1769"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/paralleldrive/cuid",
+      "where": "lib/client.js:3017"
+    },
+    {
+      "host": "json-schema.org",
+      "url": "https://json-schema.org/draft/2020-12/schema",
+      "where": "lib/client.js:3625"
+    },
+    {
+      "host": "json-schema.org",
+      "url": "http://json-schema.org/draft-07/schema#",
+      "where": "lib/client.js:3626"
+    },
+    {
+      "host": "json-schema.org",
+      "url": "http://json-schema.org/draft-04/schema#",
+      "where": "lib/client.js:3627"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/paralleldrive/cuid",
+      "where": "lib/client.js:4340"
+    },
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "lib/client.js:6131"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com",
+      "where": "lib/client.js:6431"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "lib/client.js:6437"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "where": "lib/client.js:6623"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com/blog/harness-architecture",
+      "where": "lib/client.js:6629"
+    },
+    {
+      "host": "docs.deepseek.com",
+      "url": "https://docs.deepseek.com/harness/plugins",
+      "where": "lib/client.js:6633"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com/blog/harness-architecture",
+      "where": "lib/client.js:6642"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com/blog/harness-architecture\\",
+      "where": "lib/client.js:7095"
+    },
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "lib/client.js:10088"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/paralleldrive/cuid",
+      "where": "lib/client.js:10758"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/paralleldrive/cuid",
+      "where": "lib/client.js:11277"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/paralleldrive/cuid",
+      "where": "lib/client.js:12335"
+    },
+    {
+      "host": "json-schema.org",
+      "url": "https://json-schema.org/draft/2020-12/schema",
+      "where": "lib/client.js:12877"
+    },
+    {
+      "host": "json-schema.org",
+      "url": "http://json-schema.org/draft-07/schema#",
+      "where": "lib/client.js:12878"
+    },
+    {
+      "host": "json-schema.org",
+      "url": "http://json-schema.org/draft-04/schema#",
+      "where": "lib/client.js:12879"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/paralleldrive/cuid",
+      "where": "lib/client.js:13536"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "lib/host/auth-local.js:1835"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "lib/host/auth-local.js:1905"
+    },
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "lib/host/connection-enterprise.js:65"
+    },
+    {
+      "host": "${authority",
+      "url": "http://${authority",
+      "where": "lib/host/connection-enterprise.js:129"
+    },
+    {
+      "host": "${entry",
+      "url": "https://${entry",
+      "where": "lib/host/connection-enterprise.js:161"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Chammoon/web-enterprise.git",
+      "where": "package.json:25"
+    },
+    {
+      "host": "${authority",
+      "url": "http://${authority",
+      "where": "src/client/connection-enterprise/api-request-trust.ts:34"
+    },
+    {
+      "host": "${entry",
+      "url": "https://${entry",
+      "where": "src/client/connection-enterprise/api-request-trust.ts:69"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com",
+      "where": "src/client/connection-enterprise/client/fixture.ts:81"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "src/client/connection-enterprise/client/fixture.ts:88"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "where": "src/client/connection-enterprise/client/fixture.ts:259"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com/blog/harness-architecture",
+      "where": "src/client/connection-enterprise/client/fixture.ts:265"
+    },
+    {
+      "host": "docs.deepseek.com",
+      "url": "https://docs.deepseek.com/harness/plugins",
+      "where": "src/client/connection-enterprise/client/fixture.ts:269"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com/blog/harness-architecture",
+      "where": "src/client/connection-enterprise/client/fixture.ts:279"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com/blog/harness-architecture",
+      "where": "src/client/connection-enterprise/client/fixture.ts:549"
+    },
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "src/client/connection-enterprise/client/rpc.ts:11"
+    },
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "src/client/connection-enterprise/http-bridge.ts:69"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "src/host/auth-local/http.ts:86"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "src/host/auth-local/http.ts:137"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "ws": "^8.21.0",
+      "zod": "^4.4.3"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 8,
+    "pushed_at": "2026-08-23T03:59:30Z",
+    "created_at": "2026-08-23T03:54:48Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/invariant.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "web-enterprise — 给你的 DeepSeek Harness 装上企业级门禁",
+      "text": "> 一条命令，把个人版 Harness 变成多人可用的企业工作台：账号登录、权限分级、私有工作区、共享协作，全部开箱即用。"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "原版 dsh 的 Web 界面默认\"裸奔\"——谁打开网址谁就是主人。**web-enterprise** 在不修改 dsh 源码一行的情况下，为你的部署加上完整的准入控制："
+    },
+    {
+      "section": "为什么需要它",
+      "text": "- 🚪 **认证围墙** —— 所有 `/api` 请求先过登录态校验，未认证一律 401，fail-closed 设计：认证服务不在，门就不开\n- 👤 **本地账号体系** —— scrypt 加密密码、cookie 会话、优雅的登录页，首个管理员密码开箱即得（可预设，也可自动生成并打印到日志）\n- 🏢 **每人一个私有工作区** —— Personal Workspace 物理隔离，你的会话你的数据，别人看不见也摸不着\n- 🤝 **群组共享协作** —— 组命名空间的会话共享，独占写入（sole-writer）语义，协作不踩脚\n- 🛡️ **精细权限（RBAC）** —— 管理员/普通用户/自定义角色，从\"谁能看哪个会话\"到\"谁能进管理后台\"，粒度随心\n- ⚙️ **企业管理后台** —— 设置页新增\"企业管理\"专区：账户与安全、群组会话、管理后台，改密码、踢会话、管用户，全在浏览器里点几下\n- 🔌 **零侵入安装** —— 不改配置、不碰源码、不需要 npm 发布，一条命令装上，一条命令卸掉\n- 🔄 **自动跟随 dsh 版本** —— 运行时直接复用你已安装的 dsh 代码，dsh 升级插件自动适配，永不出现双副本冲突"
+    },
+    {
+      "section": "安装（一条命令）",
+      "text": "```bash\ndsh plugin --profile web add github:Chammoon/web-enterprise\n```\n\n重启 `dsh web` 即生效。首次启动前设置管理员密码（可选，不设则自动生成并打印到日志）：\n\n```bash\nexport DSH_BOOTSTRAP_ADMIN_PASSWORD=你的管理员密码\ndsh web   # 引导账号为 admin\n```"
+    },
+    {
+      "section": "卸载 / 更新",
+      "text": "```bash\ndsh plugin --profile web remove @duiba/dsh-web-enterprise\ndsh plugin --profile web update @duiba/dsh-web-enterprise\n```"
+    },
+    {
+      "section": "工作原理",
+      "text": "- `cordis.patch.yml`（由 `dsh.bundle.patch` 声明）禁用原生 `/api` 载体行，插入：企业级 carrier、本地账号、enterprise remotes、企业 UI、会话访问控制，以及一个供浏览器 roster 扫描发现客户端包的根行\n- Host 半边通过 `./host/*` 子路径导出挂载；三个浏览器半边（carrier / remotes / UI）合并为单一客户端包 `lib/client.js`，在页面模块表中注册后按 carrier → remotes → UI 顺序挂载\n- `@deepseek-ai/*` 依赖在运行时通过 dsh 安装自身的符号链接解析（`~/.dsh/profiles/node_modules`），因此插件始终与你运行中的 dsh 版本一致；仅 `ws` 与 `zod` 来自 npm\n- `lib/` 预构建产物直接入库，安装时无构建步骤，也不触发 pnpm 的构建脚本白名单"
+    },
+    {
+      "section": "重新构建",
+      "text": "`lib/` 为预构建产物。修改 `src/` 后，需在仍保留 enterprise 包的 dsh monorepo 检出中构建（`tsc -b` + 各包的 `tsdown` 双面构建），再拷回：各包 `lib/index.js` → `lib/host/*.js`，`packages/core/{auth,session-access}/lib/index.js` → `lib/core/*.js`，三个 client bundle 拼接加合成入口 → `lib/client.js`（见其尾部注释）。"
+    },
+    {
+      "section": "English Summary",
+      "text": "Out-of-tree DeepSeek Harness plugin: enterprise admission control (local accounts, per-user Personal Workspace, group sharing, RBAC, admin console) layered over the `web` profile. One-command install (`dsh plugin --profile web add github:Chammoon/web-enterprise`), zero intrusion, no npm publish required; `@deepseek-ai/*` imports resolve against the running dsh installation at runtime."
+    }
+  ],
+  "skipped": []
+}

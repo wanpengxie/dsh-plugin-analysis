@@ -1,0 +1,267 @@
+{
+  "repo": "CroissanTTs/dsh-bailian-models",
+  "commit": "53cf053be605ea1cee32a1043ccf5346b71a1e9a",
+  "extracted_at": "2026-11-10T09:57:52.229028+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 92342,
+    "lines_by_language": {
+      "JSON": 47,
+      "JavaScript": 1308,
+      "Markdown": 390,
+      "Other": 24,
+      "YAML": 471
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "PUBLISHING.md",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "package.json",
+      "scripts/build-catalog.mjs",
+      "scripts/test-autoadapt.mjs",
+      "scripts/validate.mjs",
+      "src/catalog.mjs",
+      "src/index.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-bailian-models",
+    "version": "1.5.0",
+    "description": "Alibaba Bailian (DashScope) model catalog preset + auto-adapter for DeepSeek Harness — reasoning effort levels, thinking budgets, context windows, auto-adaptation of existing Bailian routes, a configurable context ceiling",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "bailian",
+      "dashscope",
+      "qwen",
+      "alibaba",
+      "llm"
+    ],
+    "license": "MIT",
+    "type": "module",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/CroissanTTs/dsh-bailian-models.git"
+    },
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "src/",
+      "README.md",
+      "README.zh.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {},
+    "scripts": {
+      "build": "node scripts/build-catalog.mjs",
+      "validate": "node scripts/validate.mjs",
+      "test": "node scripts/validate.mjs && node scripts/test-autoadapt.mjs"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-llm-pi-ai": "^0.1.5-rc.1",
+      "js-yaml": "^4.1.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-bailian-models — 阿里云百炼（DashScope）模型目录预置\n#\n# 工作机制：dsh-base 组合里常驻挂载了一行休眠的 `@deepseek-ai/dsh-llm-pi-ai`\n#（id: llm-pi-ai，无 config）。本 patch 按 id 覆盖该行的整个 config，\n# 把 `bailian` 预置路由注入组合的 base 层；用户在 settings.yaml / 模型设置页\n# 的 `llm-pi-ai:` 分节仍按 provider 键逐层合并，可以覆盖这里的任何字段。\n# `name` 行是防漂移护栏：若未来 base 组合在该 id 上换了别的插件，本 patch\n# 会被跳过并告警，而不是静默写坏配置。\n#\n# 推理强度适配按百炼官方文档分四档（见 README 的模型速查表）：\n#   A. 等级型：enable_thinking + reasoning_effort（qwen3.8 / glm-5.x / deepseek-v4）\n#   B. 预算型：enable_thinking + thinking_budget，档位映射 token 预算（qwen3.5-3.7、qwen3-max、qwen-plus）\n#   C. 开关型：仅 enable_thinking 开/关（deepseek-v3.x、kimi-k2.5/2.6、qwen-flash/turbo）\n#   D. 仅思考型：始终思考、不可调节，声明为非推理模型以免误发参数（kimi-k3、deepseek-r1、MiniMax-M2.x 等）\n#\n# 数据来源：阿里云百炼官方文档各模型信息页（上下文/最大输出/思维链上限）与\n# 《深度思考模型的用法》支持矩阵；GLM 的 reasoning_effort 取值取自 GLM 系列页。\n# 逐模型出处见 README.md。\n\n# 第二行：挂载本包的自动适配器（src/index.js）。它监听 llm-pi-ai 设置分节，\n# 自动识别 baseURL 指向百炼的已有路由并补齐缺失的方言/容量/推理档位声明，\n# 用户手写的字段一律保留。不需要可在 profile 用户 patch 里禁用该行。\n- insert:\n    - id: bailian-models-autoadapt\n      name: dsh-bailian-models\n      config:\n        autoAdapt: true\n\n- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      bailian:\n        displayName: 百炼 DashScope\n        # 凭据引用：按请求从环境变量解析，不落盘。改用其它变量名请在设置里覆盖。\n        apiKeyEnv: DASHSCOPE_API_KEY\n        api: openai-completions\n        # 华北2（北京）标准端点。新加坡：https://dashscope-intl.aliyuncs.com/compatible-mode/v1\n        # 美国（弗吉尼亚）：https://dashscope-us.aliyuncs.com/compatible-mode/v1\n        baseURL: https://dashscope.aliyuncs.com/compatible-mode/v1\n        defaultContextWindow: 262144\n        defaultMaxTokens: 32768\n        compat:\n          # pi-ai 不认识 dashscope 域名，必须显式声明，否则会按 OpenAI 默认方言错配。\n          thinkingFormat: qwen\n          supportsStore: false\n          supportsDeveloperRole: false\n          supportsReasoningEffort: false\n        # 预算型模型的档位 → thinking_budget token 映射（路由级，逐模型按 maxTokens 钳制）。\n        thinkingBudgets:\n          minimal: 1024\n          low: 4096\n          medium: 16384\n          high: 65536\n        models:\n          # ── A. 等级型：reasoning_effort ─────────────────────────────\n          # Qwen3.8 系列：官方支持 low / medium / xhigh（默认 xhigh）；\n          # reasoning_effort 与 thinking_budget 互斥，故不配预算字段。\n          - id: qwen3.8-max\n            name: Qwen3.8 Max\n            contextWindow: 1000000\n            maxTokens: 131072\n            input: [text, image]\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              low: low\n              medium: medium\n              xhigh: xhigh\n          - id: qwen3.8-max-0902\n            name: Qwen3.8 Max (0902 快照)\n            contextWindow: 1000000\n            maxTokens: 131072\n            input: [text, image]\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              low: low\n              medium: medium\n              xhigh: xhigh\n          - id: qwen3.8-flash\n            name: Qwen3.8 Flash\n            contextWindow: 1000000\n            maxTokens: 131072\n            input: [text, image]\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              low: low\n              medium: medium\n              xhigh: xhigh\n          # GLM-5.3：官方只认 low / high / max，且**不支持关闭思考**。\n          # 文档说传 enable_thinking=false「不会生效」，线上实测是直接 400\n          # （InternalError.Algo.InvalidParameter: The value of the enable_thinking\n          # parameter is restricted）。所以这里做两件事：\n          #  1. 不声明 off —— 声明了就等于承诺一个端点必定拒绝的请求；\n          #  2. 模型级 thinkingFormat 从路由的 qwen 覆盖为 openai，让 pi-ai 走\n          #     「只在选了档位时发 reasoning_effort」那条分支：未选档位时**完全不发**\n          #     enable_thinking，走模型默认（默认即思考模式），因此不会踩到 400。\n          # 实测档位确实在调深度（难题：low≈10 / high≈59 / max≈686 思考 token）。\n          - id: glm-5.3\n            name: GLM-5.3\n            contextWindow: 1000000\n            maxTokens: 131072\n            compat:\n              supportsReasoningEffort: true\n              thinkingFormat: openai\n            reasoningEfforts:\n              low: low\n              high: high\n              max: max\n          # GLM-5.2 系列：官方文档取值 none~max（none 由 off 档覆盖）。\n          - id: glm-5.2\n            name: GLM-5.2\n            contextWindow: 1048576\n            maxTokens: 131072\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n              xhigh: xhigh\n              max: max\n          - id: glm-5.2-us\n            name: GLM-5.2 (US)\n            contextWindow: 1048576\n            maxTokens: 131072\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n              xhigh: xhigh\n              max: max\n          - id: glm-5.2-fast-preview\n            name: GLM-5.2 Fast Preview\n            contextWindow: 1048576\n            maxTokens: 131072\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n              xhigh: xhigh\n              max: max\n          # GLM-5.1 / GLM-5：官方取值 none~xhigh（不支持 max）。\n          - id: glm-5.1\n            name: GLM-5.1\n            contextWindow: 202745\n            maxTokens: 131072\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n              xhigh: xhigh\n          - id: glm-5\n            name: GLM-5\n            contextWindow: 202752\n            maxTokens: 16384\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n              xhigh: xhigh\n          # DeepSeek V4 系列：reasoning_effort 支持 high / max（pi-ai 目录口径）。\n          - id: deepseek-v4-pro\n            name: DeepSeek V4 Pro\n            contextWindow: 1000000\n            maxTokens: 393216\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              high: high\n              max: max\n          - id: deepseek-v4-pro-0813\n            name: DeepSeek V4 Pro (0813 快照)\n            contextWindow: 1000000\n            maxTokens: 393216\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              high: high\n              max: max\n          - id: deepseek-v4-flash\n            name: DeepSeek V4 Flash\n            contextWindow: 1000000\n            maxTokens: 393216\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              high: high\n              max: max\n          - id: deepseek-v4-flash-0731\n            name: DeepSeek V4 Flash (0731 快照)\n            contextWindow: 1000000\n            maxTokens: 393216\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              off:\n              high: high\n              max: max\n          # DeepSeek V4.1 Flash（2026-09-13 上线）。官方文档写 reasoning_effort 取\n          # “1～100 的整数”，但线上 compatible-mode 端点实测**拒绝整数**，只认枚举\n          # minimal/low/medium/high/xhigh/max/ultra。\n          #\n          # ⚠️ harness 的档位上限是 7，且 off 占其中一格（pi-ai 的\n          # EXTENDED_THINKING_LEVELS = off/minimal/low/medium/high/xhigh/max，\n          # getSupportedThinkingLevels 会把未声明档位剔除）。所以“不要 off、minimal→ultra\n          # 正好七档”在 harness 里做不到：只能是「off+6 档」或「无 off、6 档」。\n          # 官方那七级枚举里必然要丢掉一级。\n          #\n          # 本文件选择：不声明 off（滑动条最低档 = minimal），保留官方最低档 minimal，\n          # 把 max 映射到官方最高档 ultra 用满上限 —— 等于丢掉高位的 max、留下低位。\n          # 代价：该模型不可关闭思考（实测 enable_thinking:false 确实能关，属主动取舍）。\n          # 想恢复“可关思考”，给 reasoningEfforts 补一行空的 `off:` 即可，此时为 7 档\n          # 但最高只见 xhigh。\n          # 容量与模态取自官方模型元数据接口。\n          - id: deepseek-v4.1-flash\n            name: DeepSeek V4.1 Flash\n            contextWindow: 1000000\n            maxTokens: 393216\n            input: [text, image]\n            compat:\n              supportsReasoningEffort: true\n            reasoningEfforts:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n              xhigh: xhigh\n              max: ultra\n          # ── B. 预算型：档位 → thinking_budget ───────────────────────\n          # Qwen3.7 系列（思维链上限 262144）\n          - id: qwen3.7-max\n            name: Qwen3.7 Max\n            contextWindow: 1000000\n            maxTokens: 131072\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          - id: qwen3.7-plus\n            name: Qwen3.7 Plus\n            contextWindow: 1000000\n            maxTokens: 131072\n            input: [text, image]\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          - id: qwen3.7-flash\n            name: Qwen3.7 Flash\n            contextWindow: 1000000\n            maxTokens: 131072\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          # Qwen3.6 系列\n          - id: qwen3.6-plus\n            name: Qwen3.6 Plus\n            contextWindow: 1000000\n            maxTokens: 65536\n            input: [text, image]\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          - id: qwen3.6-flash\n            name: Qwen3.6 Flash\n            contextWindow: 1000000\n            maxTokens: 65536\n            input: [text, image]\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          # Qwen3.5 系列（思维链上限 81920）\n          - id: qwen3.5-plus\n            name: Qwen3.5 Plus\n            contextWindow: 1000000\n            maxTokens: 65536\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          - id: qwen3.5-flash\n            name: Qwen3.5 Flash\n            contextWindow: 1000000\n            maxTokens: 65536\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          # Qwen3 商业版（混合思考，默认关闭；思维链上限 81920）\n          - id: qwen3-max\n            name: Qwen3 Max\n            contextWindow: 262144\n            maxTokens: 65536\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          - id: qwen-plus\n            name: Qwen Plus\n            contextWindow: 1000000\n            maxTokens: 32768\n            compat:\n              supportsThinkingTokenBudget: true\n              thinkingTokenBudgetField: thinking_budget\n            reasoningEfforts:\n              off:\n              minimal: minimal\n              low: low\n              medium: medium\n              high: high\n          # ── C. 开关型：仅开/关思考 ──────────────────────────────────\n          # qwen-flash / qwen-turbo 的 thinking_budget 上限未见官方记载，稳妥起见只给开关。\n          - id: qwen-flash\n            name: Qwen Flash\n            contextWindow: 1000000\n            maxTokens: 32768\n            reasoningEfforts:\n              off:\n              high: high\n          - id: qwen-turbo\n            name: Qwen Turbo\n            contextWindow: 131072\n            maxTokens: 16384\n            reasoningEfforts:\n              off:\n              high: high\n          # DeepSeek V3.x（混合思考，默认关闭）\n          - id: deepseek-v3.2\n            name: DeepSeek V3.2\n            contextWindow: 131072\n            maxTokens: 65536\n            reasoningEfforts:\n              off:\n              high: high\n          - id: deepseek-v3.2-exp\n            name: DeepSeek V3.2 Exp\n            contextWindow: 131072\n            maxTokens: 65536\n            reasoningEfforts:\n              off:\n              high: high\n          - id: deepseek-v3.1\n            name: DeepSeek V3.1\n            contextWindow: 131072\n            maxTokens: 65536\n            reasoningEfforts:\n              off:\n              high: high\n          # Kimi K2.5 / K2.6（百炼部署，混合思考，默认关闭）\n          - id: kimi-k2.6\n            name: Kimi K2.6\n            contextWindow: 262144\n            maxTokens: 16384\n            input: [text, image]\n            reasoningEfforts:\n              off:\n              high: high\n          - id: kimi-k2.5\n            name: Kimi K2.5\n            contextWindow: 262144\n            maxTokens: 16384\n            input: [text, image]\n            reasoningEfforts:\n              off:\n              high: high\n          # ── D. 仅思考型：始终思考，声明为非推理以免误发 enable_thinking ──\n          # 这些模型永远先思考再回复；thinking 内容仍会正常显示，只是没有档位可调。\n          - id: kimi-k3\n            name: Kimi K3\n            contextWindow: 1048576\n            maxTokens: 1048576\n          - id: kimi-k2.7-code\n            name: Kimi K2.7 Code\n            contextWindow: 262144\n            maxTokens: 16384\n            input: [text, image]\n          # kimi-k2-thinking 的百炼上下文未见单列，按 K2 家族 262144 取值。\n          - id: kimi-k2-thinking\n            name: Kimi K2 Thinking\n            contextWindow: 262144\n            maxTokens: 16384\n          - id: MiniMax-M2.5\n            name: MiniMax M2.5\n            contextWindow: 204800\n            maxTokens: 32768\n          - id: MiniMax-M2.1\n            name: MiniMax M2.1\n            contextWindow: 204800\n            maxTokens: 32768\n          - id: deepseek-r1\n            name: DeepSeek R1\n            contextWindow: 131072\n            maxTokens: 16384\n          - id: deepseek-r1-0528\n            name: DeepSeek R1 (0528)\n            contextWindow: 131072\n            maxTokens: 16384\n          - id: qwq-plus\n            name: QwQ Plus\n            contextWindow: 131072\n            maxTokens: 8192\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DASHSCOPE_API_KEY",
+      "kind": "env",
+      "where": "cordis.patch.yml:32"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "dashscope-intl.aliyuncs.com",
+      "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      "where": "cordis.patch.yml:38"
+    },
+    {
+      "host": "dashscope-us.aliyuncs.com",
+      "url": "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+      "where": "cordis.patch.yml:39"
+    },
+    {
+      "host": "dashscope.aliyuncs.com",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "where": "cordis.patch.yml:40"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CroissanTTs/dsh-bailian-models.git",
+      "where": "package.json:19"
+    },
+    {
+      "host": "dashscope.aliyuncs.com",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "where": "scripts/test-autoadapt.mjs:62"
+    },
+    {
+      "host": "dashscope.aliyuncs.com",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "where": "scripts/test-autoadapt.mjs:115"
+    },
+    {
+      "host": "dashscope.aliyuncs.com",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "where": "scripts/test-autoadapt.mjs:141"
+    },
+    {
+      "host": "api.openai.com",
+      "url": "https://api.openai.com/v1",
+      "where": "scripts/test-autoadapt.mjs:187"
+    },
+    {
+      "host": "dashscope.aliyuncs.com",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "where": "scripts/test-autoadapt.mjs:188"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/dsh-llm-pi-ai": "^0.1.5-rc.1",
+      "js-yaml": "^4.1.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-09-20T08:54:09Z",
+    "created_at": "2026-09-13T08:16:03Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "scripts/build-catalog.mjs",
+    "scripts/test-autoadapt.mjs",
+    "scripts/validate.mjs",
+    "src/catalog.mjs",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-bailian-models",
+      "text": "English | [中文](README.zh.md)\n\nA DeepSeek Harness (DSH) plugin for **Alibaba Bailian (DashScope)**:"
+    },
+    {
+      "section": "dsh-bailian-models",
+      "text": "1. **Preset route**: a ready-to-use `bailian` provider route with a built-in catalog of **36 major text models** — context windows, max output tokens, and per-family reasoning effort controls (`enable_thinking` / `reasoning_effort` / `thinking_budget`);\n2. **Auto-adapter**: detects any of your **existing** provider routes whose `baseURL` points at Bailian and fills in the missing dialect, reasoning levels, and capacity declarations — fields you wrote yourself are always kept."
+    },
+    {
+      "section": "dsh-bailian-models",
+      "text": "Once installed, Bailian models appear in the DSH model picker with working reasoning-effort levels — no hand-written `settings.yaml` required."
+    },
+    {
+      "section": "Why",
+      "text": "DSH's built-in pi-ai adapter does not recognize the `dashscope.aliyuncs.com` endpoint: requests fall back to the plain OpenAI dialect (wrong `store`/`developer` fields, no `enable_thinking`), and model entries carry no context-window or reasoning metadata — so reasoning strength is fixed and context is unknown. This bundle supplies the correct dialect, effort levels, and capacities for every listed model."
+    },
+    {
+      "section": "Install",
+      "text": "**DSH Desktop / Web (community market)**: search for `dsh-bailian-models` in the market and confirm the install.\n\n**CLI**:\n\n```bash\ndsh plugin --profile web add dsh-bailian-models\n```\n\nSet your API key (referenced by env var name only — keys are never stored by this plugin):\n\n```bash\nexport DASHSCOPE_API_KEY=sk-...\n```\n\nYou can later edit the `bailian` route in DSH settings (Models page) to use a different env var name or regional endpoint."
+    },
+    {
+      "section": "Auto-adapting existing routes",
+      "text": "Beyond the preset `bailian` route, the bundle mounts an auto-adapter: it watches the `llm-pi-ai` settings section, and any existing route whose `baseURL` hostname matches a Bailian endpoint (`dashscope.aliyuncs.com` / `dashscope-intl` / `dashscope-us` / `*.maas.aliyuncs.com`) gets filled in automatically:"
+    },
+    {
+      "section": "Auto-adapting existing routes",
+      "text": "- route-level dialect compat (`thinkingFormat: qwen`, `supportsStore: false`, `supportsDeveloperRole: false`);\n- `contextWindow` / `maxTokens` / `input` / `reasoningEfforts` / model-level `compat` for models known to the bundled catalog (snapshot suffixes like `-0902` or `-2026-05-20` fall back to the parent model);\n- the route-level `thinkingBudgets` level map when budget-type models are present."
+    },
+    {
+      "section": "Auto-adapting existing routes",
+      "text": "**Only gaps are filled — values you wrote are never overwritten**; unknown model ids are left untouched. Every write is validated against `dsh-llm-pi-ai`'s own schema first; if a write is rejected, your config stays as-is and a warning is logged. Disable per profile by disabling the `bailian-models-autoadapt` patch row, or set its `config.autoAdapt: false`; self-hosted gateways can be added via `config.extraHosts`."
+    },
+    {
+      "section": "Auto-adapting existing routes",
+      "text": "> Auto-filled fields land in the **user layer** of your settings (`settings.yaml`), so they survive uninstalling the plugin (harmlessly); the preset `bailian` route disappears with uninstall."
+    },
+    {
+      "section": "How reasoning levels map to the wire",
+      "text": "Bailian model families speak incompatible thinking dialects; the bundle adapts each one:"
+    },
+    {
+      "section": "How reasoning levels map to the wire",
+      "text": "| Family type | Wire params | DSH level behavior |\n|---|---|---|\n| A. Effort levels | `enable_thinking` + `reasoning_effort` | Selecting a level sends that effort; Off disables thinking |\n| B. Budgets | `enable_thinking` + `thinking_budget` | Levels map to token budgets: minimal 1024 / low 4096 / medium 16384 / high 65536 (clamped per model) |\n| C. Toggle | `enable_thinking` only | Off / High (High = thinking on) |\n| D. Always-thinking | none (model always thinks) | No levels offered — sending any toggle risks a 400; reasoning content still displays |"
+    },
+    {
+      "section": "How reasoning levels map to the wire",
+      "text": "> With no level selected, type A/B/C models explicitly send `enable_thinking: false` (predictable cost). Type D models are unaffected."
+    },
+    {
+      "section": "Model table",
+      "text": "All capacities from the official Alibaba Bailian docs. Context / max output in tokens."
+    },
+    {
+      "section": "Model table",
+      "text": "**A. Effort levels** — qwen3.8-max, qwen3.8-max-0902, qwen3.8-flash (off/low/medium/xhigh, 1M ctx, 131k out, text+image) · glm-5.3 (low/high/max — thinking cannot be disabled; 1M ctx, 131k out) · glm-5.2, glm-5.2-us, glm-5.2-fast-preview (off…max, 1,048,576 ctx) · glm-5.1, glm-5 (off…xhigh) · deepseek-v4-pro, deepseek-v4-pro-0813, deepseek-v4-flash, deepseek-v4-flash-0731 (off/high/max, 1M ctx, 393,216 out) · deepseek-v4.1-flash (minimal…max — six levels, no `off`; 1M ctx, 393,216 out, text+image)."
+    },
+    {
+      "section": "Model table",
+      "text": "> **deepseek-v4.1-flash levels**: the official docs say `reasoning_effort` takes an integer 1–100, but the live `compatible-mode` endpoint rejects integers (`'reasoning_effort' must be an object with 'effort' field or a String`) and only accepts the enum `minimal/low/medium/high/xhigh/max/ultra` — `ultra` being one level beyond the documented set.\n>\n> ⚠️ The harness caps the level list at **7**, and `off` occupies one of those slots (pi-ai's `EXTENDED_THINKING_LEVELS = off/minimal/low/medium/high/xhigh/max`; undeclared levels are dropped). The official enum has exactly seven values, so \"drop `off`, minimal→ultra = seven levels\" is **physically impossible** in the harness — that would be eight. The choice is \"off + 6 levels\" or \"no off, 6 levels\". This catalog picks the latter: the slider's floor is `minimal` (thinking cannot be disabled for this model), and `max` maps to the official top tier `ultra` — i.e. the high `max` is sacrificed to keep the low `minimal`. `enable_thinking:false` does genuinely disable thinking (tested), so this is a deliberate trade-off; to restore \"can disable thinking\", add an empty `off:` line to `reasoningEfforts` (the top then becomes `xhigh`).\n>\n> **gl"
+    },
+    {
+      "section": "Model table",
+      "text": "**B. Budgets** — qwen3.7-max/plus/flash, qwen3.6-plus/flash, qwen3.5-plus/flash, qwen3-max, qwen-plus (off/minimal/low/medium/high).\n\n**C. Toggle** — qwen-flash, qwen-turbo, deepseek-v3.2, deepseek-v3.2-exp, deepseek-v3.1, kimi-k2.6, kimi-k2.5.\n\n**D. Always-thinking** — kimi-k3, kimi-k2.7-code, kimi-k2-thinking, MiniMax-M2.5, MiniMax-M2.1, deepseek-r1, deepseek-r1-0528, qwq-plus.\n\nThe full per-model table with sources lives in [README.zh.md](README.zh.md#模型速查表)."
+    },
+    {
+      "section": "Customizing",
+      "text": "The bundle writes into the composition **base layer**; anything you put in the `llm-pi-ai:` section of `~/.dsh/settings.yaml` (or edit in the Models page) merges over it per provider key and applies without a restart:\n\n```yaml\nllm-pi-ai:\n  providers:\n    bailian:\n      baseURL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1  # Singapore"
+    },
+    {
+      "section": "Customizing",
+      "text": "> ⚠️ **Careful when editing the Bailian list on the Models page**: the GUI writes the resolved list back into `settings.yaml` as `models`, replacing the base-layer catalog (this is how a 37-model route shrinks to a handful). The auto-adapter restores the missing fields by id on the next settings change, so effort levels survive — but if you want the whole catalog, delete that `models:` block from the user layer."
+    },
+    {
+      "section": "Customizing",
+      "text": "**Uninstall** removes the base-layer route; any user-layer overrides of `bailian` stay harmless but inert — delete them too if you like."
+    },
+    {
+      "section": "How it works (for maintainers)",
+      "text": "1. **Pure-config preset**: `package.json`'s `dsh.bundle.patch` points to [`cordis.patch.yml`](cordis.patch.yml), which overrides (by `id`) the dormant `llm-pi-ai` row in the `dsh-base` composition, injecting the `bailian` route into the base layer. The `name` field is a drift guard: if a future base composition mounts a different plugin under that id, this patch is skipped with a warning instead of silently corrupting configuration.\n2. **Auto-adapter** (`src/index.js`, mounted by the same patch's `insert` row): listens to `settings/document-updated`, detects Bailian routes by hostname, and fills gaps via an idempotent pure function (`computeRoutePatch`). The model catalog is generated from `cordis.patch.yml` (`npm run build` → `src/catalog.mjs`); the YAML is the single source of truth. Zero runtime dependencies."
+    },
+    {
+      "section": "How it works (for maintainers)",
+      "text": "Serialization is done by `@deepseek-ai/dsh-llm-pi-ai` (pi-ai runtime): with the `qwen` thinking dialect it sends `enable_thinking` / `reasoning_effort` / `thinking_budget`, and reasoning streams back via `reasoning_content`.\n\nValidate after editing the patch:\n\n```bash\nnpm install\nnpm test   # schema-validates cordis.patch.yml + catalog sync + auto-adapter behavior (22 assertions)\n```"
+    },
+    {
+      "section": "Platform constraints worth knowing",
+      "text": "- Thinking mode requires streaming — DSH always streams, so this is a non-issue.\n- `reasoning_effort` and `thinking_budget` are **mutually exclusive** on the qwen3.8 family, hence no budget levels on type-A Qwen models.\n- kimi-k3, deepseek-r1, MiniMax-M2.x, qwq-plus etc. are **always-thinking** models; thinking cannot be disabled — a platform behavior, not a plugin defect.\n- The bundle cannot see deprecations; if Bailian retires a model, delete its entry in settings."
+    },
+    {
+      "section": "Contributing",
+      "text": "Add or fix a model by editing [`cordis.patch.yml`](cordis.patch.yml): copy the entry shape of its family and attach a link to the official Bailian doc page for the numbers. Run `npm run validate` before submitting."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

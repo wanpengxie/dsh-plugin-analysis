@@ -1,0 +1,609 @@
+{
+  "repo": "CC19990113/dsh-plugin-sessiongraph",
+  "commit": "1844cf4b68a5e9753144300e7f6617fe9532f38d",
+  "extracted_at": "2026-11-10T09:38:30.183246+00:00",
+  "tree": {
+    "files": 118,
+    "bytes": 1205583,
+    "lines_by_language": {
+      "JSON": 696,
+      "JavaScript": 1257,
+      "Markdown": 661,
+      "Other": 687,
+      "Rust": 4551,
+      "Shell": 137,
+      "TOML": 31,
+      "TypeScript": 19947,
+      "YAML": 1719
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "DESIGN.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "crates/sessiongraph-core/Cargo.lock",
+      "crates/sessiongraph-core/Cargo.toml",
+      "crates/sessiongraph-core/build.rs",
+      "package.json",
+      "packages/bundle/cordis.patch.yml",
+      "packages/bundle/package.json",
+      "packages/native/.gitignore",
+      "packages/native/build-native.sh",
+      "packages/native/package.json",
+      "packages/native/tsconfig.json",
+      "packages/panel/package.json",
+      "packages/service/package.json",
+      "packages/service/tsconfig.json",
+      "packages/sessions/package.json",
+      "packages/sessions/tsconfig.json",
+      "packages/sqlite/package.json",
+      "packages/sqlite/tsconfig.json",
+      "packages/tool/package.json",
+      "packages/tool/tsconfig.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "scripts/assemble-check.mjs",
+      "scripts/check-release-versions.mjs",
+      "scripts/native-verify.mjs",
+      "scripts/release-finish.mjs",
+      "scripts/release-prepare.mjs",
+      "tsconfig.base.json",
+      "tsconfig.json",
+      "vitest.config.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-sessiongraph-root",
+    "version": "0.1.15",
+    "private": true,
+    "type": "module",
+    "packageManager": "pnpm@11.7.0",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./packages/bundle/cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "build": "tsc -b",
+      "typecheck": "tsc -b",
+      "test": "vitest run",
+      "test:coverage": "vitest run --coverage",
+      "clean": "tsc -b --clean",
+      "check:versions": "node scripts/check-release-versions.mjs",
+      "release:prepare": "node scripts/release-prepare.mjs",
+      "release:finish": "node scripts/release-finish.mjs"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-invariants": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-timeout": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+      "@types/node": "^22.10.0",
+      "@vitest/coverage-v8": "^4.1.8",
+      "typescript": "^5.9.0",
+      "vite-tsconfig-paths": "^5.1.4",
+      "vitest": "^4.1.8"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/CC19990113/dsh-plugin-sessiongraph.git"
+    },
+    "homepage": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+    "bugs": {
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues"
+    },
+    "license": "MIT",
+    "author": "CC ZHAO"
+  },
+  "bundle": [
+    {
+      "path": "packages/bundle/cordis.patch.yml",
+      "text": "# The dsh-plugin-sessiongraph bundle patch: mounts the whole local-conversation-index\n# capability as ONE layer over an existing dsh profile.\n#\n# Row order carries no load semantics — activation is service-availability\n# driven — so the seam may appear before or after the providers that fill it.\n# The user's own profile patch layer can address any row below by `id` to\n# retune it (last write per row wins), e.g. pointing `sessionsRoot` at another\n# harness data directory or moving `indexRoot` off the default.\n\n- insert:\n    # TEMPORARILY DISABLED: this row mounts the host's own `@deepseek-ai/dsh-session-query-sqlite`\n    # to read live sessions. It publishes a machine-wide `sessionQuery`, and when DSH's session\n    # controller resolves that service instead of its own isolated instance, the session list stops\n    # working (history unopenable, new session unresponsive). Kept here, commented out, until the\n    # interaction is understood.\n    #\n    # - id: sessiongraph-session-query\n    #   name: '@deepseek-ai/dsh-session-query-sqlite'\n    #   config:\n    #     path: ':memory:'\n    #     openAt: never\n\n    # Service Definition: publishes ctx.sessiongraph, the store/indexer provider\n    # registries, and the normalized query vocabulary. Carries no index of its own.\n    - id: sessiongraph\n      name: 'dsh-plugin-sessiongraph-service'\n\n    # Service Provider (read): serves the five operations from <indexRoot>/index.db.\n    # Claims a root only when that file already exists; `status` still answers for\n    # a root with no index so \"never indexed\" is distinguishable from \"no match\".\n    - id: sessiongraph-sqlite\n      name: 'dsh-plugin-sessiongraph-sqlite'\n\n    # Service Provider (write): scans ~/.dsh/sessions, decompresses each\n    # session.v*.jsonl.zstd, and writes that same index. Registers ONLY an\n    # indexer, never a store, so the seam's one-claimant-per-root rule stays intact.\n    - id: sessiongraph-sessions\n      name: 'dsh-plugin-sessiongraph-sessions'\n\n    # Consumer: the model-facing `sessiongraph` tool (its `index` operation builds\n    # the index) plus its system-prompt section.\n    - id: sessiongraph-tool\n      name: 'dsh-plugin-sessiongraph-tool'\n"
+    }
+  ],
+  "entries": [
+    "packages/bundle/cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "CI",
+      "kind": "env",
+      "where": ".github/workflows/ci.yml:91"
+    },
+    {
+      "name": "SESSIONGRAPH_REQUIRE_KERNEL",
+      "kind": "env",
+      "where": "packages/native/tests/query.spec.ts:34"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:72"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "crates/sessiongraph-core/npm/darwin-arm64/package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "crates/sessiongraph-core/npm/darwin-x64/package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "crates/sessiongraph-core/npm/linux-arm64-gnu/package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "crates/sessiongraph-core/npm/linux-x64-gnu/package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "crates/sessiongraph-core/npm/win32-x64-msvc/package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "package.json:40"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+      "where": "package.json:42"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues",
+      "where": "package.json:44"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "packages/bundle/package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+      "where": "packages/bundle/package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues",
+      "where": "packages/bundle/package.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "packages/native/package.json:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+      "where": "packages/native/package.json:27"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues",
+      "where": "packages/native/package.json:28"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "packages/panel/package.json:20"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+      "where": "packages/panel/package.json:23"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues",
+      "where": "packages/panel/package.json:24"
+    },
+    {
+      "host": "evil.example",
+      "url": "https://evil.example",
+      "where": "packages/panel/tests/panel.spec.ts:341"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:61653",
+      "where": "packages/panel/tests/panel.spec.ts:342"
+    },
+    {
+      "host": "localhost.evil.example",
+      "url": "http://localhost.evil.example",
+      "where": "packages/panel/tests/panel.spec.ts:343"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:61652",
+      "where": "packages/panel/tests/panel.spec.ts:371"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:3000",
+      "where": "packages/panel/tests/panel.spec.ts:380"
+    },
+    {
+      "host": "192.168.1.5",
+      "url": "http://192.168.1.5:61652",
+      "where": "packages/panel/tests/panel.spec.ts:397"
+    },
+    {
+      "host": "evil.example",
+      "url": "http://evil.example:61652",
+      "where": "packages/panel/tests/panel.spec.ts:414"
+    },
+    {
+      "host": "evil.example",
+      "url": "https://evil.example",
+      "where": "packages/panel/tests/panel.spec.ts:445"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "packages/service/package.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+      "where": "packages/service/package.json:25"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues",
+      "where": "packages/service/package.json:26"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "packages/sessions/package.json:23"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+      "where": "packages/sessions/package.json:26"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues",
+      "where": "packages/sessions/package.json:27"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "packages/sqlite/package.json:23"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+      "where": "packages/sqlite/package.json:26"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues",
+      "where": "packages/sqlite/package.json:27"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph.git",
+      "where": "packages/tool/package.json:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph#readme",
+      "where": "packages/tool/package.json:27"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CC19990113/dsh-plugin-sessiongraph/issues",
+      "where": "packages/tool/package.json:28"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "packages/tool/src/panel.ts:247"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "packages/tool/src/version-check.ts:38"
+    },
+    {
+      "host": "registry.npmmirror.com\\n",
+      "url": "https://registry.npmmirror.com\\n",
+      "where": "packages/tool/tests/version-check.spec.ts:91"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com",
+      "where": "packages/tool/tests/version-check.spec.ts:91"
+    },
+    {
+      "host": "scoped.example.com",
+      "url": "https://scoped.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:100"
+    },
+    {
+      "host": "mirror.example.com",
+      "url": "https://mirror.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:101"
+    },
+    {
+      "host": "mirror.example.com",
+      "url": "https://mirror.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:103"
+    },
+    {
+      "host": "mirror.example.com",
+      "url": "https://mirror.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:107"
+    },
+    {
+      "host": "mirror.example.com",
+      "url": "https://mirror.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:108"
+    },
+    {
+      "host": "env.example.com",
+      "url": "https://env.example.com/",
+      "where": "packages/tool/tests/version-check.spec.ts:120"
+    },
+    {
+      "host": "file.example.com",
+      "url": "https://file.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:121"
+    },
+    {
+      "host": "env.example.com",
+      "url": "https://env.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:121"
+    },
+    {
+      "host": "upper.example.com",
+      "url": "https://upper.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:125"
+    },
+    {
+      "host": "upper.example.com",
+      "url": "https://upper.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:126"
+    },
+    {
+      "host": "file.example.com",
+      "url": "https://file.example.com/",
+      "where": "packages/tool/tests/version-check.spec.ts:130"
+    },
+    {
+      "host": "file.example.com",
+      "url": "https://file.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:131"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "packages/tool/tests/version-check.spec.ts:135"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "packages/tool/tests/version-check.spec.ts:136"
+    },
+    {
+      "host": "r.example.com",
+      "url": "https://r.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:151"
+    },
+    {
+      "host": "r.example.com",
+      "url": "https://r.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:156"
+    },
+    {
+      "host": "r.example.com",
+      "url": "https://r.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:161"
+    },
+    {
+      "host": "r.example.com",
+      "url": "https://r.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:163"
+    },
+    {
+      "host": "r.example.com",
+      "url": "https://r.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:165"
+    },
+    {
+      "host": "r.example.com",
+      "url": "https://r.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:170"
+    },
+    {
+      "host": "mirror.example.com",
+      "url": "https://mirror.example.com/",
+      "where": "packages/tool/tests/version-check.spec.ts:422"
+    },
+    {
+      "host": "mirror.example.com",
+      "url": "https://mirror.example.com",
+      "where": "packages/tool/tests/version-check.spec.ts:432"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-invariants": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-timeout": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+      "@types/node": "^22.10.0",
+      "@vitest/coverage-v8": "^4.1.8",
+      "typescript": "^5.9.0",
+      "vite-tsconfig-paths": "^5.1.4",
+      "vitest": "^4.1.8"
+    }
+  },
+  "quality_raw": {
+    "test_files": 30,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 53,
+    "pushed_at": "2026-11-06T08:54:42Z",
+    "created_at": "2026-11-03T03:33:43Z"
+  },
+  "runtime_files": [
+    "packages/bundle/cordis.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-sessiongraph",
+      "text": "English | [中文](README.zh.md)\n\nEvery DSH session on this machine, indexed as one searchable corpus — the model looks up \"where did I say or do this\" in milliseconds, instead of you digging through the sidebar or grepping compressed logs."
+    },
+    {
+      "section": "Architecture",
+      "text": "Six packages behind one strict seam: **adding a store or an indexer never touches the model tools.**"
+    },
+    {
+      "section": "Architecture",
+      "text": "| Package | Role |\n|---|---|\n| `service` | Defines the `ctx.sessiongraph` seam: query vocabulary, store/indexer registries, schema v1, the Chinese bigram tokenizer |\n| `sqlite` | Read provider: answers the seven queries from `index.db`, routing between the native and TypeScript engines |\n| `sessions` | Write provider: scan session logs, decode frame by frame, extract entries, write the database (TypeScript and Rust engines); `raw.ts` reads unabridged events back |\n| `tool` | Consumer: **one** `sessiongraph` tool (eight operations), the `/sessiongraph` command, the system-prompt section, the settings HTTP route, and tool visibility |\n| `native` | Rust kernel: index writes (`indexSessions`) and queries (`query`); returns `undefined` on any failure, never throws |\n| `panel` | Browser half only: the settings \"会话检索\" tab (`dsh.client`; the host entry is an empty apply) |\n| `bundle` | Installable meta-package: `cordis.patch.yml` |"
+    },
+    {
+      "section": "Architecture",
+      "text": "**Routing is \"exactly one claimant\", never first match.** Every registered store is asked concurrently on each query; zero claimants and several claimants both throw (`SESSIONGRAPH_UNAVAILABLE` / `SESSIONGRAPH_CONFLICT`). Registration order and hot reload therefore never change the result. `status` is the one operation that answers with no store at all — someone who has never built an index needs to learn that fact, not receive the same failure every other operation raises."
+    },
+    {
+      "section": "Rust kernel",
+      "text": "The indexing path is a napi-rs native module (Rayon for parallelism, rusqlite for the database), not WASM: the kernel must read the filesystem directly, write SQLite directly, and move gigabyte-scale data. WASM's boundary copies and absent fs/sqlite are disqualifying.\n\n| | Full rebuild | Incremental | Query | Index size |\n|---|---|---|---|---|\n| **Rust kernel** | **6.76 s** | **59–107 ms** | 0.1–6.9 ms | ~170 MB |\n| TypeScript (fallback) | 19.22 s | 230 ms | same | ~170 MB |"
+    },
+    {
+      "section": "Rust kernel",
+      "text": "Both databases hold **identical content**, so this is not \"a different index\": `sqlite_master` DDL is byte-for-byte equal, every unchanged session compares field by field with zero differences, entry rows / session rows / FTS token multisets hash to the same SHA-256, and the TypeScript store reads a Rust-built database directly."
+    },
+    {
+      "section": "Rust kernel",
+      "text": "Engine selection is `engine: 'auto' | 'native' | 'typescript'`, defaulting to `auto`: use the native kernel when present, fall back silently otherwise — **a missing binary is never an error**."
+    },
+    {
+      "section": "How it relates to memory and to the built-in session search",
+      "text": "The same question has three homes, and picking the wrong one means finding nothing:"
+    },
+    {
+      "section": "How it relates to memory and to the built-in session search",
+      "text": "| | Memory (OpenViking / MEMORY.md) | **Built-in DSH `session_search`** | **sessiongraph** |\n|---|---|---|---|\n| Stores | Extracted conclusions: preferences, decisions, entities | **Semantic text** projected from session events, per event type | **Raw entries**: message bodies, tool-call names and arguments |\n| Form | Markdown entries under `viking://` | SQLite FTS5 in an **in-memory** database (`openAt: first-search`, rebuilt every start) | SQLite **on disk**, maintained incrementally |\n| Scope | Machine-wide | **The caller's workspace** | Machine-wide, across workspaces |\n| Chinese | Semantic (embeddings), recalls by meaning | No — the `unicode61` tokenizer does **no CJK handling** at all: `我今天在改广告SDK` is one token, so `广告` matches nothing | Yes — purpose-built bigram tokenizer, **two-character terms match** |\n| How you search | By meaning | By token or phrase (English keywords, whole words) | By characters, full text (Chinese and English) |\n| Can it find the exact words | No — only what survived extraction | Partly: returns an excerpt | Yes — the whole thing, including commands and arguments |\n| Good for | \"What do I prefer\", \"what did we decide\" | English keywords, exact phrase"
+    },
+    {
+      "section": "How it relates to memory and to the built-in session search",
+      "text": "In one line: **memory answers \"what is the conclusion\", the built-in search answers \"which session mentioned it\", sessiongraph answers \"what was actually said\".**\n\nSince 0.2.0 the model no longer has to choose: the settings page hides the host's five `session_*` tools by default and leaves only `sessiongraph` (see \"Settings: which session tools the model sees\"). Switch back any time.\n\nThree differences that matter in practice:"
+    },
+    {
+      "section": "How it relates to memory and to the built-in session search",
+      "text": "- **Chinese**: the built-in search is effectively unusable for Chinese (its tokenizer has no CJK handling); sessiongraph is built for two-character Chinese terms\n- **Scope**: the built-in search only sees the caller's workspace; sessiongraph spans every workspace\n- **Persistence**: the built-in index lives in memory, opens on first search, and is gone after a restart; sessiongraph's index is on disk, usable immediately, kept fresh incrementally"
+    },
+    {
+      "section": "How it relates to memory and to the built-in session search",
+      "text": "Memory does not overlap with either: a conversation may **never enter memory** (short, casual, below any threshold) yet it is always in sessiongraph's raw index. Conversely, a memory entry has usually lost its context, and checking it means going back to the original."
+    },
+    {
+      "section": "Three entry points",
+      "text": "| Entry | How |\n|---|---|\n| **The model calls it** | Just ask \"which session discussed the splash screen\"; it reaches for `sessiongraph` |\n| **Slash command** | `/sessiongraph status` / `index` / `search <term>` / `workspaces` |\n| **Command results flow back** (opt-in, off by default) | With `injectCommandResults: true` the command's result is injected into the conversation as a `plugin/notice` message, so the model's next turn knows what you looked up — the same mechanism `/plan` uses. Off by default because commands run on the host's main thread, and calling `agent.inject` from a handler drags the agent loop onto that stack: `/sessiongraph status` hung the desktop that way |"
+    },
+    {
+      "section": "Tools",
+      "text": "`sessiongraph`:\n\n**One tool, eight operations.** Since 0.2.0 indexing is no longer a separate tool (`sessiongraph_index` is gone)."
+    },
+    {
+      "section": "Tools",
+      "text": "| Operation | What it does |\n|---|---|\n| `search` | Cross-session full-text search; filters on `sessionId` / `workspace` / `after` / `before` / `kinds`. One hit per session by default (`dedupeBySession: false` to disable). Returns title, workspace, time, turn and a highlighted snippet |\n| `session` | Open one session by full id or unique prefix: metadata, ordered entries, child sessions |\n| `event` | Read **one unabridged raw event** from the source log (not the index's clipped text), with optional `windowBefore` / `windowAfter` neighbours |\n| `trace` | Without `seq`: session lineage (ancestor chain + recursive descendant tree). With `seq`: that event's replacement chain, shadowed range and cited source events |\n| `timeline` | List sessions newest-first, optionally scoped to a workspace |\n| `workspaces` | Workspace inventory with session/entry counts |\n| `status` | The index's own state — **the only operation that answers before an index exists** |\n| `index` | Build or refresh inside the shared 30-second tool budget; unchanged sources are skipped, and past a thousand sessions the run becomes a host background job returning a job id |"
+    },
+    {
+      "section": "Tools",
+      "text": "Tool parameters are **snake_case** (`session_id`, `window_before`, `dedupe_by_session`), matching the built-in tools.\n\nRanking is `bm25 / weight` with `user 1.0 / title 1.1 / assistant 1.2 / tool 1.5`. FTS5's bm25 is negative, so **dividing** by the weight demotes — multiplying would push tool calls to the top."
+    },
+    {
+      "section": "Settings: which session tools the model sees",
+      "text": "Settings → **会话检索** (Session search), a three-way dropdown:\n\n| Choice | Effect |\n|---|---|\n| `sessiongraph` (default) | Hides the host's `session_search` / `session_event_search` / `session_trace` / `session_event_trace` / `session_event_read`, keeping only `sessiongraph` |\n| `kernel` | The reverse: hides `sessiongraph`, keeps the host's five |\n| `both` | Exposes both. The model may check the same thing twice, and it costs more context |"
+    },
+    {
+      "section": "Settings: which session tools the model sees",
+      "text": "Switching is **immediate, no restart**. It works through the host's `agent.ctx.tools.restrict({ deny })` (a per-agent restriction — a hidden tool's schema never enters the request) plus a per-agent system-prompt override. The choice lands in `<indexRoot>/panel.json` and is read back on start."
+    },
+    {
+      "section": "Query engines",
+      "text": "Two implementations read the same `index.db`:\n\n- **Native (Rust)**: `rusqlite` opened read-only, reusing the same Chinese bigram tokenizer the indexer uses, one napi call returning JSON\n- **TypeScript**: `node:sqlite`"
+    },
+    {
+      "section": "Query engines",
+      "text": "`engine: auto` (the default) prefers native and falls back to TypeScript silently — logging once — when the binary is missing or a call throws. Measured on a real 700+ session index, one `search`: Rust **3.5–4 ms**, TypeScript **22 ms**. The two are held together by per-operation parity tests (11 request shapes, identical results)."
+    },
+    {
+      "section": "Commands",
+      "text": "| Command | What it does |\n|---|---|\n| `/sessiongraph` | Same as `status` |\n| `/sessiongraph status` | Index size, disk usage, last build time, live session count, current workspace |\n| `/sessiongraph index [--force]` | Build or refresh; large corpora delegate to a background job and print the job id |\n| `/sessiongraph search <term>` | Search directly, printing the top ten hits |\n| `/sessiongraph workspaces` | Workspace list, `*` marking the current one |"
+    },
+    {
+      "section": "Automatic indexing",
+      "text": "| When | Mechanism | Cost |\n|---|---|---|\n| **The first time** (no index yet) | Session creation builds it in the background (`autoBuild`, on by default) | seconds to minutes, off the critical path |\n| **On session creation** (index present) | `agent/created` → background incremental run, never blocking and never registered as a host job (a job's completion notice would inject into the conversation) | 59–107 ms |\n| **Before a query** | If `status.json`'s `indexedAt` is older than 5 minutes, refresh incrementally first | ~400 ms |\n| **The current session** | Reads the host's `ctx.sessionQuery` and indexes live sessions that have not hit disk yet | negligible |"
+    },
+    {
+      "section": "Automatic indexing",
+      "text": "Prefer to drive it yourself? `autoBuild: false` disables the first automatic build and `autoIndex: false` disables the incremental refreshes; everything then goes through `sessiongraph` (operation `index`) / `/sessiongraph index`.\n\n**A run has a deadline.** Each automatic refresh is aborted after `autoIndexTimeoutMs` (fifteen minutes by default) and its index root released, so a run that never settles cannot suppress every later session's refresh."
+    },
+    {
+      "section": "When the registry has a newer release",
+      "text": "**It says so once, after a tool runs.** A plugin cannot upgrade itself — it lives in a profile's dependency tree, and rewriting that tree is the host's job. So it does the next best thing: after one of its tools runs, it checks the registry in the background and, when the published version is newer than the running one, appends a notice to the next step of the conversation, where both the model and the user can see it. Three details keep it from turning into noise: the check only ever happens *after* a tool was used; a release is announced once, with `notifiedVersion` persisted so a desktop restart does not replay it; and checks run at most every six hours, while an unreachable registry, a timeout, or an unwritable state file all mean \"nothing to report\" rather than an error. The registry follows npm's own resolution order — `npm_config_registry`, then `registry=` in the user's `~/.npmrc`, then npm's public default — so a machine behind a mirror checks the mirror it actually installs from. `updateCheck: false` turns the whole thing off, and `updateCheckIntervalMs` changes the interval."
+    },
+    {
+      "section": "A nudge for history questions",
+      "text": "The system prompt already says to search the index instead of grepping compressed logs. This release adds the moment-of-use reminder: when the last message the user typed reads like a question about past conversations (`上次`, `之前`, `昨天`, `last time`, …) and this conversation has not used either tool yet, the plugin appends one short notice to that model request pointing at `sessiongraph`. Three rules keep it quiet: only a message whose source is the user's own typing can trigger it (injected context, tool results and other plugins' notices are ignored, so the reminder cannot trigger itself); it speaks at most once per conversation; and it never speaks after `sessiongraph` or `sessiongraph` (operation `index`) has run. `historyHint: false` turns it off."
+    },
+    {
+      "section": "What gets indexed",
+      "text": "`user/message` (only `source.kind === 'user'`, i.e. text a human typed), the `text` blocks of `assistant/message` (`reasoning` is 61% of the bytes and is not indexed), `tool/call` names and arguments, and `session/title`. Skipped: `tool/result` bodies, `request/header`, `step/*`, `job/*`."
+    },
+    {
+      "section": "Why two-character Chinese terms match",
+      "text": "SQLite's `unicode61` treats `我今天在改广告SDK` as a single token, so searching `广告` finds nothing; `trigram` needs at least three characters, so two-character words stay unreachable. Write and read paths therefore share one purpose-built tokenizer (`packages/service/src/tokenize.ts`): CJK runs split into overlapping bigrams (`广告点击` → `广告` `告点` `点击`), Latin/digit runs become lowercased whole words split on `_`, and query tokens are quoted and joined with `AND`. The trade-off is recall over phrase precision — searching your own history is a \"find it\" problem."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin add dsh-plugin-sessiongraph\n```\n\nOr link a local checkout in a profile:\n\n```json\n\"dependencies\": { \"dsh-plugin-sessiongraph\": \"link:/path/to/dsh-plugin-sessiongraph\" },\n\"dsh\": { \"profile\": { \"bundles\": [ \"...\", \"dsh-plugin-sessiongraph\" ] } }\n```\n\nRestart DSH afterwards; the first `sessiongraph` (operation `index`) call builds the database, and everything after that is incremental."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\npnpm install\npnpm build      # tsc -b, five TypeScript project references\npnpm test       # vitest run, 200+ tests\n```\n\nInternal contracts — data format, schema, tokenizer rules, per-package responsibilities, and which host capabilities this plugin reuses — live in [`DESIGN.md`](./DESIGN.md)."
+    },
+    {
+      "section": "Releasing",
+      "text": "Two commands, because `pnpm-lock.yaml` cannot be regenerated before the platform addons exist on the\nregistry: an addon version only becomes resolvable after the tag-triggered workflow publishes it."
+    },
+    {
+      "section": "Releasing",
+      "text": "```sh\npnpm run release:prepare 0.1.22     # every published manifest + the five addon pins + the exclude list\ngit commit -am \"chore(release): 0.1.22\"\ngit tag v0.1.22 && git push --tags  # publish.yml builds the kernels first, then the five packages\npnpm run release:finish             # regenerate the lockfile, then re-run the gate CI runs"
+    },
+    {
+      "section": "Releasing",
+      "text": "`pnpm run check:versions` is that gate. It compares the six package versions, the five kernel\nmanifests, `packages/native`'s `optionalDependencies` pins, the lockfile's recorded specifiers and the\n`minimumReleaseAgeExclude` list — and fails *before* anything is published rather than halfway through\na release. Both `ci.yml` and `publish.yml` run it first."
+    }
+  ],
+  "skipped": []
+}

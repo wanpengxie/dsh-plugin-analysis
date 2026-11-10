@@ -1,0 +1,189 @@
+{
+  "repo": "ChenXu233/dsh-perf-patch",
+  "commit": "b9ed37b7dc5e484214be6edd67204ac22d84fb15",
+  "extracted_at": "2026-11-10T09:48:42.489438+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 19658,
+    "lines_by_language": {
+      "JSON": 23,
+      "JavaScript": 270,
+      "Markdown": 122,
+      "Other": 25,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-perf-patch",
+    "version": "0.1.0",
+    "description": "Runtime-only performance patches for DeepSeek Harness: coalesce the agent-mount tools/change storm, memoize tool schemas per revision, and short-circuit dsh-ops presentation probes. No third-party source is modified.",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "performance"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": ">=18"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ChenXu233/dsh-perf-patch.git"
+    },
+    "bugs": {
+      "url": "https://github.com/ChenXu233/dsh-perf-patch/issues"
+    },
+    "homepage": "https://github.com/ChenXu233/dsh-perf-patch#readme"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-perf-patch profile patch layer — insert one loader entry for this package.\n- insert:\n    - id: perf-patch\n      name: 'dsh-perf-patch'\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PERF_PATCH",
+      "kind": "env",
+      "where": "lib/index.js:26"
+    },
+    {
+      "name": "DSH_PERF_PATCH_VERIFY",
+      "kind": "env",
+      "where": "lib/index.js:200"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/ChenXu233/dsh-perf-patch.git",
+      "where": "package.json:20"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ChenXu233/dsh-perf-patch/issues",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ChenXu233/dsh-perf-patch#readme",
+      "where": "package.json:22"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-11-01T11:30:49Z",
+    "created_at": "2026-10-24T02:55:01Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "⚠️本仓库因上游修复了相关问题，本补丁已自然无效化，故归档处理。\n----\n⚠️ This repository has been archived because the upstream issue has been fixed, and this patch has become naturally invalid.\n----"
+    },
+    {
+      "section": "dsh-perf-patch",
+      "text": "Runtime-only performance patches for **DeepSeek Harness (DSH)** when third-party plugins make\nthe host O(N) slow. Nothing in `node_modules` is edited: the patches wrap host services at load\ntime, and each one **fails safe** — on any doubt it falls back to the original code path instead\nof changing behaviour.\n\nBuilt and measured on DSH Desktop `0.2.1-rc.2` (Electron 44 / Node 24 / Windows 11) with\n`dsh-ops` and `dsh-mcp-connector` installed."
+    },
+    {
+      "section": "1. The agent-mount `tools/change` storm",
+      "text": "Mounting an agent registers ~161 tools. Every registration fires `tools/change`, and every\nlistener that reacts (discovery reconcile, PTC reconcile, MCP governance) replays its full\nO(tools) work. One `agents.create` therefore emits hundreds of notifications, each listener\nre-running hundreds of times.\n\n**Fix:** while `agents.create` / `agents.resume` runs, `tools.layers.onChange` is suppressed and\nthe notification is emitted **once, synchronously**, when the outermost call returns."
+    },
+    {
+      "section": "1. The agent-mount `tools/change` storm",
+      "text": "Suppress + synchronous flush is deliberate. Flushing via `queueMicrotask` starves the event\nloop (listeners queue more microtasks than the loop drains) and was observed to freeze the UI;\nthat variant was removed and is not shipped."
+    },
+    {
+      "section": "2. `tools.schemas()` deep-clones on every read",
+      "text": "`schemas(scope)` clones every tool's JSON Schema; `schemaOf(def, true)` clones one. Both are pure\nfunctions of the tool revision / definition, yet listeners call them in loops.\n\n**Fix:** memoize `schemas(scope)` per tool revision (`WeakMap` keyed by scope, invalidated on\n`tools/change`) and `schemaOf(definition, true)` by definition + parameter identity. Returned\nobjects are shared between callers, so treat them as **read-only**."
+    },
+    {
+      "section": "3. dsh-ops asks a one-boolean question with a full prompt assembly",
+      "text": "`dsh-ops/lib/presentation.js` decides \"is this agent on PTC presentation?\" by calling\n`systemPrompt.assemble({scope, signal})` and then reading exactly one thing:\n\n```js\nassembly.sections.some(s => s.name === 'tools:ptc-only' && s.text.trim() !== '')\n```\n\n`assemble()` renders ~36 sections and `structuredClone`s every tool schema (~250–310 ms\nmeasured). dsh-ops does this **6× per live agent, per reconcile**."
+    },
+    {
+      "section": "3. dsh-ops asks a one-boolean question with a full prompt assembly",
+      "text": "**Fix:** wrap `systemPrompt.assemble`. When — and only when — the call is one of those probes,\nreturn a minimal assembly built from the same layers:\n\n```js\n{ sections: [{ name: 'tools:ptc-only', text }], contexts: [], tools: [] }\n```"
+    },
+    {
+      "section": "3. dsh-ops asks a one-boolean question with a full prompt assembly",
+      "text": "Probe detection uses dsh-ops' own marker (`isPresentationProbe`, a `WeakSet` reached through the\nmodule cache); if that import is unavailable it falls back to \"the stack contains\n`dsh-ops/lib/presentation.js`\". Every other caller — including the real prompt assemblies in\n`ptc/index.js` and `discovery/index.js` — passes straight through."
+    },
+    {
+      "section": "3. dsh-ops asks a one-boolean question with a full prompt assembly",
+      "text": "The section text is recomputed on **every** call. Caching it was tried and reverted: a stale\ncontrol input turns reconcile into a fixed point that never settles, and freezes the host.\n\nMeasured on a 3-agent instance: per probe **254–312 ms → 0 ms** (~4.9 s per reconcile sweep),\nwith the PTC decision byte-identical for all 3 agents."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ncd ~/.dsh/profiles/desktop\nnpm install ChenXu233/dsh-perf-patch\n```\n\nThen list `\"dsh-perf-patch\"` in the `dsh.profile.bundles` array of the profile's\n`package.json`. The package ships `dsh.bundle.patch` → `cordis.patch.yml`, which inserts the\nloader entry. Adding the name to `bundles` **alone is not enough** — without the patch layer the\nplugin is never loaded.\n\nFrom a checkout: clone this repo into `<profile>/node_modules/dsh-perf-patch` and add the name to\n`bundles` the same way."
+    },
+    {
+      "section": "Kill switches",
+      "text": "| Variable | Effect |\n| --- | --- |\n| `DSH_PERF_PATCH=0` | Disables all three patches at load time. |\n| `DSH_PERF_PATCH_VERIFY=1` | Probe short-circuit also computes the full assembly and compares. On divergence it logs an error and **permanently disables** the short-circuit for the session. |\n\nRuntime counters:\n\n```js\nglobalThis.__dshPerfPatchProbe   // { hits, bypass, mismatches, enabled }\n```"
+    },
+    {
+      "section": "Kill switches",
+      "text": "`hits` = probes answered short, `bypass` = calls that went to the real `assemble`. If `hits`\nstays 0, detection is not matching and the plugin is a no-op."
+    },
+    {
+      "section": "Expectations",
+      "text": "* Intended to become **inert** once upstream fixes land: the schema cache is keyed by revision\n  (correct regardless), and the probe short-circuit stands down when dsh-ops stops matching.\n* The batch gate is the only behavioural change: listeners fire once per mount instead of once\n  per tool. That is the point, but a plugin relying on every intermediate `tools/change` during\n  mount would now see one.\n* Do not mutate objects returned by `schemas()` / `schemaOf()`."
+    },
+    {
+      "section": "Related upstream issues",
+      "text": "* dsh-ops #333 — discovery reconcile recomputes presentation for every agent\n* dsh-ops #369 — `tools.schemas()` deep copy with 258 tools, linear slowdown\n* dsh-mcp-connector #178 — governance reconcile cost\n\nIf this plugin causes a problem: set `DSH_PERF_PATCH=0`, confirm it disappears, and open an issue\nwith the numbers."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

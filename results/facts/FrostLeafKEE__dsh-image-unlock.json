@@ -1,0 +1,136 @@
+{
+  "repo": "FrostLeafKEE/dsh-image-unlock",
+  "commit": "f4e51d8daead11d064f5a0f4862a74a8383d2f58",
+  "extracted_at": "2026-11-10T10:26:59.046939+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 235569,
+    "lines_by_language": {
+      "JSON": 26,
+      "JavaScript": 193,
+      "Markdown": 176,
+      "Other": 24,
+      "YAML": 17
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "assets/hero-banner.jpg",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "scripts/patch-pi-ai.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@dsh-external/dsh-image-unlock",
+    "description": "Lift the 'model does not support images' gate in the DeepSeek Harness web GUI: declares image input for every llm-pi-ai model that does not state its own input modalities, so attachments are admitted, and textifies image blocks for the text-only opencode-go upstream (pair with a vision skill for actual recognition). Toggleable by the claude-vision-skill directory's presence: skill enabled = vision-skill flow, skill disabled = native vision model.",
+    "version": "0.0.3",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "lib/index.js",
+      "cordis.patch.yml",
+      "scripts/patch-pi-ai.mjs",
+      "README.md",
+      "LICENSE",
+      "assets"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-image-unlock bundle patch.\n#\n# Lifts the \"model does not support images\" gate for llm-pi-ai models that do\n# not declare their own input modalities: every provider profile gains\n# `defaultInput: [text, image]`, and every model entry that omits `input`\n# inherits it (resolveModels: entry.input ?? base.input ?? request.defaultInput).\n#\n# User-layer settings (settings.yaml) merge over this base layer, so a model\n# that explicitly declares `input: [text]` keeps its narrower declaration —\n# only unstated models widen to include image.\n- id: llm-pi-ai\n  config:\n    providers:\n      opencode-go:\n        defaultInput:\n          - text\n          - image\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-08-15T10:15:17Z",
+    "created_at": "2026-08-15T09:15:07Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json",
+    "scripts/patch-pi-ai.mjs"
+  ],
+  "readme": [
+    {
+      "section": "🐳 dsh-image-unlock",
+      "text": "<p align=\"center\">\n  <img src=\"assets/hero-banner.jpg\" alt=\"鲸鱼娘为你解锁图片输入\" width=\"100%\">\n</p>\n\n<div align=\"center\">\n\n**解除 DeepSeek Harness Web GUI 的图片输入限制，让图片附件在不支持图片的上游（Console Go）下可用。**\n\n[]()\n[]()\n[]()\n[]()\n\n</div>\n\n---"
+    },
+    {
+      "section": "✨ 一张图看懂",
+      "text": "```\n 🖼️ 上传图片\n   │\n   ▼\n 🚪 准入闸门   ←── bundle patch：defaultInput: [text, image]\n\n---"
+    },
+    {
+      "section": "🧩 问题",
+      "text": "Harness 在 API 层（`dsh-host-apiproxy`）、LLM 层（`dsh-llm-pi-ai`）都根据模型的\n`inputModalities`（来自 llm-pi-ai 的模型 `input` 声明）判断能否接收图片。\n默认声明只有 `text`，因此未声明 `input` 的模型（如 `deepseek-v4-flash`）在发图时\n会被拒绝（`\"Model does not support image input\"`）。\n\n但只放行还不够：`dsh-llm-pi-ai` 会把 durable 图片块转成\n`{ type: \"image\", data: base64 }` 部件，pi-ai SDK 序列化为 `image_url` 发送给\n上游。Console Go 上游协议只接受 `text`，于是报："
+    },
+    {
+      "section": "🧩 问题",
+      "text": "```\n400 invalid_request_error: Failed to deserialize the JSON body into the\ntarget type: messages[605]: unknown variant `image_url`, expected `text`\n```\n\n也就是说：**声明图片能力是\"准入\"，但上游根本不收图片**。正确做法是准入后把\n图片块转成带附件路径的文本标记，识别交给 vision skill。\n\n---"
+    },
+    {
+      "section": "1. Bundle patch：准入（`cordis.patch.yml`）",
+      "text": "给 `llm-pi-ai` 的 `opencode-go` provider 加上 `defaultInput: [text, image]`，\n让未显式声明 `input` 的模型继承 image 输入能力，从而通过 API 层 / LLM 层的\n图片闸门。显式声明 `input: [text]` 的模型保持原样（用户层优先）。"
+    },
+    {
+      "section": "2. 代码 patch：图片文本化（`scripts/patch-pi-ai.mjs`）",
+      "text": "`dsh-llm-pi-ai` 的序列化没有配置开关，请求对象又是深度冻结的（`llm/stream`\nwaterfall 无法改写），所以对本地安装的包做一次代码补丁（已用\n`[dsh-plugin-image-unlock]` 标记注释标注）：\n\n- 在 `stream()` 中，对 `opencode-go` 路由先调用 `textifyImageBlocks()`：\n  把 durable 图片块（含 tool-result 内嵌套的）替换为文本标记；是否执行由\n  运行时开关 `globalThis.__dsh_image_unlock_textify` 控制（见下节）。\n\n```\n  [图片附件: <名称>] 附件已保存到 <DSH_HOME>/attachments/v1/objects/<xx>/<sha256>（当前模型不能直接查看图片，请用 claude-vision-skill 识别该路径；无法访问时用 --clipboard 回退）\n  ```"
+    },
+    {
+      "section": "2. 代码 patch：图片文本化（`scripts/patch-pi-ai.mjs`）",
+      "text": "- 附件对象文件没有扩展名，`claude-vision-skill/vision.js` 已支持按魔数嗅探\n  MIME（png/jpeg/webp/gif），可直接识读该路径；剪贴板回退仍然可用。\n\n这样：上传不再被拒（第 1 部分）、请求不再 400（第 2 部分）、agent 看到\n`[图片附件: ...]` 标记后按 vision skill 流程识别（配套 skill 已更新文档）。\n\n---"
+    },
+    {
+      "section": "📦 安装",
+      "text": "**方式一：本地目录（开发调试用）**\n\n```sh\ndsh plugin --profile web add <本插件目录>\n```\n\n**方式二：从 GitHub 直接安装**\n\n```sh\ndsh plugin --profile web add https://github.com/FrostLeafKEE/dsh-image-unlock.git\n```\n\n> `dsh plugin` 会把参数转发给 profile 目录里的 pnpm，两种方式等价；安装后\n> `dsh.profile.bundles` 会自动登记 `@dsh-external/dsh-image-unlock`。\n\n安装后还需要在 profile 的 `cordis.patch.yml` 中插入插件条目（见下节），\n并打一次代码补丁（见\"重装/升级后重新打补丁\"）。\n\n---"
+    },
+    {
+      "section": "🎛️ 开关（skill 驱动：禁用 skill = 原生视觉模型）",
+      "text": "开关与 **claude-vision-skill 的启停绑定**，全部即时生效、无需重启：\n\n- **启用 skill（默认）**：`claude-vision-skill` 目录在 `.agents/skills` 下 →\n  文本化开启，图片转成文本标记，agent 走 vision.js 识图流程\n  （适合当前 text-only 的 opencode-go 模型）。\n- **禁用 skill（用原生视觉模型）**：把 `<工作区>/.agents/skills/claude-vision-skill`\n  目录移出（例如移到 `<工作区>/.dshskin/` 下）→ 文本化自动关闭，\n  模型收到真实图片部件。想切回 vision-skill 流程就放回原处。\n\n插件会监视 skills 目录，目录移动即刻切换，无需重启。\n\n附加覆盖（profile 的 `cordis.patch.yml` 插件条目）："
+    },
+    {
+      "section": "🎛️ 开关（skill 驱动：禁用 skill = 原生视觉模型）",
+      "text": "```yaml\n- insert:\n    - id: image-unlock\n      name: '@dsh-external/dsh-image-unlock'\n      # disabled: true            # 整体关闭：取消注释这一行\n\n> **注意**：bundle patch 的 `defaultInput` 声明不受上述开关影响（只影响未声明\n> `input` 的模型；视觉模型应通过 settings 声明自己的 `input: [text, image]`，\n> 其声明优先于 defaultInput）。\n\n运行时标志：插件把开关写入 `globalThis.__dsh_image_unlock_textify`；\n`dsh-llm-pi-ai` 补丁代码在每次请求时读取它（`=== true` 才文本化）。条目被\n禁用、插件被移除、或 skill 目录不存在时标志被清除，文本化随之关闭。\n\n---"
+    },
+    {
+      "section": "🔄 重装/升级后重新打补丁",
+      "text": "第 2 部分是针对 node_modules 的代码补丁，`pnpm install` / 升级 `@deepseek-ai/dsh`\n会把它冲掉。重装后执行（幂等，已打补丁会直接跳过）：\n\n```sh\nnode scripts/patch-pi-ai.mjs\n```\n\n默认在以下位置寻找目标文件（也可用参数指定绝对路径）：\n\n- `<本插件目录>/../../DeepSeekHarness/node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js`\n- `<本插件目录>/../DeepSeekHarness/node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js`\n- `<本插件目录>/../../../node_modules/@deepseek-ai/dsh-llm-pi-ai/lib/index.js`\n\n---"
+    },
+    {
+      "section": "⚠️ 注意",
+      "text": "- 这只**放行图片附件并文本化**；模型本身不支持图像输入。实际识图请配合\n  vision skill（`claude-vision-skill`，通过 vision.js 调用外部 vision API）。\n- 文本化只影响 `opencode-go` 路由，其它 pi-ai 路由行为不变。\n- 若某天 opencode-go 路由真的挂上了原生视觉模型，用上面的开关关闭文本化即可；\n  彻底移除的话：删掉插件条目、`dsh plugin remove`、并手动删除\n  `dsh-llm-pi-ai/lib/index.js` 中两处 `[dsh-plugin-image-unlock]` 标记的代码。\n\n---\n\n<p align=\"center\">\n  🐳 头图由 <code>wan2.7-image-pro</code> 生成 · DeepSeek 鲸鱼娘风格<br>\n  <sub>MIT License · dsh-plugin · deepseek-harness</sub>\n</p>"
+    }
+  ],
+  "skipped": []
+}

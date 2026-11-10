@@ -1,0 +1,221 @@
+{
+  "repo": "DEVVE-1/dsh-windows-approval-notify",
+  "commit": "f6080fd5451826c8e6dacbe8382600a565c1250a",
+  "extracted_at": "2026-11-10T10:00:02.080252+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 26684,
+    "lines_by_language": {
+      "JSON": 49,
+      "JavaScript": 320,
+      "Markdown": 216,
+      "Other": 138,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "foreground.ps1",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "notify-host.ps1",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-windows-approval-notify",
+    "version": "1.1.0",
+    "repository": "git+https://github.com/DEVVE-1/dsh-windows-approval-notify.git",
+    "type": "module",
+    "description": "Pop a Windows toast when a DSH task needs approval or finishes, but only while DSH is not the foreground program.",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "windows",
+      "toast",
+      "approval",
+      "notification"
+    ],
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "notify-host.ps1",
+      "foreground.ps1",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: windows-approval-notify\n      name: 'dsh-windows-approval-notify'\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/DEVVE-1/dsh-windows-approval-notify.git",
+      "where": "package.json:4"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 25,
+    "pushed_at": "2026-10-24T12:32:30Z",
+    "created_at": "2026-10-23T09:31:50Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "Windows 消息通知（DSH 插件）",
+      "text": "[English](README.en.md) | 简体中文\n\nDSH 需要提权、等待你授权，或一轮任务正常结束时，弹出一条 Windows 通知（显示为 **DeepSeek Harness**）。\n只有 **DSH 不是当前前台程序** 时才弹：你正盯着 DSH 界面时不打扰。\n插件只做转发：不参与授权决策，不改变审批结果，也不做其它任何事情。"
+    },
+    {
+      "section": "触发条件",
+      "text": "| 触发 | 来源 | 标题 |\n| --- | --- | --- |\n| 有操作请求授权 | `approval/request`（兜底 `approval/asked`） | `DSH 需要提权` |\n| 一轮任务正常结束 | `session/event` 的 `turn/end`，且 `reason.kind === 'completed'` | `DSH 任务完成` |\n\n- 只有主会话才会提示任务完成；子代理（`header.parentSession` / `origin: 'subagent'`）的会话不提示。\n- `turn/end` 的原因不是 `completed`（中止、报错、被拦截、超长截断等）时不提示，也不把中止说成“完成”。\n- 前台抑制对两类通知都生效：前台窗口标题包含 `DeepSeek Harness` 时直接跳过，判定逻辑在 `foreground.ps1`。"
+    },
+    {
+      "section": "实现",
+      "text": "- 常驻一个 PowerShell 通知宿主，插件激活即预热；之后每条通知只写一行 JSON。\n- PowerShell 侧先读前台窗口标题判断是否前台（Win32 `GetForegroundWindow` + `GetWindowText`），需要真正弹窗时才加载 WinRT Toast API。\n- 弹窗延迟：预热后约 5–10ms；进程被回收/被杀时退化为一次性弹窗并退避重启宿主。\n- 通知标签：授权 `dshApproval`、完成 `dshTaskDone`，同组 `dshNotify`；同类通知互相替换，不同类各自保留一条。"
+    },
+    {
+      "section": "文案",
+      "text": "- 授权正文优先用 DSH 自己的 `displayReason`（优先中文），其次 `reason`；都没有时显示 `<工具名> 正在请求你的授权`。\n- 完成正文为 `「<会话标题>」已完成`，没有标题时显示 `当前会话的这一轮任务已完成`。\n- 正文最多 220 字符，超出截断。"
+    },
+    {
+      "section": "环境要求",
+      "text": "- Windows 10/11，系统通知未关闭。\n- `powershell.exe`（Windows 自带）。\n- 通知宿主以 `com.deepseek.dsh`（DSH 桌面端的 AppUserModelID）发布，所以通知卡片显示为 DeepSeek Harness。"
+    },
+    {
+      "section": "文件",
+      "text": "| 文件 | 作用 |\n| --- | --- |\n| `index.js` | Host 插件：事件监听 + 通知通道（常驻进程、失败退避重启、一次性兜底） |\n| `notify-host.ps1` | 纯 ASCII 的 PowerShell 通知宿主，从 stdin 逐行读取 JSON，按需弹 Toast |\n| `foreground.ps1` | 前台窗口标题匹配（判断 DSH 是不是当前主程序） |\n| `cordis.patch.yml` | 插入 `windows-approval-notify` 行 |\n| `locale/{en,zh}.json` | 插件管理器的标题/描述 |\n| `icon.svg` | 插件图标 |"
+    },
+    {
+      "section": "安装",
+      "text": "把本仓库克隆（或解压发布包）到任意目录，在 DSH 里执行：\n\n```text\nplugin_manager install_bundle target = <本目录的绝对路径>\n```\n\n例如：\n\n```text\nplugin_manager install_bundle target = D:\\plugins\\dsh-windows-approval-notify\n```\n\n安装后插件行立即生效，无需重启 DSH。卸载：\n\n```text\nplugin_manager remove_bundle target = dsh-windows-approval-notify\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT，见 [LICENSE](LICENSE)。"
+    },
+    {
+      "section": "Introduction",
+      "text": "<img src=\"icon.svg\" width=\"80\" align=\"right\" alt=\"\">"
+    },
+    {
+      "section": "Windows Approval Notify",
+      "text": "**A Windows toast pops up the instant DSH needs your approval.**\n\n[](#requirements)\n[](LICENSE)\n[](https://github.com/)\n\n**English** · [简体中文](README.md)\n\n---"
+    },
+    {
+      "section": "Why",
+      "text": "When a long DSH job runs in the background and one of its operations needs approval, DSH waits for you in its own window — a window that is very likely buried behind others, minimized, or on a screen you're not looking at. A task that should have taken three seconds ends up waiting ten minutes for a click."
+    },
+    {
+      "section": "Why",
+      "text": "This plugin moves \"waiting for approval\" out of the DSH window and into the Windows notification center: the moment an approval request is raised, a system toast appears (attributed to **DeepSeek Harness**), so you notice it while doing something else entirely."
+    },
+    {
+      "section": "What it does, and what it doesn't",
+      "text": "| | |\n| --- | --- |\n| ✅ Does | Listens to DSH approval events and forwards their prompt text as a Windows toast |\n| ❌ Doesn't | Decide approvals, alter outcomes, click \"Allow\" for you, log approval content, or touch the network |\n\nIt is a **read-only, one-way notification channel**. Remove it and the DSH approval flow is exactly as it was."
+    },
+    {
+      "section": "Features",
+      "text": "- **Fast** — a persistent PowerShell notification host is pre-warmed when the plugin activates, so each toast costs 5–10ms. You won't see the DSH dialog first and the toast second.\n- **Same wording** — reuses the exact text DSH itself shows, so the two never disagree.\n- **No spam** — every approval in a burst reuses one notification tag, so a new toast replaces the old one instead of piling up.\n- **No duplicates** — the same request is announced once within a 15-second window, even though two event paths can both see it.\n- **Never in the way** — if the host process is killed or crashes it restarts with exponential backoff, falling back to a one-shot spawn so nothing is dropped. The approval flow itself is never affected."
+    },
+    {
+      "section": "Requirements",
+      "text": "- Windows 10 / 11, with system notifications enabled (Do Not Disturb / Focus Assist may swallow them).\n- `powershell.exe` (ships with Windows).\n- Toasts are published under `com.deepseek.dsh` (the DSH desktop app's AppUserModelID), which is why the card reads **DeepSeek Harness**.\n\n> On non-Windows platforms the plugin silently no-ops."
+    },
+    {
+      "section": "Install",
+      "text": "Clone the repository anywhere:\n\n```bash\ngit clone https://github.com/<your-username>/dsh-windows-approval-notify.git\n```\n\nThen, inside DSH:\n\n```text\nplugin_manager install_bundle target = <absolute path to this directory>\n```\n\nFor example:\n\n```text\nplugin_manager install_bundle target = G:\\DS-test\\plugins\\dsh-windows-approval-notify\n```\n\nThe plugin row takes effect immediately — no restart needed.\n\nTo uninstall:"
+    },
+    {
+      "section": "Install",
+      "text": "```text\nplugin_manager remove_bundle target = @local/dsh-windows-approval-notify\n```"
+    },
+    {
+      "section": "How it works",
+      "text": "Two trigger paths, so nothing is missed and nothing is doubled:\n\n```mermaid\nsequenceDiagram\n    autonumber\n    participant T as DSH tool call\n    participant P as index.js"
+    },
+    {
+      "section": "How it works",
+      "text": "1. **Primary path** — a `prepend` waterfall hook on `approval/request`, so we read the request (and its `displayReason`) before any other answerer can claim it.\n2. **Fallback path** — if another answerer claims the request first, we listen for the persisted `approval/asked` session event and fire 120ms later, giving the richer request a chance to arrive first."
+    },
+    {
+      "section": "How it works",
+      "text": "Delivery goes through a **persistent PowerShell process**: started and handshaked with `ready` when the plugin activates; afterwards each notification is a single JSON line on stdin. The host parses it, calls the WinRT `ToastNotificationManager` and answers `ok`. Compared with spawning a fresh PowerShell per toast (~270ms startup), this is one to two orders of magnitude faster in practice."
+    },
+    {
+      "section": "How it works",
+      "text": "If the host dies, it restarts on a 2s → 30s exponential backoff, and any pending notification is delivered by a one-shot spawn in the meantime."
+    },
+    {
+      "section": "Notification content",
+      "text": "| Element | Value |\n| --- | --- |\n| Title | Always `DSH 需要提权` |\n| Body | `displayReason` (tries `zh` / `zh-CN` / `zh-Hans` / `en`), then `reason`, then `<tool> is requesting your approval` |\n| Length | Body capped at 220 characters, truncated with `…` |\n| Tag | `Tag = dshApproval`, `Group = dshNotify` (same-tag toasts replace each other) |"
+    },
+    {
+      "section": "Project layout",
+      "text": "| File | Purpose |\n| --- | --- |\n| `index.js` | Host plugin: event listeners, de-dupe, notification channel (persistent process + backoff restart + one-shot fallback) |\n| `notify-host.ps1` | Plain-ASCII PowerShell notification host; reads JSON lines from stdin and raises WinRT toasts |\n| `cordis.patch.yml` | Injection patch that adds the `windows-approval-notify` row |\n| `locale/zh.json`, `locale/en.json` | Title and description shown by the plugin manager |\n| `icon.svg` | Plugin icon |\n| `package.json` | Package metadata and DSH bundle declaration |"
+    },
+    {
+      "section": "FAQ",
+      "text": "**No notification at all?**\nCheck Settings → System → Notifications and make sure \"DeepSeek Harness\" is allowed; also check Do Not Disturb / Focus Assist. If the entry isn't listed at all, the DSH desktop app hasn't registered its AppUserModelID yet and Windows drops the toast.\n\n**The toast shows up before I see the DSH dialog?**\nBy design — the notification rides the event stream and can beat DSH's own render. Same content, just sooner."
+    },
+    {
+      "section": "FAQ",
+      "text": "**Will it spam me?**\nNo. Each approval request is de-duped by `callId` (falling back to `tool|reason`) for 15 seconds, and same-tag toasts replace each other.\n\n**Several approvals at once?**\nOnly the last one stays in the notification center. A deliberate trade-off: better to lose one line of history than to bury you in toasts."
+    },
+    {
+      "section": "FAQ",
+      "text": "**Can I change the wording or add a sound?**\nThere are no options in this version; wording tracks DSH. To change it, `TITLE` at the top of `index.js` and the toast XML inside `notify-host.ps1` are the only two places to touch."
+    },
+    {
+      "section": "Contributing",
+      "text": "Issues and PRs are welcome. Please open an issue before larger changes, especially anything touching how events are observed or how toasts are delivered — those two are the whole basis of the \"never interferes with DSH\" promise."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE) © DSH Windows Approval Notify contributors"
+    }
+  ],
+  "skipped": []
+}

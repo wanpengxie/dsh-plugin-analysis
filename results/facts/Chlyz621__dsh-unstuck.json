@@ -1,0 +1,308 @@
+{
+  "repo": "Chlyz621/dsh-unstuck",
+  "commit": "08469c30232a52caaf46e2fdf650b138b0788f49",
+  "extracted_at": "2026-11-10T09:50:47.442617+00:00",
+  "tree": {
+    "files": 21,
+    "bytes": 177734,
+    "lines_by_language": {
+      "JSON": 101,
+      "JavaScript": 3228,
+      "Markdown": 664,
+      "Other": 273,
+      "YAML": 70
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "PLUGIN-NOTES.md",
+      "README.md",
+      "cordis.patch.yml",
+      "dev/probe-meta.mjs",
+      "icon.svg",
+      "install.ps1",
+      "lib/config.js",
+      "lib/core.js",
+      "lib/index.js",
+      "locale/en.json",
+      "package.json",
+      "probe-await.mjs",
+      "probe2.mjs",
+      "test/core.test.js",
+      "test/plugin.test.js",
+      "test/smoke-cordis.mjs",
+      "tools/diag.mjs",
+      "uninstall.ps1",
+      "unstuck.config.example.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-unstuck",
+    "version": "0.3.1",
+    "description": "Auto-recovery for DeepSeek Harness: continues turns that stopped silently or abnormally, revives stalled model requests, pauses when a turn asks you a question and then runs ahead without waiting, and reports waits on approval or questions. Pure structural detection, no judge model.",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Chlyz621/dsh-unstuck.git"
+    },
+    "homepage": "https://github.com/Chlyz621/dsh-unstuck#readme",
+    "bugs": {
+      "url": "https://github.com/Chlyz621/dsh-unstuck/issues"
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json",
+      "./locale/*": "./locale/*"
+    },
+    "files": [
+      "lib",
+      "locale",
+      "tools",
+      "LICENSE",
+      "cordis.patch.yml",
+      "README.md",
+      "PLUGIN-NOTES.md",
+      "icon.svg",
+      "unstuck.config.example.json",
+      "install.ps1",
+      "uninstall.ps1"
+    ],
+    "icon": "icon.svg",
+    "scripts": {
+      "test": "node --test \"test/*.test.js\""
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "unstuck",
+      "auto-continue",
+      "watchdog"
+    ],
+    "license": "MIT",
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dshTarget": "0.2.1-rc.2"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-unstuck bundle patch\n#\n# 装进 profile 之后，这一层会插入一个 dsh-unstuck 条目。\n# 这里写的 config 只是「初始值」：真正的调参请改\n#   <DSH_HOME>/unstuck/config.json\n# 那个文件优先级更高，改完重启 dsh 生效（不用改本文件、不用重装）。\n#\n# 注意：dsh-purge 的 autoRetry 已经在做请求重试（profile 里默认开着）。\n# 本插件 autoRetry 默认 false，避免两边叠成 6 次重试。\n# 想统一交给监督员管，就在 profile 的 cordis.patch.yml 里把\n# dsh-purge 的 autoRetry 关掉，再打开下面这个。\n\n- insert:\n    - id: dsh-unstuck\n      name: 'dsh-unstuck'\n      config:\n        enabled: true\n        verbose: false\n\n        # 轮次异常结束 → 补一条「继续」\n        autoContinue: true\n        continueMax: 3\n        continueText: \"继续\"\n        continueDelayMs: 700\n        backoffMs: [1500, 5000, 15000]\n\n        # 「假完成」也续跑：turn/end 写着 completed，其实工具调用被中转站吞成正文，\n        # agent 静默 idle —— 这是实测里最常见的断连形态（见 README 的「断连根因」）\n        continueOnSwallowed: true\n        continueTextSwallowed: \"继续。你上一条消息里的工具调用没有正常发出，请直接重新发起工具调用，不要重复解释。\"\n\n        # 你按了停止（turn/end = aborted{kind:'user'}）怎么办：\n        #   never  = 一律不碰（默认，你按停止就是停止）\n        #   silent = 只在「这一轮一个字都没输出」时补一条\n        #            （实测 8 次用户中断全是零输出，和「界面看着卡住我按一下」分不清）\n        #   always = 只要不是监督员自己掐的都续（不建议）\n        continueOnUserAbort: never\n        notifyUserAbort: true\n\n        # 「问了不等」：正文在等你点头，模型却自己往下干 → 掐掉这一轮，把发言权还给你\n        #   off    = 不管\n        #   mutate = 只有它开始动文件（write/edit/delete/apply_patch…）才掐（默认）\n        #   any    = 问完只要还有下一步动作（含 shell）就掐\n        pauseOnUnansweredQuestion: mutate\n\n        # 正文里把话头交给你（「回「可以」我就开始」「三处需要你点头」）→ 绝不补「继续」。\n        # 它没弹问题框、只在正文里让你确认/选择时，补一条「继续」等于替你把决定做了，\n        # 你没空回，它已经自己开工了。实测案例见 lib/core.js 的 tailAsksForAnswer 注释 B。\n        respectPendingQuestion: true\n\n        # 模型请求重试（默认交给 dsh-purge）\n        autoRetry: false\n        retryMax: 2\n\n        # 假死检测：请求发出后多久没有任何流片段就掐掉重来\n        stallEnabled: true\n        stallMs: 180000\n        stallResumeMs: 800\n        tickMs: 15000\n        hardStallMs: 0\n\n        # 卡在等审批 / 等回答时提醒\n        notifyBlocked: true\n        blockedNotifyMs: 120000\n\n        # 通知命令，{msg} 会被替换成正文；留空则只写日志\n        notifyCommand: \"\"\n\n        # 子 agent 默认不插手\n        skipOwnedAgents: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/config.js:200"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/plugin.test.js:19"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/smoke-cordis.mjs:22"
+    },
+    {
+      "name": "DSH_DEPS_DIR",
+      "kind": "env",
+      "where": "test/smoke-cordis.mjs:40"
+    },
+    {
+      "name": "DSH_DEPS_DIR",
+      "kind": "env",
+      "where": "test/smoke-cordis.mjs:41"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/smoke-cordis.mjs:61"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/diag.mjs:32"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Chlyz621/dsh-unstuck.git",
+      "where": "package.json:7"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Chlyz621/dsh-unstuck#readme",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Chlyz621/dsh-unstuck/issues",
+      "where": "package.json:11"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-10-23T10:24:32Z",
+    "created_at": "2026-10-20T18:59:55Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/config.js",
+    "lib/core.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-unstuck",
+      "text": "给 DeepSeek Harness 用的**监督员**插件。dsh 跑着跑着自己断了、卡住了、闷头不动了，它负责发现并把你解开（`unstuck`），不需要你手动发消息。"
+    },
+    {
+      "section": "dsh-unstuck",
+      "text": "> **English** — A watchdog plugin for DeepSeek Harness. When a run stops on its own and waits for you to say something, this continues it.\n>\n> It handles three cases, and nothing else:\n> - **Abnormal turn end** (`error`, `aborted` not caused by you, `max-tokens`, `interrupted`) — sends one \"continue\" after a short delay.\n> - **Swallowed turns** — the turn is logged as `completed` even though the model meant to call a tool and an OpenAI-compatible relay emitted the call markup as plain text instead, leaving the agent silently idle. Detected structurally (the reasoning block and the text block are byte-identical, or the text is empty while reasoning is not, or the tail is a broken call tag) and continued with a pointed message asking for the tool call again.\n> - **Stalled requests** — a model request was issued and then no stream frame arrived for `stallMs`. The turn is cancelled (`kind: 'hook'`, inbox kept) and continued.\n>\n> Waiting on an approval or on a question is logged and notified, never answered on your behalf. A stop you pressed yourself, a turn that really finished, and non-retryable errors (auth, quota, context overflow) are all left alone. Detection is pure structure ove"
+    },
+    {
+      "section": "dsh-unstuck",
+      "text": "---"
+    },
+    {
+      "section": "它管四件事",
+      "text": "| 现象 | 监督员怎么做 |\n| --- | --- |\n| 一轮对话异常结束（上游报错、输出被截断、进程崩溃留下的残局、非你按的中断） | 等一小会儿，补发一条「继续」 |\n| **「假完成」**：日志写着这轮正常结束，其实工具调用被吞了、活没干完（最常见，见下节） | 补一条带指向性的「继续」，让它重新发工具调用 |\n| 模型请求发出去了，但很久**没有任何流片段**（假死：TCP 断了但不报错） | 掐掉当前这一轮，再补「继续」 |\n| **「问了不等」**：正文问你「你认可吗？」，你没回它，它自己往下开工 | 掐掉这一轮，把发言权还给你（见「问了不等」一节） |\n| 卡在等你审批 / 等你回答问题 | 只记录 + 通知，**绝不替你回答** |\n\n不插手的情况：你按了停止、你这轮真的干完了、你正在输入（inbox 里有你的消息）、连续中断超过预算、认证失败这类再试也没用的错误。"
+    },
+    {
+      "section": "它管四件事",
+      "text": "「异常结束」具体指这几种 `turn/end` 原因：`error`（上游报错）、`aborted`（不是你按的停止）、`max-tokens`（输出被 token 上限截断）、`interrupted`（进程中断留下的残局）。\n\n---"
+    },
+    {
+      "section": "断连根因：中转站把工具调用吞成了正文",
+      "text": "这不是猜的，是从真实会话日志里挖出来的。同一会话三轮，**每一轮都是这么断的**：\n\n| turn | 末 step | 耗时 | 块结构 | reasoning 与 text | tool-call | 正文尾部 |\n| --- | --- | --- | --- | --- | --- | --- |\n| 1 | 21 | 10.6s | reasoning+text | **逐字节相同** | 无 | `…</｜｜DSML｜｜ calls>` |\n| 2 | 138 | 4.5s | reasoning+text | **逐字节相同** | 无 | `…temp dir.</｜｜DSML｜｜ parameter>` |\n| 3 | 10 | 18.4s | reasoning+text | **逐字节相同** | 无 | `Hmm, the`（断在词中间） |\n\n同一会话 172 条 assistant 消息里，「reasoning 和 text 逐字节相同且没有 tool-call」只出现这 3 次 —— 正是被吞的 3 次，其余 169 条零误报。"
+    },
+    {
+      "section": "断连根因：中转站把工具调用吞成了正文",
+      "text": "**机理**：模型本来要发工具调用，中转站（`api: openai-completions` 兼容层）没能把 DeepSeek 原生的 `｜｜DSML｜｜` 工具调用标记转成 OpenAI 的 `tool_calls`，那段标记被当普通正文吐了出来。于是 assistant 消息里只剩 reasoning + text、没有 tool-call；agent 循环认为「模型没要求调工具 = 这轮说完了」，`turn/end` 记成 `completed`，agent 静默 idle。\n\n你看到的现象就是「跑着跑着自己断了，得手动发一句才继续」。耗时正常（4.5–18.4s，不是超时）、长度不一（2868–8892 字符，不是 token 上限），所以既不是超时也不是截断，是**协议转换层偶发失败**。\n\ndsh 自带的「继续」按钮也救不了它 —— 那个按钮把 `completed` 当「已收工」，直接拒绝续跑。本插件的 `continueOnSwallowed` 就是专门补这个洞。"
+    },
+    {
+      "section": "想根治的话（可选）",
+      "text": "根因在中转站那一层，插件只能兜底。能减轻的办法：\n\n- **换模型**：`glm-5.3` / `kimi-k3-1` / `minimax-m3` 这些模型原生就是 OpenAI 风格的工具调用，不走 DSML，理论上不会踩这个坑。改 profile 的 `agent-default-model` 即可。\n- **降 `reasoningEffort`**：`max` 会让 reasoning 特别长，长流更容易在中转站出错。降到 `high` 试试。\n- **换官方端点**：DeepSeek 官方 API 不会有这层转换。\n\n---"
+    },
+    {
+      "section": "问了不等：它问你「你认可吗」，然后自己开工",
+      "text": "这是实测抓到的另一种更隐蔽的中断，2026-10-22 02:07 在会话 `session-d54e23f7` 里完整发生了一遍：\n\n| 时刻 | 发生了什么 |\n| --- | --- |\n| 02:07:24 | assistant 正文写「上面这个 5 表 3 页的范围，**你认可吗？**」，并承诺「认可 → 我下一轮直接出工程骨架」 |\n| 02:07:51 | **同一个轮次**里自己开始建工程（`mkdir` → 写 `package.json` → `npm install`） |\n| 02:10:10 | 装完 244 个包，后台起好了 |\n| 02:10:11 | 你按了停止，然后问「你刚刚都给我提了什么问题？」 |\n\n问题不在「它做错了」，而在**它把「等你点头」和「先干起来」放在了同一个轮次里**：你还没来得及回答，工已经开了一半。等你想改主意，成本已经产生了。\n\n`pauseOnUnansweredQuestion` 就是拦这个："
+    },
+    {
+      "section": "问了不等：它问你「你认可吗」，然后自己开工",
+      "text": "| 值 | 行为 |\n| --- | --- |\n| `off` | 不管 |\n| `mutate`（默认） | 问完之后只要它开始**动文件**（`write` / `edit` / `delete` / `apply_patch` …）就掐 |\n| `any` | 问完之后只要有**任何**下一步动作（含 `bash`）就掐 |\n\n判定用的是结构而不是关键字：正文最后 400 字里出现求确认措辞（「你认可吗」「需要你点头」「请确认」…）或第二人称问句（`你/您 … ？`）。代码围栏里的问号不算 —— 否则它解释这条规则的时候会被自己误伤。\n\n掐掉之后**不会**自动补「继续」，因为该说话的是你。日志里留一条 `question-paused`。\n\n> 只在它真的往下干的时候才掐。只是问一句、然后等你回话，是正常行为。"
+    },
+    {
+      "section": "没弹问题框、只在正文里让你确认时，也不续跑",
+      "text": "上面那一招只在「它已经开始动文件」时才拦得住。更常见的是另一种：它这一轮**正常结束了**，但结尾把话头交给了你——「三处需要你点头：① … 同意吗？② … 行吗？③ … 要不要排除？」「**回「可以」我就开始**」。它没弹问题框，只是让你在正文下面自己输。\n\n这种情况插件原来会补一条「继续」，于是你还没空回，它已经开工了。`respectPendingQuestion`（默认 `true`）就是关掉这个：\n\n| 你的处境 | 插件行为 |\n| --- | --- |\n| 结尾在等你拍板/选择 | **不补「继续」**，只在日志留 `continue-skipped` + `awaiting-answer`，并发一条通知告诉你它在等你 |\n| 这一轮只是普通陈述/还没干完就断了 | 照旧补「继续」 |\n| 你已经回过话了（哪怕只回「可以」） | 不再算「在等你」，该续就续 |\n\n判据分两档，都先剥掉被吞的工具调用残留、再忽略代码围栏："
+    },
+    {
+      "section": "没弹问题框、只在正文里让你确认时，也不续跑",
+      "text": "- **强信号（看正文最后 1200 字）**：模型明说在等你——「需要你点头」「要你拍板」「等你回」「回「…」」「我就开始」「说一声」「点头」「拍板」。\n- **弱信号（看最后 400 字）**：求确认措辞（「同意吗」「行吗」「可以吗」「要不要」「请确认」…）、第二人称问句（`你/您 … ？`）、或最后一行以问号收尾且带求确认语气。\n\n举例：`session-19b6c197` 第 45 轮那段正文里三个问句**一个「你」字都没有**（「要不要排除」「这个规则行吗」），旧版只看尾部 400 字的第二人称问句，全都漏了——现在靠「回「可以」我就开始」这个强信号接住。\n\n<details>\n<summary>想恢复成「不管它在聊什么，断了就续」</summary>\n\n```jsonc\n{ \"respectPendingQuestion\": false }\n```\n\n关掉之后行为回到 0.3.0：短阈值的求确认检测仍会被 `pauseOnUnansweredQuestion` 用来拦「问了不等」，但轮次结束后的续跑不再看这一点。\n</details>\n\n---"
+    },
+    {
+      "section": "三个必须知道的默认行为",
+      "text": "1. **只补「继续」两个字。** 它不猜你想干什么，也不改你的需求。续跑消息的来源标记是 `dsh-unstuck`，所以它不会把自己发的消息当成你在说话。\n2. **有预算。** 同一个会话连续中断最多自动续跑 `continueMax`（默认 3）次，用完就停手并在日志里记一条 `continue-budget-exhausted`。你只要手动发一条消息，预算立刻清零。\n3. **有退避。** 第 1/2/3 次续跑前分别多等 1.5s / 5s / 15s，避免把上游打爆、也避免烧钱。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "两种装法。只想装上用走第一种；要改代码或者离线装走第二种。"
+    },
+    {
+      "section": "一、从 GitHub 装（推荐）",
+      "text": "```powershell\ndsh plugin --profile tauri add github:Chlyz621/dsh-unstuck\n```\n\ndsh 会把仓库取到 profile 的 `node_modules` 下并登记进 `dsh.profile.bundles`。装完**完全退出** DeepSeek Harness（含托盘图标）再打开。"
+    },
+    {
+      "section": "二、从本地目录装（改代码时用）",
+      "text": "```powershell\ncd <仓库根目录>\npwsh -File .\\install.ps1\n```\n\n装完**完全退出** DeepSeek Harness（含托盘图标）再打开。\n\n脚本做三件事，每一步都会先备份：\n\n1. 把插件复制到 `<DSH_HOME>\\plugins\\dsh-unstuck`\n2. 在 `<DSH_HOME>\\profiles\\tauri\\package.json` 里登记依赖并加进 `dsh.profile.bundles`\n3. 在 profile 的 `node_modules` 下建一个目录联接，让 dsh 能 `require` 到它（不联网、不跑 pnpm）\n\n参数：\n\n```powershell\npwsh -File .\\install.ps1 -Profile tauri -DshHome C:\\Users\\me\\.dsh -Force\n```\n\n卸载："
+    },
+    {
+      "section": "二、从本地目录装（改代码时用）",
+      "text": "```powershell\npwsh -File .\\uninstall.ps1          # 只从 profile 摘掉，插件文件留着\npwsh -File .\\uninstall.ps1 -Purge  # 连插件文件一起删\n```\n\n---"
+    },
+    {
+      "section": "怎么确认它活着",
+      "text": "```powershell\nGet-Content \"$env:USERPROFILE\\.dsh\\unstuck\\unstuck.jsonl\" -Tail 20\n```\n\n开机应该有一行 `{\"event\":\"boot\",...}`，里面能看到当前生效的配置和挂上了几个监听器。之后每次动手都有记录："
+    },
+    {
+      "section": "怎么确认它活着",
+      "text": "| event | 含义 |\n| --- | --- |\n| `boot` / `dispose` | 装上了 / 卸载了 |\n| `continue-sent` | 补了一条「继续」（带 attempt、kind、code） |\n| `turn-swallowed` | 发现「假完成」（带 why：`dsml-leak` / `echo-reasoning` / `no-output`） |\n| `continue-skipped` | 判断过但没补（带 why：`user-abort` / `policy` / `stall-already-handled`） |\n| `continue-deferred` | 本来要补，但你在输入或已经跑起来了（`user-took-over` / `inbox-busy`） |\n| `continue-budget-exhausted` | 预算用完，需要人看一眼 |\n| `stall-detected` | 判定假死（带 silenceMs） |\n| `clock-jump` | 机器睡眠/事件循环被卡，这一轮巡检只搬时间锚点、不判定（带 gapMs） |\n| `question-paused` | 命中「问了不等」，掐掉了这一轮（带 tools：它本来要动哪些文件） |\n| `awaiting-answer` | 这一轮在等你回答，所以没有自动续跑（配 `continue-skipped` 的 `why: \"awaiting-answer\"` 看） |\n| `user-abort-noted` | 你按了停止、且这一轮一个字都没输出（可能就是界面看着卡住） |\n| `question-asked` / `approval-asked` | 记录了你被卡住 |\n| `question-blocked` / `approval-blocked` | 卡太久，提醒你 |\n| `request-retry` | 重试了一次模型请求（默认关闭） |"
+    },
+    {
+      "section": "怎么确认它活着",
+      "text": "debug 级的记录（比如每轮一条 `running`）默认不落盘，只有 `verbose: true` 才写，免得把上面这些有用的记录淹掉。\n\n---"
+    },
+    {
+      "section": "调参",
+      "text": "默认值够用。想改就把示例配置复制过去，改完重启 dsh：\n\n```powershell\nCopy-Item .\\unstuck.config.example.json \"$env:USERPROFILE\\.dsh\\unstuck\\config.json\"\n```\n\n优先级：内置默认 < profile 里 `cordis.patch.yml` 的 config < 这个 `config.json`（后者赢）。"
+    },
+    {
+      "section": "调参",
+      "text": "| 键 | 默认 | 说明 |\n| --- | --- | --- |\n| `enabled` | `true` | 总开关，关掉后一个监听器都不装 |\n| `autoContinue` | `true` | 续跑总开关 |\n| `continueMax` | `3` | 每个会话最多自动续几次 |\n| `continueText` | `\"继续\"` | 续跑发什么 |\n| `continueOnSwallowed` | `true` | 「假完成」也续跑，见「断连根因」一节 |\n| `continueTextSwallowed` | 带指向性的一句 | 「假完成」时发的措辞 |\n| `continueOnUserAbort` | `never` | 你按了停止怎么办：`never` 不碰 / `silent` 只在零输出时续 / `always` 一律续 |\n| `notifyUserAbort` | `true` | 零输出的用户中断额外提醒一次 |\n| `pauseOnUnansweredQuestion` | `mutate` | 「问了不等」拦不拦：`off` / `mutate` / `any`，见上文 |\n| `respectPendingQuestion` | `true` | 轮次结束时正文在等你确认/选择 → **不**补「继续」，见上文 |\n| `continueDelayMs` | `700` | 发现中断后先等多久 |\n| `backoffMs` | `[1500,5000,15000]` | 每次续跑额外等待 |\n| `continueOn` | 异常类原因 | 只在这些 turn 结束原因上续跑 |\n| `skipCodes` | 认证类错误码 | 命中就不续（试也没用） |\n| `autoRetry` | `false` | 模型请求层重试，**默认关**，见下 |\n| `retryMax` | `2` | 请求重试次数 |\n| `stallEnabled` | `true` | 假死检测开关 |\n| `stallMs` | `180000` | 请求发出后多久没流片段算假死（3 分钟） |\n| `stallResumeMs` | `800` | 掐掉后等多久再补「继续」 |\n| `tickMs` | `15000` | 巡检间隔 |\n| `hardStallMs` | `0` | 整轮零事件的兜底阈值，0=关闭（长工具本来就很久没事件） |\n| `notifyBlocked` | `true` | 卡审批/等回答时提醒 |\n| `blockedNotifyMs` | `120000` | 卡多久开始提醒 |\n| `notifyCommand` | `\"\"` | 额外执行的命令，`{msg}` 会替换成正文；留空只写日志 |\n"
+    },
+    {
+      "section": "和 dsh 自带「继续」按钮的关系",
+      "text": "桌面端本来就有一个「继续」按钮（`POST /api/tauri/ui/session/resume`），它做的事和本插件一样：判断上一轮是不是正常结束，不是就补一条 `Continue the interrupted task...`。\n\n区别在于**它是手动的**——得你去点。本插件把那套判断搬进进程内、按事件自动触发，而且更保守：\n\n- 你按了停止 → 不续（`continueOnUserAbort` 默认 `never`；想连这种也救就设 `silent`）\n- 认证失败 / 余额不足 / 上下文超长 → 不续（点了也没用）\n- 连续中断超过 `continueMax` 次 → 停手并提醒\n- 你的消息一进来 → 立刻让位\n\n它发的消息 source.kind 是 `dsh-unstuck`，跟桌面端按钮的 `continue` 区分开，日志里一眼能看出是谁干的。反过来，如果发现会话里已经有一条 `continue` 或 `dsh-unstuck` 消息，本插件不会再补第二条。"
+    },
+    {
+      "section": "和 dsh-purge 的关系",
+      "text": "dsh-purge 自带一个 `autoRetry`（profile 里默认**开着**），做的是同一件事。所以本插件 `autoRetry` 默认 `false`，避免两边叠成 6 次重试。\n\n想让监督员统一管：在 profile 的 `cordis.patch.yml` 里把 dsh-purge 的 `autoRetry` 设成 `false`，再把本插件的 `autoRetry` 设成 `true`。\n\n---"
+    },
+    {
+      "section": "桌面通知（可选）",
+      "text": "Windows 上想收气泡提醒，把 `notifyCommand` 设成：\n\n```json\n{ \"notifyCommand\": \"msg * {msg}\" }\n```\n\n或者用 [BurntToast](https://github.com/Windos/BurntToast)：`pwsh -NoProfile -c \"New-BurntToastNotification -Text 'dsh', '{msg}'\"`。\n\n---"
+    },
+    {
+      "section": "它做不到的事",
+      "text": "- **dsh 进程整个没了（崩溃、被关掉、桌面端退出）** —— 插件在进程内，进程死了它也跟着死，救不了。这种要靠外部守护进程，不在本插件范围。\n- **模型一直返回同样错误** —— 预算用完后它只提醒，不硬刚。\n- **它不替你回答提问、不替你点审批。** 这是故意的：那类决定不该自动化。\n\n---"
+    },
+    {
+      "section": "开发",
+      "text": "```powershell\ncd <仓库根目录>\nnode --test \"test/*.test.js\"\n```\n\n- `lib/core.js` 纯逻辑（判原因、算退避、造消息、读 session 事件），无副作用，好测\n- `lib/config.js` 默认值 + 归一化 + 用户配置文件\n- `lib/index.js` cordis 装配层，只管接事件和发消息\n- `test/core.test.js` 逻辑单测；`test/plugin.test.js` 用假 ctx / 假 agent 跑装配层\n\n改完 `lib/` 想让它生效，有两条路（实测过，别信「改 profile patch 就能热重载」这种说法，那个不成立）："
+    },
+    {
+      "section": "开发",
+      "text": "1. **改已安装目录里的文件** —— dsh 在监听 `~/.dsh/plugins/` 下的插件目录，文件一变，1~2 秒内自己 `dispose` + `boot`，不用重启。所以先同步：\n   ```powershell\n   Copy-Item .\\lib\\*.js $env:DSH_HOME\\plugins\\dsh-unstuck\\lib\\ -Force\n   ```\n   然后看 `~/.dsh/unstuck/unstuck.jsonl` 尾部有没有新的 `boot` 行。\n2. **重跑 `install.ps1` 或直接重启桌面端** —— 最稳，任何情况下都算数。\n\n注意：只往 profile 的 `cordis.patch.yml` 里加注释**不会**触发重载（实测等 30 秒无反应）。想改配置，写进 `<DSH_HOME>\\unstuck\\config.json` 再重启。\n\n---"
+    },
+    {
+      "section": "关于名字和市场里的描述",
+      "text": "**为什么叫 `unstuck`**：它的三件事——异常结束、假完成、请求假死——本质都是「卡住了」，本插件做的就是把卡住解开。这个名字在 npm 和插件市场 catalog 上都是空闲的；而 `dsh-supervisor` 那个名字已经被人发布后撤回（registry 里只剩墓碑，0 版本），发不了，也进不了 catalog。\n\n**为什么插件市场里一开始没有描述**：市场只显示 **catalog 里已发布插件**的描述，不读本地 `package.json`。本地 `file:` 安装的插件没有 catalog 条目，所以只有包名、没有描述。目前的解决办法是把一条说明写进市场备注（`.dsh-market\\state.json` 的 `notes`），市场「已安装」那一行会显示它；你可以在行尾「···」里改成自己的话。"
+    },
+    {
+      "section": "关于名字和市场里的描述",
+      "text": "想让它有真正的「作者描述」，只能发布到 npm 并被 catalog 收录——catalog 支持 `description.en` 与 `description.zh-CN` 两栏。发布前请确认 `package.json` 里的 `files`、`dsh.bundle.patch`、`dshTarget` 都对（现在是对的）。"
+    }
+  ],
+  "skipped": []
+}

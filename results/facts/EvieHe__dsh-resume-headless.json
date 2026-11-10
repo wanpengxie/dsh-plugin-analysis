@@ -1,0 +1,181 @@
+{
+  "repo": "EvieHe/dsh-resume-headless",
+  "commit": "90a148a1219682c427070702e13c79f20489dd12",
+  "extracted_at": "2026-11-10T10:17:43.212084+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 19859,
+    "lines_by_language": {
+      "JSON": 69,
+      "JavaScript": 183,
+      "Markdown": 67,
+      "Other": 2,
+      "TypeScript": 247,
+      "YAML": 25
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/startup.js",
+      "package.json",
+      "src/index.ts",
+      "src/startup.ts",
+      "tsconfig.json",
+      "tsdown.config.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-resume-headless",
+    "version": "0.1.1",
+    "description": "Headless one-shot session resume for DeepSeek Harness: dsh --profile headless --resume <session-id> \"task\"",
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./startup": {
+        "default": "./lib/startup.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.js",
+      "lib/startup.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "scripts": {
+      "build": "tsdown",
+      "typecheck": "tsc --noEmit"
+    },
+    "license": "MIT",
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "headless",
+      "resume"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
+      "@deepseek-ai/dsh-agent": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-cmdline": "^0.0.1-rc.1",
+      "@deepseek-ai/dsh-llm": "^0.0.1-rc.1",
+      "@deepseek-ai/dsh-session": "^0.0.1-rc.1"
+    },
+    "devDependencies": {
+      "@types/node": "^22.0.0",
+      "tsdown": "^0.22.2",
+      "typescript": "^5.9.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-resume-headless bundle patch\n#\n# 覆盖官方 headless 的两个行：headless-startup（无 --resume 选项）与\n# headless-runner（源码写死 randomUUID 新建会话，从不 resume）。\n# 本层按 bundle 顺序应用在 @deepseek-ai/dsh-headless 之后，因此可以 disable\n# 它插入的行并替换为自己的实现。\n#\n# 注意：只适用于叠加了 @deepseek-ai/dsh-headless 的 profile（如 headless）。\n# 默认模型（agent-default-model）由用户配置，本层不干预。\n- id: headless-startup\n  disabled: true\n\n- id: headless-runner\n  disabled: true\n\n- insert:\n    - id: resume-startup\n      name: 'dsh-resume-headless/startup'\n\n    - id: resume-runner\n      name: 'dsh-resume-headless'\n      inject: [resumeStartup]\n      config:\n        task: !!js ctx.resumeStartup.task\n        resumeSessionId: !!js ctx.resumeStartup.resumeSessionId ?? undefined\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/startup.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "@types/node": "^22.0.0",
+      "tsdown": "^0.22.2",
+      "typescript": "^5.9.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 2,
+    "pushed_at": "2026-08-24T08:37:39Z",
+    "created_at": "2026-08-24T04:02:51Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/startup.js",
+    "package.json",
+    "src/index.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-resume-headless",
+      "text": "给 DeepSeek Harness 官方 `headless` profile 加**一次性会话恢复**（one-shot resume）能力的 bundle：\n\n```sh\ndsh --profile headless --resume <session-id> \"继续任务\"   # 恢复历史会话，跑完即退出\ndsh --profile headless \"新任务\"                           # 无 --resume 时行为与官方 headless 完全一致\n```"
+    },
+    {
+      "section": "dsh-resume-headless",
+      "text": "原理：`--resume` 时走核心 API `ctx.agents.resume({ resumeSessionId })`——从持久化\n（默认 `$DSH_HOME/sessions`）加载会话、重建历史、**轮次编号接着上次**；否则退回官方\n`agents.create()` 新建随机会话。恢复路径、输出契约（stdout 最后一条 assistant 文本、\ncompleted → 0 / 其他 → 1）与官方 headless 一致；会话 id 打印到 stderr（`dsh-session: <id>`）\n方便脚本续接。"
+    },
+    {
+      "section": "安装",
+      "text": "先安装 dsh CLI（`npm i -g @deepseek-ai/dsh`），然后任选一种：\n\n```sh"
+    },
+    {
+      "section": "npm（推荐）",
+      "text": "dsh plugin --profile headless add dsh-resume-headless"
+    },
+    {
+      "section": "把提示的 allowBuilds 键加进 ~/.dsh/profiles/headless/pnpm-workspace.yaml 后重跑）",
+      "text": "dsh plugin --profile headless add github:<you>/dsh-resume-headless#v0.1.0"
+    },
+    {
+      "section": "本地 checkout",
+      "text": "dsh plugin --profile headless add file:.\n```\n\n要求：Node `^22.19 || >=24`；只适用于叠加了 `@deepseek-ai/dsh-headless` 的 profile。"
+    },
+    {
+      "section": "配置",
+      "text": "模型与官方 headless 一样配置：`DEEPSEEK_API_KEY` 环境变量 / `$DSH_HOME/settings.yaml`\n（`llm-deepseek.baseURL`）或 OpenAI 兼容网关（patch `llm-pi-ai` 行）。"
+    },
+    {
+      "section": "使用",
+      "text": "```sh"
+    },
+    {
+      "section": "新建会话",
+      "text": "dsh --profile headless \"run the tests\""
+    },
+    {
+      "section": "恢复并继续（会话 id 从上次运行的 stderr `dsh-session:` 行提取）",
+      "text": "dsh --profile headless --resume session-xxxx \"continue where you left off\""
+    },
+    {
+      "section": "恢复不存在的会话 → 响亮失败（exit 1），不会静默新建",
+      "text": "```"
+    },
+    {
+      "section": "开发 / 发布",
+      "text": "```sh\npnpm install\npnpm build        # tsdown: src/ → lib/\npnpm typecheck\npnpm pack         # 本地产物检查\n\n`lib/` 随仓库提交：git 安装直接使用提交的构建产物，**无需 prepare/allowBuilds 等任何构建权限**；\n改动 `src/` 后记得先 `pnpm build` 再提交。发布后给仓库打上 GitHub\n[`dsh-plugin`](https://github.com/topics/dsh-plugin) 话题便于被发现。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。"
+    }
+  ],
+  "skipped": []
+}

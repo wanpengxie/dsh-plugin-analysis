@@ -1,0 +1,401 @@
+{
+  "repo": "FireOpalus/dsh-laa",
+  "commit": "6ecc122fd48f7df91ffb9dbad9ed80d98523de51",
+  "extracted_at": "2026-11-10T10:24:20.268667+00:00",
+  "tree": {
+    "files": 24,
+    "bytes": 246542,
+    "lines_by_language": {
+      "JSON": 70,
+      "JavaScript": 4764,
+      "Markdown": 621,
+      "Other": 44,
+      "YAML": 117
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/command.js",
+      "lib/index.js",
+      "lib/laa.js",
+      "lib/pricing.js",
+      "lib/store.js",
+      "lib/web.js",
+      "package.json",
+      "scripts/dev-home.mjs",
+      "scripts/e2e.mjs",
+      "scripts/smoke.mjs",
+      "test/client.test.js",
+      "test/harness.js",
+      "test/plugin.test.js",
+      "test/pricing.test.js",
+      "test/runtime.test.js",
+      "test/web.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-laa",
+    "version": "0.6.0",
+    "description": "DSH 插件：为每个会话提供 LAA 模式——DeepSeek 峰时自动停止运行，谷时自动继续运行。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./pricing": "./lib/pricing.js",
+      "./runtime": "./lib/laa.js",
+      "./store": "./lib/store.js",
+      "./command": "./lib/command.js",
+      "./web": "./lib/web.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "scripts",
+      "test",
+      "cordis.patch.yml",
+      "README.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "scripts": {
+      "test": "node --test --test-isolation=none test/pricing.test.js test/runtime.test.js test/plugin.test.js test/web.test.js test/client.test.js",
+      "smoke": "node scripts/smoke.mjs",
+      "e2e": "node scripts/e2e.mjs",
+      "dev-home": "node scripts/dev-home.mjs",
+      "dev": "node scripts/dev-home.mjs --boot"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "dsh-plugin",
+      "plugin",
+      "laa",
+      "off-peak",
+      "peak",
+      "scheduling"
+    ],
+    "author": "Boiser",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/FireOpalus/dsh-laa.git"
+    },
+    "bugs": {
+      "url": "https://github.com/FireOpalus/dsh-laa/issues"
+    },
+    "homepage": "https://github.com/FireOpalus/dsh-laa#readme",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-laa bundle patch layer —— 该包本身就是插件包，安装后由本层插入加载器行。\n#\n# 安装：dsh plugin --profile web add dsh-laa（或开发时 add link:<本目录>），\n# 然后重启 dsh web / DSH Desktop。\n#\n# 提醒：profile 自己的 cordis.patch.yml 覆盖同一行时，是【整体替换】config\n# 而不是逐字段合并。因此这里只写必要字段，缺省值由 lib/laa.js 的\n# normalizeConfig() 补齐；要改峰谷窗口就在这里同时写出完整的 peakWindows。\n- insert:\n    - id: laa\n      name: 'dsh-laa'\n      config:\n        # 总开关：false 时插件照常加载，但任何会话都不会被停。\n        enabled: true\n        # 峰谷窗口所依据的时区（DeepSeek 官方口径为北京时间）。\n        timeZone: 'Asia/Shanghai'\n        # 峰时窗口，其余时段一律视为谷时。\n        # 官方口径：北京时间周一至周五 09:00-12:00、14:00-18:00。\n        peakWindows:\n          - days: [mon, tue, wed, thu, fri]\n            start: '09:00'\n            end: '12:00'\n          - days: [mon, tue, wed, thu, fri]\n            start: '14:00'\n            end: '18:00'\n        # 新会话默认是否开启 LAA 模式（每个会话仍可用 /laa on|off 单独切换）。\n        defaultMode: false\n        # 峰谷切换时的浏览器通知策略：enabled（只有开着 LAA 的会话才播报）/ always / off。\n        # 开关上「跳三下 + 平滑变色」的动画不受它影响。\n        notify: enabled\n        # 哪些提供方路由按峰谷计费、因此受峰时约束；其余提供方（自建网关、第三方中转、\n        # 别家模型）在峰时不会被阻塞。空列表表示谁都不拦。\n        peakProviders:\n          - deepseek-official\n        # 峰时开始时是否中止正在运行的轮次。\n        cancelRunningOnPeak: true\n        # 谷时开始时是否自动续跑被停下的工作。\n        resumeOnValley: true\n        # 相位安全检查间隔（毫秒），同时是窗口边界的兜底轮询。\n        tickMs: 30000\n        # 每个会话最多暂存多少条峰时输入，超出时丢弃最旧的。\n        maxDeferred: 20\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/pricing.js",
+    "lib/laa.js",
+    "lib/store.js",
+    "lib/command.js",
+    "lib/web.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "REAL_DSH_HOME",
+      "kind": "env",
+      "where": "scripts/dev-home.mjs:28"
+    },
+    {
+      "name": "DSH_BIN",
+      "kind": "env",
+      "where": "scripts/dev-home.mjs:220"
+    },
+    {
+      "name": "DSH_BIN",
+      "kind": "env",
+      "where": "scripts/dev-home.mjs:240"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/smoke.mjs:26"
+    },
+    {
+      "name": "DSH_DESKTOP_APP",
+      "kind": "env",
+      "where": "scripts/smoke.mjs:27"
+    },
+    {
+      "name": "timeZone",
+      "kind": "setting",
+      "default": "Asia/Shanghai",
+      "where": "cordis.patch.yml:16"
+    },
+    {
+      "name": "peakWindows",
+      "kind": "setting",
+      "default": "",
+      "where": "cordis.patch.yml:19"
+    },
+    {
+      "name": "peakProviders",
+      "kind": "setting",
+      "default": "deepseek-official",
+      "where": "cordis.patch.yml:34"
+    },
+    {
+      "name": "defaultMode",
+      "kind": "setting",
+      "default": "false",
+      "where": "cordis.patch.yml:27"
+    },
+    {
+      "name": "statePath",
+      "kind": "setting",
+      "default": "$DSH_HOME/laa/state.json",
+      "where": "lib/laa.js:106"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/dsh-laa`：",
+      "where": ".github/workflows/publish.yml:7"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing）：",
+      "where": "lib/pricing.js:4"
+    },
+    {
+      "host": "dsh-laa",
+      "url": "http://dsh-laa",
+      "where": "lib/web.js:126"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/FireOpalus/dsh-laa.git",
+      "where": "package.json:51"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/FireOpalus/dsh-laa/issues",
+      "where": "package.json:54"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/FireOpalus/dsh-laa#readme",
+      "where": "package.json:56"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "command",
+      "name": "laa",
+      "where": "test/plugin.test.js:77"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 24,
+    "pushed_at": "2026-09-17T13:42:25Z",
+    "created_at": "2026-09-12T15:11:20Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/command.js",
+    "lib/index.js",
+    "lib/laa.js",
+    "lib/pricing.js",
+    "lib/store.js",
+    "lib/web.js",
+    "package.json",
+    "scripts/dev-home.mjs",
+    "scripts/e2e.mjs",
+    "scripts/smoke.mjs",
+    "test/client.test.js",
+    "test/harness.js",
+    "test/plugin.test.js",
+    "test/pricing.test.js",
+    "test/runtime.test.js",
+    "test/web.test.js"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "---\ndescription: \"面向用户与维护者的会话级 LAA 模式说明：在 DeepSeek 峰时停止运行、谷时继续运行的 /laa 开关、峰谷判定与停机/续跑的确切语义。\"\nkind: \"package-reference\"\n---"
+    },
+    {
+      "section": "dsh-laa",
+      "text": "`dsh-laa` 给**每一个会话**加一个 LAA 模式。会话打开它之后，就只在 DeepSeek 的\n**谷时（空闲时段）** 运行：\n\n- **峰时**：正在跑的轮次被立刻停下；任何想要进入的步骤会被拦下，于是**一个模型请求都不会发出**。被拦下的输入被原样保存。\n- **谷时**：被停下的轮次收到一条续跑提示词继续做；峰时被拦下的输入按原顺序重新投递。\n\n峰谷时段取自 DeepSeek 官方定价口径，窗口可配置，官方改口径时不需要改代码。\n每个版本的变更记录见 [CHANGELOG.md](CHANGELOG.md)。"
+    },
+    {
+      "section": "目录",
+      "text": "- [安装](#安装)\n- [使用](#使用)\n- [浏览器开关与控制面](#控制面)\n- [峰时到底发生什么](#峰时到底发生什么)\n- [谷时到底发生什么](#谷时到底发生什么)\n- [配置](#配置)\n- [本地隔离测试环境](#测试环境)\n- [怎么测](#测试)\n- [边界与已知限制](#边界与已知限制)\n- [开发](#开发)\n\n-----\n\n<a id=\"安装\"></a>"
+    },
+    {
+      "section": "安装",
+      "text": "```sh"
+    },
+    {
+      "section": "从 npm",
+      "text": "dsh plugin --profile web add dsh-laa"
+    },
+    {
+      "section": "或者本地开发中的 checkout（link: 会建软链，改完重启即可生效）",
+      "text": "dsh plugin --profile web add link:D:\\Project\\dsh-laa\n```\n\nDSH Desktop 用户直接改 `%USERPROFILE%\\.dsh\\profiles\\web`（macOS / Linux 为\n`~/.dsh/profiles/web`）即可：本包自带 `cordis.patch.yml`，作为 profile bundle 加入\n`dsh.profile.bundles` 后就会插入 `laa` 加载器行。\n\n装好后**重启** `dsh web` / DSH Desktop，然后任意会话里输入 `/laa`。\n\n<a id=\"使用\"></a>"
+    },
+    {
+      "section": "使用",
+      "text": "LAA 模式是**每个会话各自**的开关，默认关闭。\n\n| 命令 | 作用 |\n|---|---|\n| `/laa` | 查看状态：开关、当前是峰时还是谷时、下一次切换、峰时窗口、待恢复的输入数量 |\n| `/laa on` | 打开该会话的 LAA 模式 |\n| `/laa off` | 关闭；**当刻就把压着的输入发出去**（被中断过的轮次会先收到一条「LAA 已关闭」的续跑提示词），命令会报告发了多少、还有几个会话在等实时 agent |\n| `/laa status` | 等同于 `/laa` |\n\n命令直接从 UI 作用到会话，不产生任何模型消息，因此开关本身不花 token。\n\nWeb UI 里还有第二种入口：**滑动开关**（轨道 + `LAA` 标签）。单击即切换当前会话的\n模式；悬停显示当前峰谷时段、下一次切换、峰时窗口与待恢复的输入条数；开启且正处峰时\n的时候轨道会变成琥珀色，一眼就能看出\"它现在正被按住\"。命令、开关、状态文件读的是\n同一份快照，因此三者永远一致。\n\n开关的位置跟着页面走，页面上任何时刻都恰好有一个："
+    },
+    {
+      "section": "使用",
+      "text": "| 页面 | 位置 |\n|---|---|\n| 已有对话的会话 | 会话页顶栏右侧（DSH 的 `conversation.session.header.utilities`） |\n| **新对话页**（还没有第一条消息） | **输入框工具行的左侧**（`conversation.input.left`），就在权限选择与 Plan 旁边 |\n\nDSH 在会话还没有第一条消息时会把整条顶栏藏起来（连标题带工具区），顶栏里的开关因此\n根本不会挂载——这就是为什么新对话页需要第二份。它只在顶栏确实不显示时渲染，所以新\n对话页、以及正在打开的会话里都点得到，**可以在发出第一条消息之前就把 LAA 打开**。\n\n典型用法：晚上下班前对一个长任务说「继续做」，然后点一下那个开关（或 `/laa on`）——\n峰时它会自己停住，谷时（工作日 12:00-14:00、18:00 之后、以及整个周末）它会自己接着做。"
+    },
+    {
+      "section": "子会话（subagent 会话）",
+      "text": "LAA 模式属于**会话树**，而不是单个会话：DSH 的 subagent 子会话（会话 header 里带\n`origin: 'subagent'` 与 `parentSession`，在侧栏里嵌套显示的那些）**没有自己的模式**，\n它跟随自己所属的顶层会话。于是父会话开着的时候子会话也开着、父会话关掉的时候子会话\n立刻恢复放行，整棵树永远只有一个开关：\n\n| 动作 | 结果 |\n|---|---|\n| 父会话开 LAA | 子会话也受管：峰时子会话同样被拦下，一个模型请求都不会发出 |\n| 父会话关 LAA | 子会话立刻恢复放行 |\n| 在子会话页点开关 / `/laa on\\|off` | 改的是**父会话**（命令会明确告诉你改的是哪个会话） |\n| 子会话的悬停提示 | 多一行「跟随父会话」，写着父会话的标题与 id |\n\n**但遗留工作记在会话自己名下**：峰时被拦下的输入、被中断的轮次都属于**产生它们的那个\n会话**，谷时回到那个会话自己的 agent 上继续跑——子会话的输入不会被投递到父会话去。"
+    },
+    {
+      "section": "峰谷切换时的动画与通知",
+      "text": "峰谷真的翻过去的那一刻（宿主在边界后重新评估相位，前端按快照里的 `nextChangeAt`\n对齐去问），页面上的开关：\n\n1. **跳三下**（`prefers-reduced-motion` 下自动不播动画）；\n2. 开着 LAA 的时候，轨道颜色用 1.26 秒从绿平滑推到琥珀（或反过来）——平时 0.2 秒的\n   换色只够「变」，不够「看得出它变了」；\n3. 弹一条**浏览器通知**（`LAA · 进入峰时` / `LAA · 进入谷时`），标签页在后台也收得到；\n   同一个会话的播报互相顶替，不会堆一屏。\n\n通知要授权：**第一次点开关时**顺手申请一次（浏览器要求用户手势）；拒绝授权、或者浏览器\n没有这个 API，都只是没有通知，开关照常工作。播报范围由「配置」里的 `notify` 决定。\n\n前端只按宿主给的边界对表，不在前端自己算第二套时间；标签页或系统休眠期间错过的切换，\n由 20 秒的兜底轮询追平。"
+    },
+    {
+      "section": "峰谷切换时的动画与通知",
+      "text": "这层关系落盘在 `$DSH_HOME/laa/state.json`（`lineage` 字段，来自会话 header 的\n`parentSession`），所以进程重启、或者子会话当前没有实时 agent 时，开关与 `/laa`\n依旧显示父会话的那一份状态。\n\n插件见过的子会话会随手记下；**装插件之前就存在、之后一直冷着的子会话**则由控制面在\n第一次收到请求时，向宿主的会话清单（`ctx.sessionQuery.listSessions()`，也就是侧栏\n在用的那一份）补一次谱系——每个进程只补一次，读失败只是退回原来的判断。\n\n-----\n\n<a id=\"控制面\"></a>"
+    },
+    {
+      "section": "浏览器开关与控制面",
+      "text": "两个位置的开关都通过宿主插件的一条 HTTP 控制面读写状态，路径全部挂在 `/dsh-laa` 前缀下，\n只用了 `ctx.webServer.register()` 这一条既有 seam（不需要 typert 远端声明，也不需要\n额外的依赖）：\n\n| 方法 | 路径 | 作用 |\n|---|---|---|\n| `GET` | `/dsh-laa/health` | 插件是否在跑、总开关、时区 |\n| `GET` | `/dsh-laa/state?sessionId=<id>` | 一个会话的完整状态（开关、峰谷、下一次切换、待恢复条数）；子会话的 `enabled` 就是父会话的那一份，另带 `inheritedFrom`（它跟随的顶层会话） |\n| `POST` | `/dsh-laa/mode` | `{ \"sessionId\": \"...\", \"enabled\": true }`，改写该会话的模式 |\n\n于是它也能被脚本直接驱动："
+    },
+    {
+      "section": "浏览器开关与控制面",
+      "text": "```sh\ncurl -s \"$DSH_URL/dsh-laa/state?sessionId=$SID\"\ncurl -s -X POST \"$DSH_URL/dsh-laa/mode\" -H 'content-type: application/json' \\\n  -d \"{\\\"sessionId\\\":\\\"$SID\\\",\\\"enabled\\\":true}\"\n```\n\n写入被拒绝时返回 400（缺参数/类型不对）、409（插件总开关 `enabled: false`）或 404\n（未知路径），并且**不会**先把状态改掉；前端拿到的永远只有 `{ ok, value }` 或\n`{ ok: false, error }`。控制面是可选挂载：没有 `webServer` 的组合（headless / SDK /\nACP）只是没有浏览器入口，调度行为不受影响。\n\n<a id=\"峰时到底发生什么\"></a>"
+    },
+    {
+      "section": "峰时到底发生什么",
+      "text": "峰时开始的那一刻：\n\n1. 所有属于该会话的实时 agent（根会话 agent 及其在进程内的子代理）如果正在跑，\n   会被 `cancel(cause, { keepInbox: true })` 中止当前轮次，**已排队但还没开始的输入会被保留**。\n2. 之后任何试图进入的步骤都会在 `agent/pre-step` 瀑布里被**拒绝**。拒绝发生在\n   模型请求之前，所以峰时不会产生任何 API 调用。\n3. 被拒绝步骤的输入不会丢：轮次的**第一个步骤**里携带的、真正的用户/插件输入会被\n   原样记进状态文件；轮次中途的步骤只把会话标记为「需要续跑」——工具结果不是用户\n   输入，不会被当成用户消息重放。\n\n峰时期间你在 UI 里发消息是安全的：它会等谷时再被投递，而不是被丢掉；不想等就直接把\nLAA 关掉（`/laa off` 或点开关），攒下的输入会在**当刻**发出去。"
+    },
+    {
+      "section": "峰时到底发生什么",
+      "text": "关掉 LAA 时的投递范围是**整棵会话树**（父会话 + 它的所有子会话），并且与谷时用不同的\n续跑提示词（`[LAA MODE — TURNED OFF]`，而不是 `OFF-PEAK WINDOW OPENED`）——模型因此\n知道自己不是「等到了谷时」，而是「人把 LAA 关了」。当时没有实时 agent 的会话交不出去，\n输入留在状态里，等它下次运行（agent 被拉起）时立刻投递，一条都不会丢。"
+    },
+    {
+      "section": "只管按峰谷计费的提供方",
+      "text": "峰谷定价只存在于 **DeepSeek 官方路由**（DSH 里是 `deepseek-official`）。所以峰时约束\n**只作用于 `peakProviders` 里的提供方**（默认就是它一个）：别的路由——自建网关、第三方\n中转、别家模型——不按峰谷计费，峰时一个请求都不会被拦，会话照跑。\n\n路由是这样解析的（从最贴近事实到最兜底）：\n\n1. 会话**最近一次请求**的记录头（`session.requestHeader()`）——会话中途换过模型的话，\n   只有这里反映当前真正在用的路由；\n2. agent **创建时**的路由（`agent.options.provider`）；\n3. **部署默认**路由（`ctx.agentDefaultModel.currentSelection()`）。\n\n所以中途换模型会立刻跟上：换成别的提供方，峰时就不再拦你。三级都读不到路由时按\n「按峰谷计费」保守处理——宁可多等一会儿，也不漏拦真正按峰时计费的请求。"
+    },
+    {
+      "section": "只管按峰谷计费的提供方",
+      "text": "开关的悬停提示会写明这一条：当会话当前的路由不在清单里时，多一行\n「峰时不会阻塞：这个提供方不按峰谷计费（openai）」。想让某个自建路由也受约束，把它的\n路由 id 加进 `peakProviders` 即可；`[]` 表示谁都不拦。\n\n一个例外要说清楚：如果这个会话**之前**（还是按峰谷计费的路由时）已经在峰时攒下了输入，\n那些输入仍然按原来的节奏走——谷时投递，或者你 `/laa off` 立即投递。换路由不会替你把\n已经压下的活立刻发出去。\n\n<a id=\"谷时到底发生什么\"></a>"
+    },
+    {
+      "section": "谷时到底发生什么",
+      "text": "谷时开始的那一刻，每一个还有遗留工作的会话：\n\n1. 如果峰时中断过轮次，先投递一条续跑提示词 `[LAA MODE — OFF-PEAK WINDOW OPENED]`，\n   让模型从既有历史、工作区与工具结果继续，而不是从头重来。\n2. 然后把峰时暂存的输入**按原顺序**逐条重新投递（保留原本的 message source）。\n3. 如果峰时拦下的是 goal round，还会把被拦下时自动暂停的 goal 重新武装，\n   让自动续行回到你原本的意图。\n\n只有确实投递成功的部分才会从状态里清掉。会话在谷时到来时如果还没有实时 agent\n（没打开过），遗留输入会一直留着，等它下一次变成实时 agent 时立刻交付。\n\n<a id=\"配置\"></a>"
+    },
+    {
+      "section": "配置",
+      "text": "编辑 profile 的 `cordis.patch.yml`（或直接改本包自带的 `cordis.patch.yml`）：\n\n```yaml\n- id: laa            # 注意：patch 是【整体替换】config，不是逐字段合并\n  config:\n    enabled: true\n    timeZone: 'Asia/Shanghai'"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认 | 含义 |\n|---|---|---|\n| `enabled` | `true` | 插件总开关。`false` 时插件照常加载，但任何会话都不会被停。 |\n| `timeZone` | `'Asia/Shanghai'` | 峰时窗口所依据的 IANA 时区（DeepSeek 官方口径为北京时间）。 |\n| `peakWindows` | 见上 | 峰时窗口数组，**其余时段一律是谷时**。`days` 接受 `mon`…`sun` 或 `1`（周一）…`7`（周日）；`start`/`end` 为 `HH:MM`；`end <= start` 表示跨零点窗口。 |\n| `defaultMode` | `false` | 从未被 `/laa` 切换过的会话是否默认开启。显式关掉过的会话不会被它重新打开。 |\n| `peakProviders` | `['deepseek-official']` | 哪些提供方路由**按峰谷计费**、因此受峰时约束；其余提供方在峰时不被阻塞。空数组表示谁都不拦（峰时约束失效，谷时重放语义保留）。 |\n| `notify` | `'enabled'` | 峰谷切换时的浏览器通知策略：`enabled`（只有开着 LAA 的会话才播报）、`always`（任何会话都播报）、`off`（不播报）。只影响通知，开关上的切换动画不受影响。 |\n| `cancelRunningOnPeak` | `true` | 峰时开始时是否中止正在跑的轮次。 |\n| `resumeOnValley` | `true` | 谷时开始时是否自动续跑。 |\n| `tickMs` | `30000` | 相位重新评估的兜底间隔；窗口边界本身总是会被精确唤醒。 |\n| `maxDeferred` | `20` | 每个会话最多暂存多少条输入，超出时丢弃最旧的并记一条警告。 |\n| `statePath` | `$DSH_HOME/laa/state.json` | 状态文件位置。 |"
+    },
+    {
+      "section": "官方峰谷口径",
+      "text": "据 [DeepSeek 官方定价页](https://api-docs.deepseek.com/zh-cn/quick_start/pricing) 注 (3)：\n空闲时段价格为高峰时段价格的一半，**高峰时段为北京时间周一至周五 09:00-12:00、\n14:00-18:00，其余为空闲时段**。折算成 UTC 即周一至周五 01:00-04:00 与 06:00-10:00。\n\n于是：工作日 12:00-14:00、每天 18:00 之后、以及整个周末都是谷时，其中从\n**周五 18:00 到周一 09:00 是一段连续 63 小时的谷时**。\n\n窗口写在配置里而不是写死在代码里——DeepSeek 调整过峰谷口径（2025-02-26 的\n`16:30-00:30 UTC` 方案已被 2026-08-17 生效的新口径取代），下一次调整只需要改配置。\n\n-----\n\n<a id=\"测试环境\"></a>"
+    },
+    {
+      "section": "本地隔离测试环境",
+      "text": "`scripts/dev-home.mjs` 会在工作区里建一个**只属于本仓库**的 DSH home（`.dsh-test/`）。\n它和你日常在用的 `~/.dsh`（含其中的 `web` profile）完全分开：会话、设置、插件，\n以及 dsh-laa 自己的 `laa/state.json` 都落在那个目录下，所以测这个插件不会碰到你的\n真实环境。\n\n```sh\nnode scripts/dev-home.mjs          # 创建/修复环境并打印状态（幂等，重复跑不会覆盖你的改动）\nnode scripts/dev-home.mjs --boot   # 创建后启动 dsh web（用 Ctrl+C 结束）\n```\n\n脚本建立的东西："
+    },
+    {
+      "section": "本地隔离测试环境",
+      "text": "| 位置 | 内容 |\n|---|---|\n| `.dsh-test/profiles/web/package.json` | bundle 列表 = `@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`、`dsh-laa`，`patchReload: live` |\n| `.dsh-test/profiles/web/node_modules/dsh-laa` | 指向本仓库的目录链接，所以改完源码重启即生效 |\n| `.dsh-test/profiles/web/cordis.patch.yml` | 只属于这个环境的用户 patch 层，预置了「整天峰时」与「每天头一分钟峰时」两段可直接取消注释的测试窗口 |\n| `.dsh-test/.credentials.yaml` | 从 `~/.dsh/.credentials.yaml` 复制的一份。隔离 home 看不到真实 home 的密钥，没有它这个环境一次模型请求都发不出去；脚本从不读取或打印密钥值 |"
+    },
+    {
+      "section": "本地隔离测试环境",
+      "text": "`.dsh-test/` 整个目录都在 `.gitignore` 里。其它参数：`--refresh-credentials` 重新同步密钥、\n`--no-credentials` 建一个不带密钥的环境、`-- --port 64100` 换端口、`DSH_BIN=<路径>` 指定 dsh CLI。\n\n因为 profile 是 `patchReload: live`，改 `cordis.patch.yml` 保存后加载器会重新应用该插件\n（loader 在 config 变化时重启对应 fiber），运行时于是立刻按新窗口重新评估相位——不用重启\n就能在「峰时停机」和「谷时续跑」之间来回切换。想把插件完全摘掉试试，把 bundle 列表里的\n`dsh-laa` 删掉或给它加一行 `- id: laa` + `disabled: true` 即可。\n\n-----\n\n<a id=\"测试\"></a>"
+    },
+    {
+      "section": "怎么测",
+      "text": "四层，从最便宜到最贵。前三层都跑在隔离环境里，不会碰你日常的 `~/.dsh`。"
+    },
+    {
+      "section": "1. 单元 / 集成测试 —— 秒级，不碰真实会话",
+      "text": "```sh\nnpm test\n```\n\n48 个用例，自带一个只实现 LAA 用到的那部分 Cordis 契约的假宿主：峰谷算术（含跨零点、\n周末、下一个边界）、峰时拦截与暂存、谷时续跑与重放、工具结果不被当成用户输入、\n子代理继承、状态跨进程存活、`/laa` 命令、浏览器 bundle 的插槽注册与开关显隐门控、\n以及\"没有 `export default`\"这条模块形状约定。"
+    },
+    {
+      "section": "2. 真实 Cordis 冒烟 —— 秒级",
+      "text": "```sh\nnpm run smoke\n```\n\n在真实的 `@deepseek-ai/cordis` 上验证假宿主替不掉的那部分：`inject` 门控、\n`agent/pre-step` 瀑布的 `{ prepend: true }` 顺序、`ctx.inject(['commands'])` 的迟到挂载、\n以及卸载时 effect 树的回收。"
+    },
+    {
+      "section": "3. 零成本端到端 —— 真实 DSH + 真实 agent loop，一个模型请求都不发",
+      "text": "```sh\nnpm run e2e\n```\n\n`.dsh-test` 的 headless profile 把峰时窗口设成整天，于是任何步骤都会在\n`agent/pre-step` 里被拒绝——**拒绝发生在构建并发出请求之前**，所以这次运行不花任何\ntoken，却完整走过了真实的 agent loop、真实会话与真实插件运行时。脚本不断言 stdout，\n而是读插件自己的状态文件 `.dsh-test/laa/state.json`：\n\n```\n✔ 一次真实的 headless 运行创建了新会话并在插件里留了记录 — 1 条新记录\n✔ 该运行没有正常完成（被拦下的轮次映射为非零退出码） — exit=1\n✔ 被拒绝的是第 1 轮第 1 步 — {\"turn\":1,\"step\":1,\"deferred\":1}\n✔ 输入没有丢：被原样暂存进 laa/state.json — deferred=1"
+    },
+    {
+      "section": "4. 手动交互验证 —— 需要你自己点，会真的调用模型",
+      "text": "```sh\nnode scripts/dev-home.mjs --boot     # 启动隔离环境的 web\n```\n\n**A. 看「峰时停机」**：打开 `.dsh-test/profiles/web/cordis.patch.yml`，取消注释第一段\n（窗口 = 整天），保存。因为 profile 是 `patchReload: live`，加载器会重新应用插件。\n然后在会话里发一句话：\n\n- 会话不会产生任何回答（请求根本没发出）；\n- `/laa` 会报告「当前 DeepSeek 时段：峰时」和「等待谷时：N 条暂存输入」；\n- `.dsh-test/laa/state.json` 里出现 `deferred` 与 `lastRefusal`。\n\n**B. 看「谷时续跑」**：把同一段里的 `end: '23:59'` 改成 `'00:01'`（每天只有头一分钟是\n峰时），保存。插件重新加载后会立刻按谷时评估，把上一步暂存的输入投递出去——这时才会\n真的调用模型，你会看到会话把刚才那句话接着做完。"
+    },
+    {
+      "section": "4. 手动交互验证 —— 需要你自己点，会真的调用模型",
+      "text": "**C. 看开关**：`/laa off` 之后同样的输入会直接执行；`/laa on` 再回到 A 的行为。\n\n> 观察点只有三个：`/laa` 的输出、`.dsh-test/laa/state.json`、以及会话本身有没有\n> 产生回答。cordis 的默认 logger 只做内存缓冲、不打到终端，所以别指望在控制台看到\n> 插件的 `logger.info`。\n\n-----\n\n<a id=\"边界与已知限制\"></a>"
+    },
+    {
+      "section": "边界与已知限制",
+      "text": "- **只续跑实时会话。** 谷时到来时没有实时 agent 的会话不会被插件唤醒——拉起一个\n  冷会话需要 profile 的 agent preset 组合（`ctx.agents.resume({ resumeSessionId, agentOptions, setup })`），\n  那是 UI/会话控制器的职责。这类会话的遗留输入会被保留，等它下一次变成实时 agent\n  时立刻交付。\n- **不杀后台任务。** 峰时停的是 agent 的轮次，不是操作系统进程：`pwsh` 的后台\n  job、子进程等会继续在后台跑完（它们无法「暂停后继续」，只能被杀掉重跑）。会话在\n  谷时续跑时再收它们的结果。\n- **子会话跟随所属的顶层会话。** 子会话没有自己的模式（见「使用 → 子会话」）；\n  已经派发到进程外的子代理（ACP / SDK）不在管辖范围内。\n- **子会话的遗留工作要等它自己回到实时状态。** 峰时被拦下的子会话输入记在子会话\n  名下，谷时只有该子会话有实时 agent 时才投递——这与「只续跑实时会话」是同一条规则。\n- **`/laa` 需要命令适配器。** headless / SDK 这类没有命令适配器的组合只是没有这个\n  入口，LAA 的调度行为不受影响。\n- **峰时会在会话日志里留下空轮次。** 被拒绝的步骤已经开启了 `turn/start`，拒绝后\n  以 `turn/end { reason: { kind: 'blocked' } }` 收尾。这是 DSH 既有的语义，不是错误。\n- **状态文件是本插件自己的。** DSH 的持久化读取路径会拒绝解释未知的会话事件类型\n  （除非事件带 `ignorable` 标记，而这在公开的 `session.append()` 上无法设置），所以\n  这里不去污染会话日志，而是把状态放在 `$DSH_HOME/laa/state.json`，写入是原子的\n  （临时文件 + rename）且做了防抖。"
+    },
+    {
+      "section": "边界与已知限制",
+      "text": "<a id=\"开发\"></a>"
+    },
+    {
+      "section": "开发",
+      "text": "本包是**零运行时依赖**的纯 ESM：不 import 任何 `@deepseek-ai/*`，只用 Node 内建能力。\nprofile 中的第三方插件要自己解析依赖，零依赖让它不与宿主版本耦合，也不需要构建步骤。\n\n验证入口见上一节。npm 脚本：`test`、`smoke`、`e2e`、`dev-home`、`dev`。"
+    },
+    {
+      "section": "开发",
+      "text": "| 文件 | 职责 |\n|---|---|\n| `lib/index.js` | Cordis 插件入口：`name` / `inject` / `apply`（以及返回运行时的 `mount`） |\n| `lib/pricing.js` | 峰谷判定与窗口算术的纯函数：`resolvePhase`、`normalizeWindows`、`zonedTimeToEpoch` |\n| `lib/laa.js` | 运行时状态机：峰时停机、`agent/pre-step` 拦截、暂存、谷时续跑与重放 |\n| `lib/command.js` | `/laa` 斜杠命令 |\n| `lib/web.js` | 浏览器控制面：`/dsh-laa/health`、`/state`、`/mode` |\n| `lib/client.js` | 浏览器 bundle：滑动开关（会话顶栏 + 新对话页的输入框工具行；手写 `__ModuleLoader__` 格式，无构建步骤） |\n| `lib/store.js` | `$DSH_HOME/laa/state.json` 的同步读 / 防抖原子写：每个会话的模式与遗留工作，外加子会话谱系（`lineage`） |\n| `scripts/dev-home.mjs` | 隔离测试环境（web + headless）的创建与启动 |\n| `scripts/e2e.mjs` | 零成本端到端验证：真实 headless 运行 + 状态文件断言 |"
+    },
+    {
+      "section": "开发",
+      "text": "只用到 DSH 的公开扩展点：`ctx.agents` 注册表、`Agent.cancel/followup/status`、\n`agent/pre-step` 瀑布、`agent/created`、`ctx.commands.register` 与 `ctx.goals`（可选）。\n`cancel` 用的 cause 是 `{ kind: 'hook', reason: 'dsh-laa: deepseek peak window' }`——\n`hook` 是 `AgentCancelCause` 里为插件/钩子预留的成员，日志与 UI 因此能看出是谁停的。"
+    }
+  ],
+  "skipped": []
+}
