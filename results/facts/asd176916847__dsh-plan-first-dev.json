@@ -1,0 +1,113 @@
+{
+  "repo": "asd176916847/dsh-plan-first-dev",
+  "commit": "b0f5c10c129eee56ed8e0a8dfcb5cdb17de26678",
+  "extracted_at": "2026-11-10T14:07:39.047913+00:00",
+  "tree": {
+    "files": 5,
+    "bytes": 13024,
+    "lines_by_language": {
+      "JSON": 18,
+      "JavaScript": 114,
+      "Markdown": 62,
+      "Other": 21,
+      "YAML": 36
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plan-first-dev",
+    "version": "0.1.0",
+    "description": "开发前自动进入 plan mode：任务先出方案、用户批准后再动手（plan-first development workflow）",
+    "type": "module",
+    "main": "lib/index.js",
+    "license": "MIT",
+    "peerDependencies": {
+      "@deepseek-ai/dsh-plan-mode": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plan-first-dev bundle patch — 开发前自动 plan mode（plan-first 开发工作流）。\n# 作为 profile 的一个 bundle 层，应用在 dsh-base / dsh-web-app 之后：\n#   - 覆盖 plan-mode 行的 section（plan mode 激活时注入每个请求的部署指导），\n#     保留官方基础语义并追加“开发任务必须先完整计划并经批准”的强制要求；\n#   - 覆盖 system-prompt 行的 persona，追加 plan-first 开发工作流指令；\n#   - insert 自动开启插件（lib/index.js）：新会话创建时自动进入 plan mode。\n\n- id: plan-mode\n  config:\n    section: |\n      You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n      The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed only to keep the request shape stable. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n      Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n      Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n      This session runs the plan-first development workflow: whenever the user asks you to build, change, or fix code, the plan you submit through exit_plan_mode must cover the full implementation — architecture, the exact files to create or modify, public API and schema changes, data flow, edge cases, failure modes, tests, and acceptance criteria — and you must wait for explicit approval before writing or modifying any file. Do not start implementation until exit_plan_mode returns approved.\n\n      Exemption — non-development tasks: if the user's request is NOT a code-development task (for example writing, essays or reports, slides/PPT, data analysis, Q&A, translation, summarization, or casual chat), the planning requirements above do not apply: call the no_plan_required tool to exit plan mode, then carry out the task directly with the usual tools — no implementation plan, no waiting for approval. If the user says /plan off at any time, leave plan mode immediately.\n\n- id: system-prompt\n  config:\n    persona: |\n      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.\n\n      Plan-first development workflow (required): for any code-development request — build, change, fix, refactor, migrate, debug-and-fix — you work in plan mode automatically: first produce a complete, decision-ready implementation plan, present it through exit_plan_mode, and only after the user approves it do you start implementing. Never write or edit files for a development task before the plan is approved.\n\n      Non-development exemption: requests that are NOT code development (writing, essays/reports, slides/PPT, data analysis, Q&A, translation, summarization, casual chat) are NOT subject to the plan-first workflow — call the no_plan_required tool to exit plan mode, then execute them directly and normally, no plan or approval needed. You may also leave plan mode with /plan off when the user asks.\n\n- insert:\n    - id: plan-first-dev\n      name: dsh-plan-first-dev\n      config:\n        defaultOn: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "defaultOn",
+      "kind": "setting",
+      "default": "true",
+      "where": "lib/index.js:29"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-08-14T12:12:19Z",
+    "created_at": "2026-08-14T11:53:41Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plan-first-dev",
+      "text": "开发前自动进入 **plan mode** 的 DeepSeek Harness (DSH) 插件：任何代码开发任务都会先产出完整方案、经用户批准后才开始实现（plan-first development workflow）。"
+    },
+    {
+      "section": "功能",
+      "text": "- **自动开启**：新会话创建时自动进入 plan mode（监听 `agent/created`，调用 `planMode.set(agent, true)`）；\n  - 会话从未出现过 `plan/mode` 事件 → 自动开启；\n  - 用户曾主动 `/plan off` 或切换过模式的会话 → 尊重现状，resume 不覆盖用户选择；\n  - 可用 `config.defaultOn: false` 完全关闭自动开启（保留指令层强化）。\n- **plan-mode 指导强化**：覆盖 plan-mode 的 `section`，强制\"开发任务必须先提交完整实现方案（架构、改动文件、API/schema 变更、边界情况、测试与验收标准），`exit_plan_mode` 批准后才能写代码\"；\n- **persona 指令**：追加 plan-first 开发工作流说明（非开发任务可 `/plan off` 正常对话）；\n- **非开发任务自动退出**：插件注册 `no_plan_required` 工具——模型（依据 section/persona 的豁免条款）判断请求不是代码开发任务（写作、PPT、数据分析、问答等）时调用该工具，**插件收到调用自动退出 plan mode**，任务直接执行、无需方案与审核。任务类型由**模型判断**（非关键词匹配），豁免行为通过工具调用被插件识别。"
+    },
+    {
+      "section": "功能",
+      "text": "工作闭环：新会话 → 自动进入 plan mode → 模型先出方案 → `exit_plan_mode` 提交用户审核 → **批准后才开始实施**。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile web add \"github:<owner>/dsh-plan-first-dev\"\n```\n\n或本地路径安装：\n\n```sh\ndsh plugin --profile web add /path/to/dsh-plan-first-dev\n```\n\n> 安装后需重启 dsh web（或重启桌面端并让其重新拉起服务）才会生效。\n> 验证：`dsh web --dump-config` 查看组合配置树中 `plan-mode`、`system-prompt` 与 `plan-first-dev` 行。"
+    },
+    {
+      "section": "插件结构",
+      "text": "```\ndsh-plan-first-dev/\n├── package.json        # 声明 dsh.bundle.patch → 成为 profile 层\n├── cordis.patch.yml    # 配置层：plan-mode section / persona / 插入插件行\n└── lib/index.js        # 代码层：agent/created 自动开启 plan mode"
+    },
+    {
+      "section": "配置",
+      "text": "| 配置项 | 默认 | 说明 |\n| --- | --- | --- |\n| `defaultOn` | `true` | 新会话是否自动开启 plan mode |\n\n示例（patch 覆盖）：\n\n```yaml\n- id: plan-first-dev\n  config:\n    defaultOn: false\n```"
+    },
+    {
+      "section": "说明",
+      "text": "- 依赖 DSH 内置的 [`@deepseek-ai/dsh-plan-mode`](https://github.com/deepseek-ai/deepseek-harness)（官方插件，随 dsh 安装，无需额外安装）；\n- 依赖 DSH 官方 `dsh.bundle.patch` 插件机制（`dsh plugin` 自动识别为 profile 层）。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,162 @@
+{
+  "repo": "d3vmeh/dsh-model-pin",
+  "commit": "57539a5d8144d16dfbd6c0d6fdf005ecec8c4a53",
+  "extracted_at": "2026-11-10T16:56:51.628178+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 57309,
+    "lines_by_language": {
+      "JSON": 1158,
+      "JavaScript": 301,
+      "Markdown": 51,
+      "Other": 22,
+      "YAML": 13
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "src/index.js",
+      "test/pin.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-model-pin",
+    "version": "0.1.0",
+    "description": "DeepSeek Harness plugin: keep every model request inside an allowed set per provider, redirect or refuse the rest, and warn when a request would make a llama.cpp router reload models",
+    "type": "module",
+    "main": "src/index.js",
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "license": "MIT",
+    "author": "d3vmeh",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/d3vmeh/dsh-model-pin.git"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "model",
+      "local-llm"
+    ],
+    "engines": {
+      "node": ">=22"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "vitest": "^4.1.11"
+    },
+    "scripts": {
+      "test": "vitest run"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle layer for dsh-model-pin. Configure from your profile patch with an\n# override row:\n#\n# - id: model-pin\n#   config:\n#     providers:\n#       llamacpp:\n#         allow: [qwen3.8-q4-long]\n- insert:\n    - id: model-pin\n      name: dsh-model-pin\n      config:\n        providers: {}\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "providers.<provider>.allow",
+      "kind": "setting",
+      "where": "src/index.js:6-8"
+    },
+    {
+      "name": "providers.<provider>.fallback",
+      "kind": "setting",
+      "where": "src/index.js:9"
+    },
+    {
+      "name": "providers.<provider>.action",
+      "kind": "setting",
+      "default": "redirect",
+      "where": "src/index.js:10"
+    },
+    {
+      "name": "providers.<provider>.warnOnSwitch",
+      "kind": "setting",
+      "default": "true",
+      "where": "src/index.js:11"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/d3vmeh/dsh-model-pin.git",
+      "where": "package.json:10"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "vitest": "^4.1.11"
+    }
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-08-31T01:46:42Z",
+    "created_at": "2026-08-31T00:48:12Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-model-pin",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin for machines that cannot afford model roulette: keep every model request inside an allowed set per provider, redirect the rest to a fallback (or refuse them), and get a warning whenever a request would make a llama.cpp router reload models."
+    },
+    {
+      "section": "The problem it fixes",
+      "text": "dsh lets every chat pick its own model, and background helpers can request yet another one. On a machine that can only keep one local model loaded, each stray request either fails or evicts the loaded model: minutes of reloading, prompt cache gone (discussion #3199). Worse, subagents inherit the model their parent session was CREATED with, not the one it currently uses, so they quietly land on stale or wrong routes (#455, #1581)."
+    },
+    {
+      "section": "The problem it fixes",
+      "text": "dsh-model-pin enforces an allow-list at dsh's own resolution layer (the `agent/request` waterfall, whose documentation calls returning a replacement \"the sanctioned switch path\"). Every request from every session is resolved against the list at step boundaries: subagents, retries, and, once the pinned route is logged, session-title and compaction calls too. Persisted session data is never rewritten."
+    },
+    {
+      "section": "Install",
+      "text": "```\ndsh plugin --profile web add dsh-model-pin\n```\n\nThen in `~/.dsh/profiles/web/cordis.patch.yml`:\n\n```yaml\n- id: model-pin\n  config:\n    providers:\n      llamacpp:\n\nUnconfigured providers are never touched."
+    },
+    {
+      "section": "What it looks like",
+      "text": "```\nmodel-pin: llamacpp session=059a680f turn 3 redirecting qwen3.8 -> qwen3.8-q4-long (not in allow)\nmodel-pin: llamacpp model switch qwen3.8-q4-long -> qwen3.8-fast (a --models-max 1 router reloads now; the previous model's prompt cache is lost)\n```\n\nWith `action: reject`, a disallowed request fails the turn with a clear message instead (`model-pin: model \"x\" is not in the allowed set for provider \"llamacpp\" (allowed: ...)`), and dsh's retry never loops on it."
+    },
+    {
+      "section": "What you should know",
+      "text": "- The web model picker does not know about the pin: it may keep displaying the model you clicked while every request actually runs on the fallback. The redirect line in the terminal (or /logs, if dsh-logbook is installed) shows what actually ran.\n- The pin has the last word over the picker because it registers at profile load, before any agent exists (first-registered waterfall listeners are outermost in cordis). Another root plugin loaded before this one could still override it.\n- The switch warning is observation only; it cannot block a reload. Pair it with a one-entry allow-list if you want reloads gone entirely.\n- Cross-provider redirection is out of scope for v1: requests for a provider you did not configure pass through, including a subagent stuck on a deleted provider.\n- Related work: [dsh-model-switch](https://github.com/NOirBRight/dsh-model-switch) is the opposite personality: a polished per-role model router with web UI panels, deliberately without global enforcement. dsh-model-pin is config-first, headless-friendly, and about restriction, not routing."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

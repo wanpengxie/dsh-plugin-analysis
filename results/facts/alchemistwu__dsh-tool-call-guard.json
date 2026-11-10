@@ -1,0 +1,164 @@
+{
+  "repo": "alchemistwu/dsh-tool-call-guard",
+  "commit": "0a9d331493d4f95247add4e7e793f6fdab4b934f",
+  "extracted_at": "2026-11-10T13:54:20.518736+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 27798,
+    "lines_by_language": {
+      "JSON": 38,
+      "JavaScript": 305,
+      "Markdown": 187,
+      "Other": 23,
+      "TypeScript": 78,
+      "YAML": 43
+    },
+    "outline": [
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "examples/adapter-sanitize.ts",
+      "package.json",
+      "src/tool-call-guard.js",
+      "test/guard.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tool-call-guard",
+    "version": "0.1.1",
+    "type": "module",
+    "main": "src/tool-call-guard.js",
+    "description": "Neutralize tool calls with invalid JSON arguments on the wire, so one malformed model generation cannot brick a session against strict OpenAI-compatible servers (vLLM et al).",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "vllm",
+      "tool-calls",
+      "llm"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/alchemistwu/dsh-tool-call-guard.git"
+    },
+    "author": "Junzheng Wu <alchemistwu0521@gmail.com>",
+    "files": [
+      "src",
+      "examples",
+      "README.md",
+      "README.zh.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node test/guard.test.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch layer: registers the tool-call-guard host plugin. Zero config.\n- insert:\n    - id: tool-call-guard\n      name: dsh-tool-call-guard\n"
+    }
+  ],
+  "entries": [
+    "src/tool-call-guard.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/alchemistwu/dsh-tool-call-guard.git",
+      "where": "package.json:18"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 12,
+    "pushed_at": "2026-08-31T02:29:31Z",
+    "created_at": "2026-08-30T18:07:16Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "src/tool-call-guard.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tool-call-guard",
+      "text": "English | [中文](README.zh.md)\n\nNeutralize tool calls with invalid JSON **arguments** before they reach the wire — so one malformed model generation cannot brick an entire session.\n\n[](LICENSE)\n[](https://github.com/deepseek-ai/deepseek-harness)\n[](https://www.npmjs.com/package/dsh-tool-call-guard)\n[](#tests)\n\n```sh\ndsh plugin add dsh-tool-call-guard\n```"
+    },
+    {
+      "section": "Why",
+      "text": "Some models occasionally emit a tool call whose `arguments` string is not valid JSON — most often unescaped inner quotes:\n\n```json\n{\"queries\": [\"\"The Idiots\" trailer youtube official\"]}\n```\n\nStrict OpenAI-compatible servers (vLLM and friends) are **asymmetric about this**:"
+    },
+    {
+      "section": "Why",
+      "text": "- **Streaming generation path** — lenient. The malformed call streams through, the harness persists it into the append-only session log, and the turn appears to succeed.\n- **History-replay path** — strict. The next request replays the poisoned tool call, the server validates it, and rejects the **entire request**:\n\n```\n400 {\"message\": \"Assistant tool call function.arguments must be valid JSON.\",\n     \"type\": \"BadRequestError\"}\n```"
+    },
+    {
+      "section": "Why",
+      "text": "From that moment, **every subsequent request in the session fails**. The session is bricked until its log is surgically repaired by hand. The same failure class exists across ecosystems ([openai-agents-python #2061](https://github.com/openai/openai-agents-python/issues/2061), [vLLM #41122](https://github.com/vllm-project/vllm/issues/41122))."
+    },
+    {
+      "section": "What it does",
+      "text": "Intercepts the harness's `llm/stream` waterfall. For every assistant tool-call block whose `arguments` fail `JSON.parse`:"
+    },
+    {
+      "section": "What it does",
+      "text": "1. **The call becomes an honest text record** (wire-only) — the model sees exactly what it emitted and can re-issue a corrected call:\n   ```\n   [A tool call to 'web_search' was removed from history because its arguments\n   were malformed JSON. Original arguments as emitted: {\"queries\": [\"\"The Idiots\" …]}]\n   ```\n2. **The matching tool result is re-expressed as a plain user message** — result content is preserved, and the conversation stays protocol-balanced (no dangling `tool_calls` entry, no orphan `role:\"tool\"` reply — each of those is itself a 400 on strict servers):\n   ```\n   [Tool Result: web_search] 10 results about The Idiots\n   ```"
+    },
+    {
+      "section": "What it does",
+      "text": "The orphaned-result-as-user-message pattern follows the upstream serializer discussion ([deepseek-harness #4668](https://github.com/deepseek-ai/deepseek-harness/discussions/4668))."
+    },
+    {
+      "section": "Properties",
+      "text": "- **Zero overhead for clean history** — one `JSON.parse` per tool-call block; messages array passes through with object identity when nothing is wrong.\n- **Append-only log respected** — the harness's durable session log is never rewritten; neutralization is applied per-request on the wire only.\n- **Provider-agnostic** — sits on `llm/stream`, so every adapter (deepseek, community, custom) is covered.\n- **Fail-open** — if the guard itself errors, the original request passes through untouched.\n- **Zero configuration** — install and restart."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add dsh-tool-call-guard"
+    },
+    {
+      "section": "or desktop:",
+      "text": "dsh plugin --profile desktop add dsh-tool-call-guard\n```\n\nOr from GitHub: `dsh plugin add github:alchemistwu/dsh-tool-call-guard`.\n\nThe package declares a `dsh.bundle` patch, so the plugin self-registers on install. Restart your `dsh web` / DSH Desktop host, then start a new session."
+    },
+    {
+      "section": "Observed in production",
+      "text": "First observed with `zai-org/GLM-5.3-Flash` served by vLLM 0.27 (`--enable-auto-tool-choice`): one `web_search` call with unescaped quotes around a film title streamed through fine, was persisted, and permanently poisoned the session with `400 … arguments must be valid JSON` on every later turn. This plugin keeps that session alive: the poisoned entry is re-expressed per-request, the session continues working, and the model sees its own mistake in context."
+    },
+    {
+      "section": "Tests",
+      "text": "```sh\nnpm test\n```\n\nNine tests cover the exact production poison, mixed valid/invalid tool calls, protocol-balance invariants (no invalid `tool_calls` and no orphan `role:\"tool\"` on the wire), degenerate inputs, and per-request state reset."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

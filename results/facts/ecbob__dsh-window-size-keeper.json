@@ -1,0 +1,300 @@
+{
+  "repo": "ecbob/dsh-window-size-keeper",
+  "commit": "9531c76449ad92665e2cb4f93b608ca2ddda1c0b",
+  "extracted_at": "2026-11-10T17:18:40.850792+00:00",
+  "tree": {
+    "files": 17,
+    "bytes": 365197,
+    "lines_by_language": {
+      "JSON": 59,
+      "JavaScript": 3999,
+      "Markdown": 1062,
+      "Other": 554,
+      "YAML": 151
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "CHANGELOG.zh-CN.md",
+      "LICENSE",
+      "PUBLISHING.md",
+      "README.md",
+      "README_zh.md",
+      "RELEASES.txt",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json",
+      "scripts/check-sensitive.mjs",
+      "scripts/selftest.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-window-size-keeper",
+    "version": "0.1.3",
+    "description": "Keeps the DSH desktop window the size you left it: records the main window's last outer frame in physical pixels and restores it (centred) on the next start, before the window is ever shown. A bilingual Settings → Window size section offers 12 common resolutions and custom width/height that apply immediately. Win32 P/Invoke through a tiny helper exe compiled on your own machine (powershell.exe as fallback), zero external dependencies.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "scripts",
+      "cordis.patch.yml",
+      "README.md",
+      "README_zh.md",
+      "CHANGELOG.md",
+      "CHANGELOG.zh-CN.md",
+      "LICENSE"
+    ],
+    "license": "MIT",
+    "author": "ecbob",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ecbob/dsh-window-size-keeper.git"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "cordis",
+      "window-size",
+      "electron",
+      "win32",
+      "settings"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "scripts": {
+      "selftest": "node scripts/selftest.mjs",
+      "check": "node --check lib/index.js && node --check lib/client.js && node --check scripts/selftest.mjs && node --check scripts/check-sensitive.mjs",
+      "scan:sensitive": "node scripts/check-sensitive.mjs",
+      "test": "npm run check && npm run scan:sensitive && node scripts/selftest.mjs",
+      "pack": "npm pack --pack-destination dist"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-ui-slots"
+        ],
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-window-size-keeper bundle patch.\n# 注册 Cordis 插件行 `window-size-keeper`：记录 DSH 桌面端主窗口最后的外框尺寸，\n# 下次启动时自动恢复并居中。所有选项均可选（默认值已编译进插件），改完重启 profile 生效。\n#\n# 首选入口是**设置页**：DSH 桌面端「设置 → 窗口大小」分区（客户端半个插件 lib/client.js）\n#   可选常用分辨率与自定义宽高，选中即改窗口并持久化到\n#   ~/.dsh/storages/window-size-keeper/settings.json，下次启动沿用。\n#   优先级：settings.json（设置页）> 本文件的 config > 插件内置默认值。\n#   所以这里把 `preset` 留空即可——要长期固定某个尺寸，请在设置页里选，不必改本文件。\n#\n# 预选项（presets）：插件内置 12 个常用分辨率（1024×768 / 1280×720 / 1366×768 /\n#   1440×900 / 1536×864 / 1600×900 / 1920×1080 / 1920×1200 / 2560×1080 / 2560×1440 /\n#   3440×1440 / 3840×2160）。设置页里选「自定义…」可填任意宽高。\n#   要增删预选项，在 config 里加 `presets:` 列表（每项 { id, label, labelEn?, width, height }）\n#   即可**整体覆盖**内置列表（示例见文件末尾注释）。`labelEn` 只在英文界面用，省略就两种\n#   语言都显示你写的那一份——插件不会替你翻译自己起的名字。\n#\n# 设置页文案语言：`language` 默认 `auto` = 跟随 DSH 客户端当前语言（「设置 → 通用 → 语言」，\n#   切语言立刻生效，不必重启）；要钉死就写 `language: zh` 或 `language: en`。\n#   判据与兜底规则（只有简体中文算中文，zh-TW 等繁体写法走英文）见 README_zh.md「显示语言」。\n- insert:\n    - id: window-size-keeper\n      name: dsh-window-size-keeper\n      config:\n        enabled: true\n        # 采样节奏（2026-10-20 起是自适应的）：窗口没变时 15 秒读一次；一旦采到与上一轮不同，立刻\n        # 转成 1 秒一次，并保持到距最后一次变化满 10 秒。三个键都只认正数，写 0/负数/垃圾一律退回\n        # 默认值（待机下限 1000ms、快轮询下限 250ms），手滑不会变成 0 毫秒狂采样。\n        saveIntervalMs: 15000   # 待机采样间隔\n        activeSampleMs: 1000    # 采到变化时的快轮询间隔\n        activeTailMs: 10000     # 距最后一次变化多久之内保持快轮询\n        # 手动改宽高时自动把「恢复尺寸」选择改成 自定义 = 那个尺寸（下次启动就用它）。\n        # 只认宽高变化；插件自己改的那一次（启动恢复、设置页应用）不算，免得具名分辨率被自己改成自定义。\n        # 写成 false 则只记状态文件，设置页的选择完全由你自己定。\n        followManualResize: true\n        restoreDelayMs: 3000\n        # Win32 走哪条路：默认 \"auto\" = 先用**系统自带**的 csc.exe 现编一个只干 Win32 的小助手 exe\n        # （起进程约 90ms；产物与同一份 .cs 源码都落在 ~/.dsh/storages/window-size-keeper/ 里，\n        # 文件名带源码摘要 —— 源码一改旧缓存自动作废，不需要谁去清）。编不出来、exe 起不来、\n        # 或者答不上来（杀软拦下刚写的 exe），整套退回原来的 powershell.exe 路径（约 1.3s）。\n        # 一点不想在本机落 exe 就写 \"powershell\"；只想用助手、起不来就当没有提前恢复，写 \"helper\"。\n        win32Backend: \"auto\"\n        centerOnRestore: true\n        # 空串 = 用\"上次尺寸\"；填某个 id（如 \"1920x1080\"）= 恢复时用该分辨率。\n        # 注意：设置页的选择（settings.json）会覆盖这一项。\n        preset: \"\"\n\n# 整体覆盖预选项列表示例（取消注释即用；设置页的下拉会跟着变成这一份清单）：\n# - insert:\n#     - id: window-size-keeper\n#       name: dsh-window-size-keeper\n#       config:\n#         presets:\n#           - { id: \"1920x1080\", label: \"1920×1080（Full HD）\", width: 1920, height: 1080 }\n#           - { id: \"2560x1440\", label: \"2560×1440（QHD）\", width: 2560, height: 1440 }\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "lib/index.js:1506"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ecbob/dsh-window-size-keeper.git",
+      "where": "package.json:26"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7890",
+      "where": "scripts/check-sensitive.mjs:184"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "scripts/check-sensitive.mjs:209"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "scripts/check-sensitive.mjs:211"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "scripts/selftest.mjs:341"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ecbob/dsh-window-size-keeper",
+      "where": "submission/data/plugins/ecbob__dsh-window-size-keeper.yml:1"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 30,
+    "pushed_at": "2026-10-24T04:18:36Z",
+    "created_at": "2026-10-19T16:57:33Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json",
+    "scripts/check-sensitive.mjs",
+    "scripts/selftest.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-window-size-keeper",
+      "text": "[English](README.md) | [中文](README_zh.md)\n\nKeeps the DSH desktop window the size you left it: host half + a settings-page section, zero external dependencies."
+    },
+    {
+      "section": "dsh-window-size-keeper",
+      "text": "> Changelog: [CHANGELOG.md](CHANGELOG.md) (English) / [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md) (Simplified Chinese) — the two are maintained together.\n> The release ledger (`RELEASES.txt`), the publish/submission guide (`PUBLISHING.md`) and the market submission entry (`submission/`) live only in this checkout (they are not part of the published package) — see \"What lives where on a machine\" at the end."
+    },
+    {
+      "section": "The problem",
+      "text": "DSH desktop (Electron) rebuilds its main window at a fixed default size (1280×820) on every start, so the size you resized to last time is lost. This plugin records the main window's last **outer frame** (title bar and borders included, in physical pixels), restores and centres it on the next start, and adds a **Window size** section to the DSH settings page where you can pick 1920×1080, 1280×720 and other common resolutions, or any custom width×height."
+    },
+    {
+      "section": "The “Window size” settings section (added 2026-10-11)",
+      "text": "DSH desktop → Settings → **Window size** (the same level as the Plugins and Desk pet sections, `order: 65`). What's in it:"
+    },
+    {
+      "section": "The “Window size” settings section (added 2026-10-11)",
+      "text": "| Control | What it does |\n| --- | --- |\n| Restore size radio group | \"Last size\" (default) / 12 common resolutions / \"Custom…\" |\n| Custom width & height inputs | any size (outer frame, physical pixels) via \"Apply custom size\" |\n| Centre on restore switch | centres on the primary work area; off = resize only, position untouched |\n| Apply current selection | re-runs one resize with the current selection, changing nothing |\n| Current outer frame / next-start size / file paths | status read-out |"
+    },
+    {
+      "section": "The “Window size” settings section (added 2026-10-11)",
+      "text": "**When it takes effect:** immediately — picking a value resizes the main window at once (centring per your setting) and writes it to the settings file, so the next start uses the same size."
+    },
+    {
+      "section": "The “Window size” settings section (added 2026-10-11)",
+      "text": "About the numbers: every value is the **outer frame** (title bar + borders) in **physical pixels**, identical to what `GetWindowRect` returns. With DPI scaling above 100% the same numbers look smaller than they read (1920×1080 does not fit a 1920-wide screen at 125% scaling and gets clamped to the work area), which is why the list includes `1536×864` (= 1920×1080 at 125% scaling)."
+    },
+    {
+      "section": "Display language (added 2026-10-19)",
+      "text": "| # | Source | Behaviour |\n| --- | --- | --- |\n| 1 | `language` in patch config (delivered to the page through `GET /state`) | `\"zh\"` / `\"en\"` pins the language. Anything unrecognised — including `zh-TW` — is not treated as \"pinned Chinese\" and falls through |\n| 2 | The DSH client's active language (`ctx.locale`, i.e. Settings → General → Language) | follows whatever you selected in DSH, **switching languages takes effect at once** — no reload, no restart, and no rebuild of the section (text already typed into the custom width/height boxes survives the switch) |\n| 3 | The plugin's own detection (`navigator` / `Intl`) | used only when the client runtime provides no language service (DSH 0.1.x clients). **Only Simplified Chinese counts as Chinese**: `zh`, `zh-Hans*`, `zh-CN`, `zh-SG`, `zh-MY`; `zh-TW` / `zh-HK` / `zh-MO` / `zh-Hant*` and every other language get English |"
+    },
+    {
+      "section": "Display language (added 2026-10-19)",
+      "text": "The host half does no UI translation. It ships data plus stable machine-readable reasons: failure `code`s (rendered per language by the client), validation `noteCodes`, and both alias spellings of every preset (`label` / `labelEn`). If a preset you defined in patch config has no `labelEn`, it is displayed exactly as you wrote it — your own names are never machine-translated.\n\nTwo deliberate choices:"
+    },
+    {
+      "section": "Display language (added 2026-10-19)",
+      "text": "- **`\"locale\"` is deliberately *not* declared in the client module's `inject`.** Declaring a service the runtime doesn't provide drops this half of the plugin entirely — the section just disappears, without an error. The language service only exists on DSH 0.2 clients, so `ctx.locale` is read optionally and wrapped in try/catch; without it the plugin falls back to rule 3 and nothing else degrades.\n- **Unrecognised error codes never reach the user as codes.** Known codes are rendered from the dictionary; an unknown code falls back to whatever text the host supplied, and only if that is missing too does it show a generic failure line."
+    },
+    {
+      "section": "How it works",
+      "text": "- The host process (DSH host, a child of the Electron main process) **starts watching the main window at `apply` time**: it keeps a resident Win32 agent - first choice a small helper exe compiled on the user's own machine, `powershell.exe` as fallback - that enumerates windows every 40 ms and acts the moment the main window appears. Identification rule: host parent PID + `Chrome_WidgetWin_1` window class + outer-frame area ≥ `earlyMinArea`. While watching, the window is still **hidden** and its title has not become the product name yet, so this stage identifies windows by area (which keeps the 600×700 welcome window and the 720×760 login window out); when two candidates have similar areas it declares \"can't tell\" and looks again next round — it never guesses.\n- **Why that yields \"opens at last time's size\":** the desktop app creates its main window **hidden → `loadURL` → `show()`** (`createWindow(appPreload, false, true)` and `enterWorkspace` in `lib/main.js`), and Electron only creates it after the host reports `ready`. So there is a window of time where the main window exists but isn't visible, and the agent finishes resizing inside it — the window's very first appearance is alre"
+    },
+    {
+      "section": "Sampling cadence and following a manual resize (added 2026-10-20)",
+      "text": "- **Cadence is adaptive, not fixed.** Idle: read the outer frame every `saveIntervalMs` (15 s). The moment a sample differs from the previous one (size or position), the next reads switch to `activeSampleMs` (1 s) and keep that pace until `activeTailMs` (10 s) has passed since the last observed change. All three keys accept positive numbers only - 0, negatives and garbage fall back to the defaults, and the floors (1 s idle, 250 ms fast) keep a typo from turning into a 0 ms busy loop.\n- **Why it matters:** the state file and the \"current outer frame\" line on the settings page are only as fresh as the last sample, and the exit hook flushes that same cache. With the old fixed 15 s poll, resizing and immediately restarting DSH lost that resize - the next start went back to the size before it. The adaptive chain bounds the damage to about a second while idle cost stays exactly as before.\n- **`followManualResize` (on by default): a manual resize also updates your selection.** When a sample shows the *width or height* changed, the plugin writes `settings.json` itself and the \"Restore size\" selection becomes `custom` = the size you just made, so the next start uses the size you dragged to "
+    },
+    {
+      "section": "State and settings files",
+      "text": "| File | Written by | Contents |\n| --- | --- | --- |\n| `state.json` | plugin polling / exit backstop | `{ \"version\": 1, \"width\": 1894, \"height\": 1171, \"x\": 18, \"y\": 17, \"savedAt\": \"...\" }` (outer frame, physical pixels) |\n| `settings.json` | settings page; also written by the plugin itself when it adopts a manual resize (`followManualResize`) | `{ \"version\": 1, \"preset\": \"1920x1080\", \"centerOnRestore\": true, \"custom\": { \"width\": 1600, \"height\": 1000 }, \"updatedAt\": \"...\" }`; `preset` empty = use \"last size\", `\"custom\"` = use the `custom` width/height |\n| `state.json.gen` | plugin | generation counter (bumped per apply, for hot-reload zombie protection); never maintained by hand |\n| `wsk-agent-<16 hex of source>.exe` + the matching `.cs` | plugin (compiled the first time Win32 is needed, reused afterwards) | the Win32 helper: the C# source ships in the package, the compilation happens only on your machine, and the `.cs` sits next to the exe so you can read what is running. Changing the source retires the cache by itself. Set `win32Backend: \"powershell\"` if you would rather no exe were ever written here; deleting these two files only means the next run recompiles |"
+    },
+    {
+      "section": "State and settings files",
+      "text": "Both JSON files are written **atomically** (temp file + rename) so a concurrent reader can't catch a half-written file.\n\nDeleting `state.json` resets \"last size\"; deleting `settings.json` returns the settings page to its default (use \"last size\")."
+    },
+    {
+      "section": "HTTP routes (the channel between the settings page and the host)",
+      "text": "Prefix `/window-size-keeper/api` (registered through the host's `webServer.register({ kind: \"prefix\" })`; `webServer` is not in `inject`, so headless setups don't hard-depend on it, and registration retries a bounded number of times if the service arrives late)."
+    },
+    {
+      "section": "HTTP routes (the channel between the settings page and the host)",
+      "text": "| Route | Purpose |\n| --- | --- |\n| `GET /state` | available resolutions, current selection, most recent window rectangle, bounds, both file paths, and which Win32 layer is actually in use (`win32Backend`, `win32HelperExe`) |\n| `POST /select` | `{ preset, custom:{width,height}, centerOnRestore }` → validate + persist + apply at once |\n| `POST /apply` | apply the current selection once (resize + centre) |\n| `POST /reset` | selection back to \"last size\" (`preset: \"\"`) and apply |"
+    },
+    {
+      "section": "HTTP routes (the channel between the settings page and the host)",
+      "text": "Invalid input (unknown `preset` id, custom width/height that aren't positive integers, picking “Custom…” without ever entering a size) is rejected with a reason — never silently applied."
+    },
+    {
+      "section": "Configuration (cordis.patch.yml)",
+      "text": "| Key | Default | Meaning |\n| --- | --- | --- |\n| `enabled` | `true` | master switch (off also stops registering the settings routes) |\n| `saveIntervalMs` | `15000` | idle sampling interval: how often the frame is read while nothing is changing |\n| `activeSampleMs` | `1000` | sampling interval while a change is in flight (floor 250 ms) |\n| `activeTailMs` | `10000` | how long after the last observed change fast sampling continues |\n| `followManualResize` | `true` | when a manual width/height change is sampled, set the \"Restore size\" selection to `custom` = that size (see the section above) |\n| `restoreDelayMs` | `3000` | first-restore delay on the fallback path (only used when `restoreEarly` is off or nothing was found) |\n| `restoreEarly` | `true` | early restore: watch from `apply` and fix the size before `show()`. Off restores the pure-polling behaviour |\n| `earlyPollMs` | `40` | interval between enumerations inside the agent while watching |\n| `earlyBudgetMs` | `10000` | total early-restore budget; on expiry it hands over to `restoreDelayMs` |\n| `earlyMinArea` | `900000` | minimum outer-frame area (physical px²) accepted as \"the main window\" while watching (the main window is alw"
+    },
+    {
+      "section": "Configuration (cordis.patch.yml)",
+      "text": "> Note: `preset`/`presets` belong to the Cordis patch config and need a **DSH restart** (or a profile reassembly) to take effect; `dev_reload_package` does not re-read patch config. Selections made on the settings page go through `settings.json` and need **no** restart."
+    },
+    {
+      "section": "Presets",
+      "text": "12 built-in common resolutions (shown in this order):\n\n`1024×768`, `1280×720`, `1366×768`, `1440×900`, `1536×864` (1920 at 125% scaling), `1600×900`, `1920×1080`, `1920×1200`, `2560×1080`, `2560×1440`, `3440×1440`, `3840×2160`"
+    },
+    {
+      "section": "Presets",
+      "text": "To add or remove entries, put a `presets:` list in `config` of `cordis.patch.yml` (each item `{ id, label, labelEn?, width, height }`), which replaces the built-in list wholesale (example in the trailing comment of `cordis.patch.yml`); the settings-page list follows it. `labelEn` is optional — omit it and that entry shows the same text in both languages."
+    },
+    {
+      "section": "Installation / reload",
+      "text": "```bash"
+    },
+    {
+      "section": "normal user: install the published artifact - download the GitHub Release asset, verify it, then install",
+      "text": "curl -L -o ~/.dsh/.plugin-sources/dsh-window-size-keeper-<version>.tgz \\\n  https://github.com/ecbob/dsh-window-size-keeper/releases/download/v<version>/dsh-window-size-keeper-<version>.tgz\nshasum -a 256 ~/.dsh/.plugin-sources/dsh-window-size-keeper-<version>.tgz   # must equal that release's SHA-256 in RELEASES.txt\ndsh plugin --profile desktop add \"<absolute path of that .tgz>\"            # the spec has to be an absolute path"
+    },
+    {
+      "section": "development: hot-assemble (no restart)",
+      "text": "dev_install_package  dir=<absolute path of this repo>  profile=desktop\ndev_reload_package   dsh-window-size-keeper   # swaps the host half only; the settings page still needs a reload\n```\n\nUninstall: `dsh plugin --profile desktop remove dsh-window-size-keeper`, or `dev_uninject_plugin dsh-window-size-keeper`."
+    },
+    {
+      "section": "development: hot-assemble (no restart)",
+      "text": "> What goes into `<profile>`? Usually `desktop` for the desktop app and `web` for the web app, but the name is decided by your machine: `dir %USERPROFILE%\\.dsh\\profiles` (Linux/macOS: `ls ~/.dsh/profiles`). A wrong name doesn't error — the plugin just lands in a different profile and you won't see it here."
+    },
+    {
+      "section": "development: hot-assemble (no restart)",
+      "text": "> **After adding or changing `lib/client.js`** (the settings-page half): the client half is loaded by the page, so a profile reassembly (restart the DSH desktop app) plus a page refresh is needed before a new section appears. Changes to the host half (`lib/index.js`) can be hot-reloaded with `dev_reload_package`."
+    },
+    {
+      "section": "Offline self-check",
+      "text": "```bash\nnode scripts/selftest.mjs                                    # or npm test\nnode --check lib/index.js && node --check lib/client.js      # or npm run check\n```"
+    },
+    {
+      "section": "Offline self-check",
+      "text": "`scripts/selftest.mjs` is dependency-free and covers 99 checks across thirteen labelled groups (0.1.1 added group `[5c]` - the sampling cadence and the \"was this resize manual?\" decision as pure functions - plus a render check that the frame line shows the real size after a refresh and after a language switch; 0.1.3 added group `[7b]` - the Win32 helper's path-picking pure functions, a real compile on the machine running the test, the three one-shot contracts and the resident protocol, and \"if the helper cannot start we must fall back to powershell, never give up\"): the pure functions (centring, clamping, priority, input validation, main-window identification, settings/state read-write), the HTTP routes (fake ctx + real http server + real fetch), the Win32 agent protocol against a real `powershell.exe` **and** against the locally compiled helper exe, the i18n dictionaries (key parity, identical `{placeholders}`, no untranslated leftovers in the English table, language resolution priority), and rendering the actual section into a fake DOM in both languages — including \"switching language must not rebuild the DOM, so the custom width you were typing is still there\", and \"a dictionary"
+    },
+    {
+      "section": "Offline self-check",
+      "text": "Group [10] is a desensitization scan (`scripts/check-sensitive.mjs`, runnable on its own as `npm run scan:sensitive`): it refuses account home directories (`C:\\Users\\<someone>`, `/home/<someone>`), personal workspace absolute paths, hard-coded loopback ports, credential-shaped strings (`api_key: …`, `ghp_…`, `sk-…`, `AKIA…`), real e-mail addresses and machine fingerprints (SID / machine GUID / hostname) anywhere in the shipped files or the repo-only release docs. It carries its own must-be-red and must-be-green control samples — the scanner prints how many at run time and selftest group [10] enforces both halves — so the gate cannot quietly rot into a rubber stamp; `~/.dsh`, `%USERPROFILE%`, `<workspace>` and `<HOME>` plus SHA-256 digests are deliberately allowed — a ledger that cannot write down a checksum is not much of a ledger."
+    },
+    {
+      "section": "Offline self-check",
+      "text": "It points the state and settings files at a temporary directory, and the helper exe it compiles during the test lands in that same temporary directory - it **never touches** the real `~/.dsh/storages/window-size-keeper`. The script's parent process is not the DSH host, so `applyNow` inside the routes can't find a main window — which is exactly what proves failures are reported honestly instead of being claimed as done, and no real window gets resized. To verify on the real machine: restart the desktop app and look at Settings → Window size."
+    },
+    {
+      "section": "The zero-dependency red line",
+      "text": "Node builtins + the in-box `csc.exe` (to compile the Win32 helper) + `powershell.exe` (fallback) only; no runtime dependency is declared, **and the package ships no binary at all** - the helper exe is compiled on the user's own machine from C# source that is part of the package. The rule holds in either install mode: when a profile installs the packaged tarball, any declared runtime dependency would have to resolve from the registry during install, and when a profile links this directory for development (pnpm `link:`) pnpm does not install the linked package's own dependencies at all - either way an unresolvable runtime dependency makes the whole Cordis plugin tree throw and DSH cannot start (the 2026-09 incident; the same warning is in `@dsh-pet/bridge`). The client half follows the same rule: it only uses the `react` the client module loader already injects, and no third-party package."
+    },
+    {
+      "section": "What lives where on a machine",
+      "text": "`<workspace>/dsh-window-size-keeper` is the one checkout: code, both READMEs, both changelogs, the release ledger, `PUBLISHING.md`, the market submission entry, CI and `.git`. Version identity is the annotated tag `v<version>` - the old habit of keeping a second directory named `<name>-<version>` as a release snapshot was retired on 2026-10-20 and nothing depends on it. `<workspace>` stands for \"wherever this checkout lives on your machine\" — the repo deliberately records no absolute paths from anyone's machine, and a selftest group enforces that. What DSH actually runs is a packaged artifact rather than this directory: `npm pack` writes `dist/<name>-<version>.tgz` and the profile installs it from `~/.dsh/.plugin-sources/<name>-<version>.tgz`, so editing `lib/*.js` here takes effect only after pack + `dsh plugin … add` + a full DSH restart (or a temporary `link:` while debugging). Everything the plugin writes at runtime lives in `~/.dsh/storages/window-size-keeper/`: `state.json`, `settings.json`, `state.json.gen`, plus the compiled `wsk-agent-*.exe` and its `.cs` (deleting those only means recompiling next time, and deleting `state.json` restarts the \"last size\" history)."
+    },
+    {
+      "section": "License",
+      "text": "MIT, see LICENSE."
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,353 @@
+{
+  "repo": "blueberrymaid/dsh-midtalk",
+  "commit": "feee0b91840e804b7104f6743673e40be85a3aee",
+  "extracted_at": "2026-11-10T16:31:26.035064+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 69912,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 792,
+      "Markdown": 454,
+      "Other": 34,
+      "YAML": 26
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/core.js",
+      "package.json",
+      "test/plugin.spec.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-midtalk",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./core": "./lib/core.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "index.js",
+      "lib/",
+      "cordis.patch.yml",
+      "test/",
+      "README.md",
+      "README.en.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "description": "任务内插话与可选打断：/say 无损递话（插到下一个步骤边界），/cut 中止当前步并留下结构化恢复卡",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "slash-command",
+      "interrupt",
+      "steer"
+    ],
+    "license": "MIT",
+    "author": "blueberrymaid",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/blueberrymaid/dsh-midtalk.git"
+    },
+    "homepage": "https://github.com/blueberrymaid/dsh-midtalk#readme",
+    "bugs": {
+      "url": "https://github.com/blueberrymaid/dsh-midtalk/issues"
+    },
+    "engines": {
+      "node": ">=22"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": "^0.1.5-rc.3"
+    },
+    "scripts": {
+      "test": "node test/plugin.spec.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: midtalk\n      name: dsh-midtalk\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "lib/core.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:49"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/blueberrymaid/dsh-midtalk.git",
+      "where": "package.json:39"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/blueberrymaid/dsh-midtalk#readme",
+      "where": "package.json:41"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/blueberrymaid/dsh-midtalk/issues",
+      "where": "package.json:43"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-24T17:21:05Z",
+    "created_at": "2026-09-24T17:17:57Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/core.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-midtalk",
+      "text": "**任务内插话 + 可选打断 + 结构化恢复卡**——给 DeepSeek Harness（DSH）加两条斜杠命令，把\"我中途想说一句\"和\"我要立刻停住这一步\"分开，并且**打断的时候不丢现场**。\n\n[English](README.en.md) · **中文**\n\n- 纯 host 侧插件（Cordis），**零客户端代码**、零构建、**无第三方运行时依赖**；对宿主包 `@deepseek-ai/dsh-llm` 有一个 peer 依赖——只有 `index.js` 用它来构造注入消息，`lib/core.js` 与自测都不需要它。\n- 不注册任何模型能力、不联网、不上报任何数据；只在 `$DSH_HOME/midtalk/` 下写自己的启动标记、送话日志与恢复卡。\n- **不经 npm 分发**：`package.json` 里 `\"private\": true`，装法是\"把目录放进 profile\"（见 §3），不是 `npm i`。\n\n---"
+    },
+    {
+      "section": "1. 它解决什么问题",
+      "text": "任务进行中你想插一句话，本来只有两个极端：\n\n| 做法 | 代价 |\n|---|---|\n| 等这一轮跑完再说 | 慢，而且长步骤可能几分钟 |\n| 按界面停止按钮 | 立刻，但**当前这一步被砍掉**，可能留下半截状态，且你刚才那句话没人接 |\n\n本插件把这两件事拆成两条命令，**由你按一次回车来决定**，不做任何\"智能升格\"（不按步长自动改成打断——这条是明确的设计选择，理由见 §6）。"
+    },
+    {
+      "section": "2. 两条命令",
+      "text": "| | `/say <你要说的话>` | `/cut [你要说的话]` |\n|---|---|---|\n| 语义 | **无损**：插到下一个步骤边界 | **有损**：中止当前这一步 |\n| 打断？ | 不打断 | 打断（在跑的工具调用被取消） |\n| 延迟 | = 当前这一步的剩余时长（步很短就几乎立刻；步很长就一直等） | 等 agent 回到 `idle` 再送话，兜底 3 秒（本机一次观测 27 ms，取证见 `$DSH_HOME/midtalk/wake.log`） |\n| 轮次 | 留在**同一轮**里回应 | 当前轮结束，你的话作为**新一轮**到达 |\n| 残余状态 | 没有 | 可能有（被打断的那一步） |\n| 恢复 | 不需要 | 自动写一张**结构化恢复卡** |\n| 什么时候用 | 默认就用它 | 我卡在一个很长的步骤里、你必须现在停我 |\n\n两条命令的返回文本都会附一句「最近一个工具调用开始于 X 秒前（估量）」——**只给信息，不改语义**：你看一眼就知道该不该改用 `/cut`。"
+    },
+    {
+      "section": "3. 安装",
+      "text": "本插件在 `package.json` 里声明了 `dsh.bundle.patch`（指向仓库根的 `cordis.patch.yml`），所以 DSH 自带的插件命令能把它按**图层**装进某个 profile；也完全可以手工放进去（方式 B）。\n\n**两个文件必须一起在包里**：`index.js` 与 `lib/core.js`——`index.js:44` 是对 `./lib/core.js` 的相对导入，少一个就挂载失败。"
+    },
+    {
+      "section": "方式 A：`dsh plugin add`（推荐，需要重启 DSH）",
+      "text": "```bash\ndsh plugin --profile web add \"github:blueberrymaid/dsh-midtalk\"\n```\n\n这是 **pnpm 的薄转发**（`@deepseek-ai/dsh/lib/plugin-Ddi42qoW.js:7-17`）：它在 profile 目录里跑 `pnpm add <你的 spec>`，然后按**已安装状态**核对 profile 的图层列表——某个依赖解析到的包若声明了 `dsh.bundle`，就被加进 `dsh.profile.bundles`；否则只当普通依赖装下并给一句警告（`:25-33`、`:46-78`）。所以 `package.json` 里的 `dsh.bundle.patch` 不是装饰：**没有它，插件装上了也不会成为 profile 图层**。装完重启 `dsh web` 生效。"
+    },
+    {
+      "section": "方式 B：手放目录 + 名册（不依赖 pnpm / 网络）",
+      "text": "**第 1 步：放到模块目录**\n\n```bash"
+    },
+    {
+      "section": "从 GitHub 取",
+      "text": "git clone https://github.com/blueberrymaid/dsh-midtalk.git dsh-midtalk\n```\n\n把整个目录（至少 `index.js` + `lib/core.js`）放进：\n\n```\n$DSH_HOME/profiles/<profile>/node_modules/dsh-midtalk/\n```\n\n`$DSH_HOME` 默认是用户主目录下的 `.dsh`；Windows 上实际路径形如\n`C:\\Users\\<你>\\.dsh\\profiles\\web\\node_modules\\dsh-midtalk\\`（profile 名通常是 `web`，在你自己的机器上以 `$DSH_HOME\\profiles\\` 下的目录名为准）。\nyaml\n- insert:\n  - id: midtalk\n    name: dsh-midtalk\n```"
+    },
+    {
+      "section": "从 GitHub 取",
+      "text": "> **改之前先备份该文件**（例如 `Copy-Item cordis.patch.yml cordis.patch.yml.bak`）。这个文件是**启动时一次性读取、全或全无**：写坏一行会让 `dsh web` 整个起不来。\n\n`name` 也接受相对/绝对路径写法（例如 `./node_modules/dsh-midtalk/index.js`）。\n\n**第 3 步：重启 `dsh web`**，然后做下面的确认。"
+    },
+    {
+      "section": "怎么确认装上了",
+      "text": "读 `$DSH_HOME/midtalk/boot.json`——插件在 `apply()` 与命令注册完成时各写一次（`index.js:210`、`index.js:235`）：\n\n```json\n{ \"plugin\": \"dsh-midtalk\", \"version\": \"1.0.0\", \"stage\": \"registered\", \"commands\": [\"say\", \"cut\"], \"pid\": 18092 }\n```\n\n- `version` 必须等于你装的版本；`stage` 走到 `registered` 才算命令注册完成。\n- `pid` 是写下该文件的进程。**版本没变或 `stage` 停在 `apply`，说明活进程跑的不是你刚放进去的代码**——ESM 模块缓存会喂回旧版本，重启最能保证清掉它。\n- GUI 输入 `/` 时应能看到 `/say` 与 `/cut`。"
+    },
+    {
+      "section": "附录：免重启方式（`dsh-my-guardian` 候选区，本机实测）",
+      "text": "装了 `dsh-my-guardian` 的机器可以改候选文件让它热挂载、**不重启**。下面是作者本机实测过的流程，**不是通用要求**：\n\n1. 把包放进 `$DSH_HOME/profiles/web/node_modules/dsh-midtalk/`；\n2. 往 `$DSH_HOME/profiles/web/cordis.staged.json` 写一行：\n   ```json\n   [{\"id\":\"midtalk\",\"name\":\"./node_modules/dsh-midtalk/index.js?v=1\"}]\n   ```\n3. 几秒内 guardian 会试挂：成功即从候选文件移除、并把条目写进 `$DSH_HOME/guardian/state.json` 的 `promoted`；失败会保留候选行并在 `lastError` 里给原因（连续失败 3 次会冻结）。\n\n**两条实测出来的坑**："
+    },
+    {
+      "section": "附录：免重启方式（`dsh-my-guardian` 候选区，本机实测）",
+      "text": "- **换模块名必须同时换 `id`**：只换 `name`、沿用旧 `id`，guardian **完全不受理**（候选行原样留着、不报错、不挂载）。\n- **同一个路径重挂不会换代码**：ESM 模块缓存会让活进程继续跑旧代码（实测：`dsh-progress-report` 三次安装零生效）。跳过缓存只有一个杠杆——**给模块名加查询串**，如 `?v=2`；再用 `boot.json` 的 `version` 核对。"
+    },
+    {
+      "section": "卸载 / 回滚",
+      "text": "1. 从 `cordis.patch.yml` 删掉那行 insert（guardian 环境里也可以 `POST http://127.0.0.1:3080/guardian/api/remove`，body `{\"id\":\"<登记的 id>\"}`，立即热卸载）；\n2. 删掉 `$DSH_HOME/profiles/<profile>/node_modules/dsh-midtalk/`；\n3. 可选：删 `$DSH_HOME/midtalk/`（内含 `boot.json`、`wake.log`、`last-interrupt-*.json` 恢复卡——**想留就留**，它们是纯文本）。"
+    },
+    {
+      "section": "4. 恢复卡",
+      "text": "`/cut` 在打断前把现场写到 `$DSH_HOME/midtalk/last-interrupt-<会话 id>.json`（**每个会话一张，不会互相覆盖**；原子落盘：临时文件 + 同目录 rename，所以不会出现半截 JSON）。字段："
+    },
+    {
+      "section": "4. 恢复卡",
+      "text": "| 字段 | 含义 |\n|---|---|\n| `at` / `reason` | 时间 / 触发原因（`cut`） |\n| `plugin` / `version` | 写入者与版本（用来判断\"活进程跑的是哪一版\"） |\n| `agentStatus` / `sessionId` | 打断时的 agent 状态与会话 |\n| `interruptedAt` | `{turn, step, attemptId}`——被打断的**位置** |\n| `userText` | 你附带的那句话 |\n| `pendingToolCalls` | 正在派发/刚派发的工具调用：`{at, attemptId, callId, name, arguments}`（`arguments` 已解析成对象，不是转义字符串） |\n| `lastReasoning` / `lastText` | 我被打断前的推理/正文片段（各截 2000 字符） |\n| `usage` / `lastFinish` | 那一刻的 token 用量与结束原因 |\n| `diagnostics` | 帧类型计数、解析失败数——出问题时用它判断帧格式是否变了 |\n| `frames` | 最近 12 个流帧（环形窗口，便于回看现场） |"
+    },
+    {
+      "section": "4. 恢复卡",
+      "text": "**恢复协议（打断后照做，只依赖这张卡，不需要别的文件）**：\n\n1. 先**列状态、不继续干**；\n2. 读这张卡，重点是 `pendingToolCalls`：它列出被打断那一刻正在派发/刚派发的工具调用（名字 + 参数）；\n3. 逐个判断\"是否已落地\"——卡里给的是**调用意图**，不是落地清单，所以要自己核实它碰的文件/命令（读文件、看退出码、比对修改时间）；\n4. 把判断结果（已落地 / 需回滚 / 先验证）交用户拍板；\n5. 用户确认后**重做被打断的那一步**。\n\n理由：`agent.cancel` **不会撤销**已经落地的写入。"
+    },
+    {
+      "section": "5. 硬规则行（只进插件）",
+      "text": "两条命令注入的正文末尾都带一行：\n\n> 〔硬规则 · 收到插话先输出一句正文回复（确认收到 + 回应内容），再决定是否继续调用工具；只发工具调用、或不回话＝违规〕\n\n它写死在 `lib/core.js:16`，**不进宿主每轮注入的 `AGENTS.md`**：这是本插件自己的行为约束，不该污染全局。出处是一次真实事故：收到插话后只发工具调用、不写正文，用户连问两次都没得到回应。它是**文本约束**，没有执行层强制力——但至少让\"被问到却不回话\"变成明确违规，而不是风格问题。"
+    },
+    {
+      "section": "6. 它**不**做的事（故意的）",
+      "text": "- **不杀后台**：`jobs.kill` / `terminals.kill` / `subagents.interrupt` / `goals.disarm` 一个都没接。杀后台本身就会制造半截状态（正在下载、正在写文件的活），与本插件\"不丢现场\"的目标冲突。\n- **不做阈值自动升格**：不去看\"当前步跑了多久然后自动改成打断\"。那会把你唯一的保证（`/say` 永不破坏）变成**由你看不见的状态决定的条件保证**，还剥夺你的选择权。\n- **不隐藏括号内容**：注入正文里的行为说明会显示为**系统行**（`source: {kind:\"plugin\", form:\"notice\"}`），不是伪装成你的消息，但**看得见**。想彻底隐形需要不被渲染的通道，本插件做不到。\n- **不撤销已落地的写入**（系统层没有回滚这一说）。"
+    },
+    {
+      "section": "7. 依赖的未公开内部接口",
+      "text": "本插件的功能建立在 DSH 的**内部事件与 API 形状**上。下面每一行都在源码里核对过；**实测 DSH 版本：`@deepseek-ai/dsh` 0.1.5-rc.3、`@deepseek-ai/dsh-llm` 0.1.5-rc.3**（版本号读自这两个包的 `package.json:4`）。**升级 DSH 后这些接口都可能变，一变本插件就静默失效**（不会有编译错误，因为它是动态挂载的 JS）。"
+    },
+    {
+      "section": "7. 依赖的未公开内部接口",
+      "text": "| 用途 | 依据（包名 + `文件:行`） |\n|---|---|\n| 无损投递 | `agent.steer(createUserMessage(...))`；`createUserMessage` 来自 `@deepseek-ai/dsh-llm`（`index.js:25` 的顶层 import，`index.js:177` 使用） |\n| 有损投递 | `agent.cancel({kind:\"user\"}, {keepInbox:true})`，与界面停止按钮同一调用：`@deepseek-ai/dsh-api-session-controller/lib/index.js:872-878`（本插件在 `index.js:198` 调它） |\n| 送话时机 | `agent.status` getter（`idle | maintenance` 之外都算 `running`）：`@deepseek-ai/dsh-agent-loop/lib/index.js:773-775`；状态变化时发 `agent/status`：同文件 `:776-782`；事件载荷带 agent：`@deepseek-ai/dsh-tool-cordis/lib/index.js:5061-5065` |\n| 恢复卡内容 | `agent/assistant-stream` 帧（订阅在 `index.js:211`）；`frame.chunk` 是**对象**（StreamChunk）而不是字符串（`lib/core.js:65-70` 兼容两种） |\n| 系统行显示 | `source: {kind:\"plugin\", plugin, form:\"notice\", summary}`（样板：`@deepseek-ai/dsh-agent/lib/index.js:99-114`；本插件在 `index.js:148-153`） |\n| 命令注册 | `ctx.commands.register({name, description, input, handler})`：`@deepseek-ai/dsh-commands/lib/index.js:257-259`；重名会抛错：同文件 `:82`（且没有公开的 unregister API——换版本要先卸载旧插件腾出命令名） |\n| 命令调用载荷 | handler 收到 `{agent, rawInput, ...}`（本插件 `index.js:166-171`） |"
+    },
+    {
+      "section": "8. 已知边界",
+      "text": "- `/say` 的**延迟 = 当前这一步的剩余时长**：我跑一个 100 秒的单步，你就会 100 秒收不到回应（实测过；对策是把长活拆成短步，或改用 `/cut`）。\n- **待送话队列上限 8，超出会静默丢最早的**：`MAX_PENDING_WAKES = 8`（`lib/core.js:20`）。同一个 agent 堆积超过 8 条待送话时，最早的会被丢弃（`index.js:132-143`），只在 `$DSH_HOME/midtalk/wake.log` 留一行 `\"why\":\"dropped:queue-full\"`——**不会提示用户**。正常用法（一次一条 `/cut`）碰不到，连续快速 `/cut` 才会。\n- 恢复卡给的是工具调用的**意图**，不是\"是否已落地\"的清单——后者结构上拿不到，靠流程兜（原子写入、只碰可整体删除的容器）。\n- 一步里超过 20 个工具调用时只保留最后 20 条（`lib/core.js:26`）。\n- `lastText` / `lastReasoning` 各截 2000 字符（`lib/core.js:24-25`），`frames` 环形窗口只有 12 帧（`lib/core.js:21`）。\n- 空 `/say`（不带内容）会注入一条无内容的插话。\n- 兼容性只在**实测 DSH 版本**（0.1.5-rc.3）上验证过：2026-09-25，Windows + node 22。Linux / macOS 未实测（代码里没有平台相关分支，但没跑过）。"
+    },
+    {
+      "section": "9. 开发",
+      "text": "```\ndsh-midtalk/\n├── index.js                     宿主半边：命令注册、cancel、写盘、事件订阅\n├── lib/core.js                  纯逻辑：流帧→trace、trace→恢复卡对象、正文拼装（零依赖，自测只跑这一层）\n├── test/plugin.spec.mjs         自测（零框架，只用 node 内置模块）\n\n```bash\nnode test/plugin.spec.mjs     # dsh-midtalk 自测：38 passed, 0 failed\n```\n\n自测只覆盖 `lib/core.js`（不 import DSH 包、不碰文件系统、不写 `.dsh`），所以在任何地方、任何平台都能跑，也不需要 `npm install`。"
+    },
+    {
+      "section": "10. License",
+      "text": "MIT（见 `LICENSE`）。"
+    },
+    {
+      "section": "dsh-midtalk",
+      "text": "**Mid-task interjection + optional interruption + a structured recovery card** for DeepSeek Harness (DSH). Two slash commands that separate \"I want to say something\" from \"stop this step right now\" — without losing the scene when it stops.\n\n**English** · [中文](README.md)"
+    },
+    {
+      "section": "dsh-midtalk",
+      "text": "- Host-side Cordis plugin only. **No client code**, no build step, **no third-party runtime dependencies**; there is one peer dependency on the host package `@deepseek-ai/dsh-llm` — only `index.js` uses it to build the injected message; `lib/core.js` and the self-test do not need it.\n- No model calls, no network, no telemetry. It only writes its own boot marker, wake log and recovery cards under `$DSH_HOME/midtalk/`.\n- **Not distributed via npm**: `package.json` sets `\"private\": true`; you install it by placing the directory into a profile (§3)."
+    },
+    {
+      "section": "dsh-midtalk",
+      "text": "---"
+    },
+    {
+      "section": "1. The problem",
+      "text": "While a task is running you have two extremes:\n\n| Option | Cost |\n|---|---|\n| Wait for the turn to finish | Slow — a long step can take minutes |\n| Hit the UI stop button | Instant, but it **kills the current step**, may leave half-written state, and your sentence gets no reply |\n\nThis plugin splits those into two commands and lets **one Enter key** decide. It never upgrades `/say` into `/cut` on its own (a deliberate choice — see §6)."
+    },
+    {
+      "section": "2. Commands",
+      "text": "| | `/say <text>` | `/cut [text]` |\n|---|---|---|\n| Semantics | **Lossless**: insert at the next step boundary | **Lossy**: abort the current step |\n| Interrupts? | No | Yes (in-flight tool calls are cancelled) |\n| Latency | = remaining time of the current step | waits for the agent to reach `idle`, 3 s fallback (one local observation: 27 ms — evidence in `$DSH_HOME/midtalk/wake.log`) |\n| Turn | Answered **within the same turn** | Current turn ends; your text arrives as a **new turn** |\n| Leftovers | None | Possibly (the aborted step) |\n| Recovery | Not needed | A **structured recovery card** is written automatically |\n| Use when | Default | I'm stuck in a very long step and you must stop me now |"
+    },
+    {
+      "section": "2. Commands",
+      "text": "Both commands append \"the last tool call started X seconds ago (estimate)\" to their reply — **information only, semantics unchanged**."
+    },
+    {
+      "section": "3. Install",
+      "text": "The package declares `dsh.bundle.patch` in `package.json` (pointing at `cordis.patch.yml` in the repo root), so DSH's own plugin command can install it into a profile **as a layer**; placing it by hand works too (Option B).\n\n**Both files are required**: `index.js` and `lib/core.js` — `index.js:44` imports `./lib/core.js` relatively, so a missing file means a failed mount."
+    },
+    {
+      "section": "Option A: `dsh plugin add` (recommended, restart required)",
+      "text": "A **thin pnpm forwarder** (`@deepseek-ai/dsh/lib/plugin-Ddi42qoW.js:7-17`): it runs `pnpm add <spec>` inside the profile directory, then reconciles the profile's layer list against the installed state — a dependency that resolves to a package declaring `dsh.bundle` joins `dsh.profile.bundles`; anything else is installed as a plain dependency with a one-line warning (`:25-33`, `:46-78`). So `dsh.bundle.patch` is not decoration: **without it the plugin installs but never becomes a profile layer**. Restart `dsh web` to activate."
+    },
+    {
+      "section": "Option B: place it in a profile + roster (no pnpm / no network)",
+      "text": "**Step 1 — put it into the module directory**\n\n```bash"
+    },
+    {
+      "section": "from GitHub",
+      "text": "git clone https://github.com/blueberrymaid/dsh-midtalk.git dsh-midtalk\n```\n\nCopy the whole directory (at least `index.js` + `lib/core.js`) into:\n\n```\n$DSH_HOME/profiles/<profile>/node_modules/dsh-midtalk/\n```"
+    },
+    {
+      "section": "from GitHub",
+      "text": "`$DSH_HOME` defaults to `.dsh` under your home directory; on Windows the real path looks like\n`C:\\Users\\<you>\\.dsh\\profiles\\web\\node_modules\\dsh-midtalk\\` (the profile name is usually `web`; check the directories under `$DSH_HOME\\profiles\\`).\nyaml\n- insert:\n  - id: midtalk\n    name: dsh-midtalk\n```\n\n> **Back that file up first** (e.g. `Copy-Item cordis.patch.yml cordis.patch.yml.bak`). It is read **once at startup, all-or-nothing**: one bad line stops `dsh web` from booting."
+    },
+    {
+      "section": "from GitHub",
+      "text": "`name` also accepts a relative or absolute path (e.g. `./node_modules/dsh-midtalk/index.js`).\n\n**Step 3 — restart `dsh web`**, then verify below."
+    },
+    {
+      "section": "How to verify it is loaded",
+      "text": "Read `$DSH_HOME/midtalk/boot.json` — the plugin writes it in `apply()` and again once command registration finishes (`index.js:210`, `index.js:235`):\n\n```json\n{ \"plugin\": \"dsh-midtalk\", \"version\": \"1.0.0\", \"stage\": \"registered\", \"commands\": [\"say\", \"cut\"], \"pid\": 18092 }\n```"
+    },
+    {
+      "section": "How to verify it is loaded",
+      "text": "- `version` must match what you installed; `stage` reaches `registered` only after the commands are registered.\n- `pid` is the process that wrote the file. **If the version does not change, or `stage` stays at `apply`, the live process is not running the code you just copied** — the ESM module cache can serve the old version; a restart is the reliable cure.\n- Typing `/` in the composer should list `/say` and `/cut`."
+    },
+    {
+      "section": "Appendix: no-restart path (`dsh-my-guardian` staging, as tested locally)",
+      "text": "Machines with `dsh-my-guardian` installed can hot-mount through its staging file, **without restarting**. This is the flow the author tested locally — **not a general requirement**:"
+    },
+    {
+      "section": "Appendix: no-restart path (`dsh-my-guardian` staging, as tested locally)",
+      "text": "1. copy the package to `$DSH_HOME/profiles/web/node_modules/dsh-midtalk/`;\n2. write one line into `$DSH_HOME/profiles/web/cordis.staged.json`:\n   ```json\n   [{\"id\":\"midtalk\",\"name\":\"./node_modules/dsh-midtalk/index.js?v=1\"}]\n   ```\n3. within seconds guardian tries to mount it: on success the staging file is emptied and the entry appears in `promoted` inside `$DSH_HOME/guardian/state.json`; on failure the line stays and `lastError` explains why (3 consecutive failures freeze it)."
+    },
+    {
+      "section": "Appendix: no-restart path (`dsh-my-guardian` staging, as tested locally)",
+      "text": "**Two traps we hit for real:**\n\n- **A new module name needs a new `id`.** Keeping the old `id` with a new `name` is silently ignored (the staging line just sits there).\n- **Re-mounting the same path does not reload code.** The ESM module cache keeps the old code alive (measured: `dsh-progress-report` stayed inert across three installs). The only lever is a **query string** on the module name (`?v=2`) — then confirm with `version` in `boot.json`."
+    },
+    {
+      "section": "Uninstall / rollback",
+      "text": "1. remove that `insert:` entry from `cordis.patch.yml` (with guardian you can instead `POST http://127.0.0.1:3080/guardian/api/remove` with `{\"id\":\"<staged id>\"}` for a hot unmount);\n2. delete `$DSH_HOME/profiles/<profile>/node_modules/dsh-midtalk/`;\n3. optionally delete `$DSH_HOME/midtalk/` (boot marker, wake log, recovery cards — plain text, safe to keep)."
+    },
+    {
+      "section": "4. Recovery card",
+      "text": "Before interrupting, `/cut` writes the scene to `$DSH_HOME/midtalk/last-interrupt-<sessionId>.json` — **one card per session, never overwritten across sessions**; written atomically (temp file + same-directory rename, so a half-written JSON is impossible)."
+    },
+    {
+      "section": "4. Recovery card",
+      "text": "Fields: `at`, `reason`, `plugin`, `version`, `agentStatus`, `sessionId`, `interruptedAt{turn,step,attemptId}`, `userText`, `pendingToolCalls[]{at,attemptId,callId,name,arguments}` (arguments parsed to objects), `lastReasoning`, `lastText`, `usage`, `lastFinish`, `diagnostics` (frame-type counters, parse errors) and `frames` (last 12 stream frames).\n\n**Recovery protocol (after an interruption; relies on this card only, no other file):**"
+    },
+    {
+      "section": "4. Recovery card",
+      "text": "1. list state first, do not continue working;\n2. read the card — especially `pendingToolCalls`, the tool calls that were in flight at the moment of interruption (name + arguments);\n3. decide for each one whether it **landed**: the card records **intent**, not an inventory, so check the files/commands it touched yourself (read the file, check exit codes, compare timestamps);\n4. hand that assessment (landed / roll back / verify first) to the user for a decision;\n5. after their confirmation, **redo the interrupted step**."
+    },
+    {
+      "section": "4. Recovery card",
+      "text": "`agent.cancel` **does not undo** anything already written."
+    },
+    {
+      "section": "5. Hard rule line (plugin-only)",
+      "text": "Both commands end their injected text with:\n\n> 〔硬规则 · 收到插话先输出一句正文回复（确认收到 + 回应内容），再决定是否继续调用工具；只发工具调用、或不回话＝违规〕"
+    },
+    {
+      "section": "5. Hard rule line (plugin-only)",
+      "text": "It is hard-coded in `lib/core.js:16` and **does not go into the host's per-turn `AGENTS.md`**: this is the plugin's own behavioural constraint and should not pollute global instructions. It comes from a real incident: an interjection was answered with tool calls only, twice. It is a **text constraint** with no enforcement layer — but it makes \"asked and not answered\" an explicit violation rather than a style question."
+    },
+    {
+      "section": "6. What it deliberately does **not** do",
+      "text": "- **No background killing**: `jobs.kill` / `terminals.kill` / `subagents.interrupt` / `goals.disarm` are not wired. Killing background work creates half-done state, which contradicts the whole point.\n- **No automatic threshold upgrade**: it will not watch how long the current step ran and silently turn `/say` into `/cut`. That would turn your one guarantee (\"`/say` never breaks anything\") into a conditional guarantee decided by state you cannot see.\n- **No hiding of the bracketed text**: injected behaviour notes render as a **system row** (`source: {kind:\"plugin\", form:\"notice\"}`), clearly not your message — but visible. True invisibility needs an unrendered channel; not available.\n- **No rollback of already-written files** (the platform has none)."
+    },
+    {
+      "section": "7. Undocumented internals it depends on",
+      "text": "Every row below was checked against the sources; **DSH version tested: `@deepseek-ai/dsh` 0.1.5-rc.3 and `@deepseek-ai/dsh-llm` 0.1.5-rc.3** (read from `version` in those packages' `package.json:4`). **Upgrading DSH can change any of them — and when one changes the plugin fails silently** (it is dynamically loaded JS, so there is no compile error)."
+    },
+    {
+      "section": "7. Undocumented internals it depends on",
+      "text": "| Use | Evidence (package + `file:line`) |\n|---|---|\n| Lossless delivery | `agent.steer(createUserMessage(...))`; `createUserMessage` comes from `@deepseek-ai/dsh-llm` (top-level import at `index.js:25`, used at `index.js:177`) |\n| Lossy delivery | `agent.cancel({kind:\"user\"}, {keepInbox:true})` — same call as the UI stop button: `@deepseek-ai/dsh-api-session-controller/lib/index.js:872-878` (called at `index.js:198`) |\n| Wake timing | `agent.status` getter (anything but `idle`/`maintenance` is `running`): `@deepseek-ai/dsh-agent-loop/lib/index.js:773-775`; status changes emit `agent/status`: same file `:776-782`; the payload carries the agent: `@deepseek-ai/dsh-tool-cordis/lib/index.js:5061-5065` |\n| Card content | `agent/assistant-stream` frames (subscribed at `index.js:211`); `frame.chunk` is an **object** (StreamChunk), not a string (`lib/core.js:65-70` accepts both) |\n| System row | `source: {kind:\"plugin\", plugin, form:\"notice\", summary}` (pattern: `@deepseek-ai/dsh-agent/lib/index.js:99-114`; used at `index.js:148-153`) |\n| Command registration | `ctx.commands.register({name, description, input, handler})`: `@deepseek-ai/dsh-commands/lib/index.js:257-259`; duplicate names th"
+    },
+    {
+      "section": "8. Known limits",
+      "text": "- `/say` latency = remaining time of the current step (a 100-second step means 100 seconds of silence; split long work into short steps or use `/cut`).\n- **The pending-wake queue caps at 8 and silently drops the oldest**: `MAX_PENDING_WAKES = 8` (`lib/core.js:20`). More than 8 queued sends for one agent means the oldest is dropped (`index.js:132-143`), leaving only a `\"why\":\"dropped:queue-full\"` line in `$DSH_HOME/midtalk/wake.log` — **the user is never told**. Normal use (one `/cut` at a time) cannot reach it; only rapid repeated `/cut` can.\n- The card records tool-call **intent**, not a \"did it land\" inventory — that is not structurally available.\n- More than 20 tool calls in one step: only the last 20 are kept (`lib/core.js:26`).\n- `lastText` / `lastReasoning` are clipped at 2000 chars (`lib/core.js:24-25`); `frames` keeps only the last 12 (`lib/core.js:21`).\n- An empty `/say` (no text) injects an interjection with no content.\n- Compatibility was verified only against the **version tested** (0.1.5-rc.3): 2026-09-25, Windows + node 22. Linux / macOS were not tested (no platform-specific branches in the code, but it has never been run there)."
+    },
+    {
+      "section": "9. Development",
+      "text": "```\ndsh-midtalk/\n├── index.js                     host half: command registration, cancel, disk writes, event subscriptions\n├── lib/core.js                  pure logic: frames→trace, trace→recovery card, injected text (zero deps; the self-test covers only this layer)\n├── test/plugin.spec.mjs         self-test (no framework, node built-ins only)\n\n```bash\nnode test/plugin.spec.mjs     # dsh-midtalk self-test: 38 passed, 0 failed\n```"
+    },
+    {
+      "section": "9. Development",
+      "text": "The self-test covers `lib/core.js` only (it imports no DSH package, touches no filesystem and writes nothing under `.dsh`), so it runs anywhere, on any platform, with no `npm install`."
+    },
+    {
+      "section": "10. License",
+      "text": "MIT (see `LICENSE`)."
+    }
+  ],
+  "skipped": []
+}

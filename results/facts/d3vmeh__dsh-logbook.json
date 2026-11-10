@@ -1,0 +1,140 @@
+{
+  "repo": "d3vmeh/dsh-logbook",
+  "commit": "c4ced44ab9babd920631939e23f7e4b614d7f5b6",
+  "extracted_at": "2026-11-10T16:56:46.001103+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 60787,
+    "lines_by_language": {
+      "JSON": 1184,
+      "JavaScript": 385,
+      "Markdown": 59,
+      "Other": 22,
+      "YAML": 12
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "src/index.js",
+      "test/logs.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-logbook",
+    "version": "0.1.0",
+    "description": "DeepSeek Harness plugin: /logs command and a stderr log exporter, so ctx.logger output is actually visible",
+    "type": "module",
+    "main": "src/index.js",
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "license": "MIT",
+    "author": "d3vmeh",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/d3vmeh/dsh-logbook.git"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "logging"
+    ],
+    "engines": {
+      "node": ">=22"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "vitest": "^4.1.11",
+      "@deepseek-ai/cordis": "^4.0.2"
+    },
+    "scripts": {
+      "test": "vitest run"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle layer for dsh-logbook. Configure from your profile patch with an\n# override row:\n#\n# - id: logs\n#   config:\n#     stderr:\n#       types:\n#         default: warn\n- insert:\n    - id: logs\n      name: dsh-logbook\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/d3vmeh/dsh-logbook.git",
+      "where": "package.json:10"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "vitest": "^4.1.11",
+      "@deepseek-ai/cordis": "^4.0.2"
+    }
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-08-30T23:39:50Z",
+    "created_at": "2026-08-30T22:03:57Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-logbook",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that makes `ctx.logger` output visible: a `/logs` command in the chat, and a stderr exporter that is on by default for warnings and errors."
+    },
+    {
+      "section": "The problem it fixes",
+      "text": "Every dsh plugin logs through `ctx.logger`, but no shipped profile mounts a log sink. The only default destination is a 1000-record in-memory buffer, and that buffer has a surprise: it silently drops `warn` and `debug` records. Cordis orders its levels error=0, info=1, warn=2, debug=3, and the buffer exporter falls back to each logger's default level of 1, so warnings never make it in. A plugin can warn about a real problem and there is no way to see it, live or after the fact (discussions #2905, #1241, #4994)."
+    },
+    {
+      "section": "The problem it fixes",
+      "text": "dsh-logbook registers one full-capture exporter (it asks cordis for everything, then filters itself) and gives you two views:\n\n1. **stderr, live.** By default only warnings and errors, so a healthy session stays silent. Open it up per plugin with a config map. Never writes to stdout, which stays free for SDK and ACP protocol traffic.\n2. **`/logs` in the chat.** The recent history (default ring of 2000 records, all levels), with filters:"
+    },
+    {
+      "section": "The problem it fixes",
+      "text": "```\n/logs\n/logs --level warn\n/logs --name llm-gate --grep queue\n/logs --since 10m --limit 100\n\n```\nlogs: 3 of 41 records shown (ring 2000, buffer seeded 12)\n14:01:59 llm-gate info llm-gate: llamacpp session=059a680f queued (depth 1)\n14:02:03 llm-gate info llm-gate: llamacpp session=059a680f dispatched after 4012ms\n14:02:11 llm-gate warn llm-gate: llamacpp session=059a680f queue full, rejecting"
+    },
+    {
+      "section": "Install",
+      "text": "```\ndsh plugin --profile web add dsh-logbook\n```\n\nThat is enough. To tune it, add to your profile's `cordis.patch.yml`:\n\n```yaml\n- id: logs\n  config:\n    ring: 2000            # records kept for /logs\n    stderr:\n\nA value means \"this type and anything more severe\", in the order error, warn, info, debug. This deliberately differs from cordis's numeric levels, where info sits below warn and \"warnings and errors only\" cannot be expressed."
+    },
+    {
+      "section": "What you should know",
+      "text": "- The ring captures every level from the moment the plugin mounts, and seeds itself from the built-in buffer for anything earlier. Records from before the mount can only be error and info, because of the buffer behaviour described above.\n- The stderr writer attaches an error listener so a closed pipe (for example a dying `tee`) cannot crash dsh, and it never throws into the logging path.\n- Upstream note: cordis's `ctx.logger.exporter()` disposer currently removes the most recently registered exporter rather than its own, so any plugin reload can detach some other plugin's log sink. dsh-logbook keeps an internal flag so a stale copy of its exporter goes inert instead of double-reporting.\n- Related work: [dsh-logger-panel](https://github.com/LingLambda/dsh-logger-panel) is a web Settings page with rotating JSONL files; [dsh-boot-doctor](https://github.com/Mide69/dsh-boot-doctor) mounts a minimal console sink aimed at boot problems; [dsh-o11y-plugin](https://github.com/fly3366/dsh-o11y-plugin) exports to OpenTelemetry. dsh-logbook is the terminal-and-chat option: filters, stderr, no web dependency, works headless."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

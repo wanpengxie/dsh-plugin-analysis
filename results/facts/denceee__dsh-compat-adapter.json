@@ -1,0 +1,826 @@
+{
+  "repo": "denceee/dsh-compat-adapter",
+  "commit": "a981972bdf5e2016a68f0a43dde77df4ae74cd02",
+  "extracted_at": "2026-11-10T17:04:59.442994+00:00",
+  "tree": {
+    "files": 55,
+    "bytes": 658710,
+    "lines_by_language": {
+      "JSON": 87,
+      "JavaScript": 10746,
+      "Markdown": 1750,
+      "Other": 47,
+      "TypeScript": 224,
+      "YAML": 14
+    },
+    "outline": [
+      ".gitignore",
+      "INTEGRATION.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "index.d.ts",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "scripts/check-surface.js",
+      "scripts/verify-installed.mjs",
+      "scripts/verify-live.mjs",
+      "scripts/write-matrix.js",
+      "src/bridge-host.js",
+      "src/bridges/copilot.js",
+      "src/bridges/shared.js",
+      "src/capability.js",
+      "src/classify.js",
+      "src/errors.js",
+      "src/hook-runner.js",
+      "src/matrix.js",
+      "src/observe.js",
+      "src/peer.js",
+      "src/rules.js",
+      "src/service.js",
+      "src/surface.js",
+      "src/translate.js",
+      "src/vendors/claude.js",
+      "src/vendors/codex.js",
+      "src/vendors/copilot.js",
+      "src/vendors/index.js",
+      "src/vendors/opencode.js",
+      "src/vendors/shared.js",
+      "src/vendors/workbuddy.js",
+      "src/worktree.js",
+      "test/bridge-copilot.test.js",
+      "test/capability.test.js",
+      "test/doc-counts.test.js",
+      "test/helpers/harness.js",
+      "test/helpers/register-dsh-resolver.js",
+      "test/helpers/wait.js",
+      "test/index.test.js",
+      "test/integration-guide.test.js",
+      "test/matrix-readme.test.js",
+      "test/plugin-mount.test.js",
+      "test/real-capabilities.test.js",
+      "test/rules.test.js",
+      "test/service.test.js",
+      "test/smoke-bridge.test.js",
+      "test/smoke-copilot.test.js",
+      "test/smoke-precise.test.js",
+      "test/vendors.test.js",
+      "test/verify-scripts.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-compat-adapter",
+    "version": "0.5.0",
+    "private": true,
+    "type": "module",
+    "description": "前置/基座适配插件：把 Claude Code / Codex / WorkBuddy / OpenCode / GitHub Copilot 的 hooks 与 rules 通过显式声明适配到 DSH seam；覆盖 5 家 vendor、112 个事件（102 个真实/精确，10 个在其 degradations 中自述 Approximate）、29 个原生翻译点，内含自建 Copilot 桥、真实文件监听、真实 git worktree 检测、官方 LSP 接入，fail-closed。",
+    "main": "./index.js",
+    "exports": {
+      ".": {
+        "types": "./index.d.ts",
+        "default": "./index.js"
+      },
+      "./matrix": {
+        "types": "./index.d.ts",
+        "default": "./src/matrix.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "check-surface": "node scripts/check-surface.js",
+      "matrix": "node scripts/write-matrix.js --print",
+      "matrix:write": "node scripts/write-matrix.js",
+      "test": "node --import ./test/helpers/register-dsh-resolver.js --test test/*.test.js",
+      "verify:live": "node scripts/verify-live.mjs",
+      "verify": "node scripts/check-surface.js && node --import ./test/helpers/register-dsh-resolver.js --test test/*.test.js && node scripts/verify-live.mjs",
+      "verify:installed": "node scripts/verify-installed.mjs"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.4",
+      "@deepseek-ai/dsh": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-hook-protocol": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-hooks-claude-code": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-hooks-codex": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+      "@deepseek-ai/schemastery": "~3.18.4"
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "license": "MIT",
+    "files": [
+      "index.js",
+      "index.d.ts",
+      "src/",
+      "scripts/",
+      "locale/",
+      "cordis.patch.yml",
+      "LICENSE",
+      "README.md",
+      "README.en.md",
+      "INTEGRATION.md"
+    ],
+    "types": "./index.d.ts",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "hooks",
+      "rules",
+      "adapter",
+      "claude-code",
+      "codex",
+      "workbuddy",
+      "codebuddy",
+      "opencode",
+      "github-copilot"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-compat-adapter bundle patch: mount the compat-adapter Host service.\n#\n# This is a PRE-ADAPTER / base plugin. It provides `ctx.compatAdapter` only; it\n# performs no adaptation by itself. Preset-class plugins declare their vendor\n# assets on their own rows (see README \"Preset usage\") and call\n# `ctx.compatAdapter.registerHook(...)` / `.registerRules(...)` from apply().\n#\n# `baseUrl` in a bundle patch is the PROFILE ROOT, not this file's directory.\n# A bare specifier resolves through the profile module resolution; the row is\n# therefore the bare package name, exactly like the shipped bundles. Do NOT\n# write a relative path or a `node_modules/<pkg>/`-prefixed path here.\n- insert:\n    - id: compat-adapter\n      name: 'dsh-compat-adapter'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "index.d.ts",
+    "src/matrix.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_COMPAT_ADAPTER_DSH_VERSION",
+      "kind": "env",
+      "where": "index.js:149"
+    },
+    {
+      "name": "DSH_INSTALL_DIR",
+      "kind": "env",
+      "where": "scripts/check-surface.js:41"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "scripts/check-surface.js:42"
+    },
+    {
+      "name": "DSH_VERIFY_INSTALLED_CHILD",
+      "kind": "env",
+      "where": "scripts/verify-installed.mjs:44"
+    },
+    {
+      "name": "DSH_INSTALL_DIR",
+      "kind": "env",
+      "where": "scripts/verify-live.mjs:42"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "scripts/verify-live.mjs:44"
+    },
+    {
+      "name": "DSH_VERIFY_LIVE_CHILD",
+      "kind": "env",
+      "where": "scripts/verify-live.mjs:147"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify-live.mjs:221"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/service.js:1723"
+    },
+    {
+      "name": "DSH_INSTALL_DIR",
+      "kind": "env",
+      "where": "test/helpers/register-dsh-resolver.js:31"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "test/helpers/register-dsh-resolver.js:32"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "test/bridge-copilot.test.js:61"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 18,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 14,
+    "pushed_at": "2026-10-18T05:40:41Z",
+    "created_at": "2026-10-18T02:01:21Z"
+  },
+  "runtime_files": [
+    "INTEGRATION.md",
+    "README.en.md",
+    "README.md",
+    "cordis.patch.yml",
+    "index.d.ts",
+    "index.js",
+    "package.json",
+    "scripts/check-surface.js",
+    "scripts/verify-installed.mjs",
+    "scripts/verify-live.mjs",
+    "scripts/write-matrix.js",
+    "src/bridge-host.js",
+    "src/capability.js",
+    "src/classify.js",
+    "src/errors.js",
+    "src/hook-runner.js",
+    "src/matrix.js",
+    "src/observe.js",
+    "src/peer.js",
+    "src/rules.js",
+    "src/service.js",
+    "src/surface.js",
+    "src/translate.js",
+    "src/vendors/claude.js",
+    "src/vendors/codex.js",
+    "src/vendors/copilot.js",
+    "src/vendors/index.js",
+    "src/vendors/opencode.js",
+    "src/vendors/shared.js",
+    "src/vendors/workbuddy.js",
+    "src/worktree.js",
+    "test/helpers/harness.js",
+    "test/helpers/register-dsh-resolver.js",
+    "test/helpers/wait.js",
+    "test/integration-guide.test.js",
+    "test/plugin-mount.test.js",
+    "test/real-capabilities.test.js",
+    "test/service.test.js",
+    "test/smoke-bridge.test.js",
+    "test/smoke-copilot.test.js",
+    "test/smoke-precise.test.js"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">\n\n<h1>dsh-compat-adapter</h1>\n\n<p><b>让 Claude Code / Codex / WorkBuddy / OpenCode / Copilot 的 hooks 与 rules，在 DSH 里真正跑起来。</b></p>\n\n<p>一个 DSH 前置适配插件：<b>显式声明 → 能力分级 → 路由到真实 seam</b>。<br/>不猜、不假装修好了、不把别家运行时塞进 Host。</p>\n\n<p>\n  <a href=\"INTEGRATION.md\"><b>🔌 我要用它</b></a> — 别的插件如何调用本适配器（消费者指南）\n</p>\n\n<p>\n  <a href=\"README.en.md\"><b>English</b></a> ·\n  <b>简体中文</b>\n</p>"
+    },
+    {
+      "section": "Introduction",
+      "text": "<p>\n  <a href=\"LICENSE\"><img src=\"https://img.shields.io/badge/license-MIT-3DA639?style=flat-square\" alt=\"License: MIT\"></a>\n  <a href=\"#验证\"><img src=\"https://img.shields.io/badge/tests-141%20passing-3DA639?style=flat-square\" alt=\"141 tests passing\"></a>\n  <img src=\"https://img.shields.io/badge/DSH-0.2.0--rc.2-4D6BFE?style=flat-square\" alt=\"DSH 0.2.0-rc.2\">\n  <img src=\"https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933?style=flat-square\" alt=\"Node ^22.19 || >=24\">\n  <img src=\"https://img.shields.io/badge/vendors-5-8957E5?style=flat-square\" alt=\"5 vendors\">\n  <img src=\"https://img.shields.io/badge/hook%20events-112-0969DA?style=flat-square\" alt=\"112 hook events\">\n  <img src=\"https://img.shields.io/badge/overclaim-none-3DA639?style=flat-square\" alt=\"No overclaim\">\n</p>"
+    },
+    {
+      "section": "Introduction",
+      "text": "</div>\n\n---"
+    },
+    {
+      "section": "这是什么",
+      "text": "DSH（DeepSeek Harness）是新的 agent 运行时。而你已经在 Claude Code、Codex、WorkBuddy、OpenCode、GitHub Copilot 里积累了成套的 hooks 与 rules —— 那些\"写文件前先拦一下\"\"工具调用后补一段上下文\"\"会话结束时跑个脚本\"的东西。\n\n把它们搬到 DSH 最省事的做法，是照着名字硬接一遍。那会静默地坏掉：\n\n> Claude 的 `updatedInput` 被解析了但不生效；\n> Codex 的 `permissionDecision: \"ask\"` 没有审批路径，退化成放行；\n> Copilot 把 deny 写在**顶层**，而 DSH 的 hook 解析器只读 `hookSpecificOutput` —— 直接复用的话，**每一个 deny 都会被当成\"没有决定\"而放行**；\n> OpenCode 的插件是 TypeScript 回调，\"名字\"能对上，\"回调体\"根本过不来。\n\n**这个插件存在的意义，是让每一次适配的\"损失\"都变成可读的输出，而不是一个看起来能跑的假象。**\n\n它只做三件事："
+    },
+    {
+      "section": "这是什么",
+      "text": "| | |\n|---|---|\n| **声明** | 预置作者显式写出 vendor 与 event。从不嗅探文件名、从不猜归属。 |\n| **分级** | 每个资产返回冻结的四级结果，损失逐条列出。 |\n| **路由** | 有官方桥就复用官方桥，有可拦截 seam 就真翻译，只能观察就明说只能观察，做不到就拒绝。 |"
+    },
+    {
+      "section": "两个不做",
+      "text": "- **不重造官方桥。** 能映射的事件直接交给 `@deepseek-ai/dsh-hooks-claude-code` / `-codex`，本插件只负责\"把声明变成桥的配置\"和\"没有桥的事件怎么办\"。\n- **不执行外部代码。** JS 函数 handler、OpenCode 的 TS 回调、Claude 的 `http` / `mcp_tool` / `prompt` / `agent` handler —— 一律 `UNSUPPORTED`。别家插件运行时不嵌进 DSH Host。\n\n---"
+    },
+    {
+      "section": "核心设计：分级，而不是布尔",
+      "text": "每个注册都返回一个**冻结**的能力结果。没有 `supported: true` 这种把风险抹平的字段。\n\n| 分级 | 含义 | 本版本情况 |\n| :--- | :--- | :--- |\n| `DIRECT` | DSH 存在 1:1 seam，语义原样保留。 | **零**。见下。 |\n| `ADAPTED` | DSH 有 seam，但存在语义损失；`degradations[]` 逐条列明。 | **全部 112 个事件** |\n| `CARRY` | 无通用映射，原文逐字节携带、会话开始注入；永不变成可执行策略。 | **全部 5 家 rules** |\n| `UNSUPPORTED` | 无忠实映射；拒绝并给出 `reason`。 | 程序性边界（见下） |"
+    },
+    {
+      "section": "为什么一个 `DIRECT` 都没有",
+      "text": "两个官方桥本身就是\"尽力而为\"的方言适配。宣称逐字节忠实，就是虚假能力。\n\n所以本插件**任何一行都不标 `DIRECT`** —— 全部 112 行都是 `ADAPTED`，每一行都必须写出自己的损失。这不是悲观，这是诚实：`test/matrix-readme.test.js` 会断言 `DIRECT.length === 0`，并断言每一行 `ADAPTED` 都至少带一条 `degradations`。"
+    },
+    {
+      "section": "为什么一个 `DIRECT` 都没有",
+      "text": "> **全覆盖不等于等价。** 112 个事件全部可执行（0 拒绝），但这是\"每行都写明损失\"的全覆盖，不是\"全都一模一样\"。其中 **10 个事件在自己的 `degradations` 里明确写着 `Approximate`**（Claude `MessageDisplay`、`StopFailure`；Codex `Interrupt`；WorkBuddy `Elicitation`、`ElicitationResult`；OpenCode `installation.updated`、`server.connected`、`session.deleted`、`session.updated`、`tui.toast.show`），其余 **102 个为真实/精确映射**。`test/doc-counts.test.js` 会把这组数字与代码逐项比对，文档不能比代码多宣称一分能力。"
+    },
+    {
+      "section": "四条硬性不变量（测试强制，不是文档承诺）",
+      "text": "| 不变量 | 由谁保证 |\n| :--- | :--- |\n| `ADAPTED` **必须**至少列出一条 `degradations`，否则构造即抛错 | `capabilityResult()` + `test/capability.test.js` |\n| `UNSUPPORTED` **必须**带 `reason`，否则构造即抛错 | `capabilityResult()` + `test/capability.test.js` |\n| 不认识的 vendor / event **抛错**（`UNKNOWN_VENDOR` / `UNKNOWN_EVENT`），不静默 fallback | `test/service.test.js` |\n| `UNSUPPORTED` 的资产**永不挂载**：不写配置、不挂桥、不进 `status()` 的可执行列表 | `test/service.test.js` + `verify:live` |\n\n那么在全部可执行的今天，`UNSUPPORTED` 还剩哪些真实触发路径？"
+    },
+    {
+      "section": "四条硬性不变量（测试强制，不是文档承诺）",
+      "text": "- **JS 函数 handler** —— 不把外部代码执行进 Host。\n- **缺 `ctx.shell`** —— 组合里没有 shell executor，命令 hook 跑不了；rules 仍然可用（只读文件、只注入）。\n- **缺官方桥包** —— `dsh-hooks-*` 从 profile 解析不到时拒绝，不退回自研实现。\n- **非 command handler** —— `http` / `mcp_tool` / `prompt` / `agent` 抛 `INVALID_HANDLER`。\n\n---"
+    },
+    {
+      "section": "支持的 vendor",
+      "text": "五家互相独立。每家是一个纯数据模块（`src/vendors/<vendor>.js`）：无 I/O、不 import DSH，所以整张矩阵脱离 Harness 也能单测。"
+    },
+    {
+      "section": "支持的 vendor",
+      "text": "| Vendor | 别名 | 官方桥 | 事件 | 官方桥 | 原生翻译 | 只观察 | 自建桥 | 近似 | rules |\n| :--- | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |\n| `claude` | `claude-code`, `cc` | `dsh-hooks-claude-code` | 33 | 7 | 24 | 2 | 0 | 2 | CARRY |\n| `codex` | `openai-codex` | `dsh-hooks-codex` | 12 | 5 | 4 | 3 | 0 | 1 | CARRY |\n| `workbuddy` | `codebuddy` | `dsh-hooks-claude-code` | 24 | 5 | 19 | 0 | 0 | 2 | CARRY |\n| `opencode` | — | **无** | 29 | 0 | 29 | 0 | 0 | 5 | CARRY |\n| `copilot` | `github-copilot` | **无** | 14 | 0 | 4 | 0 | 10 | 0 | CARRY |\n| **合计** | | | **112** | **17** | **80** | **5** | **10** | **10** | |"
+    },
+    {
+      "section": "支持的 vendor",
+      "text": "> \"近似\"列统计 `degradations[]` 中自述 `Approximate` 的事件数。它与其他列并列展示、而不是藏进正文：**它不为零，就不许写成零。**\n\n三个容易被误读的点："
+    },
+    {
+      "section": "支持的 vendor",
+      "text": "- **`workbuddy`**：WorkBuddy 桌面端**没有公开 hook API**。本插件按 CodeBuddy 引擎（腾讯文档为 Claude-Code 兼容）处理，并把\"桌面端无 API\"\"`CODEBUDDY_PROJECT_DIR` 不导出\"\"`modifiedInput` 不被读取\"写进**每一条** `degradations`，由测试断言。\n- **`opencode`**：29 个回调名全部映射到 DSH seam，但 **TS 回调\"体\"不携带** —— 必须改写为命令。这是 out of scope，不是\"忘做了\"。\n- **`copilot`**：DSH 没有官方 Copilot 桥，所以其 14 个事件里 10 个走本插件**自建桥**（`builtin-bridge`），4 个走原生翻译。deny 真拦工具、block 真续跑、子 agent 真注入、approval 真决定 —— 详见 [Copilot 的特殊路径](#copilot-的特殊路径)。\n\n---"
+    },
+    {
+      "section": "工作流程",
+      "text": "```mermaid\nflowchart TB\n    P[\"预置插件<br/>preset-class plugin\"] -->|\"显式声明 vendor + event\"| S[\"ctx.compatAdapter<br/>registerHook / registerRules\"]\n    S --> G{\"能力分级\"}\n    G -->|\"official-bridge · 17\"| B[\"官方桥<br/>dsh-hooks-claude-code / -codex\"]\n\n四种路由的差别，就是**\"决定能不能到达 DSH\"**："
+    },
+    {
+      "section": "工作流程",
+      "text": "| 路由 | 决定是否生效 | 用在哪 |\n| :--- | :--- | :--- |\n| `official-bridge` | ✅ 由官方桥映射 | 有官方桥的 vendor（claude / codex / workbuddy） |\n| `native-translate` | ✅ 本插件直接产出 DSH 裁决类型 | 无桥但 seam 可拦截 |\n| `native-seam` | ❌ **只观察**，阻断尝试被记录并忽略 | 无取消能力的生命周期时刻 |\n| `builtin-bridge` | ✅ 本插件自建的桥（仅官方无桥时使用） | copilot |\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "标准 DSH Cordis bundle（`package.json` 的 `dsh.bundle.patch` + `cordis.patch.yml`）。\n\n```bash"
+    },
+    {
+      "section": "方式 B：CLI",
+      "text": "dsh plugin --profile <profile> add <本仓库绝对路径>\n```\n\n装好后插件只做一件事：提供 `ctx.compatAdapter` 服务。**它自己不做任何适配** —— 适配由预置插件声明触发。\n\n<details>yaml"
+    },
+    {
+      "section": "✅ 正确",
+      "text": "- insert:\n    - id: compat-adapter\n      name: 'dsh-compat-adapter'\n```\n\n`test/index.test.js` 会断言这一点（并先剥掉注释，避免把注释里的反例误判成 patch 内容）。\n\n</details>"
+    },
+    {
+      "section": "预置类插件怎么用",
+      "text": "在预置的 `plugins` 列表里插入本插件（装载顺序由 `inject` 保证），然后在你自己的 `apply()` 里调用服务：\n\n```yaml\n- insert:\n    - id: preset-my-preset\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n\n```js\n// my-vendor-assets/index.js\nexport const name = 'my-vendor-assets'\nexport const inject = ['compatAdapter']\n\n---"
+    },
+    {
+      "section": "`registerHook(declaration)`",
+      "text": "| 字段 | 必填 | 说明 |\n| :--- | :---: | :--- |\n| `vendor` | ✅ | `claude` / `codex` / `workbuddy` / `opencode` / `copilot`，或文档化别名 |\n| `event` | ✅ | 厂商事件名（如 `PreToolUse`）；未知事件抛 `UNKNOWN_EVENT` |\n| `matcher` | — | 厂商 matcher 字符串；非字符串抛 `INVALID_MATCHER` |\n| `handler` | — | 命令字符串，或 `{ type: 'command', command, timeoutSec? }`。`http` / `mcp_tool` / `prompt` / `agent` 抛 `INVALID_HANDLER`；JS 函数返回 `UNSUPPORTED` |\n| `id` | — | 稳定 id，缺省 `<vendor>:<event>:<n>` |"
+    },
+    {
+      "section": "`registerHook(declaration)`",
+      "text": "返回 `Promise<CapabilityResult>`（冻结）。**可移植性不足不抛错** —— 只有\"声明本身无法处理\"才抛错。"
+    },
+    {
+      "section": "`registerRules(declaration)`",
+      "text": "| 字段 | 必填 | 说明 |\n| :--- | :---: | :--- |\n| `vendor` | ✅ | 同上 |\n| `source` | ✅ | 字符串或字符串数组：绝对路径、`baseDir` 相对路径、`file://` URL、glob |\n| `baseDir` | — | 相对源的基准目录，必须绝对路径（否则抛 `INVALID_DECLARATION`） |\n| `id` | — | 稳定 id，缺省 `<vendor>:rules:<n>` |\n\n返回 `Promise<CapabilityResult>`，`capability === 'CARRY'`，`seams === ['agent/created']`。"
+    },
+    {
+      "section": "`registerRules(declaration)`",
+      "text": "**规则语义**：注册时**读盘并逐字节携带**（附 `sha256` 与 `bytes`），在 `agent/created`（fresh / resume / clear / compact 全覆盖）时通过 `agent.inject(createUserMessage(...))` 作为模型可见上下文入队。注入消息的 `source.kind` 是 `compat-adapter-rules`，与 DSH 自带的 `agent-instructions` 区分，日志里可追溯。\n\n> **规则永远不是安全边界。** 全部 `CARRY`。尤其 Codex 的 Starlark 规则是命令策略 DSL，DSH 没有对应规则引擎 —— 本插件只把它作为\"原工具策略的说明文本\"注入，**不翻译、不强制执行**。任何\"规则会阻止某事\"的预期都是错的；要强制，请写原生 DSH 插件挂到 `tools/pre-execute`。"
+    },
+    {
+      "section": "其他方法",
+      "text": "| 方法 | 作用 |\n| :--- | :--- |\n| `matrix()` | 静态能力矩阵（本版本\"永远能做什么\"）。 |\n| `status()` | 运行时审计（\"此刻实际在跑什么\"）：每个 hook 的分级 / seam / 是否挂了桥，规则文件的路径 / 字节 / sha256，以及当前组合里 `shell` / `sessionProjections` 是否存在。 |\n| `dispose()` | 卸载所有桥与监听；之后注册抛 `ADAPTER_DISPOSED`（不会半死不活地继续）。 |"
+    },
+    {
+      "section": "配置项（`cordis.patch.yml` 的 row `config`）",
+      "text": "| 字段 | 默认 | 说明 |\n| :--- | :--- | :--- |\n| `logRegistrations` | `true` | 每次分级注册输出一行结构化日志 |\n| `failClosed` | `true` | 缺所需 seam 时拒绝注册，而不是挂一个空转的 no-op |\n| `targetDshVersion` | `0.2.0-rc.2` | 目标 DSH 版本；不一致时按 `failClosed` 报错或告警 |\n| `maxRuleBytes` | `524288` | 单文件携带上限；超限**报错**而不是静默截断 |\n\n---"
+    },
+    {
+      "section": "阻断契约",
+      "text": "参考工具文档里\"exit code 2 = 阻断\"的行为，在本 DSH 版本的两个官方桥里**不可靠**（可能被记录为 `decision: 'pass'` 而放行）。因此本插件统一契约：\n\n> **stdout 输出 `hookSpecificOutput.permissionDecision`（`deny` / `ask`）+ 退出码 `0`。**\n\n```bash\n#!/usr/bin/env bash"
+    },
+    {
+      "section": "例：拒绝写入 —— deny + exit 0",
+      "text": "printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"no writes in this preset\"}}'\nexit 0\n```\n\n本插件生成的任何示例、测试与文档都用这一种；**从不生成依赖 exit 2 的 handler**。`src/vendors/shared.js` 的 `permissionDecisionOutput()` 是唯一生成入口，测试直接断言生成物含 `permissionDecision`、且**不含**遗留的顶层 `decision` 字段。\n\n`ask` 映射成 DSH 的 `{kind:'ask'}`，`deny` 映射成 `{kind:'deny'}`（经官方桥，不经过本插件）。**exit 2 仍会被桥解析**（用户手写的老 hook 不会被吞掉），但这不是本插件承诺的契约路径。\n\n---"
+    },
+    {
+      "section": "Copilot 的特殊路径",
+      "text": "GitHub Copilot 是**唯一没有官方 DSH 桥**的 vendor（Claude / Codex / WorkBuddy 都能复用官方桥），所以它的适配路径不同：**本插件真的实现翻译层**，不是旁观。"
+    },
+    {
+      "section": "为什么不能直接复用 hook protocol",
+      "text": "DSH 的 `@deepseek-ai/dsh-hook-protocol` 只认 **Claude/Codex 方言**：\n\n```js\n// DSH 解析器只读这一层\n{ \"hookSpecificOutput\": { \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"…\" } }\n```\n\n而 Copilot 把决定写在**顶层**：\n\n```json\n{ \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"…\" }\n```\n\n若直接复用，**每一个 Copilot deny 都会被静默当成\"没有决定\"而放行**。所以 `src/translate.js` 里有一层 `parseCopilotStdout()` / `normalizeCopilotOutput()`：先按 Copilot 原生格式解析，再归一化成内部形状。"
+    },
+    {
+      "section": "为什么不能直接复用 hook protocol",
+      "text": "这条路径有专门的测试（`test/smoke-copilot.test.js`，21 个用例）并纳入 `npm run verify:live` 的真实启动验证。"
+    },
+    {
+      "section": "事件映射",
+      "text": "| Copilot 事件 | DSH seam | 能否阻断 |\n| :--- | :--- | :--- |\n| `preToolUse` | `tools/pre-execute` | ✅ deny / ask 真的生效 |\n| `postToolUse` | `tools/post-execute` | 转发 `additionalContext`（`modifiedResult` 不采纳） |\n| `subagentStart` | `subagent/start` | ✅ 可把上下文注入**子 agent**（经 `ctx.agents.get(runId)`） |\n| `subagentStop` | `subagent/end` | 只观察（拿到 `stopReason` / `lastAssistantMessage`） |\n| `errorOccurred` | `agent/error` | 只观察（DSH 错误路径无裁决通道） |\n| `sessionStart` | `agent/created` | 注入 `additionalContext` 为消息 |\n| `sessionEnd` | `agent/disposed` | 只观察 |\n| `userPromptSubmitted` | `agent/pre-step` | 注入上下文（不改写 prompt） |\n| `agentStop` | `agent/turn-stopping` | ✅ `decision:\"block\"` **真的强制续跑**（含 8 次 runaway guard） |\n| `notification` | `agent/status` | 只观察（DSH 只发布状态翻转，无 notification 类型） |\n| `permissionRequest` | `approval/request` | ✅ allow → `allowed-once`，deny → `rejected` |\n| `postToolUseFailure` | `tools/post-execute` | 仅当结果被标记为 error 时触发 |"
+    },
+    {
+      "section": "三处必须注意的方言差异",
+      "text": "1. **matcher 是锚定正则。** Copilot 编译为 `^(?:PATTERN)$` 且必须全匹配 —— `bas` **不会**匹配 `bash`；无效正则会让该 hook **整体跳过**（不是 match-all）。本插件按此实现。\n2. **`allow` 不预批准。** Copilot 的 `allow` 是\"不弹权限提示\"，不是\"强制放行\"，所以翻译成 `next()` 而非 allow 短路。\n3. **阻断契约仍统一为 stdout + exit 0。** Copilot 本身还接受 exit 2 表示 deny，但本插件不让 hook 依赖它 —— 同一个 hook 脚本在各 vendor 下行为一致。\n\n---"
+    },
+    {
+      "section": "支持矩阵",
+      "text": "> 本节**由代码生成**：`npm run matrix:write` 从 `src/matrix.js` 重新生成，`test/matrix-readme.test.js` 在漂移时报错。**不要手改。**\n\n读矩阵需要注意的三件事："
+    },
+    {
+      "section": "支持矩阵",
+      "text": "1. **`ADAPTED` 的损失是逐条列出的**，不是修辞。例如 Claude `PreToolUse` 的 `updatedInput` 只被解析、不被采纳；Codex `PreToolUse` 的 `ask` 没有审批路径；Claude `SubagentStart` 的 `agent_type` 恒为 `general-purpose`（针对具体 agent type 的 matcher 永不命中）。\n2. **`native-seam` 的事件是\"只观察\"**：`PreCompact` 映射到 `session/event` 的 `compaction/start`，`SessionEnd` 映射到 `agent/disposed`。DSH 的压缩是服务调用、不是可取消 waterfall，所以**不能否决压缩**；尝试阻断只会被记入审计日志并忽略。\n3. **WorkBuddy 的每一行都必须说明\"桌面端无公开 hook API\"** —— 这是最容易误读的地方，所以它被写进每条 `degradations` 并由测试断言。"
+    },
+    {
+      "section": "支持矩阵",
+      "text": "<details>\n<summary><b>展开完整矩阵（112 行，含每行损失说明）</b></summary>\n\n<!-- MATRIX:START -->"
+    },
+    {
+      "section": "Hooks: vendor event → DSH seam",
+      "text": "| Vendor | Event | Capability | Route | DSH seam(s) | Losses / reason |\n| --- | --- | --- | --- | --- | --- |\n| claude | `SessionStart` | ADAPTED | official bridge (claude) | agent/created | Runs detached through the bridge, so context can miss the model first request.; Plain-stdout context, initialUserMessage, sessionTitle, watchPaths and CLAUDE_ENV_FILE are not consumed.; Payload omits model, agent_type and session_title. |\n| claude | `UserPromptSubmit` | ADAPTED | official bridge (claude) | agent/pre-step | Deny is honored; plain-stdout context, sessionTitle and suppressOriginalPrompt are not.; Unless the hook sets its own timeout the bridge uses its 600s default, not the reference 30s. |\n| claude | `PreToolUse` | ADAPTED | official bridge (claude) | tools/pre-execute | deny and ask are honored; allow does not pre-approve and defer is unsupported.; updatedInput is parsed and warned about but not honored.; additionalContext from a PreToolUse hook is ignored. |\n| claude | `PostToolUse` | ADAPTED | official bridge (claude) | tools/post-execute | Blocking feedback and additionalContext work; updatedToolOutput and updatedMCPToolOutput do not.; tool_response is flattened to text. |\n| "
+    },
+    {
+      "section": "Rules: carried and injected, never executed",
+      "text": "| Vendor | Capability | Accepted formats | Default on-disk sources |\n| --- | --- | --- | --- |\n| claude | CARRY | markdown, claude-rules-frontmatter | Carried verbatim and injected as a sourced user message at session start. Claude treats rules as context, not enforced configuration; this adapter preserves that precisely and never turns them into tool policy. |\n| codex | CARRY | starlark | Carried verbatim and injected as a sourced user message at session start. Codex rules are a Starlark command-execution policy (allow / prompt / forbidden) for what may run outside the sandbox; DSH has no equivalent rule engine, so this adapter does NOT translate or enforce them. Treat the injected text as documentation for the model, never as a security boundary. |\n| workbuddy | CARRY | markdown | Carried verbatim and injected as a sourced user message at session start. WorkBuddy desktop project instructions entered in the UI are cloud-side and cannot be carried; only on-disk CodeBuddy rules files are read. |\n| opencode | CARRY | markdown | Carried verbatim and injected as a sourced user message at session start. Remote URLs in the OpenCode `instructions` array are NOT fetched: this adapter does "
+    },
+    {
+      "section": "Vendor plugin runtimes: out of scope",
+      "text": "| Vendor | Capability | Reason |\n| --- | --- | --- |\n| claude | UNSUPPORTED | Claude Code plugin runtimes (plugin hooks that are JS modules, MCP-provided tools) are not command hooks; only the JSON command-hook config is adapted. |\n| codex | UNSUPPORTED | Codex has no TypeScript plugin runtime in scope; only its command hooks.json and rules files are adapted. |\n| workbuddy | UNSUPPORTED | WorkBuddy/CodeBuddy plugin runtimes (IDE extensions, MCP servers, workflow scripts) are out of scope: this adapter adapts JSON hooks + rules text only. |\n| opencode | UNSUPPORTED | OpenCode plugins ARE TypeScript callbacks in a co-resident runtime (tool.execute.before/after, event, shell.env). Porting them means embedding a foreign plugin runtime in the DSH Host — explicitly out of scope; only OpenCode AGENTS.md/instructions text is carried. |\n| copilot | UNSUPPORTED | Copilot’s SDK hook API is a programmatic callback interface (Node/Python/Go/.NET/Java) bound to a CopilotClient session. This adapter adapts Copilot’s JSON command-hook config and instruction files only; an in-process Copilot SDK callback cannot be carried into the DSH Host. |"
+    },
+    {
+      "section": "Native translation points used by native-translate events",
+      "text": "These are REAL interceptions: the hook decision reaches DSH. Vendors with an official bridge never use them."
+    },
+    {
+      "section": "Native translation points used by native-translate events",
+      "text": "| Native point | DSH seam | Seam mode | Produces |\n| --- | --- | --- | --- |\n| `tools/pre-execute` | `tools/pre-execute` | waterfall | PreToolDecision |\n| `tools/post-execute` | `tools/post-execute` | waterfall | PostToolDecision |\n| `agent/created` | `agent/created` | serial | none |\n| `agent/pre-step` | `agent/pre-step` | waterfall | PreStepDecision |\n| `agent/turn-stopping` | `agent/turn-stopping` | serial | none |\n| `agent/disposed` | `agent/disposed` | emit | none |\n| `agent/error` | `agent/error` | emit | none |\n| `subagent/start` | `subagent/start` | emit | none |\n| `approval/request` | `approval/request` | waterfall | ApprovalOutcome |\n| `shell/env` | `shellEnv` | registry | environment variables |\n| `compaction/end` | `session/event` | emit | none |\n| `compaction/start` | `session/event` | emit | none |\n| `agent/pre-step/transform` | `agent/pre-step` | waterfall | PreStepDecision |\n| `session/event` | `session/event` | emit | none |\n| `todo/write` | `session/event` | emit | none |\n| `session/created` | `session/created` | emit | none |\n| `agent/instructions-loaded` | `session/created` | emit | none |\n| `user-questions/request` | `user-questions/request` | waterfall | AskUs"
+    },
+    {
+      "section": "Native observation points used by native-seam events",
+      "text": "| Native point | Vendor event | Wakes on |\n| --- | --- | --- |\n| `compaction/start` | PreCompact | `compaction/start` |\n| `agent/disposed` | SessionEnd | Cordis event |\n\n<!-- MATRIX:END -->\n\n</details>\n\n---"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **只在 DSH `0.2.0-rc.2` 上验证过。** DSH 是 developer preview，`src/surface.js` 精确固定版本与所消费的每个 seam / 导出；`npm run check-surface` 逐项断言，缺一项就**非 0 退出并点名缺失项**。\n- **桥包缺失时降级。** `@deepseek-ai/dsh-hooks-claude-code` / `-codex` 从 profile 解析不到时，对应 hook 注册返回 `UNSUPPORTED` 并说明缺哪个包，**不会**退回自研实现。\n- **没有 `ctx.shell` 时。** 需要执行命令的 hook 返回 `UNSUPPORTED`（原因写\"本组合没有 shell executor\"）；rules 仍然可用。\n- **`sdk-minimal` 模板本身没有 `ctx.shell`。** 它挂的是 `dsh-terminal-bash`（PTY provider），不提供 hook 桥需要的 `shell` 服务；要跑命令 hook 需在 profile patch 里加 `@deepseek-ai/dsh-bash-local`。这也正是 fail-closed 分支的现实来源。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **不执行外部代码。** JS 函数 handler 一律 `UNSUPPORTED`；OpenCode 的 TS 插件运行时、Claude 的 `http` / `mcp_tool` / `prompt` / `agent` handler 同样。\n- **`updatedInput` / `modifiedInput` 不被采纳。** 官方桥解析但不下发生效（Claude Code 桥会警告）；WorkBuddy 的 `modifiedInput` 连解析都不会。工具入参改写在 DSH 里仍是 deferred 能力。\n- **不能否决压缩。** `compaction/*` 是 log-only 的耐久事件，压缩是服务调用，不是可取消 waterfall。\n- **不联网。** OpenCode `instructions` 里的远程 URL **不会**被拉取；需先落成本地文件。\n- **WorkBuddy 桌面端 UI 里的项目指令**存在云端，不是可读文件，无法携带。\n\n</details>"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **Copilot 需自己的方言解析。** 官方 hook protocol 不识别顶层 `permissionDecision`；若上游改了输出格式，`smoke-copilot` 测试会失败。\n- **`subagentStart` 的上下文注入依赖子 agent 可见。** DSH 只在 `subagent/start` 通知期间通过 `ctx.agents.get(runId)` 解析子 agent；远端 provider 的子 agent 此时不可见，注入会被跳过。\n- **`subagentStop` / `errorOccurred` / `sessionEnd` 是只观察。** DSH 在子 agent 结束与错误路径上没有裁决通道，所以 Copilot 的 `modifiedResponse`、`decision:\"block\"`、错误恢复都无法表达。\n- **Copilot `agentStop` 的续跑是\"合成消息\"驱动的。** 在 `agent/turn-stopping` 这个 serial 事件里向 `inbox.nextStep` 追加一条消息 —— agent loop 在 dispatch 之后会重新检查 `nextStep.length === 0`，因此循环继续。语义等价，但注入的是带 hook reason 的合成消息（来源 `compat-adapter-stop-continue`），与 Copilot 自己的续跑路径在消息来源上不同。8 次 runaway guard 已复刻。"
+    },
+    {
+      "section": "已知限制",
+      "text": "</details>\n\n---"
+    },
+    {
+      "section": "验证",
+      "text": "```bash\nnpm run check-surface     # 逐项断言已安装 DSH 的 seam / 导出 / 事件 / 服务\nnpm test                  # 141 个用例：单测 + 真实 Harness 冒烟\nnpm run verify            # 两者一起\nnpm run verify:live       # 真实 profile 启动的端到端验证\n\n`npm test` 全部通过（141/141），无第三方测试依赖（`node:test`）。"
+    },
+    {
+      "section": "测试结构",
+      "text": "| 文件 | 覆盖 |\n| :--- | :--- |\n| `test/capability.test.js` | 分级词表与 fail-closed 不变量（`UNSUPPORTED` 必有 reason、`ADAPTED` 必有 degradations、结果冻结） |\n| `test/vendors.test.js` | 五家 vendor 的冻结事件表；桥覆盖事件必须 `ADAPTED`、文档化但未桥接的事件必须 `UNSUPPORTED` |\n| `test/rules.test.js` | 路径 / glob 解析、缺失源报错、逐字节携带 + sha256、超限不截断、渲染文本声明\"非强制执行\" |\n| `test/service.test.js` | 真实 Cordis Context 上的服务契约：未知 vendor/event 报错、fail-closed、规则注入、`status()`、`dispose()`；**多实例配置隔离、写盘失败时旧 hook 不丢、挂载失败回滚、孤儿配置剪枝** |\n| `test/smoke-bridge.test.js` | **端到端**：声明 → 写桥配置 → 挂真实官方桥 → 触发 `tools/pre-execute` → 真的拿到 `{kind:'deny'}`；matcher 生效；`deny` 胜过 `allow`；**并钉住已声明的退化真的发生** |\n| `test/plugin-mount.test.js` | 经 `ctx.plugin(index.js)` 的真实挂载路径：服务被 provide、async 预置能在 setup 里注册、卸载后服务消失且桥被卸载 |\n| `test/index.test.js` | 入口契约（`name` / `inject` / `Config` 默认值）、`dsh.bundle.patch`、patch 用 bare specifier、peer 版本精确钉住、locale 元数据 |\n| `test/smoke-copilot.test.js` | **Copilot 端到端**：顶层 `permissionDecision` 真的被解析并阻断；锚定 matcher；无效 matcher 不 match-all；sessionStart 注入；`agentStop` 真续跑 + runaway guard；子 agent 注入 |\n| `test/matrix-readme.test.js` | README 矩阵块与代码一致（防漂移）；无任何 `DIRECT`；无 vendor 谎称全支持 |\n| `test/doc-counts.test.js` | **散文数字防漂移**：badge、vendor 汇总表、流程图路由数、翻译点数、用例数、"
+    },
+    {
+      "section": "测试结构",
+      "text": "`test/helpers/register-dsh-resolver.js` 用 `node:module` 的 `registerHooks` 把 `@deepseek-ai/*` 解析到已安装的 DSH（`$DSH_INSTALL_DIR` → PATH 上的 `dsh` → 已知全局安装位），找不到就**报错退出**而不是跳过测试。"
+    },
+    {
+      "section": "真实 profile 的端到端验证",
+      "text": "`npm test` 里的冒烟测试启动的是**真实 Cordis 上下文**，但没有走产品启动器。`npm run verify:live` 补上这一段：在隔离的 `$DSH_HOME` 里用 `sdk-minimal` 初始化 profile → 以 `link:` 方式装进 profile → 通过官方 `runProfile` 真正启动 → 逐项断言。\n\n实测输出：\n\n```text\nverify-live: DSH install   /opt/node/lib/node_modules/@deepseek-ai/dsh\nverify-live: profile       adapter-verify\n  ok   ctx.compatAdapter is provided by the installed bundle\n  ok   ctx.shell resolves in the live composition"
+    },
+    {
+      "section": "真实 profile 的端到端验证",
+      "text": "> **为什么 `verify:live` 要自己 spawn 一个持有 stdin 管道的子进程：** `sdk-minimal` 模板挂载的 `dsh-sdk-app` 注册了 `exitOnStdinEnd`，stdin 一到 EOF 就 `exit(0)` 卸载整个组合。从 shell 继承来的 stdin 经常已经是 EOF（重定向自 `/dev/null`、管道上游已退出、CI 的封闭 stdin），因此脚本把子进程的 stdin 管道一直握在手里。这不是被测插件的缺陷，是 SDK profile 的正常产品行为。"
+    },
+    {
+      "section": "确认\"装好的插件真的生效\"",
+      "text": "配置里出现一行**不等于**运行时服务可用。`npm run verify:installed` 用真实启动器 boot **一个已经装好的 profile**：\n\n```bash\nexport DSH_HOME=/tmp/dsh-adapter-home\nnode scripts/verify-installed.mjs --profile smoke\n```\n\n```json\n{\n  \"profile\": \"smoke\",\n  \"service\": { \"compatAdapter\": true, \"shell\": true },\n  \"deny\": { \"capability\": \"ADAPTED\",\n\n---"
+    },
+    {
+      "section": "项目结构",
+      "text": "```text\ndsh-compat-adapter/\n├── index.js                 # Cordis 插件入口：provide ctx.compatAdapter\n├── cordis.patch.yml         # bundle patch（name 必须是 bare specifier）\n├── package.json             # dsh.bundle.patch + 精确钉住的 peerDependencies\n\n---"
+    },
+    {
+      "section": "给下一位维护者：实现中踩到的 DSH 坑",
+      "text": "这些都是在本插件在 `0.2.0-rc.2` 上实测踩到并已修复的，不是猜测。\n\n<details>\n<summary><b>展开 11 条（含\"为什么单元测试看不出来\"）</b></summary>"
+    },
+    {
+      "section": "给下一位维护者：实现中踩到的 DSH 坑",
+      "text": "1. **`baseUrl` 是 profile 根，不是 patch 文件目录。** bundle patch 里写相对路径或 `node_modules/<pkg>/` 前缀都会找不到包；row 的 `name` 必须是 bare specifier。\n2. **`export function apply` 返回的 disposer 会被 Cordis 静默丢弃。** Cordis 的 `isConstructor()` 只检查 `func.prototype` 与生成器，因此**函数声明**写的 `apply` 被当成 class 用 `new` 调用，返回值不进入 effect 收集 —— 组件卸载时桥不会被卸掉。正确做法是用 `ctx.effect(() => async () => { ... })` 注册清理。**这个 bug 在单元测试里看不出来**，只有真正经 `ctx.plugin(pluginModule)` 挂载才会暴露，所以 `test/plugin-mount.test.js` 专门走真实包装路径。\n3. **scope-filtered 事件的 dispatch 必须带 carrier。** `tools/pre-execute` / `agent/created` 等事件在 `dsh-scope` 的 invariant 下要求 `thisArg` 是 `scopeTarget(base, subject)`；`agent/created` 还必须按 subject **keyed**，否则报 \"carrier keyed to a DIFFERENT subject\"。裸 `ctx.waterfall(name, ...)` 会直接触发 invariant 崩溃。\n4. **生成的桥配置必须按实例唯一。** 桥的 `configPath` 是进程全局状态；固定文件名会让两个 adapter 实例（同 home 的两个 profile、嵌入式 Harness、并发测试）互相覆盖 hook 集合 —— 表现为\"这个 preset 的 hook 在另一个 preset 里触发\"。\n5. **重挂桥必须是事务性的。** 桥的配置是\"整份替换\"，新增一个 hook 就要重挂。若按 `卸旧桥 → 写新配置 → 挂新桥` 执行，**写盘或挂载失败会把已经在跑的 hook 一起弄丢**，而 `status()` 还显示它 `ADAPTED` —— 声称在跑、实际不跑，正是 fail-closed 绝不能容忍的状态。现在的顺序是：**先写新配置 + 先解析桥包（这两步可失败），全部成功后才换**；换的环节若挂载失败，用旧 hook 集合**回滚重挂**，并在拒绝原因里明说\"旧的已恢复\"还是\"旧的未能恢复\"。\n6. **每次写配置必须用新文件"
+    },
+    {
+      "section": "给下一位维护者：实现中踩到的 DSH 坑",
+      "text": "</details>\n\n---"
+    },
+    {
+      "section": "新增一个 vendor",
+      "text": "1. 建 `src/vendors/<id>.js`，导出 `VENDOR` / `HOOKS` / `RULES` / `KNOWN_EVENTS`（可选 `BRIDGE_PACKAGE`）。用 `shared.js` 的 `bridged` / `nativeSeam` / `nativeTranslate` / `unsupported` 构造每条映射。\n2. 加进 `src/vendors/index.js` 的 `VENDOR_MODULES`（含别名）与 `VENDORS`。\n3. 在 `test/vendors.test.js` 补 fixture 行。\n4. 跑 `npm run matrix:write` 重生成 README 矩阵块，再跑 `npm test`。\n\n未知 vendor 传进服务是**作者错误**（`UNKNOWN_VENDOR`），永远不会静默 fallback。\n\n---"
+    },
+    {
+      "section": "贡献",
+      "text": "```bash\nnpm install          # 无运行时依赖；peer 由 DSH 安装提供\nnpm run check-surface\nnpm test\nnpm run verify:live\n\n提交前请确保 `npm run verify` 全绿。改动 `src/vendors/**` 或 `src/matrix.js` 后**必须**重跑 `npm run matrix:write`，否则 `test/matrix-readme.test.js` 会失败 —— 这是设计如此：文档不允许比代码声称更多。"
+    },
+    {
+      "section": "许可",
+      "text": "[MIT](LICENSE) © dsh-compat-adapter contributors"
+    },
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">\n\n<h1>dsh-compat-adapter</h1>\n\n<p><b>Make Claude Code / Codex / WorkBuddy / OpenCode / Copilot hooks and rules actually run inside DSH.</b></p>\n\n<p>A DSH pre-adapter plugin: <b>declare explicitly → grade capability → route to a real seam</b>.<br/>No guessing, no pretending it works, no foreign plugin runtime inside the Host.</p>\n\n<p>\n  <a href=\"INTEGRATION.md\"><b>🔌 I want to use it</b></a> — how another plugin calls this adapter (consumer guide)\n</p>"
+    },
+    {
+      "section": "Introduction",
+      "text": "<p>\n  <a href=\"LICENSE\"><img src=\"https://img.shields.io/badge/license-MIT-3DA639?style=flat-square\" alt=\"License: MIT\"></a>\n  <a href=\"#verification\"><img src=\"https://img.shields.io/badge/tests-141%20passing-3DA639?style=flat-square\" alt=\"141 tests passing\"></a>\n  <img src=\"https://img.shields.io/badge/DSH-0.2.0--rc.2-4D6BFE?style=flat-square\" alt=\"DSH 0.2.0-rc.2\">\n  <img src=\"https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-339933?style=flat-square\" alt=\"Node ^22.19 || >=24\">\n  <img src=\"https://img.shields.io/badge/vendors-5-8957E5?style=flat-square\" alt=\"5 vendors\">\n  <img src=\"https://img.shields.io/badge/hook%20events-112-0969DA?style=flat-square\" alt=\"112 hook events\">\n  <img src=\"https://img.shields.io/badge/overclaim-none-3DA639?style=flat-square\" alt=\"No overclaim\">\n</p>"
+    },
+    {
+      "section": "Introduction",
+      "text": "</div>\n\n---"
+    },
+    {
+      "section": "What this is",
+      "text": "DSH (DeepSeek Harness) is a new agent runtime. Meanwhile you already have a working set of hooks and rules in Claude Code, Codex, WorkBuddy, OpenCode and GitHub Copilot — the \"block this before it writes a file\", \"add context after that tool call\", \"run a script when the session ends\" machinery.\n\nThe cheap way to move them to DSH is to wire them up by name. That breaks silently:"
+    },
+    {
+      "section": "What this is",
+      "text": "> Claude's `updatedInput` gets parsed but never honored;\n> Codex's `permissionDecision: \"ask\"` has no approval path and degrades into an allow;\n> Copilot writes its denial at the **top level**, while DSH's hook parser only reads `hookSpecificOutput` — so reusing it directly means **every Copilot deny is silently read as \"no decision\" and let through**;\n> OpenCode plugins are TypeScript callbacks: the *names* line up, the *callback bodies* cannot cross."
+    },
+    {
+      "section": "What this is",
+      "text": "**This plugin exists so that every adaptation loss becomes a readable output instead of a working-looking illusion.**\n\nIt does exactly three things:"
+    },
+    {
+      "section": "What this is",
+      "text": "| | |\n|---|---|\n| **Declare** | The preset author names the vendor and event explicitly. No filename sniffing, no ownership guessing. |\n| **Grade** | Every asset returns a frozen four-level result with its losses listed one by one. |\n| **Route** | Reuse the official bridge where one exists, really translate where a seam can intercept, say \"observe-only\" where it cannot, and refuse otherwise. |"
+    },
+    {
+      "section": "Two things it does not do",
+      "text": "- **It does not re-implement the official bridges.** Every event they cover is handed straight to `@deepseek-ai/dsh-hooks-claude-code` / `-codex`. This plugin only turns declarations into bridge config, and decides what happens to the events no bridge covers.\n- **It does not execute foreign code.** JS function handlers, OpenCode's TS callback runtime, Claude's `http` / `mcp_tool` / `prompt` / `agent` handlers — all `UNSUPPORTED`. Other agents' plugin runtimes do not get embedded in the DSH Host."
+    },
+    {
+      "section": "Two things it does not do",
+      "text": "---"
+    },
+    {
+      "section": "Core design: grades, not booleans",
+      "text": "Every registration returns a **frozen** capability result. There is no `supported: true` field flattening the risk away."
+    },
+    {
+      "section": "Core design: grades, not booleans",
+      "text": "| Grade | Meaning | In this version |\n| :--- | :--- | :--- |\n| `DIRECT` | A 1:1 DSH seam exists; semantics preserved verbatim. | **None.** See below. |\n| `ADAPTED` | A DSH seam exists but semantics are lossy; `degradations[]` states each loss. | **All 112 events** |\n| `CARRY` | No general mapping; carried byte-for-byte and injected at session start. Never becomes executable policy. | **All 5 vendors' rules** |\n| `UNSUPPORTED` | No faithful mapping; rejected with a `reason`. | Procedural boundaries (below) |"
+    },
+    {
+      "section": "Why nothing claims `DIRECT`",
+      "text": "Both official bridges are themselves best-effort dialect adaptations. Claiming byte-faithfulness would be a false capability.\n\nSo this plugin marks **not a single row `DIRECT`** — all 112 rows are `ADAPTED`, and every row must state its own losses. That is not pessimism, it is honesty: `test/matrix-readme.test.js` asserts `DIRECT.length === 0` and asserts that every `ADAPTED` row carries at least one degradation."
+    },
+    {
+      "section": "Why nothing claims `DIRECT`",
+      "text": "> **Full coverage is not equivalence.** All 112 events are executable (0 refusals), but that is coverage where *every row states its losses* — not a claim that they all behave identically. **10 of them say `Approximate` in their own `degradations`** (Claude `MessageDisplay`, `StopFailure`; Codex `Interrupt`; WorkBuddy `Elicitation`, `ElicitationResult`; OpenCode `installation.updated`, `server.connected`, `session.deleted`, `session.updated`, `tui.toast.show`); the other **102 are real/precise mappings**. `test/doc-counts.test.js` compares these numbers against the code, so the prose can never claim more capability than the adapter has."
+    },
+    {
+      "section": "Four hard invariants (enforced by tests, not by documentation)",
+      "text": "| Invariant | Enforced by |\n| :--- | :--- |\n| `ADAPTED` **must** list at least one `degradations` entry, or construction throws | `capabilityResult()` + `test/capability.test.js` |\n| `UNSUPPORTED` **must** carry a `reason`, or construction throws | `capabilityResult()` + `test/capability.test.js` |\n| An unknown vendor / event **throws** (`UNKNOWN_VENDOR` / `UNKNOWN_EVENT`); never a silent fallback | `test/service.test.js` |\n| An `UNSUPPORTED` asset is **never mounted**: no config written, no bridge mounted, absent from `status()`'s executable list | `test/service.test.js` + `verify:live` |"
+    },
+    {
+      "section": "Four hard invariants (enforced by tests, not by documentation)",
+      "text": "So what are the real `UNSUPPORTED` paths left, now that every event is executable?"
+    },
+    {
+      "section": "Four hard invariants (enforced by tests, not by documentation)",
+      "text": "- **JS function handlers** — foreign code is not executed in the Host.\n- **Missing `ctx.shell`** — no shell executor in the composition, so command hooks cannot run; rules still work (they only read files and inject context).\n- **Missing official bridge package** — if `dsh-hooks-*` does not resolve from the profile, the registration is refused rather than falling back to a homegrown implementation.\n- **Non-command handlers** — `http` / `mcp_tool` / `prompt` / `agent` throw `INVALID_HANDLER`."
+    },
+    {
+      "section": "Four hard invariants (enforced by tests, not by documentation)",
+      "text": "---"
+    },
+    {
+      "section": "Supported vendors",
+      "text": "Five independent adapters. Each is a pure data module (`src/vendors/<vendor>.js`): no I/O, no DSH imports, so the whole matrix is unit-testable without a Harness."
+    },
+    {
+      "section": "Supported vendors",
+      "text": "| Vendor | Aliases | Official bridge | Events | Bridged | Translated | Observe-only | Built-in bridge | Approximate | rules |\n| :--- | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |\n| `claude` | `claude-code`, `cc` | `dsh-hooks-claude-code` | 33 | 7 | 24 | 2 | 0 | 2 | CARRY |\n| `codex` | `openai-codex` | `dsh-hooks-codex` | 12 | 5 | 4 | 3 | 0 | 1 | CARRY |\n| `workbuddy` | `codebuddy` | `dsh-hooks-claude-code` | 24 | 5 | 19 | 0 | 0 | 2 | CARRY |\n| `opencode` | — | **none** | 29 | 0 | 29 | 0 | 0 | 5 | CARRY |\n| `copilot` | `github-copilot` | **none** | 14 | 0 | 4 | 0 | 10 | 0 | CARRY |\n| **Total** | | | **112** | **17** | **80** | **5** | **10** | **10** | |"
+    },
+    {
+      "section": "Supported vendors",
+      "text": "- **`workbuddy`** — the WorkBuddy desktop app **has no public hook API**. This adapter treats declarations as CodeBuddy-engine hooks (which Tencent documents as Claude-Code compatible) and writes \"no desktop API\", \"`CODEBUDDY_PROJECT_DIR` is not exported\" and \"`modifiedInput` is not read\" into *every* degradation row, asserted by tests.\n- **`opencode`** — all 29 callback names map to DSH seams, but the **TS callback bodies are not carried**; they must be re-authored as commands. That is explicitly out of scope, not forgotten.\n- **`copilot`** — DSH ships no Copilot bridge, so 10 of its 14 events go through this plugin's **built-in bridge** (`builtin-bridge`) and 4 through native translation: deny really blocks, block really forces another turn, subagents really receive context, approvals really decide. See [Copilot's special path](#copilots-special-path)."
+    },
+    {
+      "section": "Supported vendors",
+      "text": "---"
+    },
+    {
+      "section": "How it works",
+      "text": "```mermaid\nflowchart TB\n    P[\"Preset-class plugin\"] -->|\"explicit vendor + event\"| S[\"ctx.compatAdapter<br/>registerHook / registerRules\"]\n    S --> G{\"Capability grading\"}\n    G -->|\"official-bridge · 17\"| B[\"Official bridge<br/>dsh-hooks-claude-code / -codex\"]\n\nThe difference between the four routes is exactly **whether a decision reaches DSH**:"
+    },
+    {
+      "section": "How it works",
+      "text": "| Route | Decision takes effect | Used for |\n| :--- | :--- | :--- |\n| `official-bridge` | ✅ mapped by the official bridge | vendors that have a bridge (claude / codex / workbuddy) |\n| `native-translate` | ✅ this plugin produces the DSH decision type directly | no bridge, but the seam can intercept |\n| `native-seam` | ❌ **observe-only**; a blocking attempt is logged and ignored | lifecycle moments with no veto |\n| `builtin-bridge` | ✅ a bridge this plugin builds itself, only where no official one exists | copilot |"
+    },
+    {
+      "section": "How it works",
+      "text": "---"
+    },
+    {
+      "section": "Installation",
+      "text": "A standard DSH Cordis bundle (`dsh.bundle.patch` in `package.json` + `cordis.patch.yml`).\n\n```bash"
+    },
+    {
+      "section": "Option B: CLI",
+      "text": "dsh plugin --profile <profile> add <absolute path to this repo>\n```\n\nOnce installed the plugin does one thing: it provides the `ctx.compatAdapter` service. **It adapts nothing by itself** — adaptation is triggered by preset plugins declaring assets.\n\n<details>yaml"
+    },
+    {
+      "section": "✅ correct",
+      "text": "- insert:\n    - id: compat-adapter\n      name: 'dsh-compat-adapter'\n```\n\n`test/index.test.js` asserts this (after stripping comments, so the counter-example in the prose is not mistaken for patch content).\n\n</details>"
+    },
+    {
+      "section": "Using it from a preset-class plugin",
+      "text": "Insert this plugin into your preset's `plugins` list (order is guaranteed by `inject`), then call the service from your own `apply()`:\n\n```yaml\n- insert:\n    - id: preset-my-preset\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n\n```js\n// my-vendor-assets/index.js\nexport const name = 'my-vendor-assets'\nexport const inject = ['compatAdapter']\n\n---"
+    },
+    {
+      "section": "`registerHook(declaration)`",
+      "text": "| Field | Required | Notes |\n| :--- | :---: | :--- |\n| `vendor` | ✅ | `claude` / `codex` / `workbuddy` / `opencode` / `copilot`, or a documented alias |\n| `event` | ✅ | Vendor event name (e.g. `PreToolUse`); unknown throws `UNKNOWN_EVENT` |\n| `matcher` | — | Vendor matcher string; non-strings throw `INVALID_MATCHER` |\n| `handler` | — | Command string, or `{ type: 'command', command, timeoutSec? }`. `http` / `mcp_tool` / `prompt` / `agent` throw `INVALID_HANDLER`; a JS function returns `UNSUPPORTED` |\n| `id` | — | Stable id, defaults to `<vendor>:<event>:<n>` |"
+    },
+    {
+      "section": "`registerHook(declaration)`",
+      "text": "Returns `Promise<CapabilityResult>` (frozen). **Poor portability does not throw** — only a declaration that cannot be processed at all throws."
+    },
+    {
+      "section": "`registerRules(declaration)`",
+      "text": "| Field | Required | Notes |\n| :--- | :---: | :--- |\n| `vendor` | ✅ | As above |\n| `source` | ✅ | String or array of strings: absolute path, `baseDir`-relative path, `file://` URL, or glob |\n| `baseDir` | — | Basis for relative sources; must be absolute (otherwise `INVALID_DECLARATION`) |\n| `id` | — | Stable id, defaults to `<vendor>:rules:<n>` |\n\nReturns `Promise<CapabilityResult>` with `capability === 'CARRY'` and `seams === ['agent/created']`."
+    },
+    {
+      "section": "`registerRules(declaration)`",
+      "text": "**Rules semantics** — files are **read and carried byte-for-byte at registration** (with `sha256` and `bytes`), then injected on `agent/created` (covering fresh / resume / clear / compact) via `agent.inject(createUserMessage(...))` as model-facing context. The injected message's `source.kind` is `compat-adapter-rules`, distinguishable from DSH's own `agent-instructions` and traceable in logs."
+    },
+    {
+      "section": "`registerRules(declaration)`",
+      "text": "> **Rules are never a security boundary.** All `CARRY`. Codex's Starlark rules in particular are a command-policy DSL with no DSH equivalent — this adapter injects them as *documentation of the original tool policy*, never translating or enforcing them. Any expectation that \"rules will block something\" is wrong; to enforce, write a native DSH plugin on `tools/pre-execute`."
+    },
+    {
+      "section": "Other methods",
+      "text": "| Method | Purpose |\n| :--- | :--- |\n| `matrix()` | The static capability matrix (what this version can *ever* do). |\n| `status()` | Runtime audit (what is *actually live now*): each hook's grade / seams / bridge, rule file paths / bytes / sha256, and whether `shell` / `sessionProjections` exist in this composition. |\n| `dispose()` | Unload every bridge and listener; later registrations throw `ADAPTER_DISPOSED` rather than half-working. |"
+    },
+    {
+      "section": "Config (`config` on the `cordis.patch.yml` row)",
+      "text": "| Field | Default | Notes |\n| :--- | :--- | :--- |\n| `logRegistrations` | `true` | One structured log line per graded registration |\n| `failClosed` | `true` | Refuse registrations whose seam is missing instead of mounting a no-op |\n| `targetDshVersion` | `0.2.0-rc.2` | Target DSH version; a mismatch errors or warns per `failClosed` |\n| `maxRuleBytes` | `524288` | Per-file carry cap; exceeding it **errors** rather than silently truncating |\n\n---"
+    },
+    {
+      "section": "Blocking contract",
+      "text": "\"Exit code 2 means block\", as documented by the reference tools, is **not dependable** through this DSH version's two official bridges (it can be recorded as `decision: 'pass'` and let the tool through). So this adapter standardizes on:\n\n> **stdout `hookSpecificOutput.permissionDecision` (`deny` / `ask`) with exit code `0`.**\n\n```bash\n#!/usr/bin/env bash"
+    },
+    {
+      "section": "Deny a write: deny + exit 0",
+      "text": "printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"no writes in this preset\"}}'\nexit 0\n```\n\nEvery example, test and document this plugin generates uses that one form; it **never generates an exit-2 handler**. `permissionDecisionOutput()` in `src/vendors/shared.js` is the single generation entry point, and tests assert the output contains `permissionDecision` and **no** legacy top-level `decision` field."
+    },
+    {
+      "section": "Deny a write: deny + exit 0",
+      "text": "`ask` maps to DSH's `{kind:'ask'}` and `deny` to `{kind:'deny'}` (through the official bridge, not this plugin). **Exit 2 is still parsed by the bridges** (a hand-written legacy hook is not swallowed), but it is not the contract this plugin promises.\n\n---"
+    },
+    {
+      "section": "Copilot's special path",
+      "text": "GitHub Copilot is the only vendor with **no official DSH bridge** (Claude, Codex and WorkBuddy all reuse a shipped bridge), so its path differs: **this adapter really implements the translation layer** rather than watching from the side."
+    },
+    {
+      "section": "Why the hook protocol cannot be reused directly",
+      "text": "DSH's `@deepseek-ai/dsh-hook-protocol` only understands the **Claude/Codex dialect**:\n\n```js\n// DSH's parser reads only this layer\n{ \"hookSpecificOutput\": { \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"…\" } }\n```\n\nCopilot writes its decision at the **top level**:\n\n```json\n{ \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"…\" }\n```"
+    },
+    {
+      "section": "Why the hook protocol cannot be reused directly",
+      "text": "Reusing the parser would mean **every Copilot deny is silently treated as \"no decision\" and allowed through**. So `src/translate.js` has `parseCopilotStdout()` / `normalizeCopilotOutput()`: parse in Copilot's native shape first, then normalize into the internal shape.\n\nThat path has dedicated coverage (`test/smoke-copilot.test.js`, 21 cases) and is part of the real-launch `npm run verify:live` assertions."
+    },
+    {
+      "section": "Event mapping",
+      "text": "| Copilot event | DSH seam | Can block? |\n| :--- | :--- | :--- |\n| `preToolUse` | `tools/pre-execute` | ✅ deny / ask really take effect |\n| `postToolUse` | `tools/post-execute` | forwards `additionalContext` (`modifiedResult` not honored) |\n| `subagentStart` | `subagent/start` | ✅ context injected into the **child** agent (via `ctx.agents.get(runId)`) |\n| `subagentStop` | `subagent/end` | observe-only (receives `stopReason` / `lastAssistantMessage`) |\n| `errorOccurred` | `agent/error` | observe-only (DSH's error path has no verdict channel) |\n| `sessionStart` | `agent/created` | injects `additionalContext` as a message |\n| `sessionEnd` | `agent/disposed` | observe-only |\n| `userPromptSubmitted` | `agent/pre-step` | injects context (cannot rewrite the prompt) |\n| `agentStop` | `agent/turn-stopping` | ✅ `decision:\"block\"` **really forces another turn** (with an 8-block runaway guard) |\n| `notification` | `agent/status` | observe-only (DSH publishes status flips, not notification types) |\n| `permissionRequest` | `approval/request` | ✅ allow → `allowed-once`, deny → `rejected` |\n| `postToolUseFailure` | `tools/post-execute` | fires only when the result is marked as an error |"
+    },
+    {
+      "section": "Three dialect differences you must know",
+      "text": "1. **Matchers are anchored regexes.** Copilot compiles `^(?:PATTERN)$` and requires a full match — `bas` does **not** match `bash`; an invalid regex causes the hook to be **skipped entirely** (not match-all). This adapter implements exactly that.\n2. **`allow` is not a pre-approval.** Copilot's `allow` means \"don't show a permission prompt\", not \"force it through\", so it is translated to `next()` rather than a short-circuiting allow.\n3. **The blocking contract is still stdout + exit 0.** Copilot itself also accepts exit 2 for deny, but this adapter never makes a hook depend on it — one hook body behaves the same across every vendor."
+    },
+    {
+      "section": "Three dialect differences you must know",
+      "text": "---"
+    },
+    {
+      "section": "Support matrix",
+      "text": "> This section is **generated from code**: `npm run matrix:write` rewrites it from `src/matrix.js`, and `test/matrix-readme.test.js` fails on drift. **Do not edit by hand.**\n\nThree things to keep in mind when reading it:"
+    },
+    {
+      "section": "Support matrix",
+      "text": "1. **An `ADAPTED` row's losses are enumerated**, not rhetorical. Claude `PreToolUse`'s `updatedInput` is parsed but not honored; Codex `PreToolUse`'s `ask` has no approval path; Claude `SubagentStart`'s `agent_type` is always `general-purpose`, so a matcher naming a specific agent type never fires.\n2. **`native-seam` events are observe-only.** `PreCompact` maps to `compaction/start` on `session/event`, and `SessionEnd` maps to `agent/disposed`. DSH compaction is a service call, not a cancellable waterfall, so it **cannot be vetoed**; a blocking attempt is recorded in the audit log and ignored.\n3. **Every WorkBuddy row must state \"no public desktop hook API\"** — the easiest thing to misread, so it lives in every `degradations` entry and is asserted by tests."
+    },
+    {
+      "section": "Support matrix",
+      "text": "<details>\n<summary><b>Expand the full matrix (112 rows with per-row losses)</b></summary>\n\n<!-- MATRIX:START -->"
+    },
+    {
+      "section": "Hooks: vendor event → DSH seam",
+      "text": "| Vendor | Event | Capability | Route | DSH seam(s) | Losses / reason |\n| --- | --- | --- | --- | --- | --- |\n| claude | `SessionStart` | ADAPTED | official bridge (claude) | agent/created | Runs detached through the bridge, so context can miss the model first request.; Plain-stdout context, initialUserMessage, sessionTitle, watchPaths and CLAUDE_ENV_FILE are not consumed.; Payload omits model, agent_type and session_title. |\n| claude | `UserPromptSubmit` | ADAPTED | official bridge (claude) | agent/pre-step | Deny is honored; plain-stdout context, sessionTitle and suppressOriginalPrompt are not.; Unless the hook sets its own timeout the bridge uses its 600s default, not the reference 30s. |\n| claude | `PreToolUse` | ADAPTED | official bridge (claude) | tools/pre-execute | deny and ask are honored; allow does not pre-approve and defer is unsupported.; updatedInput is parsed and warned about but not honored.; additionalContext from a PreToolUse hook is ignored. |\n| claude | `PostToolUse` | ADAPTED | official bridge (claude) | tools/post-execute | Blocking feedback and additionalContext work; updatedToolOutput and updatedMCPToolOutput do not.; tool_response is flattened to text. |\n| "
+    },
+    {
+      "section": "Rules: carried and injected, never executed",
+      "text": "| Vendor | Capability | Accepted formats | Default on-disk sources |\n| --- | --- | --- | --- |\n| claude | CARRY | markdown, claude-rules-frontmatter | Carried verbatim and injected as a sourced user message at session start. Claude treats rules as context, not enforced configuration; this adapter preserves that precisely and never turns them into tool policy. |\n| codex | CARRY | starlark | Carried verbatim and injected as a sourced user message at session start. Codex rules are a Starlark command-execution policy (allow / prompt / forbidden) for what may run outside the sandbox; DSH has no equivalent rule engine, so this adapter does NOT translate or enforce them. Treat the injected text as documentation for the model, never as a security boundary. |\n| workbuddy | CARRY | markdown | Carried verbatim and injected as a sourced user message at session start. WorkBuddy desktop project instructions entered in the UI are cloud-side and cannot be carried; only on-disk CodeBuddy rules files are read. |\n| opencode | CARRY | markdown | Carried verbatim and injected as a sourced user message at session start. Remote URLs in the OpenCode `instructions` array are NOT fetched: this adapter does "
+    },
+    {
+      "section": "Vendor plugin runtimes: out of scope",
+      "text": "| Vendor | Capability | Reason |\n| --- | --- | --- |\n| claude | UNSUPPORTED | Claude Code plugin runtimes (plugin hooks that are JS modules, MCP-provided tools) are not command hooks; only the JSON command-hook config is adapted. |\n| codex | UNSUPPORTED | Codex has no TypeScript plugin runtime in scope; only its command hooks.json and rules files are adapted. |\n| workbuddy | UNSUPPORTED | WorkBuddy/CodeBuddy plugin runtimes (IDE extensions, MCP servers, workflow scripts) are out of scope: this adapter adapts JSON hooks + rules text only. |\n| opencode | UNSUPPORTED | OpenCode plugins ARE TypeScript callbacks in a co-resident runtime (tool.execute.before/after, event, shell.env). Porting them means embedding a foreign plugin runtime in the DSH Host — explicitly out of scope; only OpenCode AGENTS.md/instructions text is carried. |\n| copilot | UNSUPPORTED | Copilot’s SDK hook API is a programmatic callback interface (Node/Python/Go/.NET/Java) bound to a CopilotClient session. This adapter adapts Copilot’s JSON command-hook config and instruction files only; an in-process Copilot SDK callback cannot be carried into the DSH Host. |"
+    },
+    {
+      "section": "Native translation points used by native-translate events",
+      "text": "These are REAL interceptions: the hook decision reaches DSH. Vendors with an official bridge never use them."
+    },
+    {
+      "section": "Native translation points used by native-translate events",
+      "text": "| Native point | DSH seam | Seam mode | Produces |\n| --- | --- | --- | --- |\n| `tools/pre-execute` | `tools/pre-execute` | waterfall | PreToolDecision |\n| `tools/post-execute` | `tools/post-execute` | waterfall | PostToolDecision |\n| `agent/created` | `agent/created` | serial | none |\n| `agent/pre-step` | `agent/pre-step` | waterfall | PreStepDecision |\n| `agent/turn-stopping` | `agent/turn-stopping` | serial | none |\n| `agent/disposed` | `agent/disposed` | emit | none |\n| `agent/error` | `agent/error` | emit | none |\n| `subagent/start` | `subagent/start` | emit | none |\n| `approval/request` | `approval/request` | waterfall | ApprovalOutcome |\n| `shell/env` | `shellEnv` | registry | environment variables |\n| `compaction/end` | `session/event` | emit | none |\n| `compaction/start` | `session/event` | emit | none |\n| `agent/pre-step/transform` | `agent/pre-step` | waterfall | PreStepDecision |\n| `session/event` | `session/event` | emit | none |\n| `todo/write` | `session/event` | emit | none |\n| `session/created` | `session/created` | emit | none |\n| `agent/instructions-loaded` | `session/created` | emit | none |\n| `user-questions/request` | `user-questions/request` | waterfall | AskUs"
+    },
+    {
+      "section": "Native observation points used by native-seam events",
+      "text": "| Native point | Vendor event | Wakes on |\n| --- | --- | --- |\n| `compaction/start` | PreCompact | `compaction/start` |\n| `agent/disposed` | SessionEnd | Cordis event |\n\n<!-- MATRIX:END -->\n\n</details>\n\n---"
+    },
+    {
+      "section": "Known limitations",
+      "text": "An honest list. Every item has a corresponding row in the matrix or an assertion in the tests.\n\n<details open>\n<summary><b>Runtime and environment</b></summary>"
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **Verified only on DSH `0.2.0-rc.2`.** DSH is a developer preview; `src/surface.js` pins the exact version and every seam / export consumed. `npm run check-surface` asserts each one and **exits non-zero naming the missing item**.\n- **Degrades when a bridge package is missing.** If `@deepseek-ai/dsh-hooks-claude-code` / `-codex` does not resolve from the profile, the corresponding hook registration returns `UNSUPPORTED` naming the missing package — it **never** falls back to a homegrown implementation.\n- **Without `ctx.shell`.** Hooks that must execute commands return `UNSUPPORTED` (\"this composition has no shell executor\"); rules still work.\n- **The `sdk-minimal` template has no `ctx.shell`.** It mounts `dsh-terminal-bash` (a PTY provider), which does not provide the `shell` service the hook bridges need; to run command hooks, add `@deepseek-ai/dsh-bash-local` to the profile patch. This is the real-world origin of the fail-closed branch."
+    },
+    {
+      "section": "Known limitations",
+      "text": "</details>\n\n<details open>\n<summary><b>Capability boundaries (things it will not do)</b></summary>"
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **No foreign code execution.** A JS function handler is always `UNSUPPORTED`; likewise OpenCode's TS plugin runtime and Claude's `http` / `mcp_tool` / `prompt` / `agent` handlers.\n- **`updatedInput` / `modifiedInput` are not honored.** The official bridges parse them but do not apply them (the Claude Code bridge warns); WorkBuddy's `modifiedInput` is not even parsed. Tool-argument rewriting remains a deferred capability in DSH.\n- **Compaction cannot be vetoed.** `compaction/*` are log-only durable events, and compaction is a service call rather than a cancellable waterfall.\n- **No network access.** Remote URLs in OpenCode `instructions` are **not** fetched; materialize them to a local file first.\n- **WorkBuddy desktop UI project instructions** live cloud-side, are not readable files, and cannot be carried."
+    },
+    {
+      "section": "Known limitations",
+      "text": "</details>\n\n<details open>\n<summary><b>Per-event semantic losses (the ones that matter most)</b></summary>"
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **Copilot needs its own dialect parser.** The official hook protocol does not recognize a top-level `permissionDecision`; if upstream changes Copilot's output format, the `smoke-copilot` tests fail.\n- **`subagentStart` context injection depends on child visibility.** DSH resolves the child via `ctx.agents.get(runId)` only during the `subagent/start` notification; a remote provider's child is not visible then, so injection is skipped.\n- **`subagentStop` / `errorOccurred` / `sessionEnd` are observe-only.** DSH has no verdict channel on the child-end and error paths, so Copilot's `modifiedResponse`, `decision:\"block\"` and error recovery cannot be expressed.\n- **Copilot `agentStop` continuation is driven by a synthetic message.** During the serial `agent/turn-stopping` dispatch the adapter appends to `inbox.nextStep`; the agent loop re-checks `nextStep.length === 0` after dispatch, so the turn continues. Semantically equivalent, but the injected message is synthetic (source `compat-adapter-stop-continue`), so message provenance differs from Copilot's own continuation path. The 8-block runaway guard is reproduced."
+    },
+    {
+      "section": "Known limitations",
+      "text": "</details>\n\n---"
+    },
+    {
+      "section": "Verification",
+      "text": "```bash\nnpm run check-surface     # assert every consumed DSH seam / export / event / service\nnpm test                  # 141 cases: unit tests + real-Harness smoke tests\nnpm run verify            # both of the above\nnpm run verify:live       # end-to-end against a really launched profile\n\n`npm test` passes fully (141/141) with no third-party test dependencies (`node:test`)."
+    },
+    {
+      "section": "Test layout",
+      "text": "| File | Coverage |\n| :--- | :--- |\n| `test/capability.test.js` | Grading vocabulary and fail-closed invariants (`UNSUPPORTED` needs a reason, `ADAPTED` needs degradations, results are frozen) |\n| `test/vendors.test.js` | The five vendors' frozen event tables; bridged events must be `ADAPTED`, documented-but-unbridged events must be `UNSUPPORTED` |\n| `test/rules.test.js` | Path / glob resolution, missing-source errors, byte-faithful carry + sha256, cap errors instead of truncation, rendered text states \"not enforced\" |\n| `test/service.test.js` | Service contract on a real Cordis Context: unknown vendor/event errors, fail-closed, rules injection, `status()`, `dispose()`; **multi-instance config isolation, old hooks surviving a write failure, mount-failure rollback, orphan pruning** |\n| `test/smoke-bridge.test.js` | **End-to-end**: declaration → bridge config written → real official bridge mounted → `tools/pre-execute` fired → an actual `{kind:'deny'}`; matcher works; `deny` beats `allow`; **and the declared degradations are pinned as real** |\n| `test/plugin-mount.test.js` | The real mount path via `ctx.plugin(index.js)`: the service is provided, an async preset can register during s"
+    },
+    {
+      "section": "Test layout",
+      "text": "`test/helpers/register-dsh-resolver.js` uses `node:module`'s `registerHooks` to resolve `@deepseek-ai/*` to the installed DSH (`$DSH_INSTALL_DIR` → `dsh` on PATH → known global location), and **errors out** rather than skipping tests when it cannot."
+    },
+    {
+      "section": "End-to-end against a real profile",
+      "text": "The smoke tests in `npm test` boot a **real Cordis context**, but not the product launcher. `npm run verify:live` closes that gap: initialize a profile from `sdk-minimal` in an isolated `$DSH_HOME` → install this bundle as `link:` → really launch it through the official `runProfile` → assert item by item.\n\nActual output:"
+    },
+    {
+      "section": "End-to-end against a real profile",
+      "text": "```text\nverify-live: DSH install   /opt/node/lib/node_modules/@deepseek-ai/dsh\nverify-live: profile       adapter-verify\n  ok   ctx.compatAdapter is provided by the installed bundle\n  ok   ctx.shell resolves in the live composition"
+    },
+    {
+      "section": "End-to-end against a real profile",
+      "text": "> **Why `verify:live` spawns its own child process holding the stdin pipe:** the `sdk-minimal` template mounts `dsh-sdk-app`, which registers `exitOnStdinEnd` — the moment stdin reaches EOF it calls `exit(0)` and unloads the whole composition. Stdin inherited from a shell is often already at EOF (redirected from `/dev/null`, an exited upstream pipe, CI's closed stdin), so the script keeps the child's stdin pipe open. This is not a defect in the plugin under test; it is normal product behavior of an SDK profile."
+    },
+    {
+      "section": "Confirming an installed plugin really works",
+      "text": "A config row appearing is **not** the same as a runtime service being available. `npm run verify:installed` boots **an already-installed profile** with the real launcher:\n\n```bash\nexport DSH_HOME=/tmp/dsh-adapter-home\nnode scripts/verify-installed.mjs --profile smoke\n```\n\n```json\n{\n  \"profile\": \"smoke\",\n  \"service\": { \"compatAdapter\": true, \"shell\": true },\n  \"deny\": { \"capability\": \"ADAPTED\",\n\n---"
+    },
+    {
+      "section": "Project structure",
+      "text": "```text\ndsh-compat-adapter/\n├── index.js                 # Cordis entry: provides ctx.compatAdapter\n├── cordis.patch.yml         # bundle patch (the row name must be a bare specifier)\n├── package.json             # dsh.bundle.patch + exactly pinned peerDependencies\n\n---"
+    },
+    {
+      "section": "For the next maintainer: DSH pitfalls hit in practice",
+      "text": "These were all hit and fixed while building this plugin on `0.2.0-rc.2`. None of them is speculation.\n\n<details>\n<summary><b>Expand the 11 items (including \"why unit tests cannot see this\")</b></summary>"
+    },
+    {
+      "section": "For the next maintainer: DSH pitfalls hit in practice",
+      "text": "1. **`baseUrl` is the profile root, not the patch file's directory.** A relative path or a `node_modules/<pkg>/` prefix in a bundle patch fails to resolve; the row's `name` must be a bare specifier.\n2. **A disposer returned from `export function apply` is silently discarded by Cordis.** Cordis's `isConstructor()` only inspects `func.prototype` and generators, so a `function`-declared `apply` is treated as a class and `new`-ed, and its return value never reaches effect collection — the bridge then stays mounted after unload. Use `ctx.effect(() => async () => { ... })` instead. **This bug is invisible to unit tests**; only a real `ctx.plugin(pluginModule)` mount exposes it, which is why `test/plugin-mount.test.js` takes the real wrapping path.\n3. **Dispatch of scope-filtered events must carry a carrier.** Under `dsh-scope`'s invariant, events like `tools/pre-execute` / `agent/created` require `thisArg` to be `scopeTarget(base, subject)`; `agent/created` must additionally be **keyed** by subject, or you get \"carrier keyed to a DIFFERENT subject\". A bare `ctx.waterfall(name, ...)` trips the invariant immediately.\n4. **Generated bridge configs must be unique per instance.** A bridge's `"
+    },
+    {
+      "section": "For the next maintainer: DSH pitfalls hit in practice",
+      "text": "</details>\n\n---"
+    },
+    {
+      "section": "Adding a vendor",
+      "text": "1. Create `src/vendors/<id>.js` exporting `VENDOR` / `HOOKS` / `RULES` / `KNOWN_EVENTS` (optionally `BRIDGE_PACKAGE`). Build each mapping with `bridged` / `nativeSeam` / `nativeTranslate` / `unsupported` from `shared.js`.\n2. Register it in `src/vendors/index.js` (`VENDOR_MODULES` with aliases, and `VENDORS`).\n3. Add fixture rows in `test/vendors.test.js`.\n4. Run `npm run matrix:write` to regenerate the README matrix, then `npm test`."
+    },
+    {
+      "section": "Adding a vendor",
+      "text": "Passing an unknown vendor to the service is an **authoring error** (`UNKNOWN_VENDOR`), never a silent fallback.\n\n---"
+    },
+    {
+      "section": "Contributing",
+      "text": "```bash\nnpm install          # no runtime dependencies; peers come from the DSH installation\nnpm run check-surface\nnpm test\nnpm run verify:live\n\nMake sure `npm run verify` is green before submitting. After changing `src/vendors/**` or `src/matrix.js` you **must** rerun `npm run matrix:write`, or `test/matrix-readme.test.js` will fail — that is by design: the documentation is not allowed to claim more than the code does."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE) © dsh-compat-adapter contributors"
+    }
+  ],
+  "skipped": []
+}

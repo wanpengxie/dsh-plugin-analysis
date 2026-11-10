@@ -1,0 +1,182 @@
+{
+  "repo": "cup113/dsh-effort-memory",
+  "commit": "0100f3d0a6d675076bc15602cf87bc551a5a7251",
+  "extracted_at": "2026-11-10T16:54:45.009134+00:00",
+  "tree": {
+    "files": 15,
+    "bytes": 61704,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 1160,
+      "Markdown": 155,
+      "Other": 38,
+      "YAML": 51
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "_verify/mutation-check.mjs",
+      "_verify/probe.host.js",
+      "_verify/read-session-log.mjs",
+      "cordis.patch.yml",
+      "decide.js",
+      "index.js",
+      "package.json",
+      "test/all.mjs",
+      "test/apply.test.mjs",
+      "test/decide.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-effort-memory",
+    "version": "0.1.0",
+    "description": "Host-only DSH plugin: remember the reasoning effort that was last in effect per (provider, model) and restore it when a session switches back",
+    "private": true,
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/cup113/dsh-effort-memory.git"
+    },
+    "homepage": "https://github.com/cup113/dsh-effort-memory#readme",
+    "bugs": {
+      "url": "https://github.com/cup113/dsh-effort-memory/issues"
+    },
+    "type": "module",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "decide.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "node": ">=20.19.0"
+    },
+    "scripts": {
+      "test": "node test/all.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The dsh-effort-memory bundle patch: one row, applied when a profile lists\n# this package in its `dsh.profile.bundles`.\n#\n# `dsh plugin --profile <name> add` maintains that list automatically (the\n# reconcile step appends every dependency declaring `dsh.bundle`), so this file\n# is the only wiring an installation needs.\n#\n# Two parity rules, both copied from the shipped out-of-tree example\n# (dsh-custom-reasoning-effort/cordis.patch.yml):\n#   - `name` must be this package's name, so the Loader resolves the row — and\n#     therefore the code it mounts — from the profile's node_modules;\n#   - `id` must equal the `name` the host half exports (`index.js`), so the row\n#     and the plugin are recognizably the same thing.\n#\n# The row must stay a single entry: the include inserts rows verbatim and the\n# Loader rejects a repeated entry id (`duplicate loader entry id`).\n#\n# The plugin publishes no service, so it sits loose in the host root realm — no\n# `isolate` realm and no `config:` block are needed here.\n\n- insert:\n    - id: effort-memory\n      name: dsh-effort-memory\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/cup113/dsh-effort-memory.git",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cup113/dsh-effort-memory#readme",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cup113/dsh-effort-memory/issues",
+      "where": "package.json:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-09-24T08:44:56Z",
+    "created_at": "2026-09-22T04:47:49Z"
+  },
+  "runtime_files": [
+    "_verify/probe.host.js",
+    "cordis.patch.yml",
+    "decide.js",
+    "index.js",
+    "package.json",
+    "test/all.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-effort-memory",
+      "text": "An out-of-tree [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)\n(DSH) plugin that remembers the reasoning effort **last actually in effect** for\neach `(provider, model)` route and restores it when a session switches back to\nthat model."
+    },
+    {
+      "section": "Why",
+      "text": "The composer's model seat renders the effort from the durable `modelSelection`\nprojection. Picking a *different* model sends that model's own `defaultEffort`\n(`dsh-client-ui-model-selection/lib/client.js:427,883`), and the host resolver\nmaterializes the adapter default when a caller omits an effort\n(`dsh-llm/lib/index.js:2116-2130`). So a model switch always lands on the new\nmodel's default, and the level chosen on the model being left is not restored on\nreturn."
+    },
+    {
+      "section": "Why",
+      "text": "This plugin closes that gap by re-issuing exactly one selection through the same\npublic command interface the GUI calls — it appends no session events itself,\nregisters no service, and writes no settings."
+    },
+    {
+      "section": "Behavior",
+      "text": "1. The memory key is `(provider, model)`; the value is the effort id that was\n   last in effect on that route.\n2. On a route change `A -> B`, the plugin remembers `A`'s effort, then:\n   - if `B` has a remembered effort **and** `B` currently advertises it, it\n     re-issues one selection through `ctx.sessionController.selectModel(...)`, so\n     the session's durable selection becomes `{ B, that effort }`;\n   - otherwise it does nothing and `B` keeps its own default. This is deliberate:\n     a first visit to a never-used model lands on that model's default.\n3. A route change is recognized across a restart too: each session's\n   pre-switch route is seeded from the durable `modelSelection` projection at\n   `session/created` — attach time, while that projection still reflects the\n   stored log alone. Reading the seed from inside the event handler would be\n   vacuous: `stateOf` materializes at the session's current cursor, which\n   already includes the event being handled, so the seed would always equal\n   the event itself.\n4. A target model that declares no reasoning capability (resolved `reasoning`\n   missing, or `reasoningEfforts: false` in settings) gets no `reasoningEffort`\n   and n"
+    },
+    {
+      "section": "Design constraints",
+      "text": "- **Host half only.** No `client.js`, no slot, no React, no UI.\n- **One lever.** `ctx.sessionController.selectModel` — the same public command\n  interface the GUI calls. The plugin never appends session events itself and\n  never rewrites in-memory selection state.\n- **Capability first.** `ctx.llm.resolveModelInfo(provider, model)` is consulted\n  before any re-issue, because `selectModel` throws\n  `UNSUPPORTED_REASONING_EFFORT` for a level the target does not advertise.\n- **Loop-safe.** Only a *route change* can trigger a re-issue, only when the\n  event's effort differs from the remembered one, and the re-issue keeps the same\n  route — so the event it produces cannot re-enter the rule as a change.\n- **Replay-safe.** Constructor seeds (replay, fork, resume) never publish on the\n  `session/event` firehose; a `seq < session.firstLiveSeq` guard is kept as\n  belt-and-braces. The pre-switch route of a session not yet seen in this\n  process comes from the attach-time seed above, never from the projection\n  inside an event handler.\n- **No services, no settings, no retries.** Any failure is logged and skipped;\n  nothing is ever surfaced to the user.\n- **Zero runtime dependencies.** `defineDo"
+    },
+    {
+      "section": "Persistence",
+      "text": "- Domain `effort_memory`, table `efforts`, key `JSON.stringify([provider, model])`,\n  record `{ reasoningEffort }`.\n- The domain name must match `UNIT_NAME_RE = /^[a-z][a-z0-9_]*$/`, which forbids\n  the hyphen — hence the domain is `effort_memory` while the package, the bundle\n  patch row id, and the exported plugin name all stay `effort-memory`.\n- With the base storage stack mounted, the `single`-layout document lands at\n  `$DSH_HOME/storages/effort_memory.json` and survives restarts.\n- Without `ctx.storageDomain`, memory degrades to a process-local `Map` (a warning\n  is logged at apply time) and is lost on restart."
+    },
+    {
+      "section": "Install",
+      "text": "From a checkout, by path:\n\n```\ndsh plugin --profile <name> add link:<absolute path to this repository>\n```\n\nDirectly from GitHub:\n\n```\ndsh plugin --profile <name> add github:cup113/dsh-effort-memory\n```"
+    },
+    {
+      "section": "Install",
+      "text": "`dsh plugin` forwards to pnpm in the profile directory and then reconciles\n`dsh.profile.bundles`: a dependency resolving to a package that declares\n`dsh.bundle` joins the layer stack automatically. A new bundle row and its Node\nESM module are both loaded at boot, so **restart `dsh`** after installing or\nafter editing `index.js`."
+    },
+    {
+      "section": "Layout",
+      "text": "| Path | Role |\n|---|---|\n| `index.js` | Host half: event listener, service calls, storage memory (`apply`, `inject`, `name`) |\n| `decide.js` | Pure rules: route keys, effort normalization, the decision table |\n| `cordis.patch.yml` | The one bundle row (`id: effort-memory`, `name: dsh-effort-memory`) |\n| `test/` | Test suites: pure layer, packaging parity, and an integration test |\n| `_verify/` | Harness used against a live DSH: a dynamic host probe, a multi-frame session-log extractor, a mutation check |"
+    },
+    {
+      "section": "Layout",
+      "text": "Only the root files listed in `files` are the bundle; `test/` and `_verify/` are\ninert to the Loader."
+    },
+    {
+      "section": "Tests",
+      "text": "```\nnode test/all.mjs\n```\n\nTwenty-two assertions: the pure decision table, packaging parity (bundle row id,\npackage name, storage-domain name), and an integration suite that drives the\nreal `apply()` against a fake Cordis context — listener shape, event ordering,\nthe re-issue loop breaker, replay-seed rejection, the restart seed, and the\nstorage-less fallback. [CI](.github/workflows/test.yml) runs the same entry on\nNode 20 and 22."
+    },
+    {
+      "section": "Tests",
+      "text": "`node --test` is deliberately not used: it runs each file in a child process with\npiped stdio, which a confined sandbox refuses.\n\n`_verify/mutation-check.mjs` proves the decision assertions are not vacuous: with\nthe `restore` branch removed from `decide.js`, the canonical assertion flips."
+    },
+    {
+      "section": "Known limitations",
+      "text": "1. One settings write per switch is performed by the public `selectModel` path\n   itself (`agentDefaultModel.saveSelection` → `settings.replace('agent-default-model', …)`).\n   This plugin adds no settings namespace and no settings write of its own.\n2. Memory is global per `(provider, model)` — shared by every session and\n   workspace, as specified.\n3. The plugin acts on every live session whose route changes, subagent sessions\n   included. Restricting to root sessions would require an extra `agents`\n   dependency.\n4. Without `sessionProjections` there is no attach-time seed, so a session's\n   first switch after a restart only establishes a baseline and is not\n   restored; every later switch in the same process is.\n5. A stale remembered level is kept in the domain (harmless): if a model's effort\n   table later regains that level, it will be restored again.\n6. Single-process visibility only; `domain/changed` does not cross processes."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE) © 2026 Jason Li"
+    }
+  ],
+  "skipped": []
+}

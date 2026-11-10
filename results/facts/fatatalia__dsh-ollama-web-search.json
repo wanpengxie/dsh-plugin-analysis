@@ -1,0 +1,153 @@
+{
+  "repo": "fatatalia/dsh-ollama-web-search",
+  "commit": "45458396ff0cbebd8a705a68dd79a2d4b22fa5b7",
+  "extracted_at": "2026-11-10T17:26:03.171006+00:00",
+  "tree": {
+    "files": 5,
+    "bytes": 12521,
+    "lines_by_language": {
+      "JSON": 29,
+      "JavaScript": 168,
+      "Markdown": 95,
+      "Other": 9,
+      "YAML": 12
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-ollama-web-search",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Ollama 云 web_search provider：web_search 工具直连 ollama.com/api/web_search（原生搜索 API，返回 {results:[{title,url,content}]}），转成 dsh 的 sources 格式。替代 DeepSeek 官方搜索，无需本地 Ollama/中间件，无模型开销。",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-web": ">=0.1.0-rc.6",
+      "@deepseek-ai/dsh-settings": ">=0.1.0-rc.6",
+      "@deepseek-ai/dsh-credentials": ">=0.1.0-rc.6",
+      "@deepseek-ai/schemastery": ">=3.18.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-ollama-web-search bundle patch\n# 1) 插入 provider 插件\n# 2) 把 web 服务的 searchProvider 切到 ollama-web-search\n#    （patch 整段替换 config，web 的 Config 只有 searchProvider/fetchProvider 两个 key，需重述）\n- insert:\n    - id: dsh-ollama-web-search\n      name: dsh-ollama-web-search\n\n- id: web\n  config:\n    searchProvider: ollama-web-search\n    fetchProvider: \"\"\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "OLLAMA_API_KEY",
+      "kind": "env",
+      "where": "index.js:23-24"
+    },
+    {
+      "name": "apiKeyEnv",
+      "kind": "setting",
+      "default": "OLLAMA_API_KEY",
+      "where": "index.js:32-36"
+    },
+    {
+      "name": "baseURL",
+      "kind": "setting",
+      "default": "https://ollama.com/api/web_search",
+      "where": "index.js:32-36"
+    },
+    {
+      "name": "maxResults",
+      "kind": "setting",
+      "default": "5",
+      "where": "index.js:32-36"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "ollama.com",
+      "url": "https://ollama.com/api/web_search",
+      "where": "index.js:22"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-10-18T14:15:28Z",
+    "created_at": "2026-08-21T08:28:06Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-ollama-web-search",
+      "text": "让 dsh 的 `web_search` 工具直连 **Ollama 云搜索服务**（`ollama.com/api/web_search`），替代 DeepSeek 官方搜索。\n\n无需本地 Ollama、无需模型中间件，零模型开销——`web_search` 调用一次 HTTP 直接拿结果。"
+    },
+    {
+      "section": "dsh 版本兼容性",
+      "text": "**要求 dsh ≥ 0.1.7-rc.1**（已在 0.1.7-rc.1 实测通过）。\n\n- **`ctx.settings.register()` 已移除**（2026-09-24）：0.1.7 起配置不再经 settings namespace，`Config` 字段改标 `.volatile()`，直接以 `config.<field>.get()` 读取 —— loader 提交变更时写进运行中的引用对象，`.get()` 立即返回新值，无需 `watch()`、无需 `ctx.inject([\"settings\"])`。"
+    },
+    {
+      "section": "背景",
+      "text": "dsh 自带的 `web_search` 工具默认走 `deepseek-official` provider（DeepSeek 的 Anthropic 兼容 Messages API + `web_search_20250305` 服务端工具），需要 DeepSeek API key。\n\n[ollama launch dsh 官方集成](https://docs.ollama.com/integrations/deepseek-harness) 的做法是：本地 Ollama 当代理（模型生成查询词 → 中间件调 `ollama.com/api/web_search` → 模型总结 → 包装成 Anthropic `web_search_tool_result`）。这个方案：\n- 需要安装并常驻本地 Ollama\n- 每次搜索要 2 次模型推理（生成查询词 + 总结结果）\n- 模型与搜索强耦合\n\n本插件**直连同一个搜索后端**（`ollama.com/api/web_search`），去掉代理层与模型开销。"
+    },
+    {
+      "section": "原理",
+      "text": "```\nweb_search 工具 → ctx.web.search() → 按 searchProvider 配置选 provider\n  → ollama-web-search provider\n  → POST https://ollama.com/api/web_search  {query, max_results}\n  → {results: [{title, url, content}]}\n\n认证用 `OLLAMA_API_KEY`（Bearer），不需要 Ollama 官方集成用的签名机制。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile web add dsh-ollama-web-search@latest\n```\n\n或从源码：\n\n```sh\ngit clone https://github.com/fatatalia/dsh-ollama-web-search\ncd dsh-ollama-web-search\ndsh plugin --profile web add .\n```\n\n装完重启 dsh web 生效。插件会：\n1. 注册 `ollama-web-search` 搜索 provider\n2. 把 `web` 服务的 `searchProvider` 切到 `ollama-web-search`"
+    },
+    {
+      "section": "配置",
+      "text": "凭据：`~/.dsh/.credentials.yaml` 或环境变量 `OLLAMA_API_KEY`（与 ollama 模型 provider 共用）。\n\n可选的 settings 段（`~/.dsh/settings.yaml`）：\n\n```yaml\nollama-web-search:\n  apiKeyEnv: OLLAMA_API_KEY   # 凭据引用\n  baseURL: https://ollama.com/api/web_search  # 搜索端点\n  maxResults: 5               # 默认返回结果数上限"
+    },
+    {
+      "section": "验证",
+      "text": "装好后调用 `web_search` 工具即可：\n\n```\nweb_search(\"DeepSeek 最新动态\") → 返回多条来源（title/url/snippet）\n```\n\n也可直接 curl 验证端点：\n\n```bash\ncurl -s -X POST https://ollama.com/api/web_search \\\n  -H \"Authorization: Bearer $OLLAMA_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"query\":\"test\",\"max_results\":3}'"
+    },
+    {
+      "section": "与 DeepSeek 官方搜索的差异",
+      "text": "| | 本插件 | DeepSeek 官方（deepseek-official） |\n|---|---|---|\n| 搜索后端 | ollama.com 云 | api.deepseek.com |\n| 认证 | OLLAMA_API_KEY | DEEPSEEK_API_KEY |\n| 模型调用 | 无（直出结果） | 1 次模型 turn（服务端搜索） |\n| 依赖 | 无 | DeepSeek API |"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,219 @@
+{
+  "repo": "atesahmet0/dh-workspace",
+  "commit": "037797a85533d9b8398e55e19c9f5f2cd6810962",
+  "extracted_at": "2026-11-10T14:09:02.449797+00:00",
+  "tree": {
+    "files": 50,
+    "bytes": 215653,
+    "lines_by_language": {
+      "JSON": 357,
+      "JavaScript": 28,
+      "Markdown": 1030,
+      "Other": 47,
+      "TypeScript": 2474,
+      "YAML": 1103
+    },
+    "outline": [
+      ".gitignore",
+      ".kuro-validation/brief-restrict-unknown-tools.md",
+      ".npmrc",
+      "DESIGN.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "packages/dh-common/package.json",
+      "packages/dh-common/tsconfig.json",
+      "packages/dh-delegation/package.json",
+      "packages/dh-delegation/tsconfig.json",
+      "packages/dh-philosophy/package.json",
+      "packages/dh-philosophy/tsconfig.json",
+      "packages/dh-subagent-preset/package.json",
+      "packages/dh-subagent-preset/tsconfig.json",
+      "packages/dh-workspace/package.json",
+      "packages/dh-workspace/tsconfig.json",
+      "packages/dh-worktree/package.json",
+      "packages/dh-worktree/tsconfig.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "presets/coder/agent.cordis.yml",
+      "presets/coder/preset.yml",
+      "presets/explore/agent.cordis.yml",
+      "presets/explore/preset.yml",
+      "presets/plan/agent.cordis.yml",
+      "presets/plan/preset.yml",
+      "presets/researcher/agent.cordis.yml",
+      "presets/researcher/preset.yml",
+      "presets/reviewer/agent.cordis.yml",
+      "presets/reviewer/preset.yml",
+      "presets/scribe/agent.cordis.yml",
+      "presets/scribe/preset.yml",
+      "profile/cordis.patch.yml",
+      "profile/package.json",
+      "profile/settings.yaml",
+      "scripts/mirror-presets.mjs",
+      "tsconfig.base.json"
+    ]
+  },
+  "manifest": {
+    "name": "@dh-multiagents/bundle",
+    "description": "Out-of-tree dsh plugin bundle: philosophy skills plus workspace, delegation, subagent-preset, and worktree plugins (naming contract in DESIGN.md)",
+    "version": "0.1.10",
+    "private": false,
+    "type": "module",
+    "files": [
+      "presets/",
+      "cordis.patch.yml"
+    ],
+    "packageManager": "pnpm@11.7.0",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "scripts": {
+      "build": "pnpm -r run build",
+      "typecheck": "pnpm -r run typecheck",
+      "clean": "rm -rf packages/*/lib",
+      "prepack": "pnpm run build",
+      "prepublishOnly": "node -e 'const ua = process.env.npm_config_user_agent || \"\"; if (ua.indexOf(\"pnpm\") !== 0) { console.error(\"@dh-multiagents/bundle: publish with pnpm only — plain npm publish ships workspace:* deps unresolved (broke 0.1.0). Run: pnpm pub..."
+    },
+    "dependencies": {
+      "@dh-multiagents/dh-common": "workspace:*",
+      "@dh-multiagents/dh-delegation": "workspace:*",
+      "@dh-multiagents/dh-philosophy": "workspace:*",
+      "@dh-multiagents/dh-subagent-preset": "workspace:*",
+      "@dh-multiagents/dh-worktree": "workspace:*",
+      "@dh-multiagents/dh-workspace": "workspace:*"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "publishConfig": {
+      "access": "public"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-multiagents bundle patch — Phase 9 wiring.\n#\n# This file is the `dsh.bundle.patch` of @dh-multiagents/bundle (root\n# package.json). Layer order (bottom → top):\n#   1. `@deepseek-ai/dsh-base` bundle patch (first in dsh.profile.bundles)\n#   2. THIS bundle patch\n#   3. profile cordis.patch.yml → $DSH_HOME/cordis.patch.yml → --patch → telemetry/preset-root overlays\n#\n# A patch REPLACES a targeted row's WHOLE `config` (no deep-merge), so every\n# row overridden below restates every key it owns. `!!js` expressions are\n# evaluated in `config`/`disabled` fields (globals: process, injected\n# ctx.<service>, dshHomePath(...), baseUrl).\n\n# ── base layering (rows dsh-base already inserts; restated here so the      ──\n#    dh-multiagents deployment states its intent explicitly) ──────────────────\n\n# The native DeepSeek adapter (dsh-base row `llm-deepseek`). Credential env is\n# the default; per-model routing and reasoning defaults come from the\n# `llm-deepseek:` section of profile/settings.yaml, never from this row.\n- id: llm-deepseek\n  name: '@deepseek-ai/dsh-llm-deepseek'\n  config:\n    apiKeyEnv: DEEPSEEK_API_KEY\n\n# Local sandbox backend (dsh-base row `sandbox`). All config keys are optional\n# and take their defaults; restated so the executor selection is explicit.\n- id: sandbox\n  name: '@deepseek-ai/dsh-sandbox-local'\n\n# Sandbox policy (dsh-base row `sandbox-policy`). workspace-write lets the\n# `coder` child mutate the workspace; the read-only presets (plan/build/\n# explore/researcher/reviewer) are narrowed at runtime by the capability\n# matrix (CAPABILITY_MATRIX + restrictPresetTools, dh-common) — they mount no\n# bash/edit/write tool rows in their agent.cordis.yml and their matrix rows\n# omit those names — not by the sandbox mode or any toolFilter key.\n- id: sandbox-policy\n  name: '@deepseek-ai/dsh-sandbox-policy'\n  config:\n    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'\n    workspaceRoot: !!js process.cwd()\n\n# Session persistence (dsh-base row `session-persistence-jsonl`): JSONL\n# backend rooted under $DSH_HOME/sessions (dshHomePath resolves $DSH_HOME,\n# falling back to ~/.dsh). This is the session-persistence configuration.\n- id: session-persistence-jsonl\n  name: '@deepseek-ai/dsh-session-persistence-jsonl'\n  config:\n    root: !!js dshHomePath('sessions')\n\n# ── agent presets: provided by the SURFACE bundles ─────────────────────────\n\n# The dsh-agent-presets service is NOT inserted here. The surface bundles own\n# it: the dsh web app inserts its own `agent-presets` row, and the CLI appends\n# its shipped preset root as the last overlay. We deliberately do NOT insert\n# our own `agent-presets` row: a second bare insert collides with the web\n# app's (\"duplicate loader entry id\"). Our presets are instead discovered\n# through the USER root ($DSH_HOME/.agent-presets/), which includeUserRoot\n# enables by default (dsh-agent-presets Config default true). dh-workspace's\n# apply() mirrors the bundle's presets there at every boot\n# (mirrorPresetsAtBoot, DESIGN.md §4). To change the default preset, set it in\n# profile/settings.yaml:\n#   agent-presets:\n#     default: plan\n\n# ── dh-multiagents plugins (row ids/names per DESIGN.md §2) ──────────────\n\n- insert:\n    - id: dh-workspace\n      name: '@dh-multiagents/dh-workspace'\n      # registers tools: plan_save, plan_read (+ systemPrompt.context sections)\n\n    - id: dh-delegation\n      name: '@dh-multiagents/dh-delegation'\n      # registers tools: delegate, delegation_read, delegation_list\n\n    - id: dh-subagent-preset\n      name: '@dh-multiagents/dh-subagent-preset'\n      # registers SubagentProvider names: explore, researcher, coder, scribe, reviewer\n\n    - id: dh-worktree\n      name: '@dh-multiagents/dh-worktree'\n      # registers tools: worktree_create, worktree_delete\n\n# Skills: dh-philosophy is a content package (NOT a plugin); its five\n# SKILL.md files are surfaced through the skill-filesystem provider. The base\n# row (dsh-base) carries no config; this override points bundledSkillDir at\n# the skills dh-workspace mirrors into $DSH_HOME/.skills at every boot\n# (mirrorSkillsAtBoot, DESIGN.md §5). dshHomePath is the same harness-home\n# resolver the session-persistence row above uses, so the path survives a\n# non-hoisted (pnpm-nested) install where a node_modules-relative lookup\n# silently resolves to nothing.\n- id: skill-filesystem\n  name: '@deepseek-ai/dsh-skill-filesystem'\n  config:\n    bundledSkillDir: !!js dshHomePath('.skills')\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PERMISSION_MODE",
+      "kind": "env",
+      "where": "cordis.patch.yml:39"
+    },
+    {
+      "name": "npm_config_user_agent",
+      "kind": "env",
+      "where": "package.json:20"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "packages/dh-common/src/index.ts:28"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "packages/dh-workspace/src/index.ts:178"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/mirror-presets.mjs:13"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "cordis.patch.yml:23"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "json.schemastore.org",
+      "url": "https://json.schemastore.org/tsconfig",
+      "where": "tsconfig.base.json:2"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@dh-multiagents/dh-common": "workspace:*",
+      "@dh-multiagents/dh-delegation": "workspace:*",
+      "@dh-multiagents/dh-philosophy": "workspace:*",
+      "@dh-multiagents/dh-subagent-preset": "workspace:*",
+      "@dh-multiagents/dh-worktree": "workspace:*",
+      "@dh-multiagents/dh-workspace": "workspace:*"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 45,
+    "pushed_at": "2026-08-17T22:48:45Z",
+    "created_at": "2026-08-15T22:09:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "dh-multiagents",
+      "text": "Multi-agent orchestration for the DeepSeek Harness (dsh). A team of role-bound agents — plan, build, explore, researcher, coder, scribe, reviewer — with tools enforced by a runtime capability matrix."
+    },
+    {
+      "section": "Why dh-multiagents?",
+      "text": "- **Plan-first** — read-only orchestrators delegate, never write code themselves.\n- **Enforced, not suggested** — each preset's tool allow-list is applied via `tools.restrict`, so a plan agent physically can't run bash.\n- **Auditable delegation** — every `delegate` call persists an id (e.g. `daring-pearl-elk`) with a result file on disk.\n- **Zero-config install** — one command, presets + skills wired automatically."
+    },
+    {
+      "section": "Installation",
+      "text": "Requires Node ≥ 22.19 and a dsh install (`@deepseek-ai/dsh@0.1.0-rc.6`).\n\n```bash\ndsh plugin --profile <name> init\ndsh plugin --profile <name> add @dh-multiagents/bundle\n```\n\n> Presets are mirrored automatically at every boot (the plugin copies them\n> into `$DSH_HOME/.agent-presets/`), so there is no install-time step."
+    },
+    {
+      "section": "Installation",
+      "text": "> **Fresh dsh CLI (npm 11):** npm 11 blocks dependency install scripts by\n> default — the harness's own native deps (`node-pty`, `dsh-subprocess-local`,\n> `koffi`, `protobufjs`) are gated too. Run `npm install-scripts approve` for\n> them before headless mode will boot."
+    },
+    {
+      "section": "Quick Start",
+      "text": "> [!IMPORTANT]\n> **Select `Plan` or `Build` at the start of your session:**\n> In the Web or TUI interface, select either the **`plan`** or **`build`** preset in the preset picker at the beginning of your session:\n> - **`plan`**: Use when starting a task to research the codebase and write an implementation plan (delegates to `explore` and `researcher`).\n> - **`build`**: Use to execute an approved plan (delegates to `coder`, `scribe`, and `reviewer` with worktrees).\n>\n> Only `plan` and `build` act as orchestrators. The subagent presets (`explore`, `researcher`, `coder`, `scribe`, `reviewer`) are spawned automatically via `delegate` and should not be selected as top-level sessions."
+    },
+    {
+      "section": "Quick Start",
+      "text": "```bash"
+    },
+    {
+      "section": "headless mode needs the headless bundle (add once)",
+      "text": "dsh plugin --profile <name> add @deepseek-ai/dsh-headless\n\nDEEPSEEK_API_KEY=... dsh --profile <name> headless \\\n  \"Use plan_save to save a plan titled '# P' for project 'demo'. Then delegate '1+1?' to the researcher and report its answer.\"\n```\n\nFor full orchestration (delegate/build), use the **tui** or **web** profile — headless sessions are preset-less by design, so `delegate` is rejected there (only `plan`/`build` presets may delegate)."
+    },
+    {
+      "section": "What you get",
+      "text": "| Preset | Role | Notable tools |\n|---|---|---|\n| `plan` | Read-only orchestrator | plan_save/read, delegate → explore/researcher |\n| `build` | Read-only orchestrator | delegate → coder/scribe/reviewer, worktrees |\n| `explore` | Codebase explorer | read, glob, grep |\n| `researcher` | Web researcher | web_search, read |\n| `coder` | Implementer | bash, edit, write, worktrees |\n| `scribe` | Docs writer | edit, write, read |\n| `reviewer` | Read-only reviewer | read, glob, grep |"
+    },
+    {
+      "section": "What you get",
+      "text": "Plus 5 philosophy skills (`code-philosophy`, `code-review`, `plan-review`, `plan-protocol`, `frontend-philosophy`) loaded into every session."
+    },
+    {
+      "section": "Runtime behavior",
+      "text": "- Delegations persist as `$DSH_HOME/workspace/<project>/delegations/<id>.md` + `<id>.result.txt` — auditable after the fact.\n- Only `plan`/`build` may delegate; plan → explore/researcher, build → +coder/scribe/reviewer. No delegation from inside a subagent (anti-recursion).\n- Children inherit the parent's model selection."
+    },
+    {
+      "section": "Development",
+      "text": "```bash\npnpm install && pnpm -r build\n```\n\n- **Naming contract:** identifiers are locked in `DESIGN.md` — change it there first, never in code alone.\n- **Presets/skills:** add `presets/<name>/` + a `CAPABILITY_MATRIX` entry (dh-common), or `skills/<name>/SKILL.md` (dh-philosophy).\n- **Publishing:** bump versions, then `pnpm pack` and publish the tarballs — plain `npm publish` leaves `workspace:*` unresolved (broke 0.1.0)."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

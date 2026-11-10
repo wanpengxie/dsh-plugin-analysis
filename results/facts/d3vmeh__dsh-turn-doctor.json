@@ -1,0 +1,188 @@
+{
+  "repo": "d3vmeh/dsh-turn-doctor",
+  "commit": "7282f61460c7f18bff61a11f3cf2e05b879faf0e",
+  "extracted_at": "2026-11-10T16:56:58.605898+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 96983,
+    "lines_by_language": {
+      "JSON": 1158,
+      "JavaScript": 933,
+      "Markdown": 91,
+      "Other": 22,
+      "YAML": 13
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "src/index.js",
+      "test/apply.test.js",
+      "test/classifier.test.js",
+      "test/collector.test.js",
+      "test/config.test.js",
+      "test/corpus.test.js",
+      "test/doctor.test.js",
+      "test/helpers.js",
+      "test/reporter.test.js",
+      "test/stopwatch.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-turn-doctor",
+    "version": "0.1.1",
+    "description": "DeepSeek Harness plugin that explains which layer killed a failed turn and how to fix it",
+    "type": "module",
+    "main": "src/index.js",
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "license": "MIT",
+    "author": "d3vmeh",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/d3vmeh/dsh-turn-doctor.git"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "diagnostics",
+      "timeout"
+    ],
+    "engines": {
+      "node": ">=22"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "vitest": "^4.1.11"
+    },
+    "scripts": {
+      "test": "vitest run"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle layer for dsh-turn-doctor: inserts the plugin with default timeouts.\n# Configure it from your profile's cordis.patch.yml with an override row:\n#\n# - id: turn-doctor\n#   config:\n#     providers:\n#       llamacpp:\n#         streamIdleTimeoutMs: 7200000\n- insert:\n    - id: turn-doctor\n      name: dsh-turn-doctor\n      config:\n        providers: {}\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "providers.<provider>.streamIdleTimeoutMs",
+      "kind": "setting",
+      "default": "300000",
+      "where": "src/index.js:14"
+    },
+    {
+      "name": "providers.<provider>.timeoutMs",
+      "kind": "setting",
+      "default": "300000",
+      "where": "src/index.js:15"
+    },
+    {
+      "name": "providers.<provider>.undiciTimeoutMs",
+      "kind": "setting",
+      "default": "300000",
+      "where": "src/index.js:16"
+    },
+    {
+      "name": "keep",
+      "kind": "setting",
+      "default": "10",
+      "where": "src/index.js:18"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/d3vmeh/dsh-turn-doctor.git",
+      "where": "package.json:10"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "vitest": "^4.1.11"
+    }
+  },
+  "quality_raw": {
+    "test_files": 9,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-09-03T16:56:57Z",
+    "created_at": "2026-08-30T19:05:29Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-turn-doctor",
+      "text": "A diagnostic plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) that tells you why a turn failed and which timeout or setting is actually responsible."
+    },
+    {
+      "section": "Why this exists",
+      "text": "A dsh request can time out in several different places:\n\n* dsh's idle watchdog (`streamIdleTimeoutMs`)\n* the SDK request timeout (`timeoutMs`)\n* Node/undici HTTP timers\n* the model server\n* individual tool calls\n\nThe problem is that the UI usually only shows the final error message, and those messages aren't very specific."
+    },
+    {
+      "section": "Why this exists",
+      "text": "For example, `Request timed out.` might be the SDK timeout or undici's 300-second headers timeout. `terminated` might mean undici gave up waiting for the response body, or the model server died.\n\nThat makes it easy to change the wrong setting and then watch the request fail at exactly 5:00 again. This has come up in discussions like #3157 and #4518."
+    },
+    {
+      "section": "Why this exists",
+      "text": "`dsh-turn-doctor` measures each model request itself (time to first byte, longest gap between bytes, and total request time) and uses that timing to identify the most likely failure point.\n\nExample:"
+    },
+    {
+      "section": "Why this exists",
+      "text": "```text\nturn-doctor: session=session-ccc41e50 turn 1 attempt 1\n  verdict: Node's HTTP headers timer (undici) gave up waiting for the server's first response after 300.6 s.\n  evidence: no reply bytes in 300.6 s\n  fix: install dsh-fetch-timeouts to raise Node's HTTP timers; on llama.cpp this usually means the request was deferred behind a busy slot\n\nIt also catches a couple of failures that are otherwise easy to miss, including failed compactions and tool timeouts."
+    },
+    {
+      "section": "What it detects",
+      "text": "| Layer                       | Typical message                                         | Suggested fix                                                                          |\n| --------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------- |\n| dsh idle watchdog           | `pi-ai stream idle timeout after Nms`                   | Raise `streamIdleTimeoutMs`; if the request was queued, check the gate or `--parallel` |\n| Node headers timer (undici) | `Request timed out.` with no bytes at ~300 s            | Install/configure `dsh-fetch-timeouts`                                                 |\n| SDK request timer           | `Request timed out.` at around `timeoutMs`              | Raise `timeoutMs` on the route                                                         |\n| Node body timer (undici)    | `terminated` after ~300 s without data mid-response     | `dsh-fetch-timeouts`, or configure the server to send data/pings                       |\n| Server closed/crashed       | `terminated` or `Connection error.` after a short gap   | Check the model server logs         "
+    },
+    {
+      "section": "What it detects",
+      "text": "Each retry attempt is diagnosed separately. dsh already shows retry countdowns, so turn-doctor doesn't duplicate them.\n\nIf the timing isn't enough to distinguish two possible causes, it says that rather than pretending to know."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add dsh-turn-doctor\n```\n\nThat's it.\n\nVerdicts are printed in the dsh terminal. You can also run `/why` in chat to see recent verdicts for the current session, including subagents.\n\nIf you've changed your route timeouts from the defaults, add them to `~/.dsh/profiles/web/cordis.patch.yml` so turn-doctor can classify failures correctly:\n\n```yaml\n- id: turn-doctor\n  config:\n    providers:\n      llamacpp:"
+    },
+    {
+      "section": "Install",
+      "text": "If a provider isn't configured, turn-doctor assumes the standard 300-second defaults."
+    },
+    {
+      "section": "Notes",
+      "text": "* turn-doctor only diagnoses failures. It doesn't retry requests, change settings, or inject anything into the model context.\n* If the SDK timer and undici headers timer are both set to 300 seconds, a first-byte timeout can be ambiguous. In that case, turn-doctor reports undici because fixing it requires `dsh-fetch-timeouts`; dsh can't change that timer itself.\n* Verdicts live in memory for the life of the dsh process (the last few per session, for `/why`). They are not written to the session log: dsh refuses to load a log containing event types it does not know, so a plugin event there would make the session unresumable.\n* [dsh-error-lens](https://github.com/Wanbinyu/dsh-error-lens) is related, but solves a different problem: it shows recent failures in a web panel grouped by HTTP status. turn-doctor uses request timing to distinguish the different timeout layers, and also covers compactions and tool calls."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

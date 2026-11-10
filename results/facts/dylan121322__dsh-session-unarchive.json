@@ -1,0 +1,133 @@
+{
+  "repo": "dylan121322/dsh-session-unarchive",
+  "commit": "dbc61a49f5907038838dc3fdc9bff5e7e0bd0447",
+  "extracted_at": "2026-11-10T17:17:22.843139+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 28170,
+    "lines_by_language": {
+      "JSON": 22,
+      "JavaScript": 497,
+      "Markdown": 112,
+      "Other": 24,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-session-unarchive",
+    "private": true,
+    "version": "0.2.0",
+    "description": "dsh plugin: view archived sessions and restore them to their workspace in the Web GUI (pure plugin — no file patches, survives dsh upgrades).",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-session-unarchive bundle patch: register this package as a plugin entry\n# so dsh boots it on every start. The host half (index.js) registers the\n# unarchive HTTP routes; the client half (client.js, declared via dsh.client)\n# is picked up automatically by client-modules.\n- insert:\n    - id: session-unarchive\n      name: dsh-session-unarchive\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-09-03T03:06:23Z",
+    "created_at": "2026-08-15T07:14:06Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-session-unarchive",
+      "text": "Adds an archived-sessions view and a restore action to the dsh Web GUI — implemented as a **pure Cordis plugin** (host half + client half), with **zero file patches**. It survives dsh upgrades: nothing is written under the dsh install directory."
+    },
+    {
+      "section": "What it does",
+      "text": "- Adds an **Archived** button at the bottom of the sidebar (beside Settings), showing the archived-session count.\n- Clicking it opens a popover panel listing every archived session, with a **title filter** and a per-row **Restore** action.\n- Restoring a session returns it to its original workspace position; the panel and the built-in sidebar update automatically via dsh's `host/archived-sessions-changed` event.\n- Works in both zh-CN and en locales."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ncd \"$DSH_HOME/profiles/web\"          # e.g. ~/.dsh/profiles/web"
+    },
+    {
+      "section": "name: dsh-session-unarchive",
+      "text": "pnpm install"
+    },
+    {
+      "section": "restart dsh, then refresh the browser",
+      "text": "```\n\n> For a `dsh plugin add`-style install of this exact repo, `dsh plugin add github:dylan121322/dsh-session-unarchive` works as long as the bundle resolver reaches the profile's `node_modules`; the local `file:` form is the most reliable."
+    },
+    {
+      "section": "Architecture",
+      "text": "| File | Role |\n|------|------|\n| `index.js` | Host half — a Cordis plugin (`apply(ctx)` + `inject: [\"webServer\",\"workspaceRegistry\"]`) that registers two HTTP routes on `webServer`: `POST /api/session-unarchive/restore` and `GET /api/session-unarchive/list`. |\n| `client.js` | Client half — a prebuilt browser bundle (`window.__ModuleLoader__.load({ id, factory })`) that registers a `sidebar.footer.action` slot occupant (`replaceRisk: none`) for the Archived button + panel. |"
+    },
+    {
+      "section": "Architecture",
+      "text": "**How unarchive works without patching dsh.** Archiving in dsh is one-way: a session id is recorded in `~/.dsh/storages/workspace.json` (`global.archivedSessionIds`) and hidden from every view. The host half calls the workspace registry's **runtime methods** (`enqueueOperation` / `requireState` / `setState` — the same internal API the built-in `archiveSession` uses) to remove the id from the archive set and persist it. After `setState`, dsh's own workspace stream detects the change and broadcasts `host/archived-sessions-changed`, so the client store and the built-in sidebar refresh with no extra wiring."
+    },
+    {
+      "section": "Architecture",
+      "text": "**Data for the UI.** The panel uses the `sidebar.footer.action` slot's standard props: `useWorkspaces((s) => s.archivedSessionIds)` for the archived set and `useSessions((s) => s)` for titles — both already kept live by dsh's client runtime."
+    },
+    {
+      "section": "Architecture",
+      "text": "**Upgrade resilience.** Because the plugin only touches runtime service methods (and those are detected at load time), a dsh upgrade that renames or removes `enqueueOperation/requireState/setState` fails the plugin's capability check and the endpoint returns a clear 500 — it never corrupts dsh or the registry. No file under the dsh install is ever written, so `npm update @deepseek-ai/dsh` cannot overwrite this plugin."
+    },
+    {
+      "section": "Compatibility",
+      "text": "Tested on `@deepseek-ai/dsh@0.1.0-rc.8` (web profile). It does not depend on the patched-package layout of the older rc.6-era file-patch build; the runtime-API approach is version-agnostic as long as the registry exposes the three internal methods above."
+    },
+    {
+      "section": "Verify",
+      "text": "1. Archive any session: the **Archived · n** button appears at the sidebar foot.\n2. Click it: the popover lists archived sessions (title filter + per-row **Restore**).\n3. Click **Restore**: the session disappears from the panel and reappears in its workspace group; `archivedSessionIds` in `~/.dsh/storages/workspace.json` no longer contains the id.\n4. With several archived sessions the list scrolls inside the panel."
+    },
+    {
+      "section": "Notes",
+      "text": "- The repository previously shipped as a boot-time patcher (file patches over five dsh packages). That design is superseded by this pure-plugin form; the old `patches/`, `originals/`, `apply.sh`, and `cordis.patch.yml` were removed.\n- `client.js` is a prebuilt CJS bundle (dsh's client module system). Rebuild it from source with your own `tsdown`/`esbuild` step if you change it; the shipped file is the canonical artifact."
+    }
+  ],
+  "skipped": []
+}
