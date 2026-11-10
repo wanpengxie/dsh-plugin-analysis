@@ -1,0 +1,246 @@
+{
+  "repo": "TodayJin/dsh-trilogy",
+  "commit": "04d11de150570aa03841dc411a195c7ffa4c24da",
+  "extracted_at": "2026-11-10T01:33:31.572474+00:00",
+  "tree": {
+    "files": 15,
+    "bytes": 299919,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 5912,
+      "Markdown": 585,
+      "Other": 25,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitignore",
+      "DESIGN.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json",
+      "templates/DECISIONS.md",
+      "templates/PROJECT.md",
+      "templates/SESSIONS.md",
+      "templates/boot-block.md",
+      "test/client-interact.mjs",
+      "test/client-render.mjs",
+      "test/smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-trilogy",
+    "version": "0.9.9",
+    "description": "Per-project memory for DeepSeek Harness: auto-creates memory/PROJECT.md, DECISIONS.md and SESSIONS.md per project, loads them into every session, and records durable outcomes by classification.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.js",
+      "lib/client.js",
+      "templates",
+      "cordis.patch.yml",
+      "README.md",
+      "DESIGN.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "cordis",
+      "plugin",
+      "memory",
+      "continuity",
+      "trilogy"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.1.5-rc.1",
+      "@deepseek-ai/dsh-tools": ">=0.1.5-rc.1",
+      "@deepseek-ai/schemastery": "^3.18.2"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch layer: the row loads this package's main entry as a host plugin.\n# `dsh.bundle.patch` in package.json points here, so `dsh plugin add` picks the\n# entry up without any manual editing of the profile.\n- insert:\n    - id: trilogy\n      name: dsh-trilogy\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:718"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/smoke.mjs:187"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/smoke.mjs:708"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "lib/index.js:1178"
+    },
+    {
+      "host": "${req.headers.host",
+      "url": "http://${req.headers.host",
+      "where": "lib/index.js:1433"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/client-interact.mjs:257"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 32,
+    "pushed_at": "2026-10-24T07:19:09Z",
+    "created_at": "2026-09-12T11:53:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-trilogy",
+      "text": "**给 DeepSeek Harness 的项目记忆插件** —— 为每个工作区维护三份 Markdown 记忆文件：**自动创建、自动加载、自动记录**。\n\n记忆不该靠模型自觉。这些行为由 **host 插件**保证，而不是靠提示词提醒模型：\n\n| 能力 | 只靠提示词/技能 | 本插件 |\n|---|---|---|\n| 新建项目自动创建三个文件 | ❌ 要人工触发 | ✅ 会话启动时自动 scaffold |\n| 每个会话开始加载三个文件 | ❌ 靠模型记得读 | ✅ 自动注入 + 内容摘要去重 |\n| 进展分类记录进三个文件 | ⚠️ 靠模型自觉 | ✅ 收尾兜底提醒 + `memory_checkpoint` 工具 |\n\n> 「会话冷启动」与「锁定决策」是原生实现，不依赖模型自觉。\n\n---"
+    },
+    {
+      "section": "三个文件",
+      "text": "全部在 `<项目根>/memory/` 下。**项目根的判定规则**：\n\n**项目根 = 会话工作目录本身。** 插件完全不看版本控制 —— 你打开哪个目录，记忆就写在那个目录的\n`memory/` 里。工作区有没有 `.git` 都不影响判定。\n\n若你想要「一个仓库一份记忆、不要每个子包各一份」，把 `projectRootStrategy` 设成 `\"marker\"`，\n插件才会向上找 `projectRootMarkers`（默认 `.git`）。\n\n| 文件 | 职责 | 写入方式 |\n|---|---|---|\n| `PROJECT.md` | 项目**现在**是什么 | **就地编辑**，控制在一屏内 |\n| `DECISIONS.md` | 为什么是这样 | **只追加，最新在最上** |\n| `SESSIONS.md` | 发生了什么、什么时候 | **只追加，最新在最上** |\n\n`PROJECT.md` 的固定五节：`这是什么` / `怎么跑和怎么测` / `东西都在哪` / `现状` / `坑`。\n空节写 `暂无`。"
+    },
+    {
+      "section": "三个文件",
+      "text": "旧版本写过英文标题（`What this is` 等）的工作区，**下一次被会话打开时会就地改名** —— 只动标题行，正文一个字不动；工具也仍然接受旧的英文节名。"
+    },
+    {
+      "section": "什么才配占一行",
+      "text": "对每条候选只问一句：\n\n> **没有这条，未来的会话会不会浪费时间、或者重犯同一个错误？**\n\n不合格的候选是**丢弃，不是删短**。删除是受限操作：只允许「刚写入的这行直接取代了某一行」的**配对替换**，\n其他看着陈旧的内容会被要求写进报告交给你决定，而不是被静默删掉。"
+    },
+    {
+      "section": "路由表",
+      "text": "| 内容性质 | 去向 |\n|---|---|\n| 改变「项目是什么」或「怎么跑」 | `PROJECT.md`（就地编辑） |\n| 定下来的选择 + 被否决的替代 | `DECISIONS.md`（顶部追加） |\n| 本次会话做了什么、怎么验证的 | `SESSIONS.md`（顶部追加） |\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "**前置**：`pnpm` 在 PATH 上，DSH `0.1.7-rc.2`。\n\n```sh"
+    },
+    {
+      "section": "从本地目录安装（link，改代码即时生效，适合开发）",
+      "text": "dsh plugin --profile web add link:D:/path/to/dsh-trilogy"
+    },
+    {
+      "section": "重启 dsh web 生效",
+      "text": "```\n\n卸载：\n\n```sh\ndsh plugin --profile web remove dsh-trilogy\n```\n\n`dsh plugin add` 会自动写入 profile 依赖并追加到 `dsh.profile.bundles`，**无需手工编辑**。\n`memory/` 目录属于你的项目，卸载插件不会删除它。\n\n---"
+    },
+    {
+      "section": "使用",
+      "text": "1. 在任意项目里开一个会话 → `memory/` 三个文件和 `AGENTS.md` 的 boot block 被自动创建；\n2. **项目还没被描述过时**（`PROJECT.md` 五节全是 `暂无`）→ 注入一条\"去调研这个项目并填上\"的指令，\n   模型会读 README / 构建与测试配置 / 入口点 / 目录结构，**并真的跑一遍测试命令**，然后填 `PROJECT.md`。\n   填完就不再提；\n3. 之后每个会话开始 → 三个文件自动注入上下文（内容没变则不重复注入，**KV cache 友好**；\n   内容变了**不重发整块**，只在末尾追加一行「记忆已更新，需要时用 `memory_read`」——\n   改写历史中段会让 prompt cache 从那里到结尾全部失效，实测贵 93 倍）。\n   注入块开头永远带一行账目：**注入了什么、没注入什么、三个文件实际多大** —— 成熟工作区会先撞到天花板，账目不能等到丢东西才出现；\n4. **一个工作区像一个抽屉，里面往往塞着好几件事** —— 所以日志条目可以带一个**区域**标签（`memory_checkpoint` 的 `area`），注入的名额就按区域分：**每个区域保底 1 条**（聊什么都能看到一点），其余按**最近活跃度**加权（`Σ 0.5^(条目年龄/14天)`，「最近干得多」的多拿），但**单个区域不超过公平份额的 2 倍**（热门区域不能把别的挤没）。区域是**粗粒度闭集**：最多 4 个，第 5 个和留空的一起归入 `通用` —— 宁可粗，不要碎；\n5. 会话干了实事却没记录 → 插件**先欠着**，这条提醒会在**你的下一条消息那一步**随它一起出现，由**主模型**自己判断该不该记。它**不会**在当前回合末尾多逼出一条回复、也**不会自己开一个回合**（那会把「记下了」变成一回合的输出，真正的回答被折叠到中间）。"
+    },
+    {
+      "section": "初次填充（bootstrap）",
+      "text": "模板不等于项目说明。插件把\"先调研再写\"这一步也自动化了 ——\nscaffold 出空模板后，只要 `PROJECT.md` 还是空的，就注入一条 bootstrap 指令，要求：\n\n1. 读 README、构建与测试配置、入口点、目录结构；**有测试命令就真的跑一遍并记录是否通过**；\n2. 用 `memory_checkpoint` 填 `PROJECT.md` 五节 —— **每条论断都必须来自读过的文件或跑过的命令**；\n3. 补一条真实的 `SESSIONS.md` 记录和已定的 `DECISIONS.md` 条目。\n\n填完后 bootstrap 自动消失（靠内容判断，不需要额外状态）。用 `bootstrapWhenEmpty: false` 关掉。\n\n> 手写了自己标题格式的 `PROJECT.md` 不会被判定为\"空\"，因此不会被反复催。"
+    },
+    {
+      "section": "输入框状态图标",
+      "text": "对话框**左下角**（`conversation.input.left` 座位）常驻一个小指示器：\n\n```\n[图标] 正在记录 · 刚刚\n```\n\n| 阶段 | 显示 | 触发时机 |\n|---|---|---|\n| `recording` | **正在记录** | `memory_checkpoint` 正在写文件 |\n| `updating` | **正在更新** | 长时间写入进行中 |\n| `done` | **更新完毕** | 刚写完（约 8 秒后自动回落为「已同步」） |\n| `idle` | **已同步** | 无进行中的写入 |\n\n后面跟的是**最近的同步时间**（`刚刚` / `N 秒前` / `N 分钟前` / `N 小时前` / `N 天前`）。\n悬停显示完整信息：状态、最近同步、工作区路径、写入的文件。\n\n数据来自宿主时钟 —— 响应里带一个 `now` 字段，所以浏览器不需要相信自己的时钟。\n客户端每 4 秒轮询一次 `GET /trilogy/status`；宿主不可达时保留最后一次读数。"
+    },
+    {
+      "section": "输入框状态图标",
+      "text": "> 图标用 UI primitives 的 `IconLoadingOutline16` / `IconRefreshOutline14` /\n> `IconCheckOutline14` / `IconDatabaseOutline16`；若该模块缺少对应图标，\n> 自动回退成一个会随状态变色的圆点。"
+    },
+    {
+      "section": "图形设置界面",
+      "text": "| 功能 | 说明 |\n|---|---|\n| **看记录** | 左栏选工作区（可按路径筛选）；右栏顶部写明选中的是哪个、什么状态、最近什么时候动过 |\n| **看内容** | 页签按**文件的用途**命名：`现状` / `决策` / `日志` / `归档`，右侧标出对应的文件名与字节数 |\n| **清除** | 删掉该工作区的**全部**记忆文件（含 `SESSIONS-archive.md`），并撤回 `AGENTS.md` 里的 boot block。**注册表条目保留** —— 下次在该工作区开新会话会重新创建空文件 |\n| **忘记** | 只在「已清除」的行上出现：把这条工作区从面板列表里去掉。**只动注册表这一条索引，磁盘上什么都不碰** —— 之后在该工作区开一次会话，它会被重新登记。注册表只是索引，所以列表会一直记住曾经有记忆的工作区；这个按钮就是唯一的出口 |\n| **只读查看** | 四个记忆文件在面板里都**只读**：写入交给会话里的 `memory_checkpoint`（或导入记忆包），界面里唯一能编辑的是下面的指令文件 |\n| **重新读取** | 放在页签条里、紧挨 `归档` 左边 —— 它重新读取的正是这些页签选中的那个文件 |\n| **搜索筛选** | 工作区多时按路径过滤 |\n| **指令文件** | 显示 `AGENTS.md` 里 Memory 段的状态（`已写入` / `旧版本` / `未写入` / `文件不存在`）。可**重写**或**移除**这一整段 —— 只摘这一段，文件其余内容原样保留；也可以**编辑整份文件**，整份替换，Memory 段也在里面。注意：移除（或在整份编辑里删掉）这一段后，该工作区**下一个新会话会把它写回**；要永久关闭请设 `writeBootBlock: false` |\n| **陈旧提醒** | `PROJECT.md` 落后于其余记忆文件超过 `projectStaleDays`（默认 14 天）时，在面板顶部给出横幅，并说明这期间追加了多少条日志 |\n| **归档与恢复** | 归档页签逐条列出被搬走的会话记录，点「恢复这条」把它搬回活日志顶部。归档条目只读，要改就先恢复回日志，再让会话改写。归档和活日志一样**最新在最上** —— 每一轮搬出去的批次都头插到归档正文最前 |\n| **导出 / 导入** | 把一个工作区的 `memory/` 导出成单个 JSON 记忆包，在另一台机器或另一个工作区导入。导入会覆盖同名文件，且**只接受本插件导出的包**（按 `kind` 校验） |\n| **危险操作单独一行** | 「清除记忆文件」被移到最底部、与常用按钮分开，并且**要连点两次**（第二次是「确认清除」，旁边写明会删掉什么）才真的执行 |"
+    },
+    {
+      "section": "图形设置界面",
+      "text": "工作区列表在**打开设置页时**从活会话回填，所以历史项目（在新功能之前建的 `memory/`）也会出现。\n\n**写入受限**：清除、初始化、保存都是写操作，而裸 `webServer` 路由本身没有鉴权。`保存` 的\n白名单按工作区解析 —— 只允许那三个记忆文件，加上**该工作区自己注册的**指令文件，别的一律拒绝\n（面板只在指令文件上提供编辑器，但宿主这层白名单没变）。因此\n整个 `/trilogy` 前缀被**限制为本机访问**（非 loopback 返回 403）。\n\n> 插件**完全不调用模型** —— 没有向量检索、没有 embedding、没有后台蒸馏。\n> `PROJECT.md` 的初次内容由**会话里的模型**自己去读文件、跑测试命令后写入。"
+    },
+    {
+      "section": "模型侧工具",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `memory_checkpoint` | 按路由表分类写入。参数：`sessions[]`（每条可带 `area` 区域标签，见上）/ `decisions[]` / `project[]` / `notes` |\n| `memory_read` | 按需读取某个记忆文件（三个文件默认已自动加载；也含 `SESSIONS-archive.md`） |\n| `memory_search` | 零依赖 BM25 检索，连归档一起搜 —— 注入预算之外的内容也找得回来 |\n\n日期由**插件**从系统时钟盖戳，不靠模型记 —— 让模型自己读系统日期是不可靠的。"
+    },
+    {
+      "section": "收尾兜底（nudge）",
+      "text": "- **不额外调用模型** —— 复用当前会话里已在跑的主模型，token 开销只是一条短提醒\n- 只在「这轮干了实事」且「这轮没记录任何东西」时触发\n- **欠着，等你的下一条消息再一起送出** —— 不在回合末尾投递、也不会自己开一个回合；提醒会和你的下一条消息在同一个步骤里被模型看到，所以本回合的收尾仍然是你真正的回答，产物行、回合导航这类「以回合末条为准」的界面不会被那句「记下了」抢走\n- 有冷却时间与每会话次数上限，无事发生的轮次不打扰\n- 「值不值得记」由主模型判断（它上下文最全），插件只负责**保证它一定会被问一次**\n\n---"
+    },
+    {
+      "section": "配置",
+      "text": "在 profile 的 `cordis.patch.yml` 里按 id 覆盖，例如：\n\n```yaml\n- id: trilogy\n  config:\n    injectBudgetBytes: 24000\n    nudgeMaxPerSession: 5"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 默认 | 含义 |\n|---|---|---|\n| `enabled` | `true` | 总开关 |\n| `memoryDirName` | `\"memory\"` | 记忆目录名（相对项目根） |\n| `projectRootMarkers` | `[\".git\"]` | 项目根标识 |\n| `autoScaffold` | `true` | 缺文件时自动创建 |\n| `writeBootBlock` | `true` | 往 `AGENTS.md` 追加 Memory 段 |\n| `bootBlockFile` | `\"AGENTS.md\"` | boot block 写进哪个文件 |\n| `injectOnSessionStart` | `true` | 会话开始自动注入 |\n| `bootstrapWhenEmpty` | `true` | `PROJECT.md` 还空着时，注入\"去调研并填上\"的指令 |\n| `sessionsMaxEntries` | `200` | SESSIONS.md 超过这个条数才把最旧的搬到归档（阈值定得高，避免过早压缩） |\n| `projectRootStrategy` | `\"workspace\"` | `workspace` = 工作区即项目；`marker` = 向上找 `.git` |\n| `injectBudgetBytes` | `160000` | 注入总字节预算。**是「停止降级的天花板」，不是配额** —— 装得下就立刻返回。**实际生效值还会按路由窗口封顶**：`min(配置值, 窗口 × 16%)`，所以小窗口的模型不会被塞一个吃掉它上下文的块（128K 窗口 → 约 20 KB）。实际注入量 = `PROJECT.md` 全文 + `DECISIONS.md` 全文 + 最近 `sessionEntriesInjected` 条日志；**`SESSIONS.md` 全文永远不注入** |\n| `sessionEntriesInjected` | `15` | 注入最近几条 SESSIONS 条目 —— **这个键才决定有多少日志进上下文**（`SESSIONS.md` 全文永远不注入）。15 条约占 45 KB ≈ 11k token |\n| `nudgeOnTurnEnd` | `true` | 收尾智能判断兜底 |\n| `nudgeCooldownMs` | `600000` | 兜底提醒冷却（10 分钟） |\n| `nudgeMaxPerSession` | `3` | 每会话兜底提醒上限（**成功写入一次就清零**，长会话不会因为额度用完而沉默） |\n| `projectStaleDays` | `14` | `PROJECT.md` 落后其余记忆文件多少天才提示陈旧；"
+    },
+    {
+      "section": "配置",
+      "text": "**模板可改**：三个文件和 boot block 的模板在 `templates/`，运行时直接读取；目录缺失时回退到内置副本。\n\n---"
+    },
+    {
+      "section": "注入预算的取舍顺序",
+      "text": "超预算时按此顺序降级（`PROJECT.md` 是「当前状态」，优先级最高）：\n\n1. 完整注入三个文件；\n2. **日志条目逐档减半**（15 → 7 → 3 → 1），而不是一次丢掉整份日志；\n3. 连一条也装不下时，才丢掉 `SESSIONS.md` 的全部条目；\n4. 再不行只保留 `DECISIONS.md` 头部；\n5. 最后才硬截断 `PROJECT.md`（并标注 `[已截断以适配注入预算]`）。\n\n每一步都会往注入块末尾追加一句说明，写明这次省掉了什么 —— 模型知道自己看到的不是全貌。\n\n---"
+    },
+    {
+      "section": "开发与测试",
+      "text": "```sh\nnode test/smoke.mjs            # 74 项，宿主半边\nnode test/client-render.mjs    # 9 项，浏览器半边：每个组件都真的渲染一次，并检查注入的样式表\nnode test/client-interact.mjs  # 29 项，浏览器半边：点击 → 请求 → 状态 → 重渲染\n```\n\n`smoke.mjs` 用假 ctx 驱动真实的 `apply()`。两个浏览器套件用 vm 沙箱跑 bundle：\n渲染套件用一个 React 桩同步调用每个注册的组件（组件引用未声明的变量会被\n`SlotErrorBoundary` 静默吞成空白页，渲染套件把那片沉默变成一条失败测试）；\n交互套件换成一个会真正重渲染的迷你 React 运行时，配一个**会把每个请求体当 JSON 解析**\n的假宿主 —— `fetch` 会把普通对象悄悄变成 `\"[object Object]\"`，只有真解析才拦得住。"
+    },
+    {
+      "section": "开发与测试",
+      "text": "> **改了 `lib/client.js` 就必须跑两个客户端套件，并重启 `dsh web`。** 客户端 bundle 在\n> 启动时快照，base bundle 里 `hmr` 是 `disabled: true`。\n>\n> `test/` 与 `node_modules/` 不在发布文件清单里。本地跑测试需要 `node_modules/@deepseek-ai`\n> 能解析到 DSH 的包（开发时用 junction 指向 DSH 安装目录即可）。\n\n---"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **不做**：向量检索、embedding、网络请求、后台服务、修改 DSH 核心\n- 写入用 `node:fs` 直连，不走 harness 的 `ctx.fs` seam —— scaffold 必须在任何 provider 下都一致工作；\n  seam 的 resolve/write 契约是为**沙箱化的工具执行**设计的\n- 与 `AGENTS.md` **共存**：`AGENTS.md` 管「该守什么规矩」，三个文件管「项目是什么、发生了什么」\n- `DECISIONS.md` 允许模型写入，但要求在条目里写明被否决的替代与约束（没有这些就不该写）\n\n---"
+    },
+    {
+      "section": "参考",
+      "text": "- 设计说明：[`DESIGN.md`](./DESIGN.md)"
+    }
+  ],
+  "skipped": []
+}

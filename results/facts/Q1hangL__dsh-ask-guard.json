@@ -1,0 +1,154 @@
+{
+  "repo": "Q1hangL/dsh-ask-guard",
+  "commit": "a45f230320edd3b2ca20fd4f4d0ccdf9ff186114",
+  "extracted_at": "2026-11-10T00:50:59.798565+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 13239,
+    "lines_by_language": {
+      "JSON": 45,
+      "JavaScript": 182,
+      "Markdown": 150,
+      "Other": 23,
+      "YAML": 8
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/ask-timeout.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-ask-guard",
+    "version": "0.1.0",
+    "description": "Timeout guard for ask_user_question: a lost or unanswered question resolves as a structured ASK_TIMEOUT instead of hanging the turn forever",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "ask-user-question",
+      "timeout"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-tool-ask-user": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-user-questions": "^0.1.0-rc.6",
+      "@deepseek-ai/schemastery": "^3.18.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-ask-guard bundle patch: adds the ask-user timeout guard to the host plane.\n# Override `timeoutMs` in the profile's own cordis.patch.yml (or a --patch\n# overlay) to tune the budget; the plugin also asserts the value at load.\n- insert:\n    - id: ask-guard\n      name: 'dsh-ask-guard'\n      config:\n        timeoutMs: 300000\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-system-prompt": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-timeout": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-tool-ask-user": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-user-questions": "^0.1.0-rc.6",
+      "@deepseek-ai/schemastery": "^3.18.1"
+    }
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-14T18:03:23Z",
+    "created_at": "2026-08-14T18:03:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-ask-guard",
+      "text": "Timeout guard for `ask_user_question` in DeepSeek Harness: a lost or\nunanswered question resolves as a structured `ASK_TIMEOUT` instead of hanging\nthe turn forever."
+    },
+    {
+      "section": "The problem",
+      "text": "The question card is delivered to the browser over a single push on the mux\nWebSocket. When the page is backgrounded, the laptop sleeps, or the connection\ndies half-open, the frame is lost, the client never notices (no heartbeat), and\nthe tool waits forever — observed hangs of 6+ hours, recoverable only by\npressing Stop. Upstream report:\n[deepseek-ai/deepseek-harness#1554](https://github.com/deepseek-ai/deepseek-harness/discussions/1554)."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "It registers a `tools/execute` wrapper that arms a cooperative deadline on\nevery `ask_user_question` dispatch (the same mechanism as the official\n`dsh-tool-call-timeout-policy`, which only enforces budgets declared by tool\nplugins — `ask_user_question` declares none)."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "- When the deadline wins, the waiting provider's abort handler fires: the web\n  provider broadcasts `question/resolved cancelled`, so the stuck composer\n  (if any) is cleaned up.\n- The wrapper then replaces the normalized abort with a structured error result\n  (`code: ASK_TIMEOUT`, `name: AskTimeoutError`) with a model-facing message, so\n  the agent can end the turn gracefully instead of blocking.\n- All other tools pass through untouched."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "The timeout is **cooperative** (`@deepseek-ai/dsh-timeout` notifies via\n`exec.signal`; the web user-questions provider honors the signal, so it\nterminates for real)."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add dsh-ask-guard\n```\n\nRestart `dsh web`. The plugin is a `dsh.bundle` package, so its patch row is\nadded to the profile composition automatically on reconcile.\n\nInstall from a git checkout instead:\n\n```bash\ndsh plugin --profile web add github:Q1hangL/dsh-ask-guard\n```"
+    },
+    {
+      "section": "Config",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `timeoutMs` | `300000` | Deadline for one `ask_user_question` call (ms). |\n\nTune it in the profile's `cordis.patch.yml`:\n\n```yaml\n- id: ask-guard\n  config:\n    timeoutMs: 600000\n```"
+    },
+    {
+      "section": "Recovery note",
+      "text": "A page refresh (F5) re-syncs pending questions — the host replays unanswered\nquestions to a reconnecting client. With this plugin, even without a refresh\nthe turn no longer hangs forever."
+    },
+    {
+      "section": "Test",
+      "text": "```bash\nnpm install\nnode --test\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

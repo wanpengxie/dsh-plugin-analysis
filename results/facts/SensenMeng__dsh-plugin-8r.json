@@ -1,0 +1,146 @@
+{
+  "repo": "SensenMeng/dsh-plugin-8r",
+  "commit": "fe5dc10ead94156a880bffaa60d52b2c417373f6",
+  "extracted_at": "2026-11-10T01:10:41.724536+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 54798,
+    "lines_by_language": {
+      "JSON": 256,
+      "JavaScript": 419,
+      "Markdown": 97,
+      "Other": 24,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/data/8r_strict_cases.json",
+      "test/data/8r_strict_sets.json",
+      "test/judge.cjs",
+      "test/verify.cjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-8r",
+    "version": "0.1.0",
+    "description": "8R 规则本地判定插件：用户消息触发 8R 时，AI 回复自动带加粗「诶！…」前缀（纯本地 JS 判定，模型不知情）",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node test/verify.cjs"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "8r"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/SensenMeng/dsh-plugin-8r.git"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plugin-8r bundle patch: inserts the 8R prefix plugin into the profile\n# composition. Install with `dsh plugin --profile <name> add <path-or-git-url>`.\n- insert:\n    - id: plugin-8r\n      name: 'dsh-plugin-8r'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/SensenMeng/dsh-plugin-8r.git",
+      "where": "package.json:36"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-19T04:01:02Z",
+    "created_at": "2026-08-19T04:00:55Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "test/judge.cjs",
+    "test/verify.cjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-8r",
+      "text": "8R 规则本地判定插件，用于 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（DSH）。\n\n**用户说话触发了 8R 时，AI 的回复自动带上加粗前缀**：\n\n> **诶！「早八」**\n>\n> （正文从这里开始……）\n\n判定完全在本地完成，**模型全程不知情**：不打断思考、不污染上下文、不占 token，\n性能开销可忽略。"
+    },
+    {
+      "section": "安装",
+      "text": "在 DSH 的 profile 目录中执行（例如 web profile）：\n\n```bash\ndsh plugin --profile web add https://github.com/SensenMeng/dsh-plugin-8r\n```\n\n`dsh plugin add` 会安装依赖并把 bundle 写进 `dsh.profile.bundles`（可手动核对\n`~/.dsh/profiles/web/package.json`）。**重启 DSH 后生效**。\n\n验证是否生效：发一句触发句，例如 `早八`，回复开头应出现 `**诶！「早八」**`。\n诊断接口：`http://127.0.0.1:3081/8r-status`（事件计数器与 pending 状态）。"
+    },
+    {
+      "section": "工作原理",
+      "text": "```\n用户消息 ──> agent/pre-step（判定主通道，必然可达）\n                │  内嵌 JS 判定器 judge(text)（与 Python 参考实现逐字等价）\n                ▼  命中（should_e=true）→ pending 武装\nAI 回复流 ──> llm/stream（全局瀑布）\n\n关键契约（全部经运行时源码确认）："
+    },
+    {
+      "section": "工作原理",
+      "text": "- `llm/stream` 瀑布能到达会话级动态插件与 profile 插件；`GenerateOptions.sessionId`\n  与会话 id 对应（`Agent.id === session.id` 是运行时不变量）。\n- 判定主通道是 `agent/pre-step`（该瀑布必然可达）；`agent/inbox/inserted` 与\n  `session/event 'user/message'` 作备份通道。注意 `session/event` 的 `user/message`\n  在 `agent/pre-step` **之后**才触发（消息入日志时发射），因此 `setPending` 不得\n  重置 `armed`，否则会把 pre-step 刚武装的状态清掉（v5 修复）。\n- 适配器在流末尾补发的 `block-end` 携带其内部攒的**原始完整文本**（不含注入前缀），\n  `BlockAssembler` 以它为最终内容（first-close-wins）——因此注入点必须同时覆盖\n  `text-delta` 与 `block-end`，且 block-end 分支不能被 `!prefixed` 外层守卫跳过，\n  否则前缀会「闪现后消失」（v6 修复）。\n- 多步回合（带工具调用）时：第一个带正文的流注入；一次命中后 `applied=true`，\n  同回合后续流不再重复注入；失败重试会重新注入。\n- 只对主会话生效：子代理消息（`source=model`）不判定，子代理流的 sessionId 天然排除。"
+    },
+    {
+      "section": "8R 规则（v2.3 简述）",
+      "text": "核心是**末位辈分单位裁决**：输入合法且去尾部标点非空时，从整句话最右端向左扫描，\n忽略普通字符与标点，遇到的最后一个辈分单位（王位 λ）就是唯一裁决单位。\n\n- 高辈分 **D**（die / ba / fu / ye 四系及数字 8）→ **诶**\n- 低辈分 **E**（er / zi / sun 三系及 2 / r / R）→ **不诶**\n- 复合低辈分 token **几把 / 曼巴** 与 E 同级 → 不诶\n- 没有辈分单位 → 不诶\n\n完整规则与 Python 参考判定器见 [8Rworld](https://github.com/SensenMeng/8Rworld)。"
+    },
+    {
+      "section": "验证",
+      "text": "```bash\nnpm test        # 或 node test/verify.js\n```\n\n- 86 条黄金用例全部通过（用例随仓库分发于 `test/data/8r_strict_cases.json`）\n- 内嵌判定器与此前 29564 条模糊用例的 Python 参考输出逐字段一致"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\nindex.js             插件本体（判定逻辑内嵌，无第三方依赖）\ncordis.patch.yml     bundle 挂载补丁（`dsh plugin add` 自动应用）\ntest/judge.cjs        独立判定器副本（CommonJS，供验证）\ntest/verify.js       黄金用例验证脚本"
+    },
+    {
+      "section": "已知边界",
+      "text": "- 前缀会写进会话记录（流注入），刷新后仍在；是机械文本，模型与它无关。\n- 会话压缩（compaction）改写历史后可能匹配不到原文 → 不注入（罕见）。\n- 判定对象是用户消息全文（多文本块拼接）；附件/图片块不参与。\n- 动态定义（`cordis_define`）不跨进程重启；profile 安装则随 DSH 常驻。"
+    },
+    {
+      "section": "许可",
+      "text": "[MIT](./LICENSE) © SensenMeng"
+    }
+  ],
+  "skipped": []
+}
