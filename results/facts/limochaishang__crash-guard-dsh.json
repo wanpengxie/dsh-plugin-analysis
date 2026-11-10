@@ -1,0 +1,227 @@
+{
+  "repo": "limochaishang/crash-guard-dsh",
+  "commit": "51a771c1f5a2bf0259757154a6a3d4a4a0329cb4",
+  "extracted_at": "2026-11-10T19:05:35.594701+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 60546,
+    "lines_by_language": {
+      "JSON": 13,
+      "JavaScript": 1051,
+      "Markdown": 270,
+      "Other": 194,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "bin/dsh.cmd",
+      "bin/pnpm.cmd",
+      "cordis.patch.yml",
+      "index.mjs",
+      "install.ps1",
+      "package.json",
+      "test/simulate.mjs",
+      "test/verify-install.mjs",
+      "uninstall.ps1",
+      "watchdog.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "crash-guard-dsh",
+    "version": "1.0.0",
+    "description": "崩溃保护：某个插件导致 DeepSeek Harness 启动崩溃时，下次启动自动禁用该插件，避免反复崩溃。",
+    "type": "module",
+    "main": "index.mjs",
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# crash-guard-dsh bundle patch: inserts the crash guard as the FIRST entry so\n# it applies before any user plugin, letting it track boot progress and\n# auto-disable a plugin that crashed the previous startup.\n- insert:\n    - id: crash-guard\n      name: crash-guard-dsh"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.mjs:69"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.mjs:70"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.mjs:72"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.mjs:73"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.mjs:265"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-09-07T09:36:14Z",
+    "created_at": "2026-09-07T09:30:36Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.mjs"
+  ],
+  "readme": [
+    {
+      "section": "crash-guard-dsh",
+      "text": "> DeepSeek Harness / PawWork 插件崩溃保护插件：当某个插件导致启动崩溃或卡死时，自动隔离该插件，避免反复崩溃（crash loop）。\n\n[](https://opensource.org/licenses/MIT)\n[](#)\n[](#)"
+    },
+    {
+      "section": "功能特性",
+      "text": "- **崩溃自动隔离**：加载期崩溃后，下次启动自动禁用导致崩溃的插件\n- **卡死自动恢复**：独立看门狗进程检测完全卡死（hang），自动杀进程、禁用可疑插件、重启\n- **三层自愈架构**：同进程监控 → 独立看门狗 → 手动恢复，层层兜底\n- **零配置**：安装即用，无需额外配置\n- **安全护栏**：不误伤正常插件、不隔离自身和核心包、防重入误判"
+    },
+    {
+      "section": "三层自愈架构",
+      "text": "```\n┌─────────────────────────────────────────────────┐\n│  第一层：同进程监控（index.mjs）                  │\n│  - 每 50ms 跟踪正在加载的插件                      │\n│  - 15 秒 hang 超时检测                            │"
+    },
+    {
+      "section": "崩溃检测流程",
+      "text": "类似 Chrome 扩展的安全启动（safe mode）：\n\n| 阶段 | 动作 |\n|------|------|\n| 每次启动 | crash-guard 作为 profile bundles **第一位**加载，最先执行 `apply` |\n| 启动中 | 每 50ms 跟踪正在加载的插件，同步写盘记录 `lastLoading` |\n| 加载完成 | 状态标记 `ready`；正常退出标记 `clean` |\n| **检测崩溃** | 下次启动发现上次状态停在 `booting`（没走完也没正常退出）→ 判定加载期崩溃 |\n| **自动隔离** | 把崩溃前正在加载的那个插件写进用户层 `cordis.patch.yml`（`disabled: true`），不再加载 |"
+    },
+    {
+      "section": "独立看门狗机制",
+      "text": "同进程监控有一个根本局限：如果插件导致**完全阻塞事件循环**（如无限循环、同步阻塞），crash-guard 自身的 50ms 轮询也会被冻住，无法检测卡死。\n\n独立看门狗解决这个问题：\n\n1. crash-guard 启动时用 `child_process.spawn` 启动 `watchdog.mjs`（`detached: true`）\n2. 主进程每 2 秒写心跳文件 `heartbeat.json`\n3. 看门狗每 5 秒检查心跳文件的修改时间\n4. 超过 30 秒没更新 → 判定完全卡死\n5. 自动执行：禁用可疑插件 → 杀掉所有 PawWork 进程（排除自己）→ 重启 PawWork"
+    },
+    {
+      "section": "安全护栏（不误伤）",
+      "text": "- **只处理加载期崩溃/卡死**：运行期崩溃/强杀只记日志不自动禁用——无法可靠归因\n- **永不隔离 guard 自身和核心包**：`id: crash-guard` 和 `@deepseek-ai/*` 永远不会被禁用\n- **每次只禁一个**：每次崩溃只禁用最后一个被跟踪的插件，其余保持原样\n- **防重入锁**：模块顶层全局锁，live-reload 热重载时清理上一个实例，避免残留积累\n- **新鲜度校验**：60 秒状态文件新鲜度窗口 + 进程标记双重保险，防 live-reload 误判\n- **看门狗锁文件**：防止多个看门狗实例同时运行"
+    },
+    {
+      "section": "文件布局",
+      "text": "```\ncrash-guard-dsh/\n├── index.mjs          # 插件主体（崩溃检测 + hang 检测 + 看门狗启动 + 心跳写入）\n├── watchdog.mjs       # 独立看门狗进程（detached，监控心跳、自动恢复）\n├── cordis.patch.yml   # bundle 补丁：以第一位插入 crash-guard 条目\n\n运行时状态目录（默认）：\n\n- 状态：`$DSH_HOME/crash-guard/state.json`\n- 心跳：`$DSH_HOME/crash-guard/heartbeat.json`\n- 看门狗锁：`$DSH_HOME/crash-guard/watchdog.lock`\n- 看门狗日志：`$DSH_HOME/crash-guard/watchdog.log`\n- 隔离日志：`$DSH_HOME/crash-guard/quarantine.log`（JSONL，含每次禁用记录）\n\n> `$DSH_HOME` 默认为 `~/.pawwork/dsh`，可用 `DSH_HOME` 环境变量覆盖。"
+    },
+    {
+      "section": "前置要求",
+      "text": "- DeepSeek Harness / PawWork 已安装\n- Node.js 18+（DSH 自带运行时即可）"
+    },
+    {
+      "section": "Windows（PowerShell）",
+      "text": "```powershell"
+    },
+    {
+      "section": "克隆或下载本仓库",
+      "text": "git clone https://github.com/limochaishang/crash-guard-dsh.git\ncd crash-guard-dsh"
+    },
+    {
+      "section": "运行安装脚本",
+      "text": ".\\install.ps1\n```\n\n脚本会：\n\n1. 复制 `crash-guard-dsh` 到目标 profile 的 `node_modules/`\n2. 把 `crash-guard-dsh` 插入目标 profile `package.json` 的 `dsh.profile.bundles` **第一位**\n3. 加入 `dependencies`\n4. 备份被修改的文件为 `.crash-guard.bak`\n\n安装后**重启 DSH / PawWork** 生效。"
+    },
+    {
+      "section": "手动安装",
+      "text": "1. 复制本目录到 profile 的 `node_modules/crash-guard-dsh/`\n2. 在 profile 的 `package.json` 中，把 `crash-guard-dsh` 加入 `dsh.profile.bundles` **第一位**\n3. 加入 `dependencies`\n4. 重启 DSH / PawWork"
+    },
+    {
+      "section": "卸载",
+      "text": "```powershell\n.\\uninstall.ps1\n```\n\n从 bundles / dependencies 移除并删除 node_modules 里的包目录；`state.json`、`heartbeat.json`、`quarantine.log` 会保留（可选删除）。"
+    },
+    {
+      "section": "使用方法",
+      "text": "安装后无需任何操作，crash-guard 自动工作：\n\n- **正常启动**：crash-guard 跟踪加载过程，记录状态，启动完成后进入 ready 状态\n- **插件崩溃**：下次启动自动隔离导致崩溃的插件，PawWork 可以正常启动\n- **插件卡死**：看门狗检测到无心跳，自动杀进程、禁用可疑插件、重启\n- **查看日志**：检查 `$DSH_HOME/crash-guard/quarantine.log` 查看被禁用的插件记录"
+    },
+    {
+      "section": "手动恢复被禁用的插件",
+      "text": "崩溃/卡死后 crash-guard 会在用户层 `cordis.patch.yml`（如 `profiles/web/cordis.patch.yml`）追加类似内容：\n\n```yaml"
+    },
+    {
+      "section": "如需恢复，删除下面两行即可。",
+      "text": "- id: yyy\n  disabled: true\n```\n\n删除这两行并重启即可重新启用该插件。"
+    },
+    {
+      "section": "配置选项",
+      "text": "crash-guard 零配置即可使用。如需自定义，可通过 patch 配置以下参数：\n\n| 参数 | 默认值 | 说明 |\n|------|--------|------|\n| `stateDir` | `$DSH_HOME/crash-guard` | 状态文件目录 |\n| `patchFile` | profile 下的 `cordis.patch.yml` | 禁用插件写入的补丁文件 |\n| `freshWindowMs` | 60000 | 状态文件新鲜度窗口（毫秒） |\n| `readyTimeoutMs` | 30000 | 启动超时时间（毫秒） |\n| `hangTimeoutMs` | 15000 | 单插件加载 hang 超时（毫秒） |\n| `heartbeatIntervalMs` | 2000 | 心跳写入间隔（毫秒） |\n| `watchdogCheckIntervalMs` | 5000 | 看门狗检查间隔（毫秒） |\n| `watchdogTimeoutMs` | 30000 | 看门狗心跳超时（毫秒） |"
+    },
+    {
+      "section": "模拟崩溃测试",
+      "text": "```powershell\nnode test/simulate.mjs\n```\n\n测试覆盖：\n- 正常启动 → clean 状态\n- 崩溃残留 → 下次自动禁用\n- 幂等不重复禁用"
+    },
+    {
+      "section": "真实环境测试",
+      "text": "1. 安装一个会导致崩溃的插件（如已知不兼容的插件）\n2. 重启 PawWork，观察是否崩溃\n3. 再次重启，观察 crash-guard 是否自动隔离该插件\n4. 检查 `quarantine.log` 确认禁用记录"
+    },
+    {
+      "section": "看门狗测试",
+      "text": "1. 安装一个会导致完全卡死的插件（如无限循环、同步阻塞）\n2. 重启 PawWork，观察是否卡死\n3. 等待约 30 秒，观察看门狗是否自动杀进程、禁用插件、重启\n4. 检查 `watchdog.log` 确认看门狗动作记录"
+    },
+    {
+      "section": "Q: crash-guard 会影响正常插件的加载吗？",
+      "text": "A: 不会。crash-guard 只在启动时跟踪加载过程，不修改其他插件的代码或配置。正常启动后，crash-guard 进入 ready 状态，不再干预。"
+    },
+    {
+      "section": "Q: 为什么是\"下次启动\"才生效？",
+      "text": "A: 崩溃发生在加载过程中，guard 自身来不及写禁用指令；只有等下一次启动、由 guard 首先执行检测并落盘禁用，才能阻止坏插件再次加载。这与 Chrome 安全启动的设计一致。"
+    },
+    {
+      "section": "Q: 看门狗会不会误杀正常进程？",
+      "text": "A: 概率极低。看门狗只在心跳超过 30 秒没更新时才触发，而正常运行时主进程每 2 秒写一次心跳。只有完全卡死（事件循环被阻塞）才会导致心跳停止。"
+    },
+    {
+      "section": "Q: 两个进程（主进程 + 看门狗）会不会都崩溃？",
+      "text": "A: 理论上可能但概率极低。看门狗代码极简（约 100 行），不加载任何插件，不依赖 DSH 运行时，作为 detached 独立进程运行。主要风险来自系统级故障（如操作系统崩溃、断电）。"
+    },
+    {
+      "section": "Q: 归因不准确怎么办？",
+      "text": "A: 当前归因是启发式的——记录崩溃前正在加载的插件。在某些情况下（如插件 A 阻塞导致 loader 认为插件 B 还在加载），可能归因到错误的插件。这是已知局限，已列为未来工作方向。如果发现误禁，手动删除 `cordis.patch.yml` 中的禁用条目即可恢复。"
+    },
+    {
+      "section": "Q: crash-guard 自身崩溃了怎么办？",
+      "text": "A: crash-guard 有防重入锁和异常处理。如果 crash-guard 自身崩溃，它不会写入崩溃状态（因为还没完成 booting→ready 的转换），下次启动会重新尝试。crash-guard 代码经过严格测试，自身崩溃概率极低。"
+    },
+    {
+      "section": "局限性",
+      "text": "- 崩溃发生在 crash-guard 加载**之前**（如 base bundle 自身问题）时无法归因——设计边界，与主流 safe-mode 一致\n- 只针对「加载期崩溃/卡死」；运行期崩溃不自动禁用\n- 归因是启发式的，极端情况下可能不准确\n- 本插件不参与 UI，无配置项（如需自定义可通过 patch 配置）"
+    },
+    {
+      "section": "未来工作",
+      "text": "- [ ] 精确归因：通过插件加载时序分析更准确地定位崩溃元凶\n- [ ] 三层监控架构：同进程 → 独立看门狗 → 操作系统级服务监控\n- [ ] 崩溃报告：收集崩溃堆栈，生成更详细的诊断报告\n- [ ] 插件兼容性评分：基于历史崩溃数据评估插件稳定性\n- [ ] 批量测试工具：自动化测试插件市场中插件的兼容性"
+    },
+    {
+      "section": "贡献",
+      "text": "欢迎提交 Issue 和 Pull Request！\n\n1. Fork 本仓库\n2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)\n3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)\n4. 推送到分支 (`git push origin feature/AmazingFeature`)\n5. 开启 Pull Request"
+    },
+    {
+      "section": "许可证",
+      "text": "本项目采用 [MIT 许可证](LICENSE) 开源。"
+    },
+    {
+      "section": "致谢",
+      "text": "- DeepSeek Harness 团队提供的插件架构\n- Chrome 扩展安全启动机制的设计灵感\n- 所有贡献者和用户的反馈\n\n---\n\n**如果你觉得这个插件有用，欢迎给个 Star ⭐**"
+    }
+  ],
+  "skipped": []
+}

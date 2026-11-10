@@ -1,0 +1,140 @@
+{
+  "repo": "lsxblh/dsh-todo-dock",
+  "commit": "b8b279d8d7675aee8be7d02e48ff7a736503c988",
+  "extracted_at": "2026-11-10T19:21:44.678985+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 268784,
+    "lines_by_language": {
+      "JSON": 23,
+      "JavaScript": 340,
+      "Markdown": 255,
+      "Other": 25,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "AGENTS.md",
+      "LICENSE",
+      "README.md",
+      "assets/screenshot.png",
+      "cordis.patch.yml",
+      "docs/agents/domain.md",
+      "docs/agents/issue-tracker.md",
+      "docs/agents/triage-labels.md",
+      "lib/index.js",
+      "package.json",
+      "tests/keep-across-turns.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-todo-dock",
+    "version": "0.3.2",
+    "description": "DeepSeek Harness Web GUI 插件：把 todo 面板停靠到右上角并跨轮常驻（CSS 注入 + 机制级重放，可热调）。原名 dsh-ui-todo-fix（v0.2.x 及更早）。",
+    "author": "lsxblh",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/lsxblh/dsh-todo-dock.git"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "todo",
+      "css",
+      "ui",
+      "dsh-plugin"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-todo-dock\n      name: dsh-todo-dock\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/lsxblh/dsh-todo-dock.git",
+      "where": "package.json:9"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 14,
+    "pushed_at": "2026-08-18T03:06:04Z",
+    "created_at": "2026-08-16T03:33:20Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-todo-dock",
+      "text": "DeepSeek Harness Web GUI 插件：把 todo 面板从聊天输入框上方**停靠到界面右上角**（`position: fixed`），不占文档流、不挡输入，并让任务列表**跨轮常驻**不消失。纯 CSS 注入 + host 侧机制级重放，不碰任何组件逻辑。\n\n> **改名说明**：v0.3.0 起由 `dsh-ui-todo-fix` 更名为 `dsh-todo-dock`（v0.2.x 及更早均为原名）。"
+    },
+    {
+      "section": "特性",
+      "text": "- 零依赖、纯 Host 插件，核心代码 ~50 行\n- 走官方注入钩子 `webServer.tapIndex`（与内置主题插件同构）\n- CSS 内容由 `config.css` 驱动：**热调样式无需重启**（改 profile 的 `cordis.patch.yml` → HMR 生效 → 刷新页面）\n- **跨轮常驻**：todo 列表在发消息（新 turn）后不消失——机制级实现，不依赖任何 agent 行为习惯（v0.2 新增）\n- **跨重启恢复**：关闭重开 dsh 后，重开同一会话时从 DSH 已持久化的会话日志恢复最后一条 todo 列表（v0.3.2 新增；零新增存储，懒扫描 + 增量游标）\n- **健壮性加固**（v0.2.1 / v0.3.2）：非数组 junk 不重放 / Map 随会话销毁清理 / 重放错误隔离 / 日志无 todo 时安全回退，附 13 用例回归测试\n- 内置默认样式，装完即有默认效果\n- 标准 `dsh.bundle` 形态：`dsh plugin add` 自动登记进 profile bundles"
+    },
+    {
+      "section": "跨轮常驻",
+      "text": "dsh 原生机制：`turn/start`（用户发消息开启新一轮）会把 todos 投影清空，todo 面板随之整体消失，直到 agent 本轮重新调用 `todo_write`。\n\n本插件在 host 侧监听 `session/event`：按会话记录最近一次 `todo/write` 的列表，`turn/start` 后立即重放一条 `todo/write`——任务列表跨轮保持可见，任何 agent 都无需额外动作。\n\n- 默认开启；`config.keepAcrossTurns: false` 可关闭（恢复原生行为）\n- agent 主动清空（写入空列表）后不会复活\n- 每次 turn 会在会话事件流多追加一条 `todo/write`（合法事件，仅用于恢复）\n- **重启恢复**：进程重启后游标为空，首个 `turn/start` 会从该会话的持久化事件日志倒序懒扫描最后一条 `todo/write`（仅此一次，之后增量 O(1)）；日志里没有 todo（新会话 / 已被 compaction 剪掉）则安全回退为不重放"
+    },
+    {
+      "section": "机制",
+      "text": "todo 面板（`section[data-testid=\"todo-panel\"]`）由内置组件挂载在 `conversation.input.dock` 槽（`order: 0`），因此默认出现在输入框上方。本插件向 index.html 注入一段 `<style>`，把该面板 `position: fixed` 钉到右上角并加阴影/圆角/滚动。\n\n> 注意：TodoPanel 是条件渲染的——当前会话没有 todo 任务时不显示面板，这是产品行为，与插件无关。"
+    },
+    {
+      "section": "安装",
+      "text": "依赖 DSH Web profile（`dsh plugin` 基于 pnpm，需本机有 pnpm）：\n\n```bash"
+    },
+    {
+      "section": "方式一：GitHub 发布包（推荐）",
+      "text": "dsh plugin --profile web add https://github.com/lsxblh/dsh-todo-dock/archive/refs/tags/v0.3.2.tar.gz"
+    },
+    {
+      "section": "方式二：本地源码目录",
+      "text": "dsh plugin --profile web add file:/path/to/dsh-todo-dock\n```\n\n安装后**重启一次 dsh web 服务**（bundle 层在启动时组合）。装完面板即出现在右上角。"
+    },
+    {
+      "section": "配置与热调",
+      "text": "注入的 CSS 默认取包内 `DEFAULT_CSS`；想覆盖/调整，在 `~/.dsh/profiles/web/cordis.patch.yml` 追加：\n\n```yaml\n- id: dsh-todo-dock\n  name: dsh-todo-dock\n  config:\n    css: |\n\n改完无需重启：HMR 自动应用，刷新页面即生效。\n\n默认 CSS（`lib/index.js` 的 `DEFAULT_CSS`）：\n\n```css\nbody section[data-testid=\"todo-panel\"]{\n  position: fixed; top: 104px; right: 16px;\n  width: 320px; max-width: min(320px, calc(100vw - 32px));\n  z-index: 9999; margin: 0;"
+    },
+    {
+      "section": "卸载 / 回滚",
+      "text": "```bash\ndsh plugin --profile web remove dsh-todo-dock\n```\n\n并删除 `cordis.patch.yml` 中相关 override 行（如有）。"
+    },
+    {
+      "section": "开发",
+      "text": "```text\ndsh-todo-dock/\n├── package.json        # dsh.bundle.patch 声明（官方 bundle 形态）\n├── cordis.patch.yml    # 向 profile 注入一行插件条目\n├── lib/index.js        # 插件本体：inject webServer → tapIndex 注入 config.css + 跨轮重放\n\n修改后本地验证：`dsh plugin --profile web add file:<本目录>` → 重启 dsh web → 刷新页面。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

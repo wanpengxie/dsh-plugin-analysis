@@ -1,0 +1,448 @@
+{
+  "repo": "itchenshi/dsh-gateway-models",
+  "commit": "e3bb5f29968163783607d90846e4cd976900c67f",
+  "extracted_at": "2026-11-10T18:20:09.686257+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 108868,
+    "lines_by_language": {
+      "JSON": 70,
+      "JavaScript": 1844,
+      "Markdown": 150,
+      "Other": 33,
+      "YAML": 161
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "screenshots.json",
+      "tests/test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-gateway-models",
+    "version": "0.2.6",
+    "description": "DeepSeek Harness plugin for gateway routes (OpenCode Go and Command Code): declares the route wire protocol and endpoint (so the API address never has to be typed), detects/reads each route's model catalog and puts the DeepSeek V4.1 models at the front of the OpenCode Go list while completing the Command Code list from its public catalog, supplies the route baseURL and the DeepSeek reasoning compat a catalog-unknown model needs, and attaches a stable per-conversation x-opencode-session header (fixes 400 MissingSessionID) without leaking the internal session id.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "scripts": {
+      "test": "node tests/test.mjs",
+      "prepublishOnly": "npm test"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "dsh-plugin",
+      "cordis",
+      "opencode",
+      "opencode-go",
+      "opencode-zen",
+      "commandcode",
+      "command-code",
+      "llm-pi-ai",
+      "x-opencode-session",
+      "missing-session-id",
+      "session-affinity",
+      "prompt-cache"
+    ],
+    "license": "MIT",
+    "author": {
+      "name": "itchenshi",
+      "url": "https://github.com/itchenshi"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/itchenshi/dsh-gateway-models.git"
+    },
+    "homepage": "https://github.com/itchenshi/dsh-gateway-models#readme",
+    "bugs": {
+      "url": "https://github.com/itchenshi/dsh-gateway-models/issues"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "dsh": {
+      "compatibility": {
+        "node": ">=20",
+        "dsh": ">=0.2.0-rc.2",
+        "dshReleases": {
+          "0.2.0-rc.2": "compatible"
+        }
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-gateway-models layer.\n#\n# One plugin for the OpenCode / OpenCode Go routes, three jobs:\n#\n#   1. Declare the wire protocol for the `opencode-go` route (the `llm-pi-ai`\n#      patch below). The engine resolves each route's models with\n#        api = route.api ?? catalogModel.api ?? sharedCatalogApi(route)\n#      opencode-go's catalog spans anthropic-messages / openai-completions /\n#      openai-responses, so the shared fallback is undefined; catalog-unknown\n#      models (e.g. deepseek-v4.1-flash, which upstream already serves) then\n#      need the route-level `api`. OpenCode Go speaks OpenAI-compatible\n#      protocol at https://opencode.ai/zen/go/v1, so `openai-completions` is\n#      correct (the same choice the user settings document makes for\n#      bailian-tpp).\n#\n#   2. Mount this plugin's host half (lib/index.js), which DETECTS the route's\n#      models from the engine's own catalog and puts the DeepSeek V4.1 models at\n#      the FRONT of the route's models list — seeding that list from the detected\n#      catalog when the user configured none, and declaring the route's baseURL\n#      when a listed model is not in the catalog (the only way the engine will\n#      serve one).\n#\n#      Why that baseURL matters: a catalog-unknown model resolves its endpoint as\n#        baseURL = route.baseURL ?? catalogModel.baseUrl ?? providerBaseUrl\n#      and the installed opencode-go catalog provider has no provider-level\n#      baseUrl, so such a model has nowhere to point — the engine then refuses\n#      both to serve it (\"needs a baseURL\") and to STORE it, which is why the\n#      model never reached the picker. The runtime half supplies the endpoint only\n#      when the route has none, so a route the user pointed elsewhere keeps its own.\n#\n#      Those entries also carry the DeepSeek wire quirks the catalog would\n#      otherwise supply (`compat` + `reasoningEfforts`): pi-ai auto-detects them\n#      from the provider name or host, and the OpenCode Go relay is neither, so\n#      without them the replayed assistant turns omit `reasoning_content` and\n#      DeepSeek answers 400 \"The reasoning_content in the thinking mode must be\n#      passed back to the API\" on every multi-turn call.\n#\n#   3. Attach `x-opencode-session` to model requests routed to an OpenCode /\n#      OpenCode Go provider profile (see the row config below).\n#\n# Row config (all optional):\n#   providers: [string]  provider route keys to attach the header to.\n#                        Defaults to the pi-ai catalog ids ['opencode', 'opencode-go'].\n#                        Add your own route key when the OpenCode endpoint is\n#                        served under a custom provider name.\n#   mode: 'uuid' | 'session-id'   header value derivation.\n#                        'uuid' (secure DEFAULT): a random opaque UUID per DSH\n#                        session — the internal DSH session id is NEVER sent to\n#                        third parties.\n#                        'session-id': opt-in only; reuses the DSH session id\n#                        (the same identity the official adapter sends as\n#                        x-deepseek-harness-session-id). Only choose this if you\n#                        fully trust the OpenCode upstream with your internal id.\n#   debug: true|false    log every streamed call that receives the header.\n#   debugFile: path      optional: append one JSON line per streamed call to the\n#                        given file. ONLY a path under $DSH_HOME/logs or the OS\n#                        temp dir is honored; anything else is ignored. The\n#                        logged \"session\" field is a one-way SHA-256 hash (redacted),\n#                        never the raw DSH session id.\n#\n# Row 2 (`commandcode`) provisions Command Code, plus the endpoint. Command Code\n# is not in the installed pi-ai catalog, so nothing about its models can be\n# inferred: every entry needs a route-level `api` AND a route-level `baseURL` (the\n# engine resolves an entry as `route.baseURL ?? catalogModel.baseUrl ??\n# providerBaseUrl`, and the model page probes with `draft.baseURL ??\n# fallback.baseURL`). Declaring both here is what removes the \"type the API\n# address\" step — the address is part of the base layer, and the user only adds a\n# key.\n#\n# The name is deliberately NOT plan-specific: ONE route serves every Command Code\n# plan (Go / GOAT / Pro / MAX). The plan lives on the account behind the API key,\n# so `commandcode` is the honest name and switching plans is a key swap, never a\n# config change. (`commandcode-goat` was the old default; a route still carrying\n# that name keeps working, because the runtime matches by endpoint.)\n#\n# This row is a convenience, NOT the mechanism. The route id is only a label, so\n# a user who named theirs `commandcode-pro`, `commandcode-max` or anything else is\n# still served: the runtime half recognises those by their ENDPOINT and writes the\n# `api` + `baseURL` such a route cannot resolve on its own. Naming further routes\n# here is unnecessary — use the row's `commandcodeProviders` only when a route's\n# endpoint is nowhere to be found (e.g. it is proxied through another host).\n#\n# The `llm-pi-ai` entry below patches an existing engine row (mounted by\n# @deepseek-ai/dsh-base) rather than inserting a new one — cordis merges patch\n# layers by row id, so this layer supplies the missing `api` without touching\n# the rest. It is deliberately NOT under `insert`, so the settings window's\n# enable/disable writes (which target the inserted row ids only) can never\n# disable the protocol declaration and break catalog-unknown models.\n- insert:\n    - id: opencode-go\n      name: dsh-gateway-models\n      config:\n        providers:\n          - opencode\n          - opencode-go\n        mode: uuid\n        debug: false\n- id: llm-pi-ai\n  config:\n    providers:\n      opencode-go:\n        api: openai-completions\n      commandcode:\n        api: openai-completions\n        baseURL: https://api.commandcode.ai/provider/v1"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:97"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:103"
+    },
+    {
+      "name": "TMPDIR",
+      "kind": "env",
+      "where": "lib/index.js:131"
+    },
+    {
+      "name": "TMP",
+      "kind": "env",
+      "where": "lib/index.js:131"
+    },
+    {
+      "name": "TEMP",
+      "kind": "env",
+      "where": "lib/index.js:131"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:39"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "cordis.patch.yml:12"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "cordis.patch.yml:105"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "lib/index.js:415"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1/models",
+      "where": "lib/index.js:766"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "lib/index.js:798"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/itchenshi",
+      "where": "package.json:42"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/itchenshi/dsh-gateway-models.git",
+      "where": "package.json:46"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/itchenshi/dsh-gateway-models#readme",
+      "where": "package.json:48"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/itchenshi/dsh-gateway-models/issues",
+      "where": "package.json:50"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/v1",
+      "where": "tests/test.mjs:96"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/v1",
+      "where": "tests/test.mjs:100"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/v1",
+      "where": "tests/test.mjs:107"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "tests/test.mjs:235"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "tests/test.mjs:243"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "tests/test.mjs:249"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "tests/test.mjs:266"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "tests/test.mjs:281"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "tests/test.mjs:330"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1/models",
+      "where": "tests/test.mjs:352"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:380"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:417"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:423"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:430"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1/models",
+      "where": "tests/test.mjs:449"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:476"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai",
+      "where": "tests/test.mjs:477"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://API.CommandCode.AI/provider/v1",
+      "where": "tests/test.mjs:478"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:480"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:481"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "tests/test.mjs:483"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "tests/test.mjs:484"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:494"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:495"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:496"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:497"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "tests/test.mjs:498"
+    },
+    {
+      "host": "api.commandcode.ai",
+      "url": "https://api.commandcode.ai/provider/v1",
+      "where": "tests/test.mjs:532"
+    },
+    {
+      "host": "x",
+      "url": "https://x/v1",
+      "where": "tests/test.mjs:569"
+    },
+    {
+      "host": "x",
+      "url": "https://x/v1",
+      "where": "tests/test.mjs:577"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 19,
+    "pushed_at": "2026-10-05T10:14:32Z",
+    "created_at": "2026-09-21T11:45:49Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-gateway-models",
+      "text": "只有宿主半边的插件：给网关路由（OpenCode Go + Command Code）补齐引擎拿不到的协议、地址与模型清单，并给发往 OpenCode 的请求附加会话头。"
+    },
+    {
+      "section": "它做什么",
+      "text": "- 给 `opencode-go` 路由声明 wire 协议（`api: openai-completions`），目录外的模型不再报 `needs an api`。\n- 启动时读引擎自己的模型目录，把 DeepSeek V4.1 模型补进 `opencode-go` 清单并排到**第一位**（你自己配过的条目原样保留、顺序不变）。\n- 路由没有 `baseURL` 时补上 `https://opencode.ai/zen/go/v1`；你已经配过的地址一个字节都不动。\n- 给 `commandcode` 路由声明 `api` 与 `baseURL`（你只填密钥，不用填地址），并从它**公开的目录接口**补齐模型清单（只增不改、幂等）。\n- 给发往 OpenCode / OpenCode Go 路由的请求附加 `x-opencode-session`：默认每个会话一个随机 UUID，**绝不把内部会话 ID 发给第三方**（`mode: 'session-id'` 是显式可选）。"
+    },
+    {
+      "section": "安装",
+      "text": "- **用 DSH Ready GUI（推荐）**：插件随 GUI 内置，打开 GUI → 设置窗口 →「第三方插件」勾选**网关路由**，装完按提示**重启引擎**（它没有页面半边）。\n- **其它 DSH 宿主**（`dsh web` / CLI）—— 任选一条：\n\n```sh\n  # 推荐：直接从 GitHub 装\n  dsh plugin --profile web add github:itchenshi/dsh-gateway-models\n\n# 备选：从本仓库 Release 的 tarball 装\n\n两条命令装到的都是这个仓库的完整内容（含 `cordis.patch.yml`），装完不需要额外配置。\n\n> 本包还不在 npm 上（`registry.npmjs.org` 查无此包），只能用上面两种方式装。"
+    },
+    {
+      "section": "使用",
+      "text": "没有页面半边，也不需要打开任何界面 —— 重启引擎后它在装配层改配置。你可以在模型选择器里确认：**第一项是 `DeepSeek V4.1 Flash`**，`llm-pi-ai.providers.opencode-go` 里它排在第一位。\n\nCommand Code 那一半只对**你自己配置过的路由**（用户层里有它，比如填过密钥）动手，并按**接口地址**（`api.commandcode.ai`）识别路由 —— 路由名叫 `commandcode`、`commandcode-goat` 还是别的都行。"
+    },
+    {
+      "section": "配置",
+      "text": "`cordis.patch.yml` 里 `id: opencode-go` 这一行的 `config`，全部可选：\n\n| 键 | 默认 | 说明 |\n|---|---|---|\n| `providers` | `[opencode, opencode-go]` | 附加会话头的路由名；自定义路由名时加进来 |\n| `commandcodeProviders` | 无 | 额外的 Command Code 路由 id；仅当某条路由的地址在配置里看不到时才要填 |\n| `mode` | `uuid` | `uuid` = 每会话随机 UUID（安全默认）；`session-id` = 发送内部会话 ID |\n| `debug` | `false` | `true` 时记录每个收到会话头的流式调用 |\n| `debugFile` | 无 | 追加 JSON 日志的路径；**仅** `$DSH_HOME/logs` 或系统临时目录下的路径生效，超过 8 MiB 停止追加 |"
+    },
+    {
+      "section": "兼容性",
+      "text": "- 需要 **DSH >= 0.2.0-rc.2**（引擎 0.2.0 更换了设置服务 API，0.1.x 上无法写入路由配置）。\n- Node >= 20。\n- 依赖的是引擎装配层、`settings` 服务与 `llm` 事件的公开契约；契约变了引擎会在启动时显式报插件加载失败，而不是静默失效。"
+    },
+    {
+      "section": "常见问题",
+      "text": "**V4.1 模型没出现？** 看宿主启动日志有没有 `[gateway-models] active for providers [opencode, opencode-go] with mode uuid (debug=off)`。如果打的是 `llm.discoverModels() is unavailable` 或 `could not detect the \"opencode-go\" model catalog`，说明引擎目录读不到 —— 这时插件**跳过**自动补模型，而不是猜。\n\n**Command Code 的模型列表没补齐？** 正常会打 `[gateway-models] \"commandcode\": N model(s) from the provider catalog (list X -> Y)`；如果打的是 `could not read the Command Code model catalog (...)`，说明那次公开目录请求失败了，插件保持原列表不动。"
+    },
+    {
+      "section": "常见问题",
+      "text": "**它会读我的 API key 吗？** 不会。插件只写路由配置，密钥始终由引擎按 `apiKeyEnv` 自己解析。唯一出站请求是 `GET https://api.commandcode.ai/provider/v1/models`（公开、不需要 key、请求里不发 Authorization）。它也不注册任何本机 HTTP 路由。\n\n**写配置失败会留下半份吗？** 不会。写入走 `settings` 服务，会重跑引擎的严格校验，校验不过整笔拒绝（日志给出原因）。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\nnode --check lib/index.js\nnpm test        # node tests/test.mjs：本地行为测试（不联网、不需要引擎）\n```\n\n新增 V4.1 型号只需往 `V4_1_MODELS` 里加一条；`planRouteUpdate()` / `withV41ModelsFirst()` / `withV41Defaults()` / `isV41()` 分别负责「写什么」「怎么置顶」「怎么补字段」「是不是 v4.1」，都有单测。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-gateway-models",
+      "text": "A host-only plugin: it supplies the protocol, endpoint and model lists the engine cannot derive for gateway routes (OpenCode Go + Command Code), and attaches a session header to OpenCode requests."
+    },
+    {
+      "section": "What it does",
+      "text": "- Declares the `opencode-go` route's wire protocol (`api: openai-completions`), so a catalog-unknown model no longer fails with `needs an api`.\n- At startup it reads the engine's own model catalog, adds the DeepSeek V4.1 models to the `opencode-go` list and puts them **first** (entries you configured are kept, in their own order).\n- Supplies `https://opencode.ai/zen/go/v1` when the route has no `baseURL`; an address you set yourself is left untouched.\n- Declares `api` + `baseURL` for the `commandcode` route (you supply only the key), and completes its model list from the provider's **public catalog** (add-only, idempotent).\n- Attaches `x-opencode-session` to requests routed to OpenCode / OpenCode Go: a random UUID per session by default, and the **internal session ID is never sent to a third party** (`mode: 'session-id'` is an explicit opt-in)."
+    },
+    {
+      "section": "Install",
+      "text": "- **Using DSH Ready GUI (recommended)**: the plugin ships inside the GUI. Open the GUI → Settings → \"Third-party plugins\" and tick **Gateway routes**, then **restart the engine** as prompted (it has no page half).\n- **Any other DSH host** (`dsh web`, the CLI) — either route works:\n\n```sh\n  # Recommended: install straight from GitHub\n  dsh plugin --profile web add github:itchenshi/dsh-gateway-models\n\n# Fallback: install this release's tarball"
+    },
+    {
+      "section": "Install",
+      "text": "Both land the full repository contents (including `cordis.patch.yml`); no extra configuration is needed afterwards.\n\n> Not on npm yet (`registry.npmjs.org` has no such package), so use one of the two routes above."
+    },
+    {
+      "section": "Usage",
+      "text": "There is no page half and no window to open — after the engine restarts the plugin edits the route configuration for you. Confirm it worked in the session model selector: the **first** entry is `DeepSeek V4.1 Flash`, and it comes first under `llm-pi-ai.providers.opencode-go`."
+    },
+    {
+      "section": "Usage",
+      "text": "The Command Code half touches settings only for routes **you configured yourself** (a user-layer entry, e.g. after adding the key), and recognises them by **endpoint** (`api.commandcode.ai`) — the route may be named `commandcode`, `commandcode-goat` or anything else."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `providers` | `[opencode, opencode-go]` | route names to attach the session header to; add your own route key |\n| `commandcodeProviders` | none | extra Command Code route ids; only needed when a route's endpoint is not visible in the config |\n| `mode` | `uuid` | `uuid` = random UUID per session (safe default); `session-id` = send the internal session ID |\n| `debug` | `false` | `true` logs every streaming call that received the header |\n| `debugFile` | none | path to append JSON lines to; **only** paths under `$DSH_HOME/logs` or the system temp dir take effect, and appending stops at 8 MiB |"
+    },
+    {
+      "section": "Compatibility",
+      "text": "- Requires **DSH >= 0.2.0-rc.2** (engine 0.2.0 replaced the settings service API; on 0.1.x the route configuration cannot be written).\n- Node >= 20.\n- It depends on the public contracts of the assembly layer, the `settings` service and the `llm` events; if those change, the engine explicitly reports a plugin load failure instead of failing silently."
+    },
+    {
+      "section": "FAQ",
+      "text": "**The V4.1 model is missing?** Look for `[gateway-models] active for providers [opencode, opencode-go] with mode uuid (debug=off)` in the host log. If you instead see `llm.discoverModels() is unavailable` or `could not detect the \"opencode-go\" model catalog`, the engine's catalog is unreadable — the plugin then **skips** the auto-add rather than guessing."
+    },
+    {
+      "section": "FAQ",
+      "text": "**The Command Code model list was not completed?** The normal line is `[gateway-models] \"commandcode\": N model(s) from the provider catalog (list X -> Y)`; if you see `could not read the Command Code model catalog (...)`, that public catalog request failed and the existing list is left alone."
+    },
+    {
+      "section": "FAQ",
+      "text": "**Does it read my API key?** No. It only writes route configuration; the engine resolves the key itself from `apiKeyEnv`. Its single outbound request is `GET https://api.commandcode.ai/provider/v1/models` — public, no key required, no `Authorization` header. It registers no local HTTP route either.\n\n**Can a failed write leave half a config?** No. Writes go through the `settings` service and re-run the engine's strict validation; a rejected write is refused as a whole, with the reason logged."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode --check lib/index.js\nnpm test        # node tests/test.mjs: local behaviour tests (no network, no engine)\n```\n\nAdd an entry to `V4_1_MODELS` to support another V4.1 model. `planRouteUpdate()` / `withV41ModelsFirst()` / `withV41Defaults()` / `isV41()` decide \"what to write\", \"how to hoist\", \"how to fill gaps\" and \"is it a v4.1 model\", and all four are unit-tested."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

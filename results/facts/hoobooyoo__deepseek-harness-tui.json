@@ -1,0 +1,215 @@
+{
+  "repo": "hoobooyoo/deepseek-harness-tui",
+  "commit": "004ae2d62d48a0ed3061130bd81421ba88ed8666",
+  "extracted_at": "2026-11-10T18:03:33.396838+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 281422,
+    "lines_by_language": {
+      "JSON": 43,
+      "JavaScript": 6090,
+      "Markdown": 433,
+      "Other": 5,
+      "Python": 113,
+      "YAML": 158
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "bin/deepcode.js",
+      "cleanup-provider.mjs",
+      "cordis.patch.yml",
+      "docs/tui-api-reference.md",
+      "lib/app.js",
+      "lib/controller.js",
+      "lib/index.js",
+      "lib/logo.js",
+      "lib/session-search.js",
+      "lib/terminal-input.js",
+      "lib/theme.js",
+      "lib/x11-clipboard-read.py",
+      "lib/x11-clipboard.py",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "deepcode",
+    "version": "0.2.0",
+    "description": "deepcode — an opencode-style full-screen terminal UI for DeepSeek Harness, packaged as a dsh bundle plugin.",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "bin": {
+      "deepcode": "bin/deepcode.js"
+    },
+    "files": [
+      "lib",
+      "bin",
+      "cordis.patch.yml"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "tui",
+      "terminal",
+      "opencode"
+    ],
+    "dependencies": {
+      "@deepseek-ai/dsh": "0.1.5-rc.2",
+      "blessed": "^0.1.81",
+      "ink": "^5.2.1",
+      "react": "^18.3.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# deepcode bundle patch: an opencode-style terminal UI over dsh-base.\n#\n# It mirrors the web surface's host/agent split: dsh-base stays the shared\n# host plane (sandbox, approval, persistence, model route, the tool/skill\n# registries), while the conversation plane — persona, tools, skills, plan\n# mode, goals, subagents — moves behind the agent preset, exactly like the web\n# app. The only thing this bundle adds on top is the terminal runner.\n\n# ── the terminal runner (the one deepcode-owned row) ────────────────────────\n\n- insert:\n    # dsh-base omits this row; the web surface adds it, and the TUI needs it\n    # for the same preset-driven conversation. The roster scans the plugin's\n    # SHIPPED root by default (`includeShippedRoot`), which is the current\n    # `standard` / `ptc` / `minimal` / `cordis` set — no copied profile root,\n    # which would shadow them with a stale snapshot. Settings\n    # `agent-presets.default` overrides `default` here.\n    - id: agent-presets\n      name: '@deepseek-ai/dsh-agent-presets'\n      config:\n        default: ptc\n\n    - id: tui-runner\n      name: 'deepcode'\n      inject: [agents, agentDefaultModel, sessions]\n\n# Full-text session search is opt-in (dsh-base keeps the sqlite index closed\n# with `openAt: never`). The /session picker search uses the host service\n# (`sessionQuery.searchSessions` — the same SQLite FTS the web calls), so this\n# layer enables it lazily on a durable index: the first search builds it, later\n# searches reuse it.\n- id: session-query-sqlite\n  config:\n    path: !!js dshHomePath('profiles/deepcode/session-search.sqlite')\n    openAt: first-search\n\n# Whole-log session statistics (LLM/tool wall times, TTFT, counts) as a\n# projection unit — the same plugin the web composes for its stats.\n- insert:\n    - id: session-stats\n      name: '@deepseek-ai/dsh-session-stats'\n\n    # Host-owned opt-in the preset delegation tools sample: without it the\n    # `tool-subagent` row in the standard/ptc presets refuses to mount\n    # (\"requires @deepseek-ai/dsh-tool-subagent/model-selection-settings in the\n    # Host scope\"). The web surface composes the same host row.\n    - id: subagent-model-selection-settings\n      name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'\n\n    # Workspace registry: the durable grouping the web sidebar reads (a\n    # Workspace owns an ordered `sessionIds` account). dsh-base omits this row\n    # — only dsh-web-app composes it — so without it every session this TUI\n    # creates is missing from the web sidebar's workspace grouping and shows\n    # up under \"未分组\" instead. Sharing one registry is what makes the two\n    # surfaces agree: the web's RPC controller and the API session controller\n    # both read this same account.\n    - id: workspace\n      name: '@deepseek-ai/dsh-workspace'\n\n    # Cordis runtime services (dynamicCordisRunner, cordisInspect). The\n    # `创造模式` (cordis) preset carries a `tool-cordis` row that injects both,\n    # so without this host row that preset cannot mount at all and every\n    # session recorded on it fails to load (\"preset \\\"cordis\\\" failed to\n    # mount ... waiting for dynamicCordisRunner, cordisInspect\"). Like the\n    # workspace row, this is another capability dsh-base omits and only\n    # dsh-web-app composes.\n    - id: cordis-host-runner\n      name: '@deepseek-ai/dsh-cordis-host-runner'\n\n# ── shared surface values (same as web / headless) ──────────────────────────\n\n- id: system-prompt\n  config:\n    persona: >-\n      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.\n\n- id: hmr\n  disabled: true\n\n- id: tools\n  config:\n    mode: !!js process.env.DSH_TOOLS_MODE\n\n# ── the agent plane moves behind agent presets (mirrors dsh-web-app) ────────\n#\n# dsh-base keeps these process-wide; the web surface disables them so each\n# session's preset owns them. The TUI is also preset-driven, so it disables the\n# same rows. (Code Mode's `code-runtime` stays a host-plane capability, as in\n# web, and needs no disable here.)\n\n- id: agent-instructions\n  disabled: true\n\n- id: tool-bash\n  disabled: true\n\n- id: tool-pwsh\n  disabled: true\n\n- id: tool-fs\n  disabled: true\n\n# tool-fs-search stays enabled — the TUI needs the glob tool for the @ file\n# mention picker (dsh-at-file will be added when network is available).\n\n- id: tool-str-replace-editor\n  disabled: true\n\n- id: tool-jobs\n  disabled: true\n\n- id: tool-todo\n  disabled: true\n\n- id: tool-web\n  disabled: true\n\n- id: skill-filesystem\n  disabled: true\n\n- id: tool-skill\n  disabled: true\n\n- id: tool-goal\n  disabled: true\n\n- id: plan-mode\n  disabled: true\n\n- id: compaction-basic\n  disabled: true\n\n- id: command-compact\n  disabled: true\n\n- id: tool-result-pruner\n  disabled: true\n\n- id: tool-subagent\n  disabled: true\n\n- id: tool-subagent-control\n  disabled: true\n\n- id: tool-subagent-list-agents\n  disabled: true\n\n- id: tool-subagent-fork\n  disabled: true\n\n- id: tool-workflow\n  disabled: true\n\n- id: workflow-worker-thread\n  disabled: true\n\n- id: tool-ralph\n  disabled: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "bin/deepcode.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "bin/deepcode.js:40"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "bin/deepcode.js:40"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "cleanup-provider.mjs:7"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "cleanup-provider.mjs:7"
+    },
+    {
+      "name": "DSH_TOOLS_MODE",
+      "kind": "env",
+      "where": "cordis.patch.yml:82"
+    },
+    {
+      "name": "DISPLAY",
+      "kind": "env",
+      "where": "lib/app.js:150"
+    },
+    {
+      "name": "DEEPCODE_SMOKE",
+      "kind": "env",
+      "where": "lib/index.js:78"
+    },
+    {
+      "name": "FORCE_COLOR",
+      "kind": "env",
+      "where": "lib/theme.js:52"
+    },
+    {
+      "name": "NO_COLOR",
+      "kind": "env",
+      "where": "lib/theme.js:54"
+    },
+    {
+      "name": "COLORTERM",
+      "kind": "env",
+      "where": "lib/theme.js:59"
+    },
+    {
+      "name": "TERM",
+      "kind": "env",
+      "where": "lib/theme.js:60"
+    },
+    {
+      "name": "TERM_PROGRAM",
+      "kind": "env",
+      "where": "lib/theme.js:63"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh": "0.1.5-rc.2",
+      "blessed": "^0.1.81",
+      "ink": "^5.2.1",
+      "react": "^18.3.1"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 13,
+    "pushed_at": "2026-09-23T00:21:47Z",
+    "created_at": "2026-08-17T00:55:10Z"
+  },
+  "runtime_files": [
+    "bin/deepcode.js",
+    "cordis.patch.yml",
+    "lib/app.js",
+    "lib/controller.js",
+    "lib/index.js",
+    "lib/logo.js",
+    "lib/session-search.js",
+    "lib/terminal-input.js",
+    "lib/theme.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "deepcode",
+      "text": "`deepcode` 是一个 opencode 风格的 **DeepSeek Harness 全屏终端 UI**，按 harness 的 bundle 插件规范打包（镜像 `dsh-headless`）。输入 `deepcode` 即可在终端里与 harness 的 Agent 交互——流式对话、思考过程、工具调用卡片、审批与提问应答，不需要打开浏览器。\n\n它复用 harness 的 `dsh` 启动器与 `dsh-base` 核心（Agent / Session / 全部工具 / 审批 / 模型 / preset），本仓库只提供终端 UI 这一层。"
+    },
+    {
+      "section": "安装",
+      "text": "需要 Node.js ≥ 20 与 npm。\n\n```bash\ncd /home/fongye/code/deepcode\nnpm install      # 安装 @deepseek-ai/dsh + ink + react\nnpm link         # 注册 `deepcode` 命令\n```\n\n之后任意目录直接运行：\n\n```bash\ndeepcode\n```\n\n首次运行会自动写入 `$DSH_HOME/profiles/deepcode/` 的 profile 清单并把本 bundle 链接进解析路径，无需额外 `dsh plugin` 步骤。"
+    },
+    {
+      "section": "用法",
+      "text": "- 直接输入文字 + 回车发送；\n- `Ctrl+C`：Agent 运行中 → 打断本轮；空闲 → 退出；\n- `/quit` 或 `/exit` 退出。"
+    },
+    {
+      "section": "结构（bundle 插件）",
+      "text": "```text\ncordis.patch.yml   bundle patch：插入 agent-presets + tui-runner 两行\nlib/index.js       runner 插件（导出 { name, inject, apply }）\nlib/controller.js  Agent 包装：创建/发送/打断 + 会话事件折叠成转录（流式）\nlib/app.js         Ink UI：头部 / 消息列表 / 工具卡片 / 输入 / 审批与提问\n\n`package.json` 通过 `\"dsh\": { \"bundle\": { \"patch\": \"./cordis.patch.yml\" } }` 声明这是 bundle；`dsh --profile deepcode` 会组合 `@deepseek-ai/dsh-base` + 本 bundle。"
+    },
+    {
+      "section": "无头冒烟测试",
+      "text": "没有 TTY 时可用环境变量验证「bundle 解析 + Agent 创建 + preset 挂载 + 模型读取」整条链路：\n\n```bash\nDEEPCODE_SMOKE=1 deepcode"
+    },
+    {
+      "section": "deepcode: ready (deepseek-official/deepseek-v4-pro)",
+      "text": "```"
+    },
+    {
+      "section": "尚未实现 / 待办",
+      "text": "- 模型切换 UI（`ctx.llm.listModels` + `agentDefaultModel.saveSelection`）\n- 历史会话列表与恢复（`sessionQuery.listSessions` + `agents.resume`）\n- 计划模式 / 目标 / 子代理等面板的可视化\n- 交互式审批与提问的端到端验证（需真实 TTY）\n\nAPI 契约参考见 [`docs/tui-api-reference.md`](docs/tui-api-reference.md)（依据 `@deepseek-ai/*` 0.1.0-rc.6 源码整理）。"
+    }
+  ],
+  "skipped": []
+}

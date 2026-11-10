@@ -1,0 +1,197 @@
+{
+  "repo": "huimingli666/dsh-workspace-auto-sort",
+  "commit": "246817f8f19fa7044d634b07a9cce7b385394b1c",
+  "extracted_at": "2026-11-10T18:10:02.237267+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 60283,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 1262,
+      "Markdown": 150,
+      "Other": 24,
+      "YAML": 31
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "src/index.js",
+      "src/routes.js",
+      "src/sort.js",
+      "test/index.test.js",
+      "test/sort.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "@dsh-plugins/dsh-workspace-auto-sort",
+    "version": "0.1.0",
+    "description": "Keeps the outermost dsh workspace groups ordered by their newest child-session activity: every committed session event refreshes the owning workspace's recency rank and the plugin rewrites the durable registry order through the official insertBefore API (the same path a manual drag uses), so the sidebar reshuffles live and the order survives restarts. Host-only: the GUI already reacts to the workspace-changed broadcast, no browser bundle needed.",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": {
+        "default": "./src/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "test",
+      "README.md"
+    ],
+    "engines": {
+      "node": "^22.0.0 || >=24.0.0"
+    },
+    "scripts": {
+      "test": "node --test test/*.test.js"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/huimingli666/dsh-workspace-auto-sort.git"
+    },
+    "homepage": "https://github.com/huimingli666/dsh-workspace-auto-sort#readme",
+    "bugs": {
+      "url": "https://github.com/huimingli666/dsh-workspace-auto-sort/issues"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-workspace-auto-sort bundle patch: inserts the host-only plugin row into\n# the web profile roster. The plugin's main entry (exports \".\") runs in the\n# host process: it watches committed session events and rewrites the durable\n# workspace registry order through the official insertBefore API. There is no\n# browser half — the web GUI already re-renders the workspace list from the\n# host/workspace-changed broadcast that every registry order write emits.\n# Activate with `dsh plugin --profile web add link:<this package>` (which also\n# appends the package to the profile's dsh.profile.bundles list), then restart\n# dsh web.\n- insert:\n    - id: workspace-auto-sort\n      name: '@dsh-plugins/dsh-workspace-auto-sort'\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/huimingli666/dsh-workspace-auto-sort.git",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/huimingli666/dsh-workspace-auto-sort#readme",
+      "where": "package.json:34"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/huimingli666/dsh-workspace-auto-sort/issues",
+      "where": "package.json:36"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-09-29T02:46:45Z",
+    "created_at": "2026-09-29T02:02:42Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/index.js",
+    "src/routes.js",
+    "src/sort.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-workspace-auto-sort",
+      "text": "[](https://github.com/huimingli666/dsh-workspace-auto-sort/actions/workflows/ci.yml)\n\n为 DSH（DeepSeek Harness）Web / 桌面端新增**工作区自动排序**：会话收到新的用户消息时，\n自动把侧边栏的各个工作区按「子会话最后一条用户消息时间」降序持久化重排——刚被使用的\n工作区上浮到最前，且顺序在重启后保留。\n\nDSH 原生的「排序方式：手动 / 最近更新」只作用于**工作区组内会话**；工作区分组本身的顺序\n是 registry 的持久化有序列表，只能手动拖拽调整。本插件补上缺失的\"按活动自动排列工作区\"。"
+    },
+    {
+      "section": "功能",
+      "text": "- 监听宿主 `session/event`，按 `activity` 口径刷新「会话 → 最后活动时间」\n  （默认 `'prompt'`：只认用户自己发的消息，与 GUI「刚刚 / N 分钟」标签同口径）；\n- 排除 `origin === 'subagent'` 的隐藏子代理会话（与 GUI 可见口径一致，后台代理的写入\n  不会扰动可见排序）；\n- 活动事件经防抖窗口（默认 750ms）合并后触发一次重排计算；\n- 通过官方 `workspaceRegistry.insertBefore(id, beforeId)` 应用重排——与**手动拖拽同一条\n  持久化通道**，每步都落盘并自动触发 `host/workspace-changed` 广播，GUI 立即刷新，\n  无需任何浏览器端注入（本插件没有浏览器半面）。"
+    },
+    {
+      "section": "排序规则",
+      "text": "1. **参与范围**：默认 `scope: 'all'`——侧边栏里看到的所有工作区一起按 recency 排序\n   （嵌套显示只是 GUI 的可选视图选项，路径嵌套的工作区同样参与）。可配置\n   `scope: 'outermost'` 只排没有已注册路径祖先的顶层工作区：此时嵌套子工作区**从不**\n   出现在任何移动里（既不作为移动源也不作为锚点），其在父目录内的相对顺序保持不变；\n2. **rank**：每个工作区取其挂账会话的最新活动时间；未知活动逐级兜底\n   （活动时间 → 磁盘会话头 `createdAt` → 0），启动时从 `sessionPersistence.list()`\n   播种兜底表（服务未就绪时延迟 15s 重试一次）；\n3. **活动口径**：默认 `activity: 'prompt'`——只有**用户自己发的消息**刷新 recency，\n   与 GUI 里「刚刚 / N 分钟」标签完全同口径，长跑的后台任务/工具活动不会霸占第一名；\n   可配置 `activity: 'any'` 恢复\"任一提交事件\"口径（运行中会话会把所属工作区持续顶在最前）；\n4. **稳定排序**：rank 相同保持现有相对顺序；空工作区（无挂账会话）稳定沉底；\n5. **最少移动**：在参与子序列上模拟固定前缀推进，生成 ≤ m-1 条 `insertBefore` 移动；\n   已有序时为零移动、零写入。"
+    },
+    {
+      "section": "安全模型 / 容错（fail-degrade）",
+      "text": "- 启动时**不**主动重排——只响应真实活动变化，重启不会突然跳序；\n- 会话监听以 `{ global: true }` 注册：不受 cordis scope 过滤影响，agent 作用域内的\n  会话事件一样计入活动（随后按 origin 排除隐藏的 subagent 会话）；\n- `workspaceRegistry` 不存在（异常 profile）→ 记一次警告后休眠，不拖垮宿主；\n- 移动失败（如工作区被并发删除）→ 记警告中止本轮，下次活动从最新快照重新规划；\n- 单向数据流：插件不写任何会话数据，重排只触发 workspace 广播，不会反向产生会话事件，\n  无反馈回路；\n- 配置非法（`debounceMs` 非非负整数）在加载时直接抛错（fail loud）。"
+    },
+    {
+      "section": "诊断与手动触发（loopback-only）",
+      "text": "诊断路由与宿主其它插件走同一套信任篱笆（loopback socket + loopback Host + 同源标记），\n仅接受本机回环请求：\n\n```bash"
+    },
+    {
+      "section": "流水线状态：监听计数、各工作区 rank、最近一轮计划/错误",
+      "text": "#（每轮重排同时落盘到 ~/.dsh/logs/dsh-workspace-auto-sort.log，含 rank 快照与移动）"
+    },
+    {
+      "section": "<端口> 换成你的 dsh web 实例实际监听端口",
+      "text": "curl http://127.0.0.1:<端口>/api/dsh-workspace-auto-sort/status"
+    },
+    {
+      "section": "立即强制执行一轮重排（不等会话活动），返回应用的移动",
+      "text": "curl -X POST http://127.0.0.1:<端口>/api/dsh-workspace-auto-sort/reorder\n```\n\n`status` 响应不携带任何会话内容，只有 id、计数、时间戳与工作区元数据。"
+    },
+    {
+      "section": "安装与激活",
+      "text": "先把仓库克隆到本地任意目录（以下用 `<克隆目录>` 指代）：\n\n```bash\ngit clone https://github.com/huimingli666/dsh-workspace-auto-sort.git\ncd dsh-workspace-auto-sort\n```"
+    },
+    {
+      "section": "dsh web（CLI profile，`dsh plugin` 可直接管理）",
+      "text": "```bash\ndsh plugin --profile web add link:\"$PWD\""
+    },
+    {
+      "section": "验证已装载",
+      "text": "dsh --profile web --dump-config | grep workspace-auto-sort"
+    },
+    {
+      "section": "重启 dsh web 生效，浏览器刷新页面",
+      "text": "```"
+    },
+    {
+      "section": "DSH desktop 桌面端（`desktop` profile 由 Electron 应用独占管理，手动复刻 link 安装）",
+      "text": "`dsh plugin --profile desktop add` 会被拒绝（`profile \"desktop\" is managed exclusively\nby the Electron application`），按既有 link 插件的装法手动做三步：\n\n```bash"
+    },
+    {
+      "section": "1. 在 desktop profile 的 node_modules 下创建指向克隆目录的符号链接",
+      "text": "mkdir -p ~/.dsh/profiles/desktop/node_modules/@dsh-plugins\nln -s <克隆目录>/dsh-workspace-auto-sort \\\n      ~/.dsh/profiles/desktop/node_modules/@dsh-plugins/dsh-workspace-auto-sort"
+    },
+    {
+      "section": "重启桌面端生效",
+      "text": "```\n\n激活后：在任意工作区里跑一个会话 → 该工作区（的最外层分组）自动上浮；重启 dsh 后顺序保留；\n手动拖拽的顺序会在下一次会话活动时被重新排序（这正是\"自动排列\"语义），关闭插件即恢复纯手动。"
+    },
+    {
+      "section": "配置",
+      "text": "组合入口可覆盖的合成条目配置（`defaultConfig`）：\n\n| 键 | 默认 | 说明 |\n|---|---|---|\n| `enabled` | `true` | 总开关；`false` 时不挂监听、不读持久化、不重排 |\n| `debounceMs` | `750` | 活动事件合并窗口（非负整数） |\n| `activity` | `'prompt'` | recency 口径：`'prompt'` 只认用户自己发的消息（与 GUI 标签一致）；`'any'` 认所有提交事件 |\n| `scope` | `'all'` | 参与排序的范围：`'all'` 全部工作区；`'outermost'` 仅路径树最外层（嵌套项钉住不动） |\n| `logFile` | `''` | 重排轮日志路径；`''` = `~/.dsh/logs/dsh-workspace-auto-sort.log`；`'off'` 关闭 |\n| `announceToAgent` | `false` | 是否向模型通告本插件（纯 UI 行为，默认不占上下文） |"
+    },
+    {
+      "section": "目录布局",
+      "text": "```\npackage.json       宿主单面插件包（无 ./client 导出）\ncordis.patch.yml   web profile 插入行\nsrc/index.js       宿主接线（监听、防抖、播种、串行重排链、fail-degrade）\nsrc/sort.js        纯逻辑：路径归一/祖先判定/rank/目标顺序/移动序列（可单测）"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnode --test test/*.test.js    # 32 个用例：排序逻辑 + 接线冒烟\n```"
+    },
+    {
+      "section": "限制",
+      "text": "- 手动拖拽与自动排序互斥：活动一到，拖拽结果会被重排（`enabled: false` 可关闭）；\n- 冷会话（宿主进程内从未运行过）的排序精度取决于磁盘会话头的 `createdAt`；\n  其真实\"最后活动时间\"要等它下次运行产生事件后才会被感知；\n- 「最后运行时间」口径是**任一提交事件**（比 GUI「最近更新」的\"最后一条用户消息\"口径更广：\n  工具结果、后台 job 写入都会刷新时间）；\n- 版本兼容：插件不锁宿主版本，但在 dsh 0.1.x 上开发与测试；依赖宿主具备\n  `workspaceRegistry.insertBefore`（DOM 式插入语义，移动规划算法建立在其上）、\n  `sessionPersistence.list()`、`session/event` 的 `{ global: true }` 监听、\n  `webServer.register`（`kind: 'exact'` 路由）与 package.json 的 `dsh.bundle.patch`\n  装载机制（官方 web profile 默认具备）。更早版本未验证；缺失关键服务时插件\n  降级休眠而非报错。Node 运行时要求见 `engines`（`^22.0.0 || >=24.0.0`）。"
+    }
+  ],
+  "skipped": []
+}

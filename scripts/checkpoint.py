@@ -6,8 +6,8 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 DB=ROOT/"work"/"supervisor.sqlite3"
 LOCK=ROOT/"work"/"checkpoint.lock"
 KINDS=("facts","cards","generated","units")
-def run(*args,check=True):
- return subprocess.run(args,cwd=ROOT,text=True,capture_output=True,check=check)
+def run(*args,check=True,input=None):
+ return subprocess.run(args,cwd=ROOT,text=True,capture_output=True,check=check,input=input)
 LOCK.parent.mkdir(parents=True,exist_ok=True)
 lock_file=LOCK.open("a+")
 try:
@@ -29,7 +29,11 @@ for rel in ("results/progress.jsonl","results/supervision/status.json","scripts/
 audit=run(sys.executable,"scripts/supervisor.py","audit",check=False)
 if audit.returncode:
  print(audit.stdout+audit.stderr,file=sys.stderr); raise SystemExit(audit.returncode)
-if paths: run("git","add","--",*paths)
+if paths:
+ run(
+  "git","add","--pathspec-from-file=-","--pathspec-file-nul",
+  input="\0".join(paths)+"\0",
+ )
 diff=run("git","diff","--cached","--quiet",check=False)
 if diff.returncode==0:
  head=run("git","rev-parse","HEAD").stdout.strip()
