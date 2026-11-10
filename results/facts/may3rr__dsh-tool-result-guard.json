@@ -1,0 +1,218 @@
+{
+  "repo": "may3rr/dsh-tool-result-guard",
+  "commit": "45313fed7dfb8063930457fdcd68f54f6ce4f449",
+  "extracted_at": "2026-11-10T19:32:52.449106+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 49912,
+    "lines_by_language": {
+      "JSON": 43,
+      "JavaScript": 887,
+      "Markdown": 204,
+      "Other": 23,
+      "YAML": 20
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "index.js",
+      "install.mjs",
+      "package.json",
+      "test/bundle.compose.mjs",
+      "test/integration.cordis.mjs",
+      "test/tool-result-guard.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tool-result-guard",
+    "version": "0.1.0",
+    "description": "Zero-loss tool-result pruning for the DeepSeek Harness (DSH): oversized tool results are spilled to a file first, then pruned with exact elided-span offsets and a recovery locator. A dsh-plugin.",
+    "type": "module",
+    "main": "index.js",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "exports": {
+      ".": "./index.js"
+    },
+    "bin": {
+      "dsh-tool-result-guard": "install.mjs"
+    },
+    "scripts": {
+      "test": "node --test test/*.test.mjs"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "install.mjs",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "llm-context",
+      "context-pruning",
+      "tool-result",
+      "spill"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": ">=18"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tool-result-guard bundle patch: one row inserted into the profile's host\n# composition. Host-plane is correct here (same as the shipped spill-policy in\n# dsh-base): the plugin registers a `tools/post-execute` waterfall listener and\n# publishes no service, so it applies to every agent preset in the profile.\n#\n# The bare package name resolves from the profile's pnpm-managed node_modules\n# (this package itself). Users override the config in their profile's own\n# cordis.patch.yml by id:\n#\n#   - id: tool-result-guard\n#     config:\n#       thresholdChars: 16384\n\n- insert:\n    - id: tool-result-guard\n      name: 'dsh-tool-result-guard'\n      config:\n        thresholdChars: 8192\n        headChars: 4096\n        tailChars: 1024\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "install.mjs",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "install.mjs:145"
+    },
+    {
+      "name": "DSH_CORDIS",
+      "kind": "env",
+      "where": "test/integration.cordis.mjs:18"
+    },
+    {
+      "name": "thresholdChars",
+      "kind": "setting",
+      "default": "8192",
+      "where": "index.js:47"
+    },
+    {
+      "name": "headChars",
+      "kind": "setting",
+      "default": "4096",
+      "where": "index.js:48"
+    },
+    {
+      "name": "tailChars",
+      "kind": "setting",
+      "default": "1024",
+      "where": "index.js:49"
+    },
+    {
+      "name": "excludeTools",
+      "kind": "setting",
+      "default": "[\"read\"]",
+      "where": "index.js:50"
+    },
+    {
+      "name": "spillDir",
+      "kind": "setting",
+      "default": "unset",
+      "where": "index.js:57"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/may3rr/dsh-tool-result-guard",
+      "where": "install.mjs:41"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-08-22T13:19:23Z",
+    "created_at": "2026-08-22T11:45:09Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "install.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tool-result-guard",
+      "text": "English | [中文](README.zh.md)\n\n**Zero-loss tool-result pruning for the [DeepSeek Harness (DSH)](https://www.npmjs.com/package/@deepseek-ai/dsh).** A `dsh-plugin`.\n\nOversized plain-text tool results are **spilled to a file first**, then replaced with a bounded head/tail preview whose position-0 marker carries the exact elided span and the spill locator. The model can always recover the middle; nothing is ever dropped without a durable copy."
+    },
+    {
+      "section": "dsh-tool-result-guard",
+      "text": "```\n[pruned: kept chars [0, 4096) + [28976, 30000) of 30000; the elided middle\n[4096, 28976) is NOT lost — full output saved at: /tmp/dsh-spill/.../bash.txt.\nRecover any elided span with the read tool (offset/limit), grep, or sed on that file.]"
+    },
+    {
+      "section": "Why",
+      "text": "| mechanism | trigger | behavior |\n|---|---|---|\n| `dsh-spill-policy` | result > `maxInlineBytes` (default 50000 **bytes**) at post-execute | full text to `ctx.spillStore`, bounded preview + locator returned — **zero-loss** |\n| `dsh-compaction-tool-result-pruner` | text > 8192 chars, only **when compaction pressure qualifies** | head 4096 + `[... tool result middle pruned ...]` + tail 1024. The original event stays in the append-only session log for replay, but the model gets **no locator, no offsets, and no tool to read the log** — the middle is unrecoverable for the model |"
+    },
+    {
+      "section": "Why",
+      "text": "The gap: results between ~8K chars and 50K bytes that survive until compaction are pruned **with no model-facing recovery path**. This plugin closes the gap by pruning earlier (at `tools/post-execute`), always spilling the full text first, and embedding the exact elided span `[head, total-tail)` plus the locator in the marker."
+    },
+    {
+      "section": "Why",
+      "text": "If you install this plugin, the built-in pruner finds nothing over 8K chars on the surface and becomes a no-op; you may keep or remove its row. Same for `spill-policy` (its cap is never reached). Keeping both is harmless."
+    },
+    {
+      "section": "Install",
+      "text": "One command:\n\n```sh\ndsh plugin --profile web add dsh-tool-result-guard\n```\n\nRestart DSH. Done — it now applies to every agent preset in that profile. Remove with `dsh plugin --profile web remove dsh-tool-result-guard`.\n\nTune the budgets by id in your profile's `~/.dsh/profiles/web/cordis.patch.yml`:\n\n```yaml\n- id: tool-result-guard\n  config:\n    thresholdChars: 16384\n```"
+    },
+    {
+      "section": "Install",
+      "text": "<details>\n<summary><b>Alternative: preset-level install without pnpm</b> (single agent preset instead of the whole profile)</summary>\n\n```sh\nnpx dsh-tool-result-guard install --preset my-preset --from standard\n```"
+    },
+    {
+      "section": "Install",
+      "text": "copies the shipped `standard` preset to `~/.dsh/.agent-presets/my-preset/`, drops `dsh-tool-result-guard.js` beside its `agent.cordis.yml`, and appends the plugin row; start a **new** session on `my-preset`. Patch an existing user preset with `--preset <id>` (no `--from`), undo with `remove --preset <id>`, print the snippet with `--print`. Manual equivalent — copy `index.js` next to the preset's `agent.cordis.yml` and append:"
+    },
+    {
+      "section": "Install",
+      "text": "```yaml\n- id: tool-result-guard\n  name: './dsh-tool-result-guard.js'\n```\n\n</details>"
+    },
+    {
+      "section": "Config",
+      "text": "Unknown keys fail at load. All budgets are Unicode code points (surrogate pairs never split)."
+    },
+    {
+      "section": "Config",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `thresholdChars` | `8192` | Prune when the flattened plain-text result exceeds this many code points. |\n| `headChars` | `4096` | Leading code points kept inline. |\n| `tailChars` | `1024` | Trailing code points kept inline. |\n| `excludeTools` | `[\"read\"]` | Tools whose results always pass through. `read` is excluded by default to prevent a `read spill file → prune → read again` loop. Add e.g. `[\"read\", \"subagent\", \"memory_search\"]`. |\n| `spillDir` | *(unset)* | Override the local fallback spill directory (default: a private dir under the OS temp dir). |"
+    },
+    {
+      "section": "Config",
+      "text": "`headChars + tailChars` must be below `thresholdChars` so the marker always fits."
+    },
+    {
+      "section": "Behavior contract",
+      "text": "- **Fail-open.** No session owner, no reachable spill backend, a write failure, or a replacement that wouldn't be smaller/in-budget → the original inline result is kept, unchanged. A prune never hides output and never turns a successful call into an error.\n- **Spill first, prune second.** The full text is durable (via the deployment's `ctx.spillStore` when loaded, else a private per-process local directory) before the middle leaves the model-facing result.\n- **Pass-through.** Non-accept decisions, value replacements, nested composite sub-calls, excluded tools, results containing non-text blocks (images are never touched), and at/under-threshold results are returned byte-identical.\n- **Composable.** Runs as a prepended `tools/post-execute` waterfall listener and delegates via `next()`, so tool-owned projection and other hooks run first; their replaced content is what gets pruned. `additionalContexts` survive.\n- **Idempotent.** A replacement is always within `thresholdChars`, so a second pass never re-prunes."
+    },
+    {
+      "section": "How the model recovers the middle",
+      "text": "The marker names the spill file and the exact char span. Models recover with `read` (offset/limit), `grep -n`, or `sed -n 'X,Yp'` on that file — the `read` exclusion prevents recovery reads from being pruned themselves."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnpm test          # node:test, zero dependencies\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

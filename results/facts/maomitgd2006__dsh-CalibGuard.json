@@ -1,0 +1,799 @@
+{
+  "repo": "maomitgd2006/dsh-CalibGuard",
+  "commit": "8369897695aaa323db83aa8bff8ae8babf2139d2",
+  "extracted_at": "2026-11-10T19:30:34.277583+00:00",
+  "tree": {
+    "files": 52,
+    "bytes": 5318982,
+    "lines_by_language": {
+      "JSON": 197,
+      "JavaScript": 6243,
+      "Markdown": 1364,
+      "Other": 50065,
+      "Python": 2514,
+      "YAML": 126
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "bridge/calibguard_bridge.py",
+      "cordis.patch.yml",
+      "docs/configuration.md",
+      "docs/design-notes.md",
+      "docs/dsh-plugin-contract.md",
+      "docs/performance.md",
+      "docs/troubleshooting.md",
+      "engine/README.md",
+      "engine/audit_service.py",
+      "engine/calibguard/__init__.py",
+      "engine/calibguard/__main__.py",
+      "engine/calibguard/calibrator.py",
+      "engine/calibguard/cli.py",
+      "engine/calibguard/config.py",
+      "engine/calibguard/constants.py",
+      "engine/calibguard/feature_extractor.py",
+      "engine/calibguard/gate.py",
+      "engine/calibguard/llm_analyzer.py",
+      "engine/calibguard/model.py",
+      "engine/calibguard/pipeline.py",
+      "engine/calibguard/preprocessor.py",
+      "engine/calibguard/report.py",
+      "engine/calibguard/schemas.py",
+      "engine/models/calibration_params.json",
+      "engine/requirements-gui.txt",
+      "lib/bootstrap.js",
+      "lib/client.js",
+      "lib/config.js",
+      "lib/engine.js",
+      "lib/env.js",
+      "lib/index.js",
+      "lib/plugin-scan.js",
+      "lib/routes.js",
+      "lib/self-update.js",
+      "lib/settings.js",
+      "lib/tools.js",
+      "package.json",
+      "scripts/bridge-selftest.mjs",
+      "scripts/link-dsh.mjs",
+      "setup.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-calibguard",
+    "version": "0.5.6",
+    "publishConfig": {
+      "access": "public"
+    },
+    "description": "CalibGuard file-security auditing for DeepSeek Harness: a locally calibrated CodeBERT gate exposed as agent tools, with on-demand cloud LLM review of the gray zone.",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "calibguard",
+      "security",
+      "malware-detection"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/maomitgd2006/dsh-CalibGuard.git"
+    },
+    "homepage": "https://github.com/P-436/CalibGuard",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "bridge",
+      "engine",
+      "cordis.patch.yml",
+      "docs",
+      "setup.mjs",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": []
+      }
+    },
+    "scripts": {
+      "prepack": "node -e \"const fs=require('fs');for(const d of ['bridge','engine']){if(!fs.existsSync(d))continue;for(const f of fs.readdirSync(d,{withFileTypes:true})){if(f.isDirectory()&&f.name==='__pycache__')fs.rmSync(d+'/'+f.name,{recursive:true,fo...",
+      "test": "node --test",
+      "setup": "node setup.mjs",
+      "link-dsh": "node scripts/link-dsh.mjs",
+      "selftest": "node scripts/bridge-selftest.mjs"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-calibguard 组合包 patch —— 只做一件事：把插件行插进配置树。\n#\n# 用法（二选一）：\n#   A. 作为 bundle 安装：把 \"dsh-calibguard\" 加进 profile 的 dsh.profile.bundles，\n#      本文件里的行会被自动插入。此时 name 用包名（需能从 profile 的 node_modules 解析）。\n#   B. 直接写进 profile 的 cordis.patch.yml（源码方式，无需安装）：\n#        - insert:\n#            - id: calibguard\n#              name: 'file:///<本包绝对路径>/lib/index.js'   # 例：file:///D:/code/dsh-calibguard/lib/index.js\n#              config: { ... }\n#\n# 行内 config 与 lib/config.js 的默认值一一对应；只写想改的键即可。\n- insert:\n    - id: calibguard\n      name: 'dsh-calibguard'\n      config:\n        # 是否注册工具（false 时不注册任何东西，便于临时停用而不必删行）\n        enabled: true\n        # 引擎目录（含 calibguard/ 包与 models/ 的目录）；留空=自动推导：npm/桌面端安装为 ~/.dsh/calibguard-engine，\n        # 源码仓库里为本包同级 CG_GUI\n        engineRoot: ''\n        # Python 解释器；留空=依次尝试 <engineRoot>/.venv、环境变量 DSH_CALIBGUARD_PYTHON、PATH\n        pythonPath: ''\n        # 设备定档：auto 会做「CUDA 版本 + 算力」双检，算力 < 7.5 的显卡强制回落 CPU\n        device: auto\n        # 复用 CG_GUI/gui-settings.json 里的阈值与云端复核设置（与桌面壳共享同一份配置）\n        useGuiSettings: true\n        # 是否把「何时该用 CalibGuard」写进系统提示词\n        announceToModel: true\n        # 单次审计的文件数上限与超时（毫秒）\n        maxFiles: 20\n        auditTimeoutMs: 600000\n        # 空闲多久回收桥接进程（0 = 常驻不回收）\n        idleShutdownMs: 600000\n        # 报告落盘目录；留空=引擎默认（<engineRoot>/reports）\n        reportDir: ''\n        # GUI 与 AI 共用的设置文件（面板「保存为共享设置」写这里）；\n        # 留空 = $DSH_HOME/calibguard-settings.json\n        settingsPath: ''\n        # 模型侧全文滑窗步长（token，1~511）。留空=引擎默认 256；\n        # 大文件可设 510 让窗口数约减半（代价：窗口几乎不重叠，跨边界长逻辑可能被切开）\n        # windowStride: 510\n        # 子进程环境的清洗规则：桥接进程不会继承父进程里形如\n        # *KEY*/*PASSWORD*/*SECRET*/*TOKEN* 与 DSH_* 的变量。\n        # 留空=优先用 DSH 自己的 scrubbedParentEnv，取不到时用内置启发式。\n        sensitiveEnvPattern: ''\n        # 其他 DSH 插件扫描（安装/更新插件时自动体检；不扫自己与 @deepseek-ai/*）\n        # pluginScanMode: update   # off / update（插件列表更新时）/ weekly / monthly / quarterly / halfyearly\n        # pluginScanMaxFiles: 100  # 单个插件最多扫描的文件数（1~500）\n        # selfUpdateCheck: startup # off / startup / daily / weekly（只提示，不静默升级）\n\n        # 以下留空/不写即跟随引擎默认值或 gui-settings.json\n        # allowThreshold: 0.15\n        # blockThreshold: 0.85\n        # llmEnabled: false\n        # 【推荐】云端复核凭据名（保存位置，不是密钥）：交给 DSH 的 ctx.credentials 解析（继承环境 > 凭据库 > .env）。\n        # 名字可以写在这里，也可以留空、直接在面板「凭据名」里填（保存后记进共享设置）；\n        # 插件代码不含硬编码凭据名，也不会隐式继承宿主环境变量。\n        # credentialRef: DEEPSEEK_API_KEY\n        # 备选：直接写字面值（不推荐，凭据会出现在配置文件里）\n        # llmApiKey: ''\n        # llmBaseUrl: ''\n        # llmModel: ''\n        # llmContentSource: evidence\n        # llmDeliveryMode: truncate\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "CUDA_VISIBLE_DEVICES",
+      "kind": "env",
+      "where": "bridge/calibguard_bridge.py:170"
+    },
+    {
+      "name": "CUDA_VISIBLE_DEVICES",
+      "kind": "env",
+      "where": "bridge/calibguard_bridge.py:198"
+    },
+    {
+      "name": "CUDA_VISIBLE_DEVICES",
+      "kind": "env",
+      "where": "bridge/calibguard_bridge.py:201"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "engine/audit_service.py:198"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/config.js:69"
+    },
+    {
+      "name": "DSH_CALIBGUARD_PYTHON",
+      "kind": "env",
+      "where": "lib/engine.js:340"
+    },
+    {
+      "name": "DSH_CALIBGUARD_PYTHON",
+      "kind": "env",
+      "where": "lib/engine.js:341"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/settings.js:49"
+    },
+    {
+      "name": "DSH_PACKAGES_DIR",
+      "kind": "env",
+      "where": "scripts/link-dsh.mjs:41"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "scripts/link-dsh.mjs:42"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "scripts/link-dsh.mjs:42"
+    },
+    {
+      "name": "DSH_CALIBGUARD_TORCH_INDEX",
+      "kind": "env",
+      "where": "setup.mjs:42"
+    },
+    {
+      "name": "DSH_CALIBGUARD_DOWNLOAD_CONNECTIONS",
+      "kind": "env",
+      "where": "setup.mjs:66"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "setup.mjs:73"
+    },
+    {
+      "name": "DSH_CALIBGUARD_ENGINE_MIRRORS",
+      "kind": "env",
+      "where": "setup.mjs:90"
+    },
+    {
+      "name": "DSH_CALIBGUARD_PIP_INDEX",
+      "kind": "env",
+      "where": "setup.mjs:108"
+    },
+    {
+      "name": "PIP_INDEX_URL",
+      "kind": "env",
+      "where": "setup.mjs:108"
+    },
+    {
+      "name": "DSH_CALIBGUARD_CPU_ONLY",
+      "kind": "env",
+      "where": "setup.mjs:158"
+    },
+    {
+      "name": "DSH_CALIBGUARD_FORCE_CUDA",
+      "kind": "env",
+      "where": "setup.mjs:161"
+    },
+    {
+      "name": "DSH_CALIBGUARD_PYTHON",
+      "kind": "env",
+      "where": "setup.mjs:711"
+    },
+    {
+      "name": "DSH_CALIBGUARD_PYTHON",
+      "kind": "env",
+      "where": "setup.mjs:712"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "setup.mjs:723"
+    },
+    {
+      "name": "ProgramFiles",
+      "kind": "env",
+      "where": "setup.mjs:724"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "setup.mjs:775"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "setup.mjs:776"
+    },
+    {
+      "name": "DSH_CALIBGUARD_PYTHON",
+      "kind": "env",
+      "where": "setup.mjs:949"
+    },
+    {
+      "name": "DSH_CALIBGUARD_PYTHON",
+      "kind": "env",
+      "where": "setup.mjs:1081"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "engine/audit_service.py:45"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "engine/calibguard/config.py:32"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "lib/client.js:138"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "lib/client.js:1002"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "lib/routes.js:381"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/dsh-calibguard/latest",
+      "where": "lib/self-update.js:25"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-calibguard",
+      "where": "lib/self-update.js:26"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maomitgd2006/dsh-CalibGuard/releases/latest",
+      "where": "lib/self-update.js:27"
+    },
+    {
+      "host": "api.deepseek.com。",
+      "url": "https://api.deepseek.com。",
+      "where": "lib/tools.js:518"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maomitgd2006/dsh-CalibGuard.git",
+      "where": "package.json:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/P-436/CalibGuard",
+      "where": "package.json:21"
+    },
+    {
+      "host": "gh-proxy.com",
+      "url": "https://gh-proxy.com/",
+      "where": "setup.mjs:39"
+    },
+    {
+      "host": "ghfast.top",
+      "url": "https://ghfast.top/",
+      "where": "setup.mjs:39"
+    },
+    {
+      "host": "ghproxy.net",
+      "url": "https://ghproxy.net/",
+      "where": "setup.mjs:39"
+    },
+    {
+      "host": "download.pytorch.org",
+      "url": "https://download.pytorch.org/whl/cu128",
+      "where": "setup.mjs:42"
+    },
+    {
+      "host": "pypi.tuna.tsinghua.edu.cn",
+      "url": "https://pypi.tuna.tsinghua.edu.cn/simple",
+      "where": "setup.mjs:68"
+    },
+    {
+      "host": "pypi.org",
+      "url": "https://pypi.org/simple",
+      "where": "setup.mjs:69"
+    },
+    {
+      "host": "mirrors.aliyun.com",
+      "url": "https://mirrors.aliyun.com/pypi/simple/",
+      "where": "setup.mjs:112"
+    },
+    {
+      "host": "pypi.mirrors.ustc.edu.cn",
+      "url": "https://pypi.mirrors.ustc.edu.cn/simple/",
+      "where": "setup.mjs:113"
+    },
+    {
+      "host": "mirrors.cloud.tencent.com",
+      "url": "https://mirrors.cloud.tencent.com/pypi/simple",
+      "where": "setup.mjs:114"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maomitgd2006/dsh-CalibGuard/releases/download/model-v1.0.0/calibguard-model-1.0.0.zip",
+      "where": "setup.mjs:200"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maomitgd2006/dsh-CalibGuard/releases/tag/model-v1.0.0）",
+      "where": "setup.mjs:276"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/astral-sh/uv/releases/latest/download/${asset",
+      "where": "setup.mjs:823"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/astral-sh/uv/releases/latest/download/${asset",
+      "where": "setup.mjs:824"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download`",
+      "where": "setup.mjs:879"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/",
+      "where": "setup.mjs:959"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/",
+      "where": "setup.mjs:964"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/（或用",
+      "where": "setup.mjs:1096"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/\\n",
+      "where": "setup.mjs:1105"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/\\n",
+      "where": "setup.mjs:1111"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 43,
+    "pushed_at": "2026-10-25T13:45:20Z",
+    "created_at": "2026-10-20T15:57:58Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/bootstrap.js",
+    "lib/client.js",
+    "lib/config.js",
+    "lib/engine.js",
+    "lib/env.js",
+    "lib/index.js",
+    "lib/plugin-scan.js",
+    "lib/routes.js",
+    "lib/self-update.js",
+    "lib/settings.js",
+    "lib/tools.js",
+    "package.json",
+    "scripts/bridge-selftest.mjs",
+    "scripts/link-dsh.mjs",
+    "setup.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-calibguard",
+      "text": "中文 | [English](README.en.md)\n\n[](https://www.npmjs.com/package/dsh-calibguard)\n\n把 [CalibGuard](https://github.com/P-436/CalibGuard) 的文件安全审计引擎接进 **DeepSeek Harness（DSH）**：\n让 AI 在执行 / 安装来路不明的代码之前先过一道**本地**门控，你也可以在侧边栏面板里直接拖文件审计。"
+    },
+    {
+      "section": "dsh-calibguard",
+      "text": "- 🔒 **默认离线**：本地 CodeBERT + Platt 校准给出可解释的「恶意概率」，文件内容不会上传；\n- ☁️ **灰区才上云**：只有本地拿不准的文件才发一次云端复核（可关闭）；\n- 🧭 **四档结论**：放行 / 可疑 / 拦截 / 转人工，附证据与 Markdown 报告；\n- 🧰 **三种用法**：AI 工具（`calibguard_audit` 审计 / `calibguard_status` 状态 / `calibguard_configure` 改设置）+ 浏览器面板；\n- 🛡️ **插件体检**：安装/更新**别的 DSH 插件**时自动扫一遍并提醒（一个频率下拉控制：插件列表更新时 / 周期 / 关闭；不扫自己）；\n- 🔔 **新版本提示**：定时检查本插件是否有新版本，**弹窗询问是否升级，绝不静默升级**（可设置跳过此版本/以后不再询问）；\n- ⚙️ **一套设置**：面板里保存的阈值与送审口径，AI 调用同样生效。"
+    },
+    {
+      "section": "dsh-calibguard",
+      "text": "> **本仓库只是 DSH 插件，不是 CalibGuard 主仓库。**\n> CalibGuard 主仓库（引擎、桌面 GUI、基准）：**[P-436/CalibGuard](https://github.com/P-436/CalibGuard)**。\n> 为了让插件开箱即用，运行所需的引擎核心\n>（`calibguard/`、`audit_service.py`、词表与校准参数）已**复制到本仓库 [`engine/`](engine/README.md)**\n>（只复制、不改逻辑，同步方法见该目录 README）；模型权重（475 MB）由本仓库 Release 资产分发；\n> 运行时通过常驻 Python 子进程调用引擎。\n\n---"
+    },
+    {
+      "section": "有什么用（典型场景）",
+      "text": "| 场景 | 你怎么用 | 它给你什么 |\n|---|---|---|\n| AI 要运行下载的脚本/安装包 | 说一句「安装前先审一下 `D:\\downloads\\setup.py`」 | 四档结论 + 触发证据 + 报告路径，AI 据此决定是否继续 |\n| 手动检查可疑文件 / 压缩包 | 拖进侧边栏面板 | 逐文件结论、可排序、可点开 Markdown 报告 |\n| 审计一整个目录 | 粘宿主机目录路径 | 递归逐文件审计（超过上限会明确提示「只审了前 N 个」） |\n| 不想把代码传到云上 | 默认即离线；需要时关掉云端复核 | 全程本地推理，灰区按本地 0.5 切分 |\n| 想要更稳/更省 | 面板调阈值、送审内容源、投递方式并保存 | 面板与 AI 共用同一套口径 |"
+    },
+    {
+      "section": "结论怎么读",
+      "text": "| 标签 | 含义 | 建议动作 |\n|---|---|---|\n| **BLOCK 拦截** | 本地模型高置信度恶意 | 不要执行；看报告里的证据 |\n| **MANUAL 转人工** | 拿不准 / 云端复核失败 | 人工确认，或换个送审口径再跑 |\n| **SUSPICIOUS 可疑** | 中等概率，可能是正常库里的危险 API | 结合报告判断；压缩后的第三方库常落这里或拦截（见 FAQ） |\n| **ALLOW 放行** | 本地模型判定安全 | 可以继续 |\n\n结果里还有：校准后概率 `p`、推理设备（cpu/cuda）、窗口数、文件 sha256、以及报告文件路径。\n\n---"
+    },
+    {
+      "section": "开始前：引擎依赖会自动准备（对齐 CG_GUI 的「首启装环境」）",
+      "text": "本插件**自带引擎**（`engine/`：复制自 CG_GUI 的 `calibguard/` 包、`audit_service.py`、词表与校准参数），\n只差 **475 MB 模型权重**和 Python 依赖。**不用手动装**——装好插件重启 DSH 后，\n若检测到缺少 `<engineRoot>/.venv`，插件会在**后台自动**："
+    },
+    {
+      "section": "开始前：引擎依赖会自动准备（对齐 CG_GUI 的「首启装环境」）",
+      "text": "1. 把内置 `engine/` 复制到 `<engineRoot>`（默认 `~/.dsh/calibguard-engine`）；\n2. 从**本仓库 Release** 下载模型权重 `model.safetensors`（约 442 MB 压缩包，GitHub 直连失败会自动尝试 ghproxy 等镜像，\n   缓存于 `~/.dsh/calibguard-tools/model-cache`）；\n3. 创建 `.venv`（**不需要你预装 Python**：会自动选择本机 64 位 Python 3.10–3.12——会检查 PATH、`py` 启动器、\n   `%LOCALAPPDATA%\\Programs\\Python`、常见安装目录；只有 3.13+ 或 32 位 Python 时**自动下载便携 Python 3.10.8**，\n   约 30 MB，走 GitHub 镜像回退）；想单独准备/排查 Python 可运行 `node setup.mjs --prepare-python`；\n4. 按 `requirements-gui.txt` 安装依赖（约 1–3 GB，默认清华 PyPI 镜像）；\n5. 就绪后工具/面板自动可用。"
+    },
+    {
+      "section": "开始前：引擎依赖会自动准备（对齐 CG_GUI 的「首启装环境」）",
+      "text": "> 默认**不再**从 GitHub 下载 CG 发行包；只有显式 `node setup.mjs --from <zip>` 或 `--url <地址>`\n> 才会走 CG 发行包，用于离线/指定引擎版本。\n\n**安装速度**：模型/引擎包默认 **4 路并发分段下载**（实测单连接 0.6 MB/s → 并发 2.3 MB/s），\nGitHub 直连失败会自动换 gh-proxy / ghfast / ghproxy 镜像；pip 依赖按 清华 → 阿里 → 中科大 → 腾讯 → 官方\n依次回退。可用 `DSH_CALIBGUARD_DOWNLOAD_CONNECTIONS` 调整并发数。\n\n**GPU 自动定档**：检测到 NVIDIA 且 **CUDA ≥ 12.8、算力 ≥ 7.5**（RTX 20/30/40 系）时自动安装\n**CUDA（cu128）版 torch**；否则装 CPU 版（GTX 10 系算力 6.1，cu128 轮子里没有对应 kernel，只能 CPU）。\n面板顶部会显示「推理设备：cpu/cuda」和定档原因。"
+    },
+    {
+      "section": "开始前：引擎依赖会自动准备（对齐 CG_GUI 的「首启装环境」）",
+      "text": "手动覆盖（可选）：\n`node setup.mjs --force-cuda`（强制装 CUDA 版，跳过 CUDA/算力检查，风险自负）、\n`node setup.mjs --cpu`（强制 CPU 版），或环境变量 `DSH_CALIBGUARD_FORCE_CUDA=1` /\n`DSH_CALIBGUARD_CPU_ONLY=1`。装完想切换：`node setup.mjs --reinstall-torch --force-cuda` 或\n`--reinstall-torch --cpu`。"
+    },
+    {
+      "section": "开始前：引擎依赖会自动准备（对齐 CG_GUI 的「首启装环境」）",
+      "text": "> CPU 版与 CUDA 版 torch **不能同时存在于同一个 venv**（同名包会互相覆盖）；\n> 但 CUDA 版 torch 本身就是完整 torch，没有 GPU 时会自动用 CPU，所以不需要共存。\n>\n> **已经有 CPU 版的机器**：仅当显卡算力 **≥7.5**（如 RTX 2060）且 torch 是 CPU 版时，面板顶部才会显示\n> 「检测到 NVIDIA … 但当前 torch 是 CPU 版」并提供 **「一键重装 GPU 版 torch（约 2.5 GB）」** 按钮\n>（会先卸载 CPU 版再装 CUDA 版，完成后自动重启桥接）；算力低于 7.5 的卡（如 GTX 1060 5GB / 6.1）强制 CPU\n> 是正常行为，不会再提示重装。命令行：`node \"<插件目录>/setup.mjs\" --reinstall-torch --force-cuda`。"
+    },
+    {
+      "section": "开始前：引擎依赖会自动准备（对齐 CG_GUI 的「首启装环境」）",
+      "text": "**进度在哪看**：面板顶部会出现「首次运行：正在自动准备引擎与依赖」卡片（含当前步骤与输出尾巴）；\n宿主日志里是 `[calibguard]` 开头的行。准备期间审计按钮不可用，完成后点「刷新状态」即可。\n首次约需 **10–20 分钟**（取决于网速和 pip 源），只需一次。\n\n> **安装被中断怎么办**：0.5.4 起，装完依赖会实际导入 torch / transformers / sklearn / openai 校验，\n> 成功才写 `<引擎目录>/.deps-ok.json`；如果安装中途被中断（关掉 DSH、关机），下次启动会检测到\n> 依赖不完整并**自动补装**，不会再把半成品 venv 当作就绪（面板会显示\"正在自动补装缺失依赖\"）。"
+    },
+    {
+      "section": "开始前：引擎依赖会自动准备（对齐 CG_GUI 的「首启装环境」）",
+      "text": "> 想提前预热、或断网/锁网环境需要离线安装，也可以手动跑安装器（同一套逻辑，幂等）：\n>\n> ```powershell\n> node setup.mjs                          # 一键：内置引擎 → 下载模型 → venv → 依赖 → 自检\n> node setup.mjs --from D:\\CalibGuard-GUI.zip   # 用已下载的发行包，不联网\n> node setup.mjs --dest D:\\CG_GUI         # 装到自定义位置（之后配置 engineRoot）\n> ```\n>\n> 已有可用 `CG_GUI/`（含 `.venv`）的机器不会重复安装。\n> 如果不想让插件自动联网，把插件配置 `autoSetup` 设为 `false`（此时缺环境会直接报错并提示手动安装）。"
+    },
+    {
+      "section": "前提",
+      "text": "1. **DSH**（DeepSeek Harness）0.1.5-rc.2 实测可用；\n2. **Python**：无需预装——没有 64 位 3.10–3.12 时安装器会自动下载便携版（缓存在 `~/.dsh/calibguard-tools`，可用 `--no-portable-python` 关闭）；\n3. **引擎**：插件自带；模型权重会自动从本仓库 Release 下载（自动镜像回退）。也可用 `--from` 指定 CG 发行包，或把 `engineRoot` 指向已有 `CG_GUI/`。"
+    },
+    {
+      "section": "方式 0：桌面端「添加插件」（最省事，推荐）",
+      "text": "**DSH 桌面版只需要一步：设置 → 添加插件 → 输入 `dsh-calibguard` → 重启 DSH。**\n默认装 npm 上的最新版；要固定版本就写 `dsh-calibguard@0.3.3`（`@` 后面是版本号）。\n不需要命令行、不需要下载源码。\n\n输入框里也可以填以下任意一种（装完按提示重启 DSH）：\n\n| 填什么 | 示例 | 说明 |\n|---|---|---|\n| **GitHub 仓库地址**（推荐） | `https://github.com/maomitgd2006/dsh-CalibGuard` | 自动拉取源码并登记到当前 profile 的 bundle |\n| **本地目录路径** | `<你的插件目录>`（例：`D:\\code\\dsh-calibguard`） | 已 clone / 解压到本地时用 |\n| **包名** | `dsh-calibguard` 或 `dsh-calibguard@0.3.3` | ✅ **已发布到 npm**；不写版本=装 latest，写 `@版本`=固定版本 |"
+    },
+    {
+      "section": "方式 0：桌面端「添加插件」（最省事，推荐）",
+      "text": "> 等价命令行（已实测：安装后 DSH 会自动把包加进 profile 的 `dsh.profile.bundles`）：\n>\n> ```powershell\n> dsh plugin --profile <profile> add dsh-calibguard                                   # npm 包（推荐）\n> dsh plugin --profile <profile> add https://github.com/maomitgd2006/dsh-CalibGuard           # GitHub 源码\n> dsh plugin --profile <profile> add file:<本包绝对路径>                                # 本地目录\n> ```\n>\n> npm 包页：<https://www.npmjs.com/package/dsh-calibguard>\n\n**无论用哪种方式**，装好后首次运行都不需要手动装引擎——插件会自动准备（见下一节）。"
+    },
+    {
+      "section": "方式 A：命令行安装（npm 包，适合非桌面版 / 脚本化）",
+      "text": "```powershell\ndsh plugin --profile <profile> add dsh-calibguard\n```\n\n之后同样在 profile 的 `cordis.patch.yml` 里插一行，`name` 直接写包名 `dsh-calibguard`\n（本包自带的 `cordis.patch.yml` 会自动把插件行叠加进配置树）。\n\n> `desktop` profile 被 Electron 独占，CLI 拒绝管理它 —— 桌面版请用「方式 0」，\n> 或「方式 B」的 `file://` 行。"
+    },
+    {
+      "section": "方式 B：源码方式（`file://` 行，适合本地开发 / 离线）",
+      "text": "在 profile 的 `cordis.patch.yml` 末尾追加（路径改成你的实际位置）：\n\n```yaml\n- insert:\n    - id: calibguard\n      name: 'file:///<本包绝对路径>/lib/index.js'\n      config:\n\n`insert` 行的路径会被 DSH 自动改写成 `file://` URL；桌面版的 profile 在\n`<DSH_HOME>/profiles/desktop/cordis.patch.yml`（`<DSH_HOME>` 默认 `~/.dsh`）。\n\n可选：`node scripts/link-dsh.mjs` 把 DSH 自带的 `@deepseek-ai/*` 以目录联接挂到本包，让\n`defineTool` / Config 结构校验这两个可选能力生效（不做也能跑）。"
+    },
+    {
+      "section": "方式 C：发行包（离线 / 不想用 npm）",
+      "text": "从 [Releases](https://github.com/maomitgd2006/dsh-CalibGuard/releases/latest) 下载\n`dsh-calibguard-<版本>.zip`（约 100 KB，不含 `test/`），解压到一个固定目录，然后按「方式 B」\n把 `name` 指向解压目录下的 `lib/index.js` 即可。"
+    },
+    {
+      "section": "验证",
+      "text": "- 重启 DSH 后，左侧边栏出现盾牌图标；面板顶部显示「引擎就绪 / 阈值 / 云端复核」状态；\n- 或在对话里让我调用 `calibguard_status`，应返回设备、模型、阈值、凭据是否就绪；\n- 命令行自检（不经 DSH，直接测引擎）：\n\n```powershell\nnode scripts/bridge-selftest.mjs                       # 只看引擎状态\nnode scripts/bridge-selftest.mjs \"<engineRoot>/samples\" # 状态 + 试审计\n```\n\n> ⚠️ 改完 patch / 面板代码后**必须重启 DSH**：客户端 bundle 在宿主启动时加载，\n> 已加载的 ESM 模块也有缓存。\n\n---"
+    },
+    {
+      "section": "1) 让 AI 审计（工具调用）",
+      "text": "直接说自然语言即可，AI 会调用 `calibguard_audit`：\n\n```\n「安装前先审一下 D:\\downloads\\setup.py」\n「这个压缩包安全吗？D:\\downloads\\vendor.zip」\n「把 D:\\projects\\vendor 目录里可疑的文件过一遍」\n```\n\nAI 能看到完整四档结论与证据；若你说「只审高危文件」，它还能按次改阈值（不影响你的全局设置）。"
+    },
+    {
+      "section": "2) 面板（浏览器 UI）",
+      "text": "侧边栏盾牌图标 → **拖文件进虚线框**（或点击选择、或粘贴宿主机路径）→「开始审计」。\n\n- 压缩包由引擎在内存中解包后逐文件审计；上传只写系统临时目录、审计完即删；\n- 大文件会按实测吞吐预估耗时（例如「预计 287 个滑窗，约 76 秒」），不会让你以为卡死；\n- 结果按严重度排序，可点「查看 Markdown 报告」。"
+    },
+    {
+      "section": "3) 共享设置（面板 ↔ AI 打通）",
+      "text": "面板「常规参数设置」区照搬 CG_GUI 的设置面板（**默认收起**，摘要会显示当前阈值与云端复核状态）：\n**云端复核开关 → API Key / Base URL / 模型名称 / 送审内容 / 投递方式（截断或滑窗，参数联动显隐）→ 灰区范围**。\n\n点「保存」后："
+    },
+    {
+      "section": "3) 共享设置（面板 ↔ AI 打通）",
+      "text": "- 参数写入 `$DSH_HOME/calibguard-settings.json`（默认 `~/.dsh`，不写进仓库）；\n- **AI 调用同样使用这份设置**（优先级：插件配置 < 共享设置 < 本次调用参数）；\n- 改完立即生效，**不用重启**；\n- API Key 写入 DSH 凭据库（`ctx.credentials`），不落入该设置文件；\n- **凭据名**只是\"保存位置\"的名字（不是密钥本身，面板默认预填 `DEEPSEEK_API_KEY`）：填 API Key 保存后，\n  名字记进共享设置的 `credentialRef`，值优先写入 DSH 凭据库；**当前 DSH 版本不支持从插件写凭据库时，\n  自动保存到本机 `~/.dsh/calibguard-credentials.json`（0600，仅本机）**，面板会明确提示存储位置；\n- **审计结果**：每次审计在引擎的 `reports/` 目录生成 JSON + Markdown（默认 `<engineRoot>/reports`，\n  `engineRoot` 默认 `~/.dsh/calibguard-engine`）。面板结果区会显示该路径并可「清空结果」，\n  条目里的「查看 Markdown 报告」可直接打开。"
+    },
+    {
+      "section": "4) 让 AI 帮你改设置（`calibguard_configure`）",
+      "text": "不知道面板里怎么调、或者想让 AI 按建议设好，直接说：\n\n> \"把放行阈值改成 0.1、拦截阈值 0.95\" / \"开启云端复核，用 deepseek-chat\" / \"目录最多审 50 个文件\" / \"恢复默认设置\"\n\nAI 会调用 `calibguard_configure` 写入**共享设置**（与面板同一份，立刻生效）：\n\n- 可改：灰区阈值、云端复核开关、Base URL / 模型名、送审内容源与投递方式、截断/滑窗参数、目录上限、凭据**名**；\n- 传 `reset: true` 等价于面板「重置」（回到插件配置默认值）；某个键传 `null` 表示该项恢复默认；\n- **安全限制**：该工具**不能读取、也不能写入 API Key**（返回值里永远只有白名单设置项，不含任何凭据值）。\n  需要配置 Key 时，让 AI 提醒你在面板「设置 → API Key」里填，**不要把 Key 发在对话里**。"
+    },
+    {
+      "section": "5) 其他 DSH 插件扫描（装插件时自动体检）",
+      "text": "CalibGuard 会盯着当前 profile 的插件列表（`dsh.profile.bundles`），用**一个频率下拉**控制：\n\n| 频率选项 | 行为 |\n|---|---|\n| **插件列表更新时**（默认） | 新装/升级别的插件后自动扫一遍并提醒（已删除的忽略） |\n| **每周 / 每月 / 每季度 / 每半年** | 到期时全量巡检一遍 |\n| **不扫描** | 完全关闭（「立即扫描全部」按钮仍可手动触发） |"
+    },
+    {
+      "section": "5) 其他 DSH 插件扫描（装插件时自动体检）",
+      "text": "- **不扫自己**（`dsh-calibguard` 自带模型/词表，自身就是高敏感大包），默认也跳过 `@deepseek-ai/*` 官方核心包；\n- 每个插件默认最多扫 100 个文件（可调 1–500），结果按插件汇总（拦截/转人工/可疑/放行）；\n- 有风险时宿主日志会打 `[calibguard] 插件提醒：xxx@1.2.3 → 拦截 …`；\n- 结果文件：`$DSH_HOME/calibguard-plugin-scan.json`；\n- 这些设置在面板底部 **「高级 / 其他设置」折叠区**里；也可让 AI 用 `calibguard_configure` 改。"
+    },
+    {
+      "section": "6) 本插件更新检查（弹窗提示，绝不静默升级）",
+      "text": "- 按频率检查 npm 上 `dsh-calibguard` 的最新版本：**关闭 / 每次启动 DSH / 每天 / 每周**（默认每次启动）；\n- 发现新版本时面板顶部弹出提示：显示当前版本与最新版本、升级方式（桌面端「设置 → 添加插件 → 输入 `dsh-calibguard`」，或 CLI 命令、Release/npm 链接）；\n- **不会自动升级**；用户可以选「跳过此版本」或「以后不再询问」（持久化，对应插件扫描状态文件旁的自更新状态文件）；\n- 状态文件：`$DSH_HOME/calibguard-self-update.json`；也可以在折叠区点「立即检测」。"
+    },
+    {
+      "section": "7) 工具参数（按次覆盖，写给进阶用户）",
+      "text": "| 参数 | 说明 |\n|---|---|\n| `paths` | 必填；文件或目录绝对路径（相对路径按会话工作目录解析） |\n| `include_evidence` | 是否返回证据详情（默认 `true`） |\n| `max_files` | 目录递归展开上限（默认 20，1–200） |\n| `allow_threshold` / `block_threshold` | 本次的灰区上下限（0<p<1） |\n| `llm_enabled` | 本次是否启用云端复核 |\n| `llm_content_source` | `evidence`（精炼证据）/ `raw`（文件原文） |\n| `llm_delivery_mode` | `truncate` / `window` / `all` |\n| `truncate_chars` / `window_chars` / `window_overlap` | 送审分片参数 |\n| `window_stride` | 模型侧全文滑窗步长（1–511，默认 256；大文件可设 510 提速） |"
+    },
+    {
+      "section": "7) 工具参数（按次覆盖，写给进阶用户）",
+      "text": "> 另有 `calibguard_configure`：改**持久**共享设置（阈值/云端复核/送审方式/目录上限/凭据名），\n> 与面板同一份；**不读写 API Key**。\n\n---"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `enabled` | `true` | 关掉则什么都不注册（临时停用不必删行） |\n| `engineRoot` | `''` | 引擎目录；留空自动推导：**npm/桌面端安装**时为 `~/.dsh/calibguard-engine`，源码仓库里为本包同级 `CG_GUI` |\n| `device` | `auto` | 自动做「CUDA 版本 + 算力」双检，低算力显卡回落 CPU |\n| `credentialRef` | `''` | 云端复核凭据**名**（保存位置，不是密钥），如 `DEEPSEEK_API_KEY`；留空=用面板「凭据名」保存的名字；值存放在 DSH 凭据库/环境变量 |\n| `announceToModel` | `true` | 是否把「何时该用 CalibGuard」写进系统提示词 |\n| `autoSetup` | `true` | 首次运行缺 `.venv` 时**自动**准备引擎（内置代码 + npm 模型分片）、按需下载便携 Python、安装依赖；设 `false` 则只报错提示手动 `node setup.mjs` |\n| `maxFiles` | `20` | 目录展开上限；显式给出/上传的文件不受限 |\n| `pluginScanMode` | `'update'` | 其他 DSH 插件扫描频率：`off` / `update`（插件列表更新时）/ `weekly` / `monthly` / `quarterly` / `halfyearly` |\n| `pluginScanMaxFiles` | `100` | 单个插件一次最多扫描的文件数（1–500） |\n| `selfUpdateCheck` | `'startup'` | 本插件新版本检查频率：`off` / `startup` / `daily` / `weekly`（只提示，不静默升级） |"
+    },
+    {
+      "section": "配置",
+      "text": "---"
+    },
+    {
+      "section": "常见问题",
+      "text": "| 现象 | 处理 |\n|---|---|\n| 侧边栏没有图标 / 面板报 `not found` | 客户端与路由在宿主启动时加载：**重启 DSH** |\n| **首次运行要等十几分钟** | 正常：首次下载模型（约 442 MB，自动镜像回退）并安装依赖（1–3 GB）；面板顶部有进度卡片，只需一次 |\n| 首次审计很慢 | 正常：要加载约 475 MB 权重（之后走常驻进程） |\n| **装了别的 DSH 插件会提醒吗 / 怎么关** | 默认「插件列表更新时」扫描并提醒；面板底部「高级 / 其他设置」折叠区可改为每周/每月/每季度/每半年，或选「不扫描」关闭；不扫自己与 `@deepseek-ai/*`；结果在 `$DSH_HOME/calibguard-plugin-scan.json` |\n| **会不会自动升级 CalibGuard** | **不会**。默认每次启动检查一次，发现新版本只在面板弹提示；你可以「打开 Release 页/复制命令」自行升级，或「跳过此版本」「以后不再询问」；检查频率可在折叠区改为关闭/每天/每周 |\n| **关掉云端复核后保存，勾选状态又自动变回开启** | 0.5.5 已修复：桥接的 status 之前会复用「首次加载模型时的旧配置」，保存后刷新状态把旧值带回面板（其实设置文件已保存、后续审计也会用新值）。现在 status 按当前共享设置实时计算，客户端也会用已保存的设置兜底；升级到 ≥0.5.5 即可 |\n| **点「保存」没反应 / 报错（旧版本）** | 旧版本（≤0.3.5）在 DSH 凭据库不可写时保存 API Key 会失败；升级到 ≥0.3.6（当前 0.5.1）会自动回退到本机凭据文件并提示存储位置。参数与 Key 是分两步保存的：参数先落盘，Key 失败会单独提示「参数已保存，但 API Key 写入失败」 |\n| **不知道怎么改设置** | 直接让 AI 改：说\"把阈值/云端复核/送审方式改成…\"，AI 会调 `calibguard_configure` 写入共享设置（面板同步生效）；涉及 API Key 时必须自己在面板填，AI 不会读也不会写 Key |\n| **面板保存 API Key 提示\"需要 credentialRef\"** | 升级到 ≥ **0.3.3**：面板「凭据名」可直接填写并记住（默认预填 `DEEPSEEK_API_KEY`）；旧版本请把 `credentialRef` 写进插件配置 |\n| **提示\"当前环境不支持写入 DSH 凭据库\"** | ≥0.3.6 起会自动回退到本机凭据文件 `~/.dsh/calibguard-credentials.json`（0600），面板会显示存储位置；想改回凭据库时在 DSH Models 页配置即可。也可用插件配置 "
+    },
+    {
+      "section": "常见问题",
+      "text": "完整排错表：[docs/troubleshooting.md](docs/troubleshooting.md)。\n\n---"
+    },
+    {
+      "section": "项目结构",
+      "text": "```\ndsh-CalibGuard/\n├── lib/                 Node 侧：插件入口、引擎管理、工具、路由、共享设置、浏览器面板\n├── bridge/              Python 桥接：常驻子进程，行式 JSON 协议，复用引擎\n├── engine/              从 CG_GUI 复制来的引擎核心（代码/词表/校准参数，不含 475 MB 权重）"
+    },
+    {
+      "section": "文档索引",
+      "text": "| 文档 | 内容 |\n|---|---|\n| [docs/configuration.md](docs/configuration.md) | 完整配置项、参数优先级、凭据来源、共享设置 |\n| [docs/performance.md](docs/performance.md) | 大文件为什么慢、两套滑窗（大小/步长/重叠）、提速手段、`maxFiles` 语义 |\n| [docs/troubleshooting.md](docs/troubleshooting.md) | 排错表、面板报错解读 |\n| [docs/design-notes.md](docs/design-notes.md) | 三个关键实现决策（设备定档 / 凭据 / 客户端半边）与协议 |\n| [docs/dsh-plugin-contract.md](docs/dsh-plugin-contract.md) | 从 DSH 0.1.5-rc.2 实测提取的插件契约速查（写插件用） |"
+    },
+    {
+      "section": "相关仓库",
+      "text": "| 仓库 | 内容 |\n|---|---|\n| **maomitgd2006/dsh-CalibGuard**（本仓库） | DSH 插件：工具 / 服务 / 路由 + 浏览器面板 + Python 桥接 |\n| **[P-436/CalibGuard](https://github.com/P-436/CalibGuard)**（CalibGuard 主仓库） | 引擎与基准：`CG_GUI/`（桌面壳 + 引擎 + 模型）、`CG_Bench/`（训练/评测） |"
+    },
+    {
+      "section": "许可证",
+      "text": "[MIT](LICENSE) © 2026 maomitgd"
+    },
+    {
+      "section": "dsh-calibguard",
+      "text": "English | [中文](README.md)\n\n[](https://www.npmjs.com/package/dsh-calibguard)\n\nPlugs the [CalibGuard](https://github.com/P-436/CalibGuard) file-security auditing engine into\n**DeepSeek Harness (DSH)**: the agent screens untrusted code *locally* before running or installing it,\nand you can also drag files into a sidebar panel for the same audit."
+    },
+    {
+      "section": "dsh-calibguard",
+      "text": "- 🔒 **Offline by default** — a local CodeBERT model plus Platt calibration yields an interpretable\n  \"malicious probability\"; file contents never leave the machine;\n- ☁️ **Cloud review only for the gray zone** — only files the local model is unsure about trigger one\n  cloud LLM call (can be disabled);\n- 🧭 **Four verdicts** — allow / suspicious / block / manual review, with evidence and a Markdown report;\n- 🧰 **Three interfaces** — agent tools (`calibguard_audit` audit / `calibguard_status` status / `calibguard_configure` settings) and a browser panel;\n- 🛡️ **Plugin health checks** — when another DSH plugin is installed/updated, CalibGuard scans it and warns\n  (one frequency dropdown: on update / periodic / off; never scans itself);\n- 🔔 **Update notices** — periodically checks for a newer version of this plugin and **asks before upgrading\n  (never silently upgrades)**; you can skip a version or disable the prompt;\n- ⚙️ **One set of settings** — saved in the panel, used by the AI too."
+    },
+    {
+      "section": "dsh-calibguard",
+      "text": "> **This repository is only the DSH plugin — it is not the CalibGuard main repository.**\n> CalibGuard main repository (engine, desktop GUI, benchmarks): **[P-436/CalibGuard](https://github.com/P-436/CalibGuard)**.\n> To make the plugin work out of the box,\n> the engine core needed at runtime (`calibguard/`, `audit_service.py`, tokenizer files and calibration\n> parameters) is **copied into this repository under [`engine/`](engine/README.md)** (copied as-is, logic not\n> modified; see that folder's README for how to re-sync). The 475 MB model weights are distributed as a\n> release asset of this repository; at runtime the plugin runs the engine in a persistent Python child process."
+    },
+    {
+      "section": "dsh-calibguard",
+      "text": "---"
+    },
+    {
+      "section": "What it is for",
+      "text": "| Scenario | How you use it | What you get |\n|---|---|---|\n| The agent is about to run a downloaded script/installer | Ask: \"audit `D:\\downloads\\setup.py` before installing\" | A verdict + triggering evidence + report path; the agent decides whether to proceed |\n| You want to check a suspicious file or archive | Drag it into the sidebar panel | Per-file verdicts, sorted, with a clickable Markdown report |\n| Audit a whole directory | Paste a host directory path | Recursive per-file audit (truncation is reported explicitly) |\n| You don't want code sent to the cloud | Offline by default; toggle cloud review off | Fully local inference, gray zone split at 0.5 |\n| You want a stricter/cheaper policy | Tune thresholds and delivery in the panel, then save | The panel and the AI share the same policy |"
+    },
+    {
+      "section": "Reading a verdict",
+      "text": "| Label | Meaning | Suggested action |\n|---|---|---|\n| **BLOCK** | Locally high-confidence malicious | Do not run it; read the evidence |\n| **MANUAL** | Uncertain / cloud review failed | Human review, or retry with another delivery mode |\n| **SUSPICIOUS** | Medium probability; could be dangerous APIs inside a legitimate library | Combine with the report; compressed third-party libs often land here or in BLOCK (see FAQ) |\n| **ALLOW** | Locally judged safe | Proceed |"
+    },
+    {
+      "section": "Reading a verdict",
+      "text": "Each result also carries the calibrated `p`, the inference device (cpu/cuda), window count,\nfile sha256, and the report path.\n\n---"
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "The plugin **ships the engine code** (`engine/`: `calibguard/`, `audit_service.py`, tokenizer files and\ncalibration parameters copied from CG_GUI); only the **475 MB of model weights** and the Python dependencies\nare missing. **You don't install them by hand.** After you install the plugin and restart DSH, if\n`<engineRoot>/.venv` is missing the plugin automatically, in the background:"
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "1. copies the bundled `engine/` into `<engineRoot>` (default `~/.dsh/calibguard-engine`);\n2. downloads the model weights from a **release asset of this repository** (~442 MB; GitHub is tried first,\n   then ghproxy-style mirrors; cached in `~/.dsh/calibguard-tools/model-cache`);\n3. creates `.venv` (**no preinstalled Python required**: it picks a 64-bit Python 3.10–3.12 from PATH, the `py`\n   launcher, `%LOCALAPPDATA%\\Programs\\Python` or common install dirs; if only 3.13+ or 32-bit Python exists, a\n   portable Python 3.10.8 is downloaded automatically, ~30 MB, GitHub mirror fallback). Run\n   `node setup.mjs --prepare-python` to check/prepare Python alone;\n4. installs dependencies from `requirements-gui.txt` (1–3 GB, Tsinghua PyPI mirror by default);\n5. becomes ready — tools and the panel just work."
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "> The CG release zip is **no longer downloaded from GitHub by default**; only an explicit\n> `node setup.mjs --from <zip>` or `--url <url>` uses it (offline installs / pinning an engine version)."
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "**Install speed**: the model/engine archive is downloaded with **4 parallel ranged connections** (measured\n0.6 MB/s single → 2.3 MB/s parallel); GitHub direct failures fall back to the gh-proxy / ghfast / ghproxy\nmirrors, and pip tries Tsinghua → Aliyun → USTC → Tencent → PyPI in order. Tune with\n`DSH_CALIBGUARD_DOWNLOAD_CONNECTIONS`."
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "**GPU auto-tiering**: with an NVIDIA GPU that has **CUDA ≥ 12.8 and compute capability ≥ 7.5** (RTX 20/30/40)\nthe installer pulls the **CUDA (cu128) build of torch**; otherwise it installs the CPU build (GTX 10 series is\nSM 6.1 and has no kernels in the cu128 wheels). The panel header shows the inference device and the reason."
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "Manual override (optional): `node setup.mjs --force-cuda` (force the CUDA build, skipping the CUDA/compute\nchecks — use at your own risk) or `node setup.mjs --cpu` (force CPU), or the env vars\n`DSH_CALIBGUARD_FORCE_CUDA=1` / `DSH_CALIBGUARD_CPU_ONLY=1`. Switch later with\n`node setup.mjs --reinstall-torch --force-cuda` (or `--cpu`)."
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "> The CPU and CUDA builds of torch **cannot coexist in one venv** (same package name; installing one replaces\n> the other). The CUDA build is a full torch and falls back to CPU when no GPU is available, so coexistence is\n> unnecessary.\n>\n> **Machines that already have the CPU build**: only when the GPU compute capability is **≥7.5** (e.g. RTX 2060)\n> and torch is the CPU build does the panel header detect \"NVIDIA … but torch is the CPU build\" and offer a\n> **one-click \"Reinstall GPU torch (~2.5 GB)\"** button (uninstalls the CPU build, installs CUDA, then restarts the\n> bridge). GPUs below 7.5 (e.g. GTX 1060 5GB / 6.1) correctly stay on CPU and are no longer prompted to reinstall."
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "**Where to watch progress**: the panel shows a \"First run: preparing engine and dependencies\" card with\nthe current step and the tail of the installer output; host logs show `[calibguard]` lines. The audit\nbutton stays disabled until it is ready — press \"刷新状态 / Refresh\" afterwards. Expect **10–20 minutes**\nonce (depends on network and pip mirror)."
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "> **If the install was interrupted**: since 0.5.4, the installer actually imports torch / transformers /\n> sklearn / openai and only then writes `<engineRoot>/.deps-ok.json`. If the install was interrupted\n> (DSH closed, machine shut down), the next start detects the incomplete venv and **automatically repairs**\n> it instead of treating it as ready (the panel shows \"reinstalling missing dependencies\")."
+    },
+    {
+      "section": "Before you start: engine dependencies are prepared automatically (like CG_GUI's launcher)",
+      "text": "> You can also pre-warm, or install offline, by running the same installer manually (idempotent):\n>\n> ```powershell\n> node setup.mjs                          # bundled engine → model release asset → venv → deps → self-check\n> node setup.mjs --from D:\\CalibGuard-GUI.zip   # use an already-downloaded release zip (offline)\n> node setup.mjs --dest D:\\CG_GUI         # custom location (then configure engineRoot)\n> ```\n>\n> Machines that already have a working `CG_GUI/` (with `.venv`) are not touched.\n> To disable the auto-download entirely, set the plugin option `autoSetup: false`."
+    },
+    {
+      "section": "Prerequisites",
+      "text": "1. **DSH** (DeepSeek Harness) — verified on 0.1.5-rc.2;\n2. **Python**: nothing to install — when no 64-bit 3.10–3.12 is available the installer downloads a portable Python automatically (cached in `~/.dsh/calibguard-tools`; disable with `--no-portable-python`);\n3. **Engine** — bundled with the plugin; model weights are downloaded from npm mirrors automatically. You can also pass `--from <zip>` or point `engineRoot` at an existing `CG_GUI/`."
+    },
+    {
+      "section": "Option 0 — desktop \"Add plugin\" dialog (easiest, recommended)",
+      "text": "**On DSH desktop it is one step: Settings → Add plugin → enter `dsh-calibguard` → restart DSH.**\nThat installs the latest npm release; to pin a version write `dsh-calibguard@0.3.3` (`@` + version).\nNo terminal and no source download needed.\n\nThe dialog also accepts any of the following (restart DSH afterwards):"
+    },
+    {
+      "section": "Option 0 — desktop \"Add plugin\" dialog (easiest, recommended)",
+      "text": "| Paste | Example | Notes |\n|---|---|---|\n| **GitHub repository URL** (recommended) | `https://github.com/maomitgd2006/dsh-CalibGuard` | Fetches the source and registers the bundle in the current profile |\n| **Local directory path** | `<path to this package>` (e.g. `/opt/dsh-calibguard`) | For a local clone / extracted copy |\n| **Package name** | `dsh-calibguard` or `dsh-calibguard@0.3.3` | ✅ **Published on npm**; without a version it installs `latest`, with `@version` it pins that version |"
+    },
+    {
+      "section": "Option 0 — desktop \"Add plugin\" dialog (easiest, recommended)",
+      "text": "> Equivalent CLI (verified: after install DSH automatically appends the package to the profile's\n> `dsh.profile.bundles`):\n>\n> ```powershell\n> dsh plugin --profile <profile> add dsh-calibguard                          # npm package (recommended)\n> dsh plugin --profile <profile> add https://github.com/maomitgd2006/dsh-CalibGuard  # GitHub source\n> dsh plugin --profile <profile> add file:<absolute path to this package>     # local directory\n> ```\n>\n> npm package page: <https://www.npmjs.com/package/dsh-calibguard>"
+    },
+    {
+      "section": "Option 0 — desktop \"Add plugin\" dialog (easiest, recommended)",
+      "text": "**Whichever way you install it**, the first run prepares the engine automatically (next section) — no manual setup needed."
+    },
+    {
+      "section": "Option A — install via the CLI (npm package; for non-desktop / scripted setups)",
+      "text": "```powershell\ndsh plugin --profile <profile> add dsh-calibguard\n```\n\nThen insert the loader row in the profile's `cordis.patch.yml` with `name: dsh-calibguard`\n(this package ships its own `cordis.patch.yml`, which is applied automatically as a bundle).\n\n> The `desktop` profile is managed exclusively by the Electron app — CLI refuses it. Desktop users\n> should use \"Option 0\", or the `file://` row in \"Option B\"."
+    },
+    {
+      "section": "Option B — source mode (a `file://` loader row, for local development / offline use)",
+      "text": "Append to the profile's `cordis.patch.yml` (replace the path with yours):\n\n```yaml\n- insert:\n    - id: calibguard\n      name: 'file:///<absolute path to this package>/lib/index.js'\n      config:\n\nThe `insert` path is rewritten to a `file://` URL by DSH. On desktop the profile lives at\n`<DSH_HOME>/profiles/desktop/cordis.patch.yml` (`<DSH_HOME>` defaults to `~/.dsh`)."
+    },
+    {
+      "section": "Option B — source mode (a `file://` loader row, for local development / offline use)",
+      "text": "Optional: `node scripts/link-dsh.mjs` junctions DSH's own `@deepseek-ai/*` packages into this package so\nthe optional `defineTool` / Config schema support is active (everything still works without it)."
+    },
+    {
+      "section": "Option C — release archive (offline / no npm)",
+      "text": "Download `dsh-calibguard-<version>.zip` (~100 KB, no `test/`) from\n[Releases](https://github.com/maomitgd2006/dsh-CalibGuard/releases/latest), extract it to a fixed directory,\nthen point the `name` in \"Option B\" at `<extracted dir>/lib/index.js`."
+    },
+    {
+      "section": "Verify",
+      "text": "- After restarting DSH a shield icon appears in the sidebar; the panel header shows\n  engine / thresholds / cloud-review status;\n- Or ask the agent to call `calibguard_status` — it reports device, model, thresholds and credential state;\n- Command-line self-check (bypasses DSH, tests the engine directly):\n\n```powershell\nnode scripts/bridge-selftest.mjs                        # engine status only\nnode scripts/bridge-selftest.mjs \"<engineRoot>/samples\" # status + a trial audit\n```"
+    },
+    {
+      "section": "Verify",
+      "text": "> ⚠️ Restart DSH after changing the patch or the panel code: the client bundle is loaded at host\n> startup and ESM modules are cached.\n\n---"
+    },
+    {
+      "section": "1) Let the agent audit (tool calls)",
+      "text": "Just ask in natural language; the agent calls `calibguard_audit`:\n\n```\n\"Audit D:\\downloads\\setup.py before installing it.\"\n\"Is this archive safe? D:\\downloads\\vendor.zip\"\n\"Go through D:\\projects\\vendor and flag anything suspicious.\"\n```\n\nThe agent sees the full verdict, evidence and report path. It can also override thresholds for a single\ncall (without touching your saved settings)."
+    },
+    {
+      "section": "2) The panel (browser UI)",
+      "text": "Sidebar shield icon → **drop files onto the dashed area** (or pick files, or paste host paths) → \"开始审计\" (Start).\n\n- Archives are unpacked in memory and audited file by file; uploads are written to a temp dir and deleted afterwards;\n- Large files get an ETA based on measured throughput (e.g. \"287 windows, ~76 s\"), so it never looks hung;\n- Results are sorted by severity; click \"查看 Markdown 报告\" to read the report."
+    },
+    {
+      "section": "3) Shared settings (panel ↔ AI)",
+      "text": "The panel's \"Regular parameters\" section mirrors CG_GUI (**collapsed by default**; the summary shows the current\nthresholds and cloud-review state): **cloud-review toggle → API Key / Base URL / model name / content source /\ndelivery mode (with the matching truncation or sliding-window fields) → gray zone**.\n\nAfter pressing Save:"
+    },
+    {
+      "section": "3) Shared settings (panel ↔ AI)",
+      "text": "- values are written to `$DSH_HOME/calibguard-settings.json` (defaults to `~/.dsh`, never committed);\n- **the AI uses the same values** (precedence: plugin config < shared settings < per-call options);\n- changes take effect immediately, no restart;\n- the API key goes into the DSH credential store (`ctx.credentials`), not into that settings file;\n- the **credential name** is only the name of the storage slot (not the secret; pre-filled as\n  `DEEPSEEK_API_KEY`): fill in the API key and save; the name is remembered in shared settings\n  (`credentialRef`) and the value goes to the DSH credential store first. **If the current DSH version\n  cannot be written from a plugin, the key is stored in the local `~/.dsh/calibguard-credentials.json`\n  (0600, this machine only)** and the panel tells you where it landed;\n- **audit results**: every audit writes JSON + Markdown into the engine's `reports/` directory\n  (default `<engineRoot>/reports`, `engineRoot` defaults to `~/.dsh/calibguard-engine`). The panel shows\n  that path, has a \"clear results\" button, and each item links to its Markdown report."
+    },
+    {
+      "section": "4) Let the agent change settings (`calibguard_configure`)",
+      "text": "If the user does not know where to change something — or wants the agent to apply recommended values — just say:\n\n> \"set the allow threshold to 0.1 and block to 0.95\" / \"turn on cloud review with deepseek-chat\" / \"cap directory audits at 50 files\" / \"reset to defaults\"\n\nThe agent calls `calibguard_configure`, which writes the **shared settings** (the same ones the panel saves;\neffective immediately):"
+    },
+    {
+      "section": "4) Let the agent change settings (`calibguard_configure`)",
+      "text": "- editable: gray-zone thresholds, cloud-review switch, base URL / model name, content source, delivery mode,\n  truncate/window sizes, directory `max_files`, and the credential **name**;\n- `reset: true` behaves like the panel \"reset\"; passing `null` for one key restores that key's default;\n- **security**: this tool can **never read or write an API key** (the result only contains the settings\n  whitelist, never credential values). If a key is needed, ask the user to fill it in the panel —\n  never ask for the key in chat."
+    },
+    {
+      "section": "5) Other DSH plugin scanning (automatic health check)",
+      "text": "CalibGuard watches the profile's plugin list (`dsh.profile.bundles`) with **one frequency dropdown**:\n\n| Frequency | Behavior |\n|---|---|\n| **On plugin-list update** (default) | scans newly installed/updated plugins and warns (removed plugins are ignored) |\n| **Weekly / monthly / quarterly / half-yearly** | full scan when due |\n| **Off** | disabled (the \"scan all now\" button still works manually) |"
+    },
+    {
+      "section": "5) Other DSH plugin scanning (automatic health check)",
+      "text": "- **never scans itself** (`dsh-calibguard` ships models/tokenizer data and is the most sensitive package in\n  the profile), and skips `@deepseek-ai/*` core packages by default;\n- up to 100 files per plugin (adjustable 1–500), results summarized per plugin\n  (block / manual_review / suspicious / allow);\n- risky plugins are logged as `[calibguard] 插件提醒：name@version → …`; state lives in\n  `$DSH_HOME/calibguard-plugin-scan.json`;\n- these settings live in the collapsed **\"Advanced / other settings\"** section at the bottom of the panel;\n  the AI can change them via `calibguard_configure`."
+    },
+    {
+      "section": "6) Update notices for this plugin (ask, never auto-upgrade)",
+      "text": "- checks npm for a newer `dsh-calibguard` version: **off / on every DSH startup / daily / weekly**\n  (default: every startup);\n- when a newer version exists, the panel shows a notice at the top with current/latest versions and how to\n  upgrade (desktop \"Settings → Add plugin → `dsh-calibguard`\", the CLI command, Release/npm links);\n- **nothing is upgraded silently**; you can \"skip this version\" or \"don't ask again\" (persisted);\n- state file: `$DSH_HOME/calibguard-self-update.json`; there is also an \"check now\" button in the collapsed area."
+    },
+    {
+      "section": "7) Tool parameters (per-call, advanced)",
+      "text": "| Parameter | Description |\n|---|---|\n| `paths` | Required; absolute file or directory paths |\n| `include_evidence` | Return evidence details (default `true`) |\n| `max_files` | Directory recursion cap (default 20, 1–200) |\n| `allow_threshold` / `block_threshold` | Gray-zone bounds for this call (0 < p < 1) |\n| `llm_enabled` | Enable cloud review for this call |\n| `llm_content_source` | `evidence` (distilled) / `raw` (preprocessed text) |\n| `llm_delivery_mode` | `truncate` / `window` / `all` |\n| `truncate_chars` / `window_chars` / `window_overlap` | Cloud-delivery chunking |\n| `window_stride` | Model-side sliding-window stride (1–511, default 256; 510 speeds up big files) |"
+    },
+    {
+      "section": "7) Tool parameters (per-call, advanced)",
+      "text": "> There is also `calibguard_configure` for **persistent** shared settings (thresholds / cloud review /\n> delivery mode / directory limit / credential name), shared with the panel; it never reads or writes the API key.\n\n---"
+    },
+    {
+      "section": "Configuration",
+      "text": "Common keys of the loader row `config` (full table: [docs/configuration.md](docs/configuration.md)):"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Description |\n|---|---|---|\n| `enabled` | `true` | When false nothing is registered (no need to remove the row) |\n| `engineRoot` | `''` | CG_GUI directory; empty = the `CG_GUI` next to this package |\n| `device` | `auto` | Checks both CUDA build and compute capability; low-end GPUs fall back to CPU |\n| `credentialRef` | `''` | Credential **name** (storage slot, not the secret), e.g. `DEEPSEEK_API_KEY`; empty = use the name saved from the panel; the value lives in the DSH credential store / env |\n| `announceToModel` | `true` | Add \"when to use CalibGuard\" to the system prompt |\n| `autoSetup` | `true` | On first run, automatically download the engine, a portable Python when needed, and install deps; set `false` to only fail with instructions |\n| `maxFiles` | `20` | Directory recursion cap; explicitly given/uploaded files are not capped |\n| `pluginScanMode` | `'update'` | Other-plugin scan frequency: `off` / `update` (on plugin-list update) / `weekly` / `monthly` / `quarterly` / `halfyearly` |\n| `pluginScanMaxFiles` | `100` | Max files scanned per plugin (1–500) |\n| `selfUpdateCheck` | `'startup'` | Update-check frequency for this plugin: `off` / `startup` / `daily` /"
+    },
+    {
+      "section": "Configuration",
+      "text": "---"
+    },
+    {
+      "section": "FAQ",
+      "text": "| Symptom | Fix |\n|---|---|\n| No sidebar icon / panel says `not found` | Client bundle and routes load at host startup: **restart DSH** |\n| **First run takes 10–20 minutes** | Normal: the model (~442 MB, from the repository's model release asset with mirror fallback) and dependencies (1–3 GB) are installed once; the panel shows progress |\n| First audit is slow | Normal: ~475 MB of weights are loaded once (then the process stays resident) |\n| Big file takes tens of seconds | Normal: full-text sliding-window inference; see [docs/performance.md](docs/performance.md) |\n| Gray zone always goes to manual review | No credential configured: save \"credential name + API key\" in the panel, or set `credentialRef`, or configure it in DSH Models |\n| **Will it warn me about other DSH plugins / how to disable** | Default is \"on plugin-list update\"; the collapsed \"Advanced / other settings\" section lets you switch to weekly/monthly/quarterly/half-yearly or \"off\"; never scans itself or `@deepseek-ai/*`; state file `$DSH_HOME/calibguard-plugin-scan.json` |\n| **Does CalibGuard auto-upgrade itself** | **No.** By default it checks once per DSH startup and only shows a notice; you can open the Release pa"
+    },
+    {
+      "section": "FAQ",
+      "text": "Full troubleshooting table: [docs/troubleshooting.md](docs/troubleshooting.md).\n\n---"
+    },
+    {
+      "section": "Layout",
+      "text": "```\ndsh-CalibGuard/\n├── lib/                 Node side: plugin entry, engine manager, tools, routes, settings, browser panel\n├── bridge/              Python bridge: persistent child process, line-delimited JSON protocol\n├── engine/              Bundled engine core copied from CG_GUI (code / tokenizer / calibration, no weights)"
+    },
+    {
+      "section": "Docs",
+      "text": "| Document | Contents |\n|---|---|\n| [docs/configuration.md](docs/configuration.md) | Full option table, precedence, credential sources, shared settings |\n| [docs/performance.md](docs/performance.md) | Why big files are slow, the two sliding windows (size/stride/overlap), speed-ups, `maxFiles` semantics |\n| [docs/troubleshooting.md](docs/troubleshooting.md) | Troubleshooting table, panel error decoding |\n| [docs/design-notes.md](docs/design-notes.md) | Three key design decisions (device tiering / credentials / client half) and the protocol |\n| [docs/dsh-plugin-contract.md](docs/dsh-plugin-contract.md) | DSH plugin contract cheat-sheet extracted from 0.1.5-rc.2 (Chinese) |"
+    },
+    {
+      "section": "Related repositories",
+      "text": "| Repository | Contents |\n|---|---|\n| **maomitgd2006/dsh-CalibGuard** (this repo) | DSH plugin: tools / service / routes + browser panel + Python bridge |\n| **[P-436/CalibGuard](https://github.com/P-436/CalibGuard)** (CalibGuard main repository) | Engine and benchmark: `CG_GUI/` (desktop shell + engine + model), `CG_Bench/` (training/eval) |"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE) © 2026 maomitgd"
+    }
+  ],
+  "skipped": []
+}
