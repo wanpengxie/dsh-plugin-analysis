@@ -1,0 +1,200 @@
+{
+  "repo": "ruaibeite/dsh-auto-observe",
+  "commit": "bc0b3cd908017156d0d4d6c00030ff3f994dfc86",
+  "extracted_at": "2026-11-10T20:23:15.302133+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 30605,
+    "lines_by_language": {
+      "JSON": 47,
+      "JavaScript": 413,
+      "Markdown": 158,
+      "Other": 23,
+      "Shell": 35,
+      "YAML": 20
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "install.sh",
+      "lib/index.js",
+      "package.json",
+      "test/contract.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@ruaibeite/dsh-auto-observe",
+    "version": "0.1.0",
+    "description": "Records the edit target's current version as an observation when the agent never used the read tool (bash/sed/awk inspection does not count), so the fs observation policy stops rejecting edits with FS_NOT_OBSERVED.",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      }
+    },
+    "files": [
+      "lib/",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ruaibeite/dsh-auto-observe.git"
+    },
+    "homepage": "https://github.com/ruaibeite/dsh-auto-observe#readme",
+    "bugs": {
+      "url": "https://github.com/ruaibeite/dsh-auto-observe/issues"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "fs",
+      "observation-policy",
+      "edit"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "scripts": {
+      "test": "node test/contract.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch: inserts this plugin into a profile's layer stack.\n#\n# `dsh plugin --profile <name> add <package>` reconciles `dsh.profile.bundles`\n# against installed packages and, seeing this declaration, appends the package\n# to the bundle stack. The profile boot then merges THIS patch, so no profile\n# file needs editing by hand.\n#\n# 配置含义（插件不导出 schema，缺省即默认值，键可省略）：\n#   edits  —— 编辑（锚定替换）前自动登记观察：默认 true。\n#             替换仍必须逐字匹配当前内容，匹配不上就失败，所以风险可控。\n#   writes —— 整文件覆盖前也自动登记：默认 false，**不建议随意打开**。\n#             盲覆盖没有逐字匹配兜底，一开就等于放弃「先读后写」这层保护。\n#   log    —— 每次介入打一行日志：默认 true。安全放宽不该是无声的。\n- insert:\n    - id: fs-auto-observe\n      name: '@ruaibeite/dsh-auto-observe'\n      config:\n        edits: true\n        writes: false\n        log: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/ruaibeite/dsh-auto-observe.git",
+      "where": "package.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ruaibeite/dsh-auto-observe#readme",
+      "where": "package.json:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ruaibeite/dsh-auto-observe/issues",
+      "where": "package.json:26"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-13T05:51:12Z",
+    "created_at": "2026-10-13T05:51:05Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "@ruaibeite/dsh-auto-observe",
+      "text": "让「用 bash 看过、没用 `read` 工具读过」的文件也能编辑——修掉反复出现的\n\n```\nError: cannot modify \"…/index.vue\": file has not been read — read the file, then retry\n```"
+    },
+    {
+      "section": "这个报错为什么会一直出现",
+      "text": "`dsh-fs-observation-policy` 要求模型**先读后改**，而只有少数通道会登记观察记录：\n\n| 通道 | 是否登记观察 |\n| --- | --- |\n| `read` 工具（含 `offset`/`limit` 分段读） | ✅ |\n| 成功的 `write` / `edit` | ✅ |\n| 读图片 | ✅ |\n| **`bash`：`sed -n`、`awk 'NR>=…'`、`cat`、`python3 - <<PY`** | ❌ **不登记** |\n\n而模型查代码时恰恰习惯用 bash。实测一个真实会话的日志：**1186 次 bash 对 114 次 read**，\n其中 4 次编辑被拒，**全部**发生在「此前只有 bash 看过、`read` 次数为 0」的文件上："
+    },
+    {
+      "section": "这个报错为什么会一直出现",
+      "text": "| 被拒的文件 | 失败前的 `read` | 失败前的 bash（读过它） |\n| --- | --- | --- |\n| `docgen-ubuntu/README.md` | 0 | 5（`cat >>`、`sed -n`） |\n| `web/.../clue/unassigned/index.vue` | 0 | 28（`awk 'NR>=168…'`、python 脚本） |\n| `web/.../attachment/ClueAttachmentDialog.vue` | 0 | 5（`awk 'NR>=210…'`） |\n\n也就是说：**内容明明看过，只是看的通道不算数**。模型随后只能「再读一次、重试」——\n每次多一个来回，长会话里反复发生。"
+    },
+    {
+      "section": "它做什么",
+      "text": "在 `fs/edit-intent` / `fs/write-intent` 这条 waterfall 上**前置**一个监听器\n（必须 `prepend`：策略的监听器不调用 `next()`，排在它后面就永远轮不到），规则只有三条："
+    },
+    {
+      "section": "它做什么",
+      "text": "1. 自己也监听 `fs/observed`，维护一份与策略**同构**的镜像账本（`会话对象 → targetKey`）。\n   **目标已有记录 → 什么都不做**，直接交回 waterfall：所以「文件在你读过之后被改过」的\n   `FS_STALE_VERSION` 保护**原样保留**，不会因为本插件而消失。\n2. 目标**没有**记录时，用 `ctx.fs.stat` 取一次**真实**版本，然后按 `read` 工具的做法发出\n   `fs/observed`：存在 → `{kind:'present', version}`，不存在 → `{kind:'absent'}`。\n   策略于是看到「刚读过」，返回正常的版本守卫。\n3. 不是普通文件、拿不到会话归属（`actor.agent.session` 缺失）、`stat` 抛错 —— 一律不插手，\n   原样交回。无归属时策略本来也不放行，替它决定就成了伪造。"
+    },
+    {
+      "section": "代价，说清楚",
+      "text": "模型可能确实没有**看过内容**（只是知道文件存在）。本插件记下的观察是**关于文件的事实**\n（它此刻的真实版本），而不是「模型看过它」这个断言——放宽的是策略对「已读」的解释。\n\n- `edit`（锚定替换）**默认开**：替换仍必须**逐字匹配当前内容**，匹配不上就失败，这层\n  兜底还在；过期的 CAS 基准也不再被覆盖（见第 1 条）。\n- `write`（整文件覆盖）**默认关**：盲覆盖没有逐字匹配兜底，一开就等于放弃「先读后写」\n  这层保护。真要开就显式写 `writes: true`，并且知道自己在放弃什么。\n- 每次介入都会打一行日志（默认开），安全放宽不该是无声的。"
+    },
+    {
+      "section": "一个已知边界",
+      "text": "镜像账本从**本插件加载时**开始记录。正常路径下这没有问题：插件要重启 Harness 才生效，而重启\n会同时清空策略的内存账本，两边都从零开始、不会错位。唯一的例外是在**已经读过若干文件之后**\n才热启用本插件（例如在插件页里打开它）——那时这些文件的旧记录不在镜像里，本插件会为它们补登\n记一次当前版本，等于把这一次的过期判定放宽了。重启一次即回到同步状态。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\n./install.sh                  # 装进 desktop profile（默认）\nPROFILE_NAME=web ./install.sh # 装进别的 profile\n```\n\n装完**重启 Harness**（宿主插件不像客户端插件那样热重载）。确认挂载：\n\n```sh\ndsh --profile desktop --dump-config | grep -A3 fs-auto-observe\n```\n\n与 `@deepseek-ai/dsh-fs-local` + `@deepseek-ai/dsh-fs-observation-policy` +\n`@deepseek-ai/dsh-tool-fs` 组合使用；**没有策略时它只是多一次 `stat`**，不改变任何写入语义。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\nnode test/contract.mjs   # 零依赖契约测试\n```\n\n测试用**忠实复刻**的 waterfall 与策略逻辑（逐字对照线上实现：队列 shift 语义、异步监听器、\n`WeakMap<owner, Map<targetKey, record>>` 账本、`editIntent` 的三种结果），覆盖：\n\n- **基线复现**：不装插件时，未读编辑确实被拒（就是你看到的那条报错）；\n- 装上后同一场景放行，且断言「登记发生在策略裁决**之前**」；\n- 已有记录时**零干预**（`stat` 调用次数为 0）；\n- 过期场景下策略仍拿旧版本当 CAS 基准（保护未被削弱）；\n- 无会话归属不伪造、缺失目标登记为 `absent`、非普通文件与 IO 失败原样交回；\n- `prepend` 注册位置、`writes`/`edits`/`log` 三个开关。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    },
+    {
+      "section": "@ruaibeite/dsh-auto-observe",
+      "text": "Removes the recurring `file has not been read — read the file, then retry` failure for files the\nagent inspected with `bash` instead of the `read` tool."
+    },
+    {
+      "section": "Why it keeps happening",
+      "text": "`dsh-fs-observation-policy` requires a prior read, and only a few channels record an observation:\nthe `read` tool (including `offset`/`limit` windows), a successful `write`/`edit`, and image reads.\nA `bash` call — `sed -n`, `awk 'NR>=…'`, `cat`, a `python3 - <<PY` script — **records nothing**,\nand that is exactly how agents inspect code. In one real session: 1186 bash calls against 114\nreads, with four rejected edits, all on files that had only ever been looked at through bash."
+    },
+    {
+      "section": "What it does",
+      "text": "A listener prepended to the `fs/edit-intent` / `fs/write-intent` waterfal (prepend is required: the\npolicy's listener never calls `next()`, so anything queued after it never runs):"
+    },
+    {
+      "section": "What it does",
+      "text": "1. it mirrors `fs/observed` into a ledger shaped exactly like the policy's. **If a record exists it\n   does nothing** and hands control back — so `FS_STALE_VERSION` protection is untouched;\n2. with **no** record it takes the file's real version via `ctx.fs.stat` and emits `fs/observed`\n   the way the `read` tool does (`{kind:'present', version}`, or `{kind:'absent'}` when missing);\n3. a non-regular file, a missing session owner, or a failed `stat` all fall through untouched."
+    },
+    {
+      "section": "The trade-off, stated plainly",
+      "text": "The record it writes is a fact about the *file* (its current version), not a claim that the model\nsaw the content. `edit` is on by default because an anchored replacement still has to match the\ncurrent text byte for byte. `write` — a blind full overwrite — is **off** by default (`writes:\ntrue` to change that) because it has no such backstop. Every intervention logs one line."
+    },
+    {
+      "section": "One known bound",
+      "text": "The mirror starts recording when this plugin loads. That is harmless on the normal path — the\nplugin needs a Harness restart, and a restart empties the policy's in-memory ledger too, so both\nstart from zero together. The one exception is hot-enabling this plugin mid-session, after files\nhave already been read: those earlier records are unknown to the mirror, so the plugin records\ntheir current version once, which relaxes staleness for that single edit. A restart realigns them."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\n./install.sh        # desktop profile by default; PROFILE_NAME=web ./install.sh for another\n```\n\nRestart Harness afterwards (host plugins do not hot-reload)."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode test/contract.mjs   # dependency-free contract tests\n```\n\nThe tests replicate the real waterfall (queue-shift) and the policy's ledger logic verbatim, and\ncover the baseline failure, unblocking, zero-intervention when a record exists, staleness\npreservation, missing owners/targets, `prepend` placement and all three switches."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

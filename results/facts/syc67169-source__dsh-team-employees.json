@@ -1,0 +1,689 @@
+{
+  "repo": "syc67169-source/dsh-team-employees",
+  "commit": "5e01c5b511f2a51840d6ba52b0da31e1394b6b97",
+  "extracted_at": "2026-11-10T20:51:39.015816+00:00",
+  "tree": {
+    "files": 44,
+    "bytes": 930379,
+    "lines_by_language": {
+      "JSON": 113,
+      "JavaScript": 5214,
+      "Markdown": 688,
+      "Other": 37,
+      "YAML": 366
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "bin/link-into-profile.mjs",
+      "bin/research-worker.mjs",
+      "cordis.patch.yml",
+      "docs/always-on-research.md",
+      "docs/images/office.png",
+      "docs/images/qq.jpg",
+      "docs/images/settings.png",
+      "docs/plans/2026-10-04-always-on-research.md",
+      "docs/plans/2026-10-04-stability.md",
+      "docs/stability-repair.md",
+      "docs/内容流水线编排设计.md",
+      "employees.json",
+      "lib/client.js",
+      "lib/content-tools.js",
+      "lib/content.mjs",
+      "lib/index.js",
+      "lib/output.mjs",
+      "lib/research-headless.mjs",
+      "lib/research-source.mjs",
+      "lib/research-store.mjs",
+      "lib/research-supervisor.mjs",
+      "lib/research-worker.mjs",
+      "lib/storage.mjs",
+      "lib/store.mjs",
+      "lib/tools.js",
+      "lib/usage.mjs",
+      "package.json",
+      "research-headless.patch.yml",
+      "test/client-lifecycle.mjs",
+      "test/content.smoke.mjs",
+      "test/harness.mjs",
+      "test/mini-react.mjs",
+      "test/research-interface.mjs",
+      "test/research-process.mjs",
+      "test/research.mjs",
+      "test/smoke.mjs",
+      "test/stability.mjs",
+      "tools/preview.mjs",
+      "tools/screenshot.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-team-employees",
+    "version": "0.5.0",
+    "private": true,
+    "type": "module",
+    "description": "把 DeepSeek Harness 变成多员工协同团队：员工花名册、内容流水线、一道人工闸门，外加一个会动的办公室界面",
+    "license": "MIT",
+    "author": "syc67169-source",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "multi-agent",
+      "agent-team",
+      "content-pipeline"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/syc67169-source/dsh-team-employees.git"
+    },
+    "homepage": "https://github.com/syc67169-source/dsh-team-employees#readme",
+    "bugs": {
+      "url": "https://github.com/syc67169-source/dsh-team-employees/issues"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./tools": "./lib/tools.js",
+      "./content": "./lib/content-tools.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "employees.json",
+      "bin",
+      "docs",
+      "test",
+      "tools",
+      "README.md",
+      "LICENSE",
+      "research-headless.patch.yml",
+      "CHANGELOG.md"
+    ],
+    "scripts": {
+      "test": "node test/smoke.mjs && node test/content.smoke.mjs && node --test test/stability.mjs test/client-lifecycle.mjs test/research.mjs test/research-process.mjs test/research-interface.mjs",
+      "preview": "node tools/preview.mjs",
+      "shot": "node tools/screenshot.mjs",
+      "research:worker": "node bin/research-worker.mjs",
+      "research:stop": "node bin/research-worker.mjs --stop"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-renderer",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-team-employees —— 员工团队骨架的挂载清单\n#\n# 这一层只做两件事：\n#   1) 挂 Host 行：团队数据 + /team 面板\n#   2) 声明两个「员工」= 两个 agent preset（工牌：人设 + 工具）\n#\n# 装好后在新建会话的模式下拉里就能选到这两位员工。\n# 员工之间共享上下文靠 Agent Teams（会话里的项目组功能）和 team_log 工作日志。\n\n- insert:\n    # ── Host 平面：团队数据与面板 ─────────────────────────────────────\n    - id: team-employees\n      name: 'dsh-team-employees'\n\n    # ── 员工一：情报员工 ─────────────────────────────────────────────\n    # 只检索、只核实、只出简报；不给 shell，避免他手滑改东西。\n    - id: preset-employee-scout\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: scout\n        name: 情报员工·阿研\n        description: 只检索、只核实、只出简报；不写代码、不改文件\n        order: 20\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                你是「阿研」，团队里的情报员工。你的工牌只有三件事：\n\n                1. 检索：把问题拆成几个可查的子问题，逐个查，优先一手来源。\n                2. 核实：一条事实至少两个独立来源；只有单一来源就明说「单一来源，未交叉验证」。\n                3. 出简报：结论先行，每条结论后面跟来源链接；不确定的地方单独列一节写清楚不确定在哪。\n\n                你不做的事：不改别人的文件、不写生产代码、不替用户做决定。\n                需要动手实现的活儿，写清楚「这活该派给谁、需要什么输入」，交给用户或其他员工。\n\n                开工前先调用 team_inbox 看一眼别人做到哪了；收工前用 team_log 写一条结论。\n              suffix: Your working directory is {{cwd}}.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: team-tools\n            name: 'dsh-team-employees/tools'\n          - id: content-tools\n            name: 'dsh-team-employees/content'\n\n    # ── 员工二：审核员工 ─────────────────────────────────────────────\n    # 给他 shell 是为了能跑测试、看 git diff 复现问题；他自己不许改代码。\n    - id: preset-employee-reviewer\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: reviewer\n        name: 审核员工·阿审\n        description: 只挑毛病、只给证据和复现步骤；不替人改\n        order: 21\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                你是「阿审」，团队里的审核员工。你的工牌只有三件事：\n\n                1. 挑毛病：先看有没有会让用户吃亏的问题（数据丢失、越权、静默失败、边界条件），\n                   再看代码风格。按严重程度排序，最严重的放最前面。\n                2. 给证据：每条问题都要带位置（文件:行号）和复现路径；\n                   能从日志、测试输出、命令结果里取证的，就实际跑一遍取回来。\n                3. 说不确定：没验证过的判断标成「推测」，并写清要验证它需要做什么。\n\n                你不做的事：不替别人改代码，不重写实现，不给「建议改为」式的空话。\n                你只交问题清单，改不改由作者决定。\n\n                开工前先调用 team_inbox 看作者写了什么、做到哪；收工前用 team_log 写一条结论摘要。\n              suffix: Your working directory is {{cwd}}.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: team-tools\n            name: 'dsh-team-employees/tools'\n\n    # ══ 内容流水线（见 docs/内容流水线编排设计.md）═══════════════════════\n    # 互斥不靠身份校验，靠阶段契约：这几个角色的工具集是一样的，\n    # 谁能推动哪一步由 content.mjs 的状态机决定（每个阶段只认特定的前置阶段）。\n    # 唯一的硬闸门 content_gate 由 content-tools 自带的 ctx.tools.guard 拦下。\n\n    # ── 员工三：选题员工 ─────────────────────────────────────────────\n    - id: preset-employee-select\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: select\n        name: 选题员工·阿筛\n        description: 只打分、只排序、只给先验；不写稿、不改别人的分\n        order: 22\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                你是「阿筛」，团队里的选题员工。你的工牌只有三件事：\n\n                1. 先读历史：开工前调用 weights（action=read）。表是空的就明说「还没有样本，本次纯靠判断」。\n                2. 打分：给 hook / emotion / info 三个 0-100 的分，写清为什么。分要能被人反驳——「感觉不错」不是理由。\n                3. 排序：标出你打算先做哪几条、放弃了哪几条、为什么。\n\n                你不做的事：不写脚本、不改别人打过的分、不替用户决定发不发。\n                你的分会被冻结并与真实播放量对账，所以别讨好谁，打你真实的判断。\n              suffix: Your working directory is {{cwd}}.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: team-tools\n            name: 'dsh-team-employees/tools'\n          - id: content-tools\n            name: 'dsh-team-employees/content'\n\n    # ── 员工四：成稿员工 ─────────────────────────────────────────────\n    - id: preset-employee-write\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: write\n        name: 成稿员工·阿写\n        description: 只写脚本与标题；不改分、不决定发布\n        order: 23\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                你是「阿写」，团队里的成稿员工。你的工牌只有三件事：\n\n                1. 按分写稿：只写已经评过分的条目。前三秒必须把人钉住。\n                2. 写人话：不要「让我们一起探索」这种句子。写完自己读一遍，像不像一个人在说话。\n                3. 交出可拍的东西：脚本 + 标题（不超过 20 字）。\n\n                你不做的事：不改分数、不改授权信息、不自己决定发布。\n              suffix: Your working directory is {{cwd}}.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: team-tools\n            name: 'dsh-team-employees/tools'\n          - id: content-tools\n            name: 'dsh-team-employees/content'\n\n    # ── 员工五：数据员工 ─────────────────────────────────────────────\n    # 给他 shell：对账时能直接在指标文件上跑统计，不必让模型心算。\n    - id: preset-employee-measure\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: measure\n        name: 数据员工·阿析\n        description: 只回采和对账；样本不足不下结论\n        order: 24\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                你是「阿析」，团队里的数据员工。你的工牌只有三件事：\n\n                1. 回采：抄回真实数据，来源如实写（手工抄写 manual，接口取写 api）。\n                2. 对账：找出「评分高但没人看」和「评分低但爆了」的条目，各举例子。\n                3. 重算权重：样本够了再 update；不够就明说不够，不许硬凑结论。\n\n                你不做的事：不美化数据、不替爆款找借口、不在样本不足时下结论。\n                一条数据改变不了什么，三十条才说明问题。\n              suffix: Your working directory is {{cwd}}.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: team-tools\n            name: 'dsh-team-employees/tools'\n          - id: content-tools\n            name: 'dsh-team-employees/content'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/tools.js",
+    "lib/content-tools.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "bin/link-into-profile.mjs:33"
+    },
+    {
+      "name": "DSH_WEB_URL",
+      "kind": "env",
+      "where": "bin/link-into-profile.mjs:145"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "bin/research-worker.mjs:8"
+    },
+    {
+      "name": "DSH_TEAM_OPERATOR",
+      "kind": "env",
+      "where": "lib/content-tools.js:325"
+    },
+    {
+      "name": "DSH_TEAM_CONTENT_ROOT",
+      "kind": "env",
+      "where": "lib/content.mjs:41"
+    },
+    {
+      "name": "DSH_TEAM_METRICS_ROOT",
+      "kind": "env",
+      "where": "lib/content.mjs:45"
+    },
+    {
+      "name": "DSH_USD_CNY",
+      "kind": "env",
+      "where": "lib/content.mjs:456"
+    },
+    {
+      "name": "DSH_TEAM_DSH_CLI",
+      "kind": "env",
+      "where": "lib/research-headless.mjs:8"
+    },
+    {
+      "name": "DSH_TEAM_DSH_CLI",
+      "kind": "env",
+      "where": "lib/research-headless.mjs:10"
+    },
+    {
+      "name": "DSH_TEAM_NODE",
+      "kind": "env",
+      "where": "lib/research-supervisor.mjs:10"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/research-supervisor.mjs:12"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/store.mjs:12"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "lib/store.mjs:17"
+    },
+    {
+      "name": "DSH_USAGE_PATH",
+      "kind": "env",
+      "where": "lib/usage.mjs:11"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "test/content.smoke.mjs:17"
+    },
+    {
+      "name": "DSH_USAGE_PATH",
+      "kind": "env",
+      "where": "test/content.smoke.mjs:18"
+    },
+    {
+      "name": "DSH_USD_CNY",
+      "kind": "env",
+      "where": "test/content.smoke.mjs:19"
+    },
+    {
+      "name": "DSH_USAGE_PATH",
+      "kind": "env",
+      "where": "test/content.smoke.mjs:383"
+    },
+    {
+      "name": "DSH_TOOLS_ENTRY",
+      "kind": "env",
+      "where": "test/harness.mjs:16"
+    },
+    {
+      "name": "DSH_INSTALL_ROOT",
+      "kind": "env",
+      "where": "test/harness.mjs:23"
+    },
+    {
+      "name": "DSH_TOOLS_ENTRY",
+      "kind": "env",
+      "where": "test/harness.mjs:39"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "test/research-interface.mjs:11"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "test/research-process.mjs:15"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "test/research-process.mjs:27"
+    },
+    {
+      "name": "FIXTURE_HANG",
+      "kind": "env",
+      "where": "test/research-process.mjs:27"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "test/research.mjs:10"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "test/smoke.mjs:20"
+    },
+    {
+      "name": "DSH_USAGE_PATH",
+      "kind": "env",
+      "where": "test/smoke.mjs:117"
+    },
+    {
+      "name": "DSH_TEAM_ROOT",
+      "kind": "env",
+      "where": "test/stability.mjs:10"
+    },
+    {
+      "name": "DSH_TEAM_CONTENT_ROOT",
+      "kind": "env",
+      "where": "test/stability.mjs:11"
+    },
+    {
+      "name": "DSH_TEAM_METRICS_ROOT",
+      "kind": "env",
+      "where": "test/stability.mjs:12"
+    },
+    {
+      "name": "DSH_USAGE_PATH",
+      "kind": "env",
+      "where": "test/stability.mjs:13"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:19387",
+      "where": "bin/link-into-profile.mjs:145"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/news",
+      "where": "lib/client.js:365"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "lib/index.js:433"
+    },
+    {
+      "host": "${req.headers",
+      "url": "http://${req.headers?.host",
+      "where": "lib/index.js:453"
+    },
+    {
+      "host": "${req.headers",
+      "url": "http://${req.headers?.host",
+      "where": "lib/index.js:466"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/syc67169-source/dsh-team-employees.git",
+      "where": "package.json:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/syc67169-source/dsh-team-employees#readme",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/syc67169-source/dsh-team-employees/issues",
+      "where": "package.json:23"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "test/content.smoke.mjs:115"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/video/1",
+      "where": "test/content.smoke.mjs:231"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/research-interface.mjs:27"
+    },
+    {
+      "host": "evil.test",
+      "url": "https://evil.test",
+      "where": "test/research-interface.mjs:32"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/research-process.mjs:18"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/research.mjs:20"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1/private",
+      "where": "test/research.mjs:27"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/research.mjs:35"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1/private",
+      "where": "test/research.mjs:38"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1/private",
+      "where": "test/research.mjs:43"
+    },
+    {
+      "host": "example.org",
+      "url": "https://example.org",
+      "where": "test/research.mjs:44"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "test/research.mjs:54"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "test/research.mjs:122"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1/",
+      "where": "test/research.mjs:123"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com:8443/",
+      "where": "test/research.mjs:124"
+    },
+    {
+      "host": "evil.test",
+      "url": "https://evil.test",
+      "where": "test/stability.mjs:111"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "content_new",
+      "where": "test/content.smoke.mjs:114"
+    },
+    {
+      "kind": "tool",
+      "name": "content_score",
+      "where": "test/content.smoke.mjs:133"
+    },
+    {
+      "kind": "tool",
+      "name": "content_score",
+      "where": "test/content.smoke.mjs:146"
+    },
+    {
+      "kind": "tool",
+      "name": "content_new",
+      "where": "test/content.smoke.mjs:152"
+    },
+    {
+      "kind": "tool",
+      "name": "content_script",
+      "where": "test/content.smoke.mjs:155"
+    },
+    {
+      "kind": "tool",
+      "name": "content_script",
+      "where": "test/content.smoke.mjs:161"
+    },
+    {
+      "kind": "tool",
+      "name": "content_render",
+      "where": "test/content.smoke.mjs:171"
+    },
+    {
+      "kind": "tool",
+      "name": "content_publish",
+      "where": "test/content.smoke.mjs:190"
+    },
+    {
+      "kind": "tool",
+      "name": "content_gate",
+      "where": "test/content.smoke.mjs:197"
+    },
+    {
+      "kind": "tool",
+      "name": "content_gate",
+      "where": "test/content.smoke.mjs:204"
+    },
+    {
+      "kind": "tool",
+      "name": "content_gate",
+      "where": "test/content.smoke.mjs:210"
+    },
+    {
+      "kind": "tool",
+      "name": "content_publish",
+      "where": "test/content.smoke.mjs:219"
+    },
+    {
+      "kind": "tool",
+      "name": "content_new",
+      "where": "test/content.smoke.mjs:236"
+    },
+    {
+      "kind": "tool",
+      "name": "content_publish",
+      "where": "test/content.smoke.mjs:244"
+    },
+    {
+      "kind": "tool",
+      "name": "content_new",
+      "where": "test/content.smoke.mjs:250"
+    },
+    {
+      "kind": "tool",
+      "name": "content_score",
+      "where": "test/content.smoke.mjs:252"
+    },
+    {
+      "kind": "tool",
+      "name": "content_script",
+      "where": "test/content.smoke.mjs:253"
+    },
+    {
+      "kind": "tool",
+      "name": "content_render",
+      "where": "test/content.smoke.mjs:254"
+    },
+    {
+      "kind": "tool",
+      "name": "content_gate",
+      "where": "test/content.smoke.mjs:255"
+    },
+    {
+      "kind": "tool",
+      "name": "content_queue",
+      "where": "test/content.smoke.mjs:269"
+    },
+    {
+      "kind": "tool",
+      "name": "metrics_pull",
+      "where": "test/content.smoke.mjs:276"
+    },
+    {
+      "kind": "tool",
+      "name": "weights",
+      "where": "test/content.smoke.mjs:321"
+    },
+    {
+      "kind": "tool",
+      "name": "weights",
+      "where": "test/content.smoke.mjs:329"
+    },
+    {
+      "kind": "tool",
+      "name": "content_new",
+      "where": "test/content.smoke.mjs:376"
+    },
+    {
+      "kind": "tool",
+      "name": "content_new",
+      "where": "test/content.smoke.mjs:387"
+    },
+    {
+      "kind": "tool",
+      "name": "cost_report",
+      "where": "test/content.smoke.mjs:393"
+    },
+    {
+      "kind": "tool",
+      "name": "content_publish",
+      "where": "test/stability.mjs:36"
+    },
+    {
+      "kind": "tool",
+      "name": "content_publish",
+      "where": "test/stability.mjs:90"
+    },
+    {
+      "kind": "tool",
+      "name": "content_publish",
+      "where": "test/stability.mjs:122"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 9,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-10-04T08:59:54Z",
+    "created_at": "2026-10-04T05:18:19Z"
+  },
+  "runtime_files": [
+    "bin/research-worker.mjs",
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/content-tools.js",
+    "lib/content.mjs",
+    "lib/index.js",
+    "lib/output.mjs",
+    "lib/research-headless.mjs",
+    "lib/research-source.mjs",
+    "lib/research-store.mjs",
+    "lib/research-supervisor.mjs",
+    "lib/research-worker.mjs",
+    "lib/storage.mjs",
+    "lib/store.mjs",
+    "lib/tools.js",
+    "lib/usage.mjs",
+    "package.json",
+    "test/client-lifecycle.mjs",
+    "test/content.smoke.mjs",
+    "test/harness.mjs",
+    "test/mini-react.mjs",
+    "test/research-interface.mjs",
+    "test/research-process.mjs",
+    "test/research.mjs",
+    "test/smoke.mjs",
+    "test/stability.mjs",
+    "tools/preview.mjs",
+    "tools/screenshot.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-team-employees",
+      "text": "把 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 从「一个助手」变成一个**多员工协同团队**：有工牌、有花名册、有一条内容流水线、有一道只有人能按的闸门，还有一个会动的办公室界面。"
+    },
+    {
+      "section": "dsh-team-employees",
+      "text": "- **员工**——五个 agent preset（模式）。给每个员工一张工牌：人设 + 工具集（模型由会话选择）。情报、选题、成稿、数据四个内容岗，外加一个代码审核岗。\n- **花名册**——`$DSH_HOME/team/employees.json`。谁在岗、什么岗位、模型备注，写在一个 JSON 里。\n- **内容流水线**——素材登记 → 打分 → 写稿 → 制作计划 → **人工裁决** → 发布包 → **真实发布确认** → 回采 → 重算权重。每个阶段只认特定的前置阶段，谁都不能跳。\n- **办公室**——侧边栏一个图标，整页看到六个部门在干嘛：上钟中、待命、空岗、等你。状态来自真实会话，不是装饰动画。\n- **员工管理**——「设置 → 员工」里增删改花名册，缺工牌时会给出可复制的配置片段。\n- **长期研究职责（0.5.0）**——本地独立后台定时检查公开网页，用真实 Harness headless 模型生成简报，保留上次记忆并提示变化。关闭桌面应用后继续运行；电脑关机或休眠时无法继续。"
+    },
+    {
+      "section": "它为什么不是又一个「AI 助手壳子」",
+      "text": "三个设计上的取舍，决定了它跟同类东西不一样：\n\n**人工工具闸门。** `ctx.tools.guard()` 拦截员工调用 `content_gate`；状态机拒绝自动离开 review，发布包要求署名审核记录。办公室提供人工审核入口。具有本机文件/终端权限的员工仍可能直接改数据，因此这不是系统级权限隔离。\n\n**能用代码做的，不外包给模型。** 切片、转码、排期全是确定性任务，`content_render` 只登记参数，不调 ffmpeg、更不烧 token。模型只干「判断」和「写」。\n\n**状态诚实。** 「上钟中」的判据是那个员工的会话当前真的开着 turn；账本读不到就说读不到，不编数字；平台收入是美元、账本是人民币，没设汇率就不算净额，两个原值都留着。"
+    },
+    {
+      "section": "装上",
+      "text": "需要 Node 20+ 和一个能跑的 DeepSeek Harness。\n\n**方式一：本地目录链接（改代码最方便）**\n\n```sh\ngit clone https://github.com/syc67169-source/dsh-team-employees.git\ncd dsh-team-employees\nnode bin/link-into-profile.mjs --dry-run   # 先看要改什么，不写盘\nnode bin/link-into-profile.mjs             # 装进 desktop profile\n\n脚本只做三件事，都会打印出来：给 `~/.dsh/profiles/<profile>/package.json` 加一条 `link:` 依赖、把插件名追加进 `dsh.profile.bundles`、在 profile 的 `node_modules` 里建软链（原文件先备份成 `package.json.team.bak`）。**完全退出 DSH 再打开**后生效；卸载用 `--remove`。"
+    },
+    {
+      "section": "装上",
+      "text": "**方式二：手动改 profile（不想跑脚本）**\n\n在 `~/.dsh/profiles/<profile>/package.json` 里加一条依赖和一条 bundle：\n\n```json\n{\n  \"dependencies\": { \"dsh-team-employees\": \"github:syc67169-source/dsh-team-employees\" },\n  \"dsh\": { \"profile\": { \"bundles\": [\"…原有的…\", \"dsh-team-employees\"] } }\n}\n\n然后在那个 profile 目录里 `pnpm install`。桌面端注意：`dsh plugin --profile desktop` 会被 CLI 拒绝（官方设计如此），手动或走脚本。"
+    },
+    {
+      "section": "装上之后",
+      "text": "0. 完全退出 DSH 再打开（客户端界面模块在启动时组图）。\n1. 侧边栏出现「办公室」图标 → 点进去是六个部门的工位。\n2. 「设置 → 员工」能看到花名册，可以增删改。\n3. 新建会话 → 模式下拉里出现五位员工。\n4. 选「情报员工·阿研」，问她「团队里现在有谁」→ 她调 `team_roster`。再让她登记一条素材 → 回办公室页刷新，情报部那个工位会显示「上钟中」。"
+    },
+    {
+      "section": "先验收长期研究第一版",
+      "text": "进入 **办公室 → 长期研究员工 → 新建长期职责**，选择员工，填写目标和 1–5 个无需登录的公开网址，再设置间隔与每日模型唤醒上限。保存后默认暂停。\n\n点击 **立即执行一次** 建立第一份简报；查看最近记忆、来源和完整报告。点击 **启用定期检查** 才开始持续运行：内容未变跳过模型，发生变化生成新简报与面板提示。点击 **暂停** 会取消正在执行的任务。\n\n这是本地第一版，一次只运行一个职责；使用 headless 配置的模型，员工模型备注不负责路由。支持文本、HTML、JSON、RSS/Atom，暂不支持需要登录或浏览器渲染的网页。详情与验收步骤见 [长期研究使用与验收](docs/always-on-research.md)。"
+    },
+    {
+      "section": "员工与工具",
+      "text": "| 工位 | 模式 id | 干什么 | 工具集 |\n|---|---|---|---|\n| 情报员工·阿研 | `scout` | 找素材、核授权、登记 | 检索 + 文件 + 内容工具 |\n| 选题员工·阿筛 | `select` | 打分、排序、给先验 | 文件 + 内容工具 |\n| 成稿员工·阿写 | `write` | 脚本与标题 | 文件 + 内容工具 |\n| 数据员工·阿析 | `measure` | 回采、对账、重算权重 | 文件 + shell + 内容工具 |\n| 审核员工·阿审 | `reviewer` | 代码审核（与内容线无关） | 文件 + shell |\n\n团队通用工具（`dsh-team-employees/tools`）：`team_roster` 看花名册、`team_log` 写一条工作记录、`team_inbox` 读别人做到哪了。"
+    },
+    {
+      "section": "员工与工具",
+      "text": "内容流水线工具（`dsh-team-employees/content`）：`content_new`、`content_score`、`content_script`、`content_render`、`content_queue`、`content_gate`（仅人）、`content_publish`、`metrics_pull`、`weights`、`cost_report`。\n\n设计与字段细节见 [`docs/内容流水线编排设计.md`](docs/内容流水线编排设计.md)。"
+    },
+    {
+      "section": "数据在哪",
+      "text": "```\n$DSH_HOME/team/\n├── employees.json          花名册\n├── journal.jsonl           团队工作日志（成员之间靠它交接）\n├── content/\n\n全部是纯文本，直接看、直接改、直接进版本控制都行。"
+    },
+    {
+      "section": "自检",
+      "text": "```sh\nnpm test          # 112 项；自动测试使用隔离目录与模型夹具，不消耗真实模型额度\n```\n\n- `test/smoke.mjs`——团队工具的注册契约、Host 的 `/team/api`、办公室状态机（上钟/待命/空岗/人工岗怎么算出来的）、浏览器兜底页、客户端包的槽位注册与界面渲染。\n- `test/content.smoke.mjs`——流水线状态机、闸门、记账、权重表。\n\n本机装了 dsh 时，会用 dsh 自己的 schema 校验器验证工具契约（`DSH_TOOLS_ENTRY` 可指定位置）；没装就自动跳过那几条并明确打印说明，其余断言照跑。客户端界面是在一个最小 React 运行时里真渲染过的，所以 CI 不需要浏览器。\n\n看设计不用启动 DSH：\n\n```sh\nnpm run preview   # 三个界面渲染成静态 HTML 到 docs/preview.html\nnpm run shot      # 有 Chrome 时顺便重截 docs/images/ 里的图\n```"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\ndsh-team-employees/\n├── cordis.patch.yml        挂载清单：1 个 Host 行 + 5 个员工 preset\n├── employees.json          花名册样例（安装时复制到 $DSH_HOME/team/）\n├── lib/"
+    },
+    {
+      "section": "加一个员工 / 加一个工位",
+      "text": "加员工（改花名册，界面里就能做）：`$DSH_HOME/team/employees.json` 加一条。\n\n加工位（要改配置）：`cordis.patch.yml` 里复制一个 `preset-employee-*` 块，改 `id`（小写字母数字连字符）、`name`、`order`、人设和工具集；如果要让他守一段流水线，再在 `lib/index.js` 的 `DEPARTMENTS` 里加一行。设置页在缺工牌时会给出可以复制的片段，但不会替你改配置文件。\n\n员工花名册的 `model` 仅作备注，不会切换模型。实际模型请在对应会话的模型选择器中设置；当前插件没有员工级模型路由。"
+    },
+    {
+      "section": "边界与风险",
+      "text": "- **闸门只挡员工，不挡你。** 它防的是「员工自我放行」，不是防你手滑。\n- **`exec.agent` 是宿主内部字段。** 这是目前唯一能区分「人 vs 员工」的手段，闸门押在它上面。升级 DSH 后请重跑自检确认它还在拦。\n- **账本是 best-effort。** `.dshw-usage.json` 由宿主写，不是公开契约；读不到就退回「读不到」，不编数字。\n- **不代发、不批量多账号、不绕平台风控。** 发布这一步刻意留给人：`content_publish` 只写本地发布包，不接触任何平台接口。\n- **`bin/render.mjs` 还没写。** `content_render` 只登记参数；真正的 ffmpeg 转码是下一步。\n- **版本跟着 DSH 走。** 针对 `0.2.0-rc.2` 的运行时写的，宿主接口变动时需要跟着改；自检会告诉你哪一条不对了。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT，见 [LICENSE](LICENSE)。"
+    },
+    {
+      "section": "联系与交流",
+      "text": "用这个插件遇到问题、想提需求，或者只是想要一起交流一些AI有关的问题——扫码加我：\n\n<img src=\"docs/images/qq.jpg\" alt=\"QQ 二维码\" width=\"240\">\n\nQQ：`3657854368`（EasonS）"
+    },
+    {
+      "section": "稳定性修复（2026-10-04）",
+      "text": "- JSON 写入使用唯一临时文件；条目、花名册、回采、权重以跨进程目录锁串行化。旧 revision 保存会被拒绝。\n- 锁等待最长 15 秒，失败时不会覆盖数据。若进程崩溃留下 `.lock`，先关闭所有使用该数据目录的 Harness/脚本，再核对 `owner.json` 的 PID 已退出并移除相应锁目录。不会根据过期时间自动抢走锁。\n- 索引保留每个 id 的最新摘要；队列先去重再筛选，统计包含全部条目。事件历史仍保留在条目内。\n- `content_publish` 只准备发布包，条目保持待发布。办公室中署名审核、填写真实发布链接/记录并确认后，才进入 published；回采只接受已经确认发布的平台。可为同一条内容准备多个平台。\n- 人工操作接口复用宿主认证并校验来源，防止跨站请求。它不是抵御具有本机文件/终端权限的代理的安全沙箱。\n- 停止以全局账本前后差额自动归因内容成本。队列显示的是已关联记录，不是完整实际支出；旧成本记录未经重新审计，金额为 0 不代表免费。\n- 办公室复用一次条目和账本读取；日志从尾部读取；请求 15 秒超时、卸载时取消，前次请求完成后再轮询。\n- 制作阶段依然只生成制作计划，尚未实现媒体渲染器；审核时必须自行检查实际成片。"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,257 @@
+{
+  "repo": "stopperino/dsh-routerai-usage",
+  "commit": "5f77dd2f73aadc778f87a31fe5d208ca4dbd8527",
+  "extracted_at": "2026-11-10T20:46:02.977812+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 149139,
+    "lines_by_language": {
+      "JSON": 103,
+      "JavaScript": 3005,
+      "Markdown": 134,
+      "Other": 48,
+      "YAML": 47
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/ru.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-routerai-usage",
+    "version": "1.4.0",
+    "type": "module",
+    "description": "Баланс RouterAI и стоимость запросов в веб-интерфейсе DeepSeek Harness: баланс личного кабинета, расход текущей сессии вместе с субагентами, включая генерацию изображений, видео и речи, а также служебные вызовы модели.",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "routerai",
+      "balance",
+      "cost",
+      "usage",
+      "tokens",
+      "spend"
+    ],
+    "author": "stopperino",
+    "homepage": "https://github.com/stopperino/dsh-routerai-usage#readme",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/stopperino/dsh-routerai-usage.git"
+    },
+    "bugs": {
+      "url": "https://github.com/stopperino/dsh-routerai-usage/issues"
+    },
+    "license": "MIT",
+    "engines": {
+      "node": ">=20",
+      "dsh": ">=0.1.7-rc.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-routerai-usage — баланс и стоимость запросов для шлюза RouterAI.\n#\n# Хост-часть опрашивает GET {baseURL}/credits для баланса личного кабинета и запрашивает\n# GET {baseURL}/generation?id=<responseId> для реальной стоимости каждого вызова модели,\n# а затем отдаёт и то и другое через same-origin мост по адресу /api/dsh-routerai-usage.\n# Клиентская часть рисует их под полем ввода.\n#\n# Кроме вызовов модели, плагин считает генерации, которые идут мимо диалога: изображения,\n# видео, речь и расшифровку (агент делает их сам, обычно через терминал). Они тарифицируются\n# по-другому, поэтому читаются из ответа, который агент получил, — из пары событий\n# tool/call → tool/result журнала сессии:\n#   POST /v1/images               — идентификатора генерации нет вообще, стоимость в usage.cost;\n#   POST /v1/videos               — асинхронная задача, биллинговый id лежит в generation_id;\n#   POST /v1/audio/speech         — идентификатор в заголовке X-Generation-Id;\n#   POST /v1/audio/transcriptions — он же; стоимость ещё и в usage.cost.\n# Перечня трат у RouterAI нет (в API ни выписки, ни истории генераций), поэтому иначе эти суммы\n# получить неоткуда. В панель они попадают разделом «Кроме чата», вместе со служебными вызовами\n# самого Harness — заголовком сессии и сжатием истории, у которых идентификатор не сохраняется\n# и сумма поэтому неизвестна.\n#\n# Параметры:\n#   pollSeconds:     интервал обновления баланса, пока виджет на экране (по умолчанию 30)\n#   idlePollSeconds: интервал обновления баланса, пока никто не смотрит (по умолчанию 300)\n#   baseURL:         корень API RouterAI (по умолчанию https://routerai.ru/api/v1)\n#   peak:            предупреждать о пиковом тарифе провайдера (по умолчанию true)\n#   peakRefreshSeconds: как часто перечитывать расписание тарифов (по умолчанию 1800)\n#\n# `idlePollSeconds` существует потому, что раньше `/credits` опрашивался каждые 30 с всё время\n# работы хоста — 2 880 запросов в сутки, которых никто не видел, идеально периодичных. Без\n# присмотра теперь остаётся 1 запрос / 5 минут. Оба параметра снизу ограничены 10 с, и idle\n# никогда не опускается ниже pollSeconds.\n#\n# `peak` включает предупреждение о повышенном тарифе. Некоторые провайдеры моделей берут в часы\n# нагрузки вдвое больше; RouterAI публикует их расписание в `GET /models/{model}/endpoints`\n# (поле `variable_pricings`, тип `time-of-day`), поэтому список моделей не зашит в плагин:\n# любая модель, у которой провайдер объявил такие окна, попадает в предупреждение сама.\n# Расписание перечитывается раз в `peakRefreshSeconds` и не требует ключа.\n# `peak: false` полностью выключает режим и прекращает эти запросы.\n- insert:\n    - id: routerai-usage\n      name: dsh-routerai-usage\n      config:\n        pollSeconds: 30\n        idlePollSeconds: 300\n        baseURL: https://routerai.ru/api/v1\n        peak: true\n        peakRefreshSeconds: 1800\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:1062"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "index.js:1064"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:1068"
+    },
+    {
+      "name": "XDG_STATE_HOME",
+      "kind": "env",
+      "where": "index.js:1068"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "index.js:1068"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "routerai.ru",
+      "url": "https://routerai.ru/api/v1",
+      "where": "cordis.patch.yml:24"
+    },
+    {
+      "host": "routerai.ru",
+      "url": "https://routerai.ru/api/v1",
+      "where": "cordis.patch.yml:45"
+    },
+    {
+      "host": "routerai.ru",
+      "url": "https://routerai.ru/api/v1",
+      "where": "index.js:29"
+    },
+    {
+      "host": "routerai.ru",
+      "url": "https://routerai.ru/api/openapi.json",
+      "where": "index.js:71"
+    },
+    {
+      "host": "${authority",
+      "url": "http://${authority",
+      "where": "index.js:828"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/stopperino/dsh-routerai-usage#readme",
+      "where": "package.json:34"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/stopperino/dsh-routerai-usage.git",
+      "where": "package.json:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/stopperino/dsh-routerai-usage/issues",
+      "where": "package.json:40"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 10,
+    "pushed_at": "2026-10-29T17:52:42Z",
+    "created_at": "2026-10-24T13:42:01Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-routerai-usage",
+      "text": "Баланс RouterAI и стоимость запросов в веб-интерфейсе DeepSeek Harness.\n\nПоказывает баланс личного кабинета и сколько потратила текущая сессия — вместе с субагентами —\nпод полем ввода. По клику раскрывается, на что именно ушло: по провайдерам и по моделям.\n\n```\n505,14 ₽   ◎ 147,04 ₽\n```\n\n```\n◈ routerai                                    505,14 ₽\nвсего 147,04 ₽ · 848 запросов\nв т.ч. субагенты: 33,35 ₽ · 222 запроса\nПо провайдеру"
+    },
+    {
+      "section": "dsh-routerai-usage",
+      "text": "Панель открывается по клику и закрывается повторным кликом, кликом мимо или клавишей Escape."
+    },
+    {
+      "section": "Установка",
+      "text": "Откройте в Harness раздел плагинов, нажмите «Добавить плагин» и вставьте ссылку на репозиторий:\n\n```\nhttps://github.com/stopperino/dsh-routerai-usage\n```\n\nПосле установки включите плагин в списке — и всё.\n\nЕму нужен веб-интерфейс Harness. В профилях без него (например, `headless` или `acp`) плагин\nустановится, но работать не будет.\n\nЕсли на компьютере нет Git, вместо ссылки на репозиторий дайте ссылку на архив:"
+    },
+    {
+      "section": "Установка",
+      "text": "```\nhttps://codeload.github.com/stopperino/dsh-routerai-usage/tar.gz/refs/tags/v1.3.2\n```"
+    },
+    {
+      "section": "Пиковые часы",
+      "text": "Некоторые провайдеры берут в часы нагрузки вдвое больше — у DeepSeek так. В это время цифра баланса\nкраснеет, а в панели появляется предупреждение:\n\n```\nПиковые часы: цена 2× · до 15:00 (местное)\n```\n\nВремя местное, по вашему часовому поясу. В обычные часы виджет выглядит как раньше."
+    },
+    {
+      "section": "Пиковые часы",
+      "text": "Расписание плагин берёт у RouterAI, а не хранит у себя, поэтому модели, у которых провайдер объявит\nтакие окна, попадают в предупреждение сами. Сейчас они есть у моделей DeepSeek; у GLM, Kimi, Qwen,\nGPT, Claude, Gemini, Grok и MiniMax цена в течение дня одна и та же.\n\nЕсли предупреждение не нужно, выключите его в настройках: `peak: false`."
+    },
+    {
+      "section": "Как считается стоимость",
+      "text": "RouterAI сам решает, на каком провайдере выполнить запрос. Цены у провайдеров разные: один держит\nмодель в квантовании полегче и берёт дешевле, другой отдаёт полную версию и стоит дороже. Поэтому\nпосчитать по прайс-листу не получится — ошибка может быть в разы.\n\nПлагин ничего не считает сам: он спрашивает у RouterAI, сколько запрос стоил на самом деле, и\nпоказывает эту сумму."
+    },
+    {
+      "section": "Изображения, видео и речь",
+      "text": "Расход на них идёт мимо диалога с моделью: агент делает запрос сам, обычно через терминал\n(`curl … /api/v1/images`). Поэтому такие генерации считаются отдельно — по ответу, который агент\nполучил, а не по прайс-листу.\n\nЧто важно знать про их устройство:"
+    },
+    {
+      "section": "Изображения, видео и речь",
+      "text": "- у изображений вообще нет идентификатора генерации — стоимость приходит только в теле ответа\n  (`usage.cost`). Никакого «спросить у RouterAI позже» для них не существует, поэтому генерация\n  вне чата, ответ на которую не попал в журнал, посчитана быть не может;\n- у видео идентификатор есть, но это `generation_id`, а не идентификатор задачи;\n- у речи и расшифровки идентификатор приходит в заголовке `X-Generation-Id`;\n- перечня трат у RouterAI нет: в API нет ни выписки, ни истории генераций, так что «достать\n  задним числом» нечего."
+    },
+    {
+      "section": "Изображения, видео и речь",
+      "text": "В панели такие траты показаны в разделе **Кроме чата** — по видам, и только если они были. Если\nсумма неизвестна, плагин так и пишет: «стоимость не сообщена», а не рисует ноль.\n\nТуда же попадают служебные вызовы модели, которые Harness делает сам и которые тоже списываются с\nбаланса: заголовок сессии и сжатие истории. Идентификатор генерации у них не сохраняется, поэтому\nони видны как расход, но без суммы."
+    },
+    {
+      "section": "Настройка",
+      "text": "```yaml\n- id: routerai-usage\n  name: dsh-routerai-usage\n  config:\n    pollSeconds: 30                          # как часто обновлять баланс, пока виджет на экране\n\nОба интервала не быстрее 10 секунд, и `idlePollSeconds` не может быть меньше `pollSeconds`."
+    },
+    {
+      "section": "Ключ доступа",
+      "text": "Ключ берётся из учётных данных Harness по имени `ROUTERAI_API_KEY` — тому же, что использует\nпровайдер модели `routerai`. Плагин его не сохраняет, не пишет в журналы и не отдаёт в браузер.\nБез ключа виджет покажет «нет ключа», остальной Harness будет работать как обычно."
+    },
+    {
+      "section": "Что уходит с вашей машины",
+      "text": "Только запросы к RouterAI: баланс, стоимость уже выполненного запроса и расписание пиковых тарифов\n(последнее — без ключа). Ничего не отправляется автору плагина или кому-то ещё, телеметрии нет.\n\nСтоимость каждого запроса запоминается по его идентификатору, поэтому повторное открытие той же\nсессии не делает ни одного обращения к серверу. В памяти остаются только пары «идентификатор →\nсумма»: ни токенов, ни промптов, ни содержимого сессий."
+    },
+    {
+      "section": "Что уходит с вашей машины",
+      "text": "Баланс обновляется, только пока виджет на экране. Когда вкладка скрыта или окно закрыто, плагин\nпочти не обращается к серверу — около 288 запросов в сутки вместо 2 880."
+    },
+    {
+      "section": "Совместимость",
+      "text": "DeepSeek Harness `0.1.7-rc.1` или новее; проверено на `0.2.1-rc.3`."
+    },
+    {
+      "section": "Лицензия",
+      "text": "MIT — см. [LICENSE](LICENSE)."
+    }
+  ],
+  "skipped": []
+}

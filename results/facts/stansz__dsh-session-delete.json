@@ -1,0 +1,137 @@
+{
+  "repo": "stansz/dsh-session-delete",
+  "commit": "d2746a8a1db6ea143e3c5c40482635cf4e1ee822",
+  "extracted_at": "2026-11-10T20:44:36.526763+00:00",
+  "tree": {
+    "files": 5,
+    "bytes": 43796,
+    "lines_by_language": {
+      "JSON": 28,
+      "JavaScript": 995,
+      "Markdown": 80,
+      "Other": 1,
+      "YAML": 13
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-session-delete",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Delete a DSH session completely - log, lock, projection cache and workspace entry - and refuse the cases that would take the running Host down with it.",
+    "license": "MIT",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "meta": {
+        "title": "Session Delete",
+        "description": "Fully delete DSH sessions (log, lock, projection cache, workspace row) from the composer or an agent tool, with guards against deleting the session you are running in."
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch for dsh-session-delete.\n#\n# One inserted row. It mounts this package's Host half, which registers one tool\n# and two commands into existing services:\n#\n#   ctx.tools.register()    -> the `session_admin` tool (action: list | inspect | delete)\n#   ctx.commands.register() -> /session-list and /session-delete\n#\n# The row id is unique to this bundle, so nothing shipped is overridden and no base\n# row's config has to be restated. Delete this entry to remove every contribution.\n- insert:\n    - id: session-delete\n      name: 'dsh-session-delete'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:70"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "index.js:71"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-10-04T15:26:38Z",
+    "created_at": "2026-10-04T05:56:16Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-session-delete",
+      "text": "Delete a DSH session **completely**, without taking the Host down with it."
+    },
+    {
+      "section": "Why it needs a plugin",
+      "text": "A DSH session is not one file:\n\n| Piece | Path |\n|---|---|\n| Log directory (log + `session.lock`) | `$DSH_HOME/sessions/<encoded-cwd>/<session-id>/` |\n| Projection checkpoint | `$DSH_HOME/storages/session_projcache/sessions/<session-id>.json` |\n| Workspace row (this is the sidebar) | `$DSH_HOME/storages/workspace.json` |"
+    },
+    {
+      "section": "Why it needs a plugin",
+      "text": "Deleting the directory in Finder removes the first row and leaves the other two, which is\nwhy the session stays listed and then fails to open. Deleting a session whose Agent is\nstill live is the other failure mode: the Agent keeps appending to a log directory that no\nlonger exists."
+    },
+    {
+      "section": "What it registers",
+      "text": "Global contributions into existing services; nothing shipped is overridden.\n\n- **Tool `session_admin`** (`action: list | inspect | delete`)\n- **Command `/session-list`** — every stored session with the flags that decide deletability.\n- **Command `/session-delete <session-id> [force]`** — the same operation from the composer.\n\nAll three call one implementation (`deleteSession` in `index.js`)."
+    },
+    {
+      "section": "Usage",
+      "text": "```\n/session-list\n/session-delete session-1a2b3c4d-...          # refuses if live/locked\n/session-delete session-1a2b3c4d-... force    # cancels the turn, then deletes\n```\n\nOr ask the agent, or use the tool:\n\n```\nsession_admin action=\"list\"\nsession_admin action=\"inspect\"  sessionId=\"session-...\"\nsession_admin action=\"delete\"   sessionId=\"session-...\" dryRun=true\nsession_admin action=\"delete\"   sessionId=\"session-...\" force=true"
+    },
+    {
+      "section": "Usage",
+      "text": "`dryRun: true` reports exactly which paths and rows would go, and whether the delete would\nbe blocked, without touching anything."
+    },
+    {
+      "section": "The guards",
+      "text": "1. **Self** — deleting the session the call is running in is always refused. That is the\n   case that would otherwise crash the Host, and it is checked before anything else.\n2. **Live or lock-held** — refused unless `force: true`. \"Live\" comes from\n   `sessionController.list()`; \"lock-held\" is decoded from `session.lock` and tested with\n   `process.kill(pid, 0)`, so an Agent in another Host or terminal counts too.\n3. **Deletion order** — cancel the turn, flush the live log, forget the workspace row,\n   remove the projection cache, then unlink the log directory. Ownership is released\n   before the bytes go.\n4. **Containment** — every removed path is verified to sit inside `$DSH_HOME/sessions`\n   before `rmSync`, so a bad store value can never delete something else. Buckets are\n   discovered by scanning for a directory named exactly the session id, never by\n   reconstructing the cwd encoding.\n5. **Lossless results** — every field is materialized, because the Host rejects a tool\n   result that is not lossless JSON. This is also why a stream of `undefined` values is\n   omitted rather than sent."
+    },
+    {
+      "section": "The guards",
+      "text": "`delete` is registered as not concurrency-safe: two deletes must not interleave between\ninspect and unlink."
+    },
+    {
+      "section": "Config",
+      "text": "None. The store root comes from `DSH_HOME`, then `$DSH_PROFILE_DIR/../..`, then `~/.dsh`."
+    },
+    {
+      "section": "Restart note",
+      "text": "This package installs as a `link:`. The Desktop Host loads a bundled plugin's JavaScript\nonce and does **not** re-import a linked package's module generation on `set_plugin`\nenable/disable — so an edit to `index.js` needs a DSH restart to take effect, even though\n`install_bundle` reports `application: applied`."
+    }
+  ],
+  "skipped": []
+}

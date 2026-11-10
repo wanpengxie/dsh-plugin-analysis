@@ -1,0 +1,130 @@
+{
+  "repo": "truelove-dreamer/dsh-plugin-recall",
+  "commit": "f72e1d22122a5f86358dc0a2b6f140877d0a5fad",
+  "extracted_at": "2026-11-10T20:59:33.363906+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 15277,
+    "lines_by_language": {
+      "JSON": 36,
+      "JavaScript": 322,
+      "Markdown": 56,
+      "Other": 3,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/recall.js",
+      "package.json",
+      "test/recall.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-recall",
+    "version": "0.1.1",
+    "description": "DeepSeek Harness plugin: cross-session memory for the model. Full-text search all past sessions (SQLite FTS5 via ctx.sessionQuery) and bring the strongest matching excerpts back into the current context — recall earlier decisions, commands, and mistakes.",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/truelove-dreamer/dsh-plugin-recall.git"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "files": [
+      "lib",
+      "cordis.patch.yml"
+    ],
+    "scripts": {
+      "test": "node --test test/"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "memory",
+      "recall",
+      "session-history",
+      "full-text-search"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": ">=18"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: recall\n      name: dsh-plugin-recall\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/truelove-dreamer/dsh-plugin-recall.git",
+      "where": "package.json:7"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-08-14T10:13:50Z",
+    "created_at": "2026-08-14T09:01:51Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/recall.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-recall",
+      "text": "DeepSeek Harness 插件:给模型**跨会话记忆** —— 全文检索所有历史会话,把最强匹配片段带回当前上下文。"
+    },
+    {
+      "section": "背景",
+      "text": "DSH 已经把每个会话持久化,并用 SQLite FTS5 建了全文索引(`ctx.sessionQuery.searchSessions`),但**没有任何面向模型的工具去读它** —— 新会话对旧会话的决策、命令、踩过的坑一无所知。`recall` 把这个现成索引变成模型的能力:开新会话先 `recall` 一下,接着上次的进度继续。"
+    },
+    {
+      "section": "使用",
+      "text": "**模型工具 `recall`:**\n\n```text\nrecall query: \"we decided to use sqlite\"     # 默认返回最多 5 个会话\nrecall query: \"publish script\" limit: 3\nrecall query: \"权限绕过\" sessionIds: [\"s_xxx\"]   # 限定会话范围\n```\n\n返回每个命中会话:session id、时间、事件类型、live/persisted 标记、最强匹配片段。查询按**字面短语**处理(永不解释为 FTS 可执行语法)。\n\n**人类命令 `/recall <查询>`:** 同样输出。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile web add dsh-plugin-recall\n```\n\n挂载(标准 web profile 已含 `dsh-session-query-sqlite`,无需额外配置):\n\n```yaml\n- insert:\n    - id: recall\n      name: dsh-plugin-recall\n```"
+    },
+    {
+      "section": "设计说明",
+      "text": "- **复用官方基建**:直接调用 `ctx.sessionQuery.searchSessions`(SQLite FTS5),不改任何官方包;`sessionQuery` 未挂载时工具给出明确提示,而不是让组合加载失败。\n- **纯逻辑可单测**:参数校验 / 请求构建 / 命中映射 / 渲染在 `lib/recall.js`,`npm test` 零依赖。\n- **只拷贝叶字段**:命中结果从 live 服务对象提取为纯 JSON(sessionId / time / type / snippet),绝不引用内部对象。"
+    },
+    {
+      "section": "诚实边界",
+      "text": "- 依赖 `ctx.sessionQuery` 存在;`openAt: never` 配置下全文检索被禁用时,`recall` 会报错提示。\n- 命中片段是 FTS5 的高亮摘录(unicode61 分词器,`AI` 匹配不到 token `BRAID` 这类子串),不是精确回溯;需要精确读取请配合 session 工具。\n- 检索范围为当前 DSH_HOME 的持久化会话语料,不含其他机器/部署的历史。"
+    },
+    {
+      "section": "本地开发",
+      "text": "```bash\ncd plugins/dsh-plugin-recall\nnpm test          # node --test,零依赖\n```\n\n接线集成测试(真实 Cordis + mock sessionQuery):见仓库根 `test-wiring.mjs`。"
+    }
+  ],
+  "skipped": []
+}

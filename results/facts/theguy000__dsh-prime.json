@@ -1,0 +1,345 @@
+{
+  "repo": "theguy000/dsh-prime",
+  "commit": "54cac045fc9adeb8ecf0f0bb0a6e1366bc4e854b",
+  "extracted_at": "2026-11-10T20:56:16.205038+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 281405,
+    "lines_by_language": {
+      "JSON": 49,
+      "JavaScript": 4833,
+      "Markdown": 551,
+      "Other": 6,
+      "YAML": 214
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "VERIFY.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/scope-check.mjs",
+      "test/self-check.mjs",
+      "test/validate-patch.mjs",
+      "tool.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-prime",
+    "version": "1.2.0",
+    "type": "module",
+    "main": "./index.js",
+    "description": "Prime mode for DeepSeek Harness: a prime-agent-style self-improving agent preset plus the scoped Continual Harness (/refine) it is built around.",
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "prime-agent",
+      "rlm",
+      "continual-harness"
+    ],
+    "engines": {
+      "dsh": ">=0.1.5 <0.3.0",
+      "node": ">=20.0.0"
+    },
+    "files": [
+      "index.js",
+      "tool.js",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "exports": {
+      ".": "./index.js",
+      "./tool": "./tool.js",
+      "./client": "./client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "scripts": {
+      "check": "node test/self-check.mjs && node test/validate-patch.mjs && node test/scope-check.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "external": [
+          "@deepseek-ai/dsh-client-ui-primitives"
+        ],
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-slots"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Prime mode in two root rows: the Continual Harness plugin (host half) and the\n# `@deepseek-ai/dsh-agent-preset` that names the mode. The preset is self-contained —\n# a preset's plugin list is never merged with another preset's — so the mode is\n# complete on its own; the harness row is separate because the browser bundle table\n# is built from the root loader plane only.\n#\n# Parity note: DSH already ships nearly every prime-agent surface. The rows below\n# map onto shipped packages; only `dsh-prime` is new code.\n- insert:\n    # The host half MUST sit at the root of the loader tree, not inside the preset's\n    # config.plugins: dsh-client-modules scans only ctx.loader.entries() (the root\n    # plane) when building the browser bundle table, so an agent-plane row is\n    # invisible to it and the client half (settings section) never loads.\n    - id: dsh-prime\n      name: 'dsh-prime'\n    - id: preset-prime\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: prime\n        name: Prime\n        description: prime-agent harness — persistent REPL, programmatic orchestration, agent teams, durable reminders, and a refutable continual harness.\n        order: 3\n        plugins:\n          # ---- training/persona layer: base prompt stays immutable, prime's\n          # ---- refinements arrive later as the `dsh-prime` prompt section.\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n\n          # ---- RLM: one persistent shell, state carried across calls.\n          # ---- Replaces the one-shot pair, which starts from a clean env each call.\n          # The group's `isolate` realm matters: a provider that publishes a service\n          # into the root realm is a leak, and the registry rejects the whole preset\n          # with `Preset services require isolate realms: terminals` — which the mode\n          # picker then hides, since it renders only unbroken presets.\n          - id: persistent-shell\n            name: cordis:group\n            group: true\n            isolate:\n              terminals: true\n            config:\n              - id: terminal\n                name: '@deepseek-ai/dsh-terminal'\n              - id: terminal-bash\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform === 'win32'\n                config:\n                  timeoutMs: 300000\n              - id: terminal-pwsh\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  shellDialect: pwsh\n                  timeoutMs: 300000\n              - id: persistent-bash\n                name: '@deepseek-ai/dsh-tool-bash-persistent'\n                disabled: !!js process.platform === 'win32'\n                config:\n                  timeoutMs: 300000\n              - id: persistent-pwsh\n                name: '@deepseek-ai/dsh-tool-pwsh-persistent'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  timeoutMs: 300000\n\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n\n          # ---- the continual harness is mounted at the ROOT of this patch, not\n          # ---- here: it is plane-independent (disk store + /prime/api + prompt\n          # ---- section) and nesting it would register that section once per agent.\n          # ---- The write half is the exception: a tool must be agent-scoped or it\n          # ---- lands in every mode's catalog, so it is a preset row — the same\n          # ---- shape the shipped `@deepseek-ai/dsh-tool-subagent-control/list-agents`\n          # ---- subpath row uses.\n          - id: prime-tool\n            name: 'dsh-prime/tool'\n\n          # ---- persistent goals and bounded autonomous rounds.\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n\n          # ---- durable reminders / heartbeats.\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. When the operator explicitly asks you to implement now, treat that as authorization to execute; exit plan mode or proceed with mutation tools as the operator directs.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the request shape stable. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval.\n\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n          # ---- delegation: retained/parallel subagents, PTC orchestration, and\n          # ---- the fresh-agent loop, all enabled because prime is programmatic\n          # ---- by default rather than an add-on mode.\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n\n          # Agent Teams is deliberately absent: its `list_agents` and\n          # `interrupt_agent` collide with the delegation group's definitions, and\n          # its peer-roster UX is not prime-agent's model (prime delegates from code\n          # via the workflow PTC runtime). To opt in, drop `tool-subagent-control`\n          # and `tool-subagent-list-agents` and mount\n          # `@deepseek-ai/dsh-experimental-agent-team-profile` instead.\n\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          # The one row that makes this prime-agent's model instead of a native\n          # tool loop: the agent works through the Node PTC runtime, writing code\n          # that calls tools, rather than calling one tool per step. `mode: ptc`\n          # waits for the `ptcRuntime` service, which `@deepseek-ai/dsh-base`\n          # composes — against a deployment without it the whole preset fails to\n          # mount and the mode disappears from the picker.\n          - id: tool-presentation\n            name: '@deepseek-ai/dsh-agent-tool-presentation'\n            config:\n              mode: native\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "tool.js",
+    "client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:95"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:1178"
+    },
+    {
+      "name": "DSH_PYTHON",
+      "kind": "env",
+      "where": "index.js:1181"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:1799"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:1809"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:1810"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/scope-check.mjs:9"
+    },
+    {
+      "name": "DSH_APP_DIR",
+      "kind": "env",
+      "where": "test/self-check.mjs:16"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "test/self-check.mjs:18"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "test/self-check.mjs:18"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/self-check.mjs:77"
+    },
+    {
+      "name": "DSH_APP_DIR",
+      "kind": "env",
+      "where": "test/validate-patch.mjs:17"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "test/validate-patch.mjs:19"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "test/validate-patch.mjs:19"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/validate-patch.mjs:91"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/validate-patch.mjs:133"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-10-20T19:53:09Z",
+    "created_at": "2026-10-16T22:17:35Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "test/scope-check.mjs",
+    "test/self-check.mjs",
+    "test/validate-patch.mjs",
+    "tool.js"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">"
+    },
+    {
+      "section": "dsh-prime",
+      "text": "**prime-agent, as a first-class DeepSeek Harness mode.**\n\nProgrammatic tool calls · a persistent Python REPL · a continual harness that\noutlives compaction.\n\n[](https://github.com/deepseek-ai)\n[](https://nodejs.org)\n[](package.json)\n[](VERIFY.md)\n\n</div>\n\n> Standing on **[prime-agent](https://github.com/PrimeIntellect-ai/prime-agent)**\n> by Prime Intellect — the project this mode reproduces, and the source of every\n> idea below. Read the original first; the credits are at the bottom."
+    },
+    {
+      "section": "dsh-prime",
+      "text": "`dsh-prime` adds a **`prime`** agent preset to DeepSeek Harness. DeepSeek Harness\nalready ships nearly every surface prime-agent has; `cordis.patch.yml` wires those\npackages into one self-contained mode, and the new code supplies the two pieces\nDSH has no equivalent for: **a persistent per-session Python RLM REPL** and **the\nContinual Harness** — durable, scoped memory the agent maintains itself, with\nsnapshots and rollback."
+    },
+    {
+      "section": "What you get",
+      "text": "| Feature | What it means |\n|:--|:--|\n| **Programmatic by default** | The model's primary tool is a REPL, not a one-shot function call. It writes code that calls tools and agents: `await tools.<name>(**kwargs)`, `await rlm(\"…\")`. |\n| **A persistent Python 3 kernel** | Variables, imports, functions, and `store` survive across turns and restarts. `ctx` and `messages` still contain compacted turns the prompt no longer carries. |\n| **A continual harness** | Durable memory with an evidence gate, 8-character `ref` handles, in-place correction, and `before`/`after` snapshots you can roll back. Re-injected into every Prime prompt. |"
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile desktop add github:theguy000/dsh-prime\n```\n\n`desktop` is the app's profile — use `web` for `dsh web`, or whatever you named\nyour own. Restart, then pick **Prime** in the Web/Desktop agent-preset picker.\nTo make it the default, patch the same profile:\n\n```yaml\n- id: agent-preset-registry\n  config:\n    default: prime\n```\n\nA preset's `config.plugins` list is never merged with another preset's, so the\nmode is self-contained — editing `standard` or `ptc` cannot perturb it."
+    },
+    {
+      "section": "The Continual Harness",
+      "text": "`/refine` is the command; `harness_refine` is the tool the agent actually writes\nthrough (a slash command is operator-only). Entries live on disk, so they outlive\ncompaction by construction, and the prompt section is re-rendered on every\nassembly.\n\n```text\noperator types /refine\n  └─▶ a forked pass re-reads the conversation\n        └─▶ harness_refine(findings: [...])\n              └─▶ ~/.dsh/prime/*.json  (snapshot recorded)"
+    },
+    {
+      "section": "Using `/refine`",
+      "text": "| Command | What it does |\n|:--|:--|\n| `/refine` | Run a **refinement pass**: review the conversation and record what should outlive it |\n| `/refine workspace` | Same pass, writing to the workspace scope |\n| `/refine <note>` | Record a note directly |\n| `/refine workspace --kind prompt always run checks before committing` | Record a standing rule |\n| `/refine workspace --kind skill --name lint-check Run npm run check before commit.` | Register a reusable skill |\n| `/refine --list` | Show the entries both layers render |\n| `/refine --snapshots` | List snapshots |\n| `/refine --pin <ref>` / `--unpin <ref>` | Pin or unpin an entry |\n| `/refine --edit <ref> <new text>` | Update an entry in place |\n| `/refine --delete <ref>` | Delete an entry |\n| `/refine --clear` | Empty the selected scope |\n| `/refine --reset-repl` | Reset the session's persistent Python REPL |\n| `/refine --help` | Print the usage line |"
+    },
+    {
+      "section": "Using `/refine`",
+      "text": "Flag queries (`--list`, `--snapshots`, …) never start an agent at all."
+    },
+    {
+      "section": "Four component kinds",
+      "text": "Every rendered line starts with its `ref`, creation date, and optional kind tag:\n\n```text\n- 31725ce5 [2026-10-17] [prompt:routing] Always declare Route: fast-path before routine edits.\n```\n\nWhen an entry is wrong or superseded, the model updates or deletes it **by `ref`**\ninstead of appending a contradictory entry beside it."
+    },
+    {
+      "section": "Four component kinds",
+      "text": "| Kind | Holds | Effect |\n|:--|:--|:--|\n| `memory` (default) | durable facts, constraints, findings | injected into the prompt section |\n| `prompt` | standing behavioral or routing rules | injected **first**, ahead of unpinned memory, so routine facts never evict them |\n| `skill` | reusable workflows | registered into DSH's live `skills` service by the `prime-harness` provider, callable immediately by `tool-skill` and `/` triggers |\n| `subagent` | role specifications | prepended automatically to `rlm.spawn(..., role=\"<name\\|ref>\")` tasks |"
+    },
+    {
+      "section": "Two scopes, and only the operator picks",
+      "text": "The write target is chosen in **Settings → Prime Harness**. The agent never\nchooses: everything it records goes to the selected layer. It always *reads*\nboth.\n\n| Scope | Reach | Stored as |\n|:--|:--|:--|\n| `session` (default) | this conversation only | `~/.dsh/prime/session-<id>.json` |\n| `workspace` | every session sharing this working directory | `~/.dsh/prime/project-<sha1(cwd)>.json` |"
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "`harness_refine` takes `findings: [...]` — up to 20 edits per call, and an\noversized batch is rejected **atomically**, so a pass is never half-written. An\nedit with no evidence is refused.\n\nEvery mutation records a bounded `before`/`after` snapshot (`MAX_SNAPSHOTS = 25`)\nwith `+added ~updated -deleted` counts. **Settings → Prime Harness** lists them,\nrenders the diff inline, and rolls any pass back with one click.\n\n<details>\n<summary><b>How a <code>/refine</code> pass actually runs</b></summary>"
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**A pass behaves like a built-in command.** A bare `/refine` runs the pass as a\n**forked subagent** with `delivery: \"caller\"`: the child is seeded with this\nsession's completed-turn prefix, so it reads the same conversation at cached\nrates, and it sends no `subagent-settled` message, so the parent opens no second\nturn. The `command/run` row shimmers for the whole pass and settles once with\n`command/done` — the `/compact` shape, with no turn, thinking block, or tool call\nbetween the command and its result."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**The running label says \"Refining…\".** `GenericCommandCard` hardcodes\n`t(\"command.running\")`, and neither escape hatch is open to a plugin: the\n`runningSummary` prop reaches only the internal compaction card, and\n`locale.register` rejects a second `chat`/`en` dictionary. So `client.js`\nregisters a keyed `conversation.chat.commandview` entry for `refine` — the same\nsupported mechanism `/compact` uses — rendering the identical structure from the\nidentical primitives (`DisclosureRow` + `TextShimmer` + `IconApiOutlineRegular`).\nThe row looks and shimmers exactly like the built-in one; only the words differ."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**Each pass is its own row in the subagent list.** `startActivation` catalogs the\nchild unconditionally — `delivery: \"caller\"` suppresses the settlement *message*,\nnot the catalog entry — so passes are already visible there. The label carries\nthe time, making that list a pass history."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**The header pill says \"refines\", not \"subagents\".** The catalog pill in the session header is one cell of `conversation.session.header.actions` (`id: \"subagent-catalog\"`), and its count text lives in `@deepseek-ai/dsh-client-ui-subagent`'s own dictionary — `locale.register` refuses a second one, so the words cannot be patched. `client.js` re-registers that cell at `priority: -1` instead: a list slot elects the lowest priority per id, so the replacement takes the cell over, renders the shipped component from `slots.entries`, forwards every prop (including its `inject` face) and swaps only `t`. The wording changes only while every direct child carries the host's `refine HH:MM` label; one real subagent among them restores \"N subagents\".\nRow titles come from the same override: `harness_refine` answers in structure (`recorded`/`updated`/`deleted`), each snapshot it writes records the child session that wrote it, and `/prime/api {op: \"passes\"}` totals them per pass, so a finished pass is listed as `+3 ~1 -0` instead of its start time. Nothing is parsed from prose, and a pass that wrote nothing keeps its time label."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**The row reports what actually happened, not that the child returned.** A child\nthat ends normally without recording anything is a success by `stopReason` and a\nlie by outcome, so the handler compares the store's snapshot count before and\nafter the child runs and reports either `refined … (N pass snapshots recorded)` or\n`the pass found nothing durable to record`. Nothing durable is a legitimate\nanswer; claiming a refinement that did not occur is not."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**The child's writes land in the parent's store.** A delegated child's session\nheader records `parentSession`, and `storeSessionId` follows it back. Without\nthat, every finding landed in a file nobody reads — a silent loss, because the\nwrite itself succeeds."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**Two paths stay in-process.** Flag queries never start an agent. The automatic\npass forks on `compaction/start` — before the summarization call replaces the\nsurface — so the child is seeded with the history the compaction is about to\nreplace, not the checkpoint it leaves behind. The seed is the completed-turn\nprefix: the in-progress turn is excluded because an unbalanced turn cannot be\nreplayed as a child session, and the parent is not delayed while the child runs.\nThe in-turn `followup` path survives only for `/refine` in a profile with no fork\nprovider. It carries `source: { kind: \"prime-refine\" }`, not `user`, so Chat\ndraws the collapsed turn-trigger notice rather than an operator bubble and\n`isSpeaker` stops reading its boilerplate as the operator's own words. It is\nbound to the exact turn it opens, so an operator turn settling while it is queued\ncannot settle the row early."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**The section asserts its own authority.** It opens with *\"Treat them as already\nverified: when one answers the operator's question, answer from it rather than\nre-deriving the answer from the code\"*, and says to read source only when nothing\ncovers the question or the fact may have gone stale. The heading is\n`Established:`, because `Recorded:` reads as a log."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "**Capture is eager, not a rescue.** The prompt section carries a standing\ninstruction to record a durable fact in the same turn the operator states it. A\npreference that only lives in the conversation is gone once the history is\ncondensed; the manual command and the pre-compaction pass are backstops, and the\npass only runs when the session has taken 15 model steps since the last one.\n\n</details>\n\n<details>\n<summary><b>Ranking, and why prompt order is stable</b></summary>"
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "Relevance ranking mirrors prime-agent's `harness_digest.rs`: the goal objective\nis weighted `3.0`, then the last four user/assistant speaker messages\n(`source.kind` filtered before windowing, so injected runtime context cannot\ncrowd out the operator's words) are weighted `2.0 / 1.5 / 1.0 / 1.0`, up to 48\nquery terms, with `pinned` entries boosted by `+100`."
+    },
+    {
+      "section": "Snapshots and the evidence gate",
+      "text": "In the system prompt, entry order is **pinned-first, then `prompt`-kind rules,\nthen newest-first** (`promptOrder`) within a `topK = 12` / `4000`-character\nbudget — not query-reordered on every turn, which keeps the LLM KV-cache prefix\nstable across steps. `rank` drives `/refine --list` and the Settings UI.\n\n</details>"
+    },
+    {
+      "section": "The persistent REPL: `python_repl`",
+      "text": "Alongside DSH's Node-side workflow runtime, Prime mounts a stateful, per-session\nPython 3 kernel with top-level `await` and a bidirectional JSON-RPC bridge back\nto the host.\n\n```python\nfacts  = await rlm.harness.list(kind=\"memory\")\nstore[\"memory_count\"] = len(facts)           # persisted across restarts\n\nawait tools.web_search(queries=[\"dsh plugin manifest\"])"
+    },
+    {
+      "section": "The persistent REPL: `python_repl`",
+      "text": "- **Persistent namespace & disk store:** variables, functions, classes, and\n  imports survive across turns within the session. Any JSON-serializable value\n  written to `store[\"key\"]` (or passed via `set_vars`) persists to\n  `~/.dsh/prime/repl-session-<id>.json` across restarts.\n- **Compaction-surviving transcript (`ctx`, `messages`):** before each\n  evaluation, `extractSessionContext` reads `session.snapshotEvents()` and marks\n  compacted frames with `compacted: true`, so Python can search the entire\n  conversation even after older turns drop out of the model prompt.\n- **Programmatic RLM and tool bridge:**\n  - `await rlm(\"task\", name=\"worker\", role=\"auditor\", fork=False)` or `rlm.spawn(...)`\n  - `await rlm.list_subagents()`, `await rlm.send_message(id_or_name, msg)`, `await rlm.interrupt(id_or_name)`\n  - `await agent_message.send(msg, receiver_name=\"main\")`\n  - `await rlm.harness.list(scope=None, kind=None)`, `.add(...)`, `.update(...)`, `.delete(...)`, `.snapshots()`, `.rollback()`, `.diff()`\n  - `await tools.<tool_name>(**kwargs)` — invokes any registered DSH tool on the calling agent"
+    },
+    {
+      "section": "Settings UI",
+      "text": "**Settings → Prime Harness** (registered by `client.js` with\n`@deepseek-ai/dsh-client-ui-primitives`) talks to `POST /prime/api` and provides:"
+    },
+    {
+      "section": "Settings UI",
+      "text": "- **Default write scope & workspace browser** — switch between **This\n  conversation** (`session`) and **Workspaces** (`workspace`). The workspace view\n  lists every known repository on cold boot (discovered from live sessions, DSH\n  `storages`, and `~/.dsh/prime/project-*.json`) with entry counts, so you can\n  inspect, add, edit, or roll back memory even with no chat open.\n- **Kinds & entry controls** — filter and add by kind (`Memory`, `Prompt`,\n  `Skill`, `Subagent`), pin/unpin to the top of the prompt section, edit text,\n  kind, or name in place, or delete an entry.\n- **Snapshot history, diff & rollback** — every recorded pass with\n  `+added ~updated -deleted`, inline before/after diff, one-click rollback.\n- **REPL status** — active kernel state, evaluation count, live variable names,\n  persisted `store` keys, and reset."
+    },
+    {
+      "section": "Parity with prime-agent",
+      "text": "Source of truth for the left column: the\n[prime-agent README](https://github.com/PrimeIntellect-ai/prime-agent#readme).\nOnly `dsh-prime` is new code; the rest is composition of shipped packages."
+    },
+    {
+      "section": "Parity with prime-agent",
+      "text": "| prime-agent capability | DSH realization | Status |\n|:--|:--|:--|\n| \"Everything is programmatic\" — the model tool is a persistent REPL | `dsh-agent-tool-presentation` (`mode: native`), `dsh-tool-workflow` over `dsh-workflow-ptc`, a persistent shell (`dsh-tool-bash-persistent` / `dsh-tool-pwsh-persistent`), **plus** `python_repl` — a stateful per-session Python 3 RLM kernel with `ctx`, `messages`, `store`, `rlm.*`, and `tools.*` | **Full** |\n| `rlm.spawn(...)` subagents returning results programmatically | `dsh-tool-subagent` (`provider: spawn`) + `dsh-tool-subagent-fork` (`provider: fork`) + `python_repl`'s `rlm.spawn(..., role=...)` / `rlm.send_message` / `agent_message.send` | **Full** |\n| `/refine` — harness improves itself, base prompt immutable, snapshots roll back | **`dsh-prime`** (this plugin): durable store + `/refine` command + `harness_refine` tool + 4 component kinds + in-place update/delete/pin by `ref` + before/after snapshots with inline diff and one-click rollback in **Settings → Prime Harness** + pre-compaction auto-refine (15-step floor) | **Full** |\n| Skills are executable packages; skill creator | `dsh-skill-filesystem` + `dsh-tool-skill` + the dynamic `prime-"
+    },
+    {
+      "section": "Parity with prime-agent",
+      "text": "1. **Agent messaging, not agent teams.** Peers are reached from code\n   (`rlm.send_message`, `agent_message.send`) rather than through a peer-roster\n   UI; the Agent Teams profile is deliberately not mounted because its\n   `list_agents`/`interrupt_agent` rows collide with the delegation group.\n2. **Autonomy is bounded, not gatekept.** Rounds stop at `maxGoalRounds`; there is\n   no separate quality-gate evaluator between rounds."
+    },
+    {
+      "section": "Windows: ConPTY and the sandbox bridge",
+      "text": "In DSH Desktop on Windows, `process.execPath` is `DeepSeek Harness.exe` — an\nElectron binary linked `/SUBSYSTEM:WINDOWS` — and the sandbox runner lives inside\n`resources/app.asar`. Pipe-based subprocesses inherit handles normally, but\n`dsh-terminal-bash` (`persistent-pwsh`) spawns its shell through `node-pty`\n(`CreatePseudoConsole` / ConPTY), and Windows will not attach a GUI-subsystem\nexecutable to a pseudo-console. The symptom is `persistent-pwsh` exiting\nimmediately under `workspace-write` with `Error: PTY shell exited during startup`."
+    },
+    {
+      "section": "Windows: ConPTY and the sandbox bridge",
+      "text": "`ensureWindowsSandboxRunner` in `index.js` bridges this automatically: it extracts\nthe sandbox runner and native `koffi` bindings to a versioned temp cache and\npoints `sandbox.internals.windowsAclRunnerArgs` at DSH's bundled\n`/SUBSYSTEM:CONSOLE` Node binary\n(`resources/runtime/primary-runtime/dependencies/node/bin/node.exe`)."
+    },
+    {
+      "section": "Verify",
+      "text": "```sh\nnpm run check\n```\n\nPrints:\n\n```text\ndsh-prime self-check: ok\ndsh-prime patch ok: preset \"prime\", 40 rows, all resolvable\nALL PRIME CHECKS PASSED\n```"
+    },
+    {
+      "section": "Verify",
+      "text": "| Check | Covers |\n|:--|:--|\n| `test/self-check.mjs` | store round-trip, `/refine` flags, the `harness_refine` batch/evidence/update/delete contract, the `python_repl` namespace + `store` + RLM subagent/tool/harness RPC bridge + dynamic `skills` provider, the preset-gated pre-compaction fork, `/prime/api` end to end, and client bundle invariants |\n| `test/validate-patch.mjs` | every row in `cordis.patch.yml` resolves against the installed DSH bundle tree; both `harness_refine` and `python_repl` schemas pass `@deepseek-ai/dsh-tools`'s validators |\n| `test/scope-check.mjs` | scope isolation (`session` vs `workspace`), retired `project`/`global` spellings, deduplication, the capacity cap, and goal/query-weighted ranking |"
+    },
+    {
+      "section": "Verify",
+      "text": "[`VERIFY.md`](VERIFY.md) is the longer, adversarial version: install into a\nthrowaway profile, dump the real Loader tree, and assert 40 rows, 3 groups, and\nexactly one `prime` preset declaration."
+    },
+    {
+      "section": "Credits",
+      "text": "**prime-agent** — [PrimeIntellect-ai/prime-agent](https://github.com/PrimeIntellect-ai/prime-agent)\nby Prime Intellect. Almost nothing here is original invention: this mode exists\nbecause they published a harness that treats the model's context as a\nprogrammable runtime."
+    }
+  ],
+  "skipped": []
+}
