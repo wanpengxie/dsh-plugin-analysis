@@ -1,0 +1,167 @@
+{
+  "repo": "wsfangyou/dsh-tpm-quota-retry",
+  "commit": "f7bfdec5b5d28c35ea7362d119ed7d28da79baf7",
+  "extracted_at": "2026-11-10T21:25:11.432964+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 38875,
+    "lines_by_language": {
+      "JSON": 31,
+      "JavaScript": 612,
+      "Markdown": 97,
+      "Other": 108,
+      "YAML": 22
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "install.ps1",
+      "lib/index.js",
+      "package.json",
+      "test/smoke.mjs",
+      "test/verify-install.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tpm-quota-retry",
+    "version": "0.1.0",
+    "description": "DSH 宿主侧插件：把 qwen-token-plan 的每分钟 TPM 限流（429 Allocated quota exceeded / insufficient_quota）从终止失败救回为有界重试等待，白名单之外的 provider 与真正的额度耗尽一律原样放行",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/*.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "scripts": {
+      "test": "node test/smoke.mjs"
+    },
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "4.0.4"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.4"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tpm-quota-retry bundle patch：宿主半边（无 dsh.client，纯服务端行为）——\n# 一行两用：把插件插入 profile 的加载树、给出默认配置。profile 的\n# cordis.patch.yml 可用同样的 id 覆盖这里的任何字段。\n#\n# config:\n#   enabled     总开关（默认 true；false = 完全不接管，行为与未安装一致）\n#   providers   白名单 provider 名（默认仅 qwen-token-plan）——不影响其他模型的关键\n#   windowMs    限流窗口宽度（默认 60000ms，百炼 TPM 按分钟计）\n#   maxRetries  同一 (provider, turn, step) 的最大等待次数（默认 4，0 = 等同关闭）\n#   maxDelayMs  单次等待上限（默认 300000ms）\n#   minDelayMs  单次等待下限（默认 1000ms）\n- insert:\n    - id: tpm-quota-retry\n      name: dsh-tpm-quota-retry\n      config:\n        enabled: true\n        providers:\n          - qwen-token-plan\n        windowMs: 60000\n        maxRetries: 4\n        maxDelayMs: 300000\n        minDelayMs: 1000\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PROFILE",
+      "kind": "env",
+      "where": "test/verify-install.mjs:13"
+    },
+    {
+      "name": "DSH_SOURCE",
+      "kind": "env",
+      "where": "test/verify-install.mjs:14"
+    },
+    {
+      "name": "DSH_PLUGIN",
+      "kind": "env",
+      "where": "test/verify-install.mjs:15"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "www.alibabacloud.com",
+      "url": "https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit\\",
+      "where": "test/smoke.mjs:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.4"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-11-03T03:53:22Z",
+    "created_at": "2026-11-03T03:53:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json",
+    "test/smoke.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tpm-quota-retry",
+      "text": "把 qwen-token-plan 的**每分钟 TPM 限流**从终止失败救回为有界重试等待。只接管这一个 provider，其他模型行为零变化。"
+    },
+    {
+      "section": "它解决什么",
+      "text": "qwen3.8-flash 在长 agent 回合里会撞上百炼的每分钟 Token 限流，上游回 429：\n\n```\n429: {\"message\":\"Allocated quota exceeded, please increase your quota limit. …#token-limit\",\n      \"type\":\"insufficient_quota\",\"code\":\"insufficient_quota\"}\n```\n\n这一串在 DSH 里会走成终止失败：`dsh-llm` 的 `isQuotaExceededError` 命中 `exceed…quota` 措辞 → 归类为 `QUOTA`（语义是账户额度耗尽）→ `dsh-llm-retry` 的 normal mode 只重试 `EMPTY_RESPONSE/RATE_LIMIT/SERVER/TIMEOUT/TRANSPORT`，`QUOTA` 不在集合内 → `next()` 放行 → agent loop 抛终止 `LlmError`，回合结束，界面显示「当前请求的额度已用尽」。"
+    },
+    {
+      "section": "它解决什么",
+      "text": "而阿里云百炼限流文档写明：`Allocated quota exceeded` 与 `You exceeded your current quota` 表示**触发了每分钟 Token 消耗（TPM）限流**，通常一分钟内自动恢复；429 是限速拒绝，403 才是额度耗尽。于是「等一分钟重试」才是正确处理，模型本身没问题。"
+    },
+    {
+      "section": "机制",
+      "text": "挂在 agent loop 的 `agent/request-error` waterfall（与 `dsh-llm-retry` 同一个扩展点）：\n\n1. 失败满足**全部三条**才接管：provider 在 `providers` 白名单内、`failure.code === 'QUOTA'`、`failure.message` 命中 TPM 措辞表；\n2. 先向会话追加 `llm/retry` 事件（可重放），再等待 —— 对齐到下一个限流窗口边界，第 n 次重试多等 n-1 个完整窗口；`providerRetryAfterMs` 有效时优先遵守；\n3. 返回 `{ kind: 'retry' }`，loop 在同一打开的轮次里重跑该步骤，随后追加 `llm/retry-started`。"
+    },
+    {
+      "section": "不影响其他模型",
+      "text": "- **provider 白名单**：默认只有 `qwen-token-plan`。deepseek / xiaomi / lm 等 provider 完全不走这段逻辑。\n- **code 闸门**：只认 `QUOTA`。若某天适配器把这类 429 标成 `RATE_LIMIT`，那 `dsh-llm-retry` 的默认策略本来就该管它，本插件自动让位。\n- **措辞闸门**：只认 TPM 限流的两种报法。`Arrearage`、`Access denied, please make sure your account is in good standing.`、`isv.OUT_OF_SERVICE`、`out of credits` 等真正的余额耗尽措辞一律放行终态 —— 真问题不会被掩盖。\n- **预算有界**：每个 `(provider, turn, step)` 最多 `maxRetries`（默认 4）次；耗尽后原样交给终止路径，界面照常提示。\n- **可取消**：turn 取消或插件释放会立刻中止等待，且不返回重试决定。\n- **可关闭**：`enabled: false` 或 `maxRetries: 0` 都等价于没装。"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段           | 默认                    | 含义                                  |\n| ------------ | --------------------- | ----------------------------------- |\n| `enabled`    | `true`                | 总开关                                 |\n| `providers`  | `[\"qwen-token-plan\"]` | 白名单 provider 名                      |\n| `windowMs`   | `60000`               | 限流窗口宽度（ms）                          |\n| `maxRetries` | `4`                   | 同一 `(provider, turn, step)` 的最大等待次数 |\n| `maxDelayMs` | `300000`              | 单次等待上限（ms）                          |\n| `minDelayMs` | `1000`                | 单次等待下限（ms）                          |"
+    },
+    {
+      "section": "配置",
+      "text": "默认节奏下四次等待各约 1、2、3、4 分钟，总预算约 10 分钟。若某个 provider profile 也吃这套限流，把它的名字加进 `providers` 即可，例如：\n\n```yaml\n- id: tpm-quota-retry\n  name: dsh-tpm-quota-retry\n  config:\n    providers:"
+    },
+    {
+      "section": "安装",
+      "text": "插件源码放在工作区，profile 用 junction 引用（与本机其他插件一致）：\n\n```powershell\npowershell -NoProfile -ExecutionPolicy Bypass -File install.ps1\n```\n\n脚本做三件事，且可重复运行：在 `profiles\\web\\node_modules` 建 junction、把 `dsh-tpm-quota-retry` 加进 profile `package.json` 的 `dsh.profile.bundles`、跑 `test\\verify-install.mjs` 验证解析与配置。**bundle 列表在启动时读取，装完需要重启 DSH（Desktop 应用）才生效。**\n\n（脚本刻意全 ASCII：Windows PowerShell 5.1 会把无 BOM 的 UTF-8 脚本按 ANSI 解码，中文会变成假的语法错误。）"
+    },
+    {
+      "section": "安装",
+      "text": "依赖不走 pnpm：`node_modules\\@deepseek-ai\\{schemastery,cosmokit}` 与 `node_modules\\@standard-schema\\spec` 是从 profile 同级 `node_modules` 复制来的同版本副本，Node 按 realpath 解析依赖时正好命中它们。升级 profile 的 schemastery 后如果想同步，重跑一次复制即可。\n\n卸载：删掉 junction 与 bundles 里的那一行。"
+    },
+    {
+      "section": "验证",
+      "text": "```powershell\nnode test/smoke.mjs            # 行为：21 项\nnode test/verify-install.mjs   # 安装：解析 / 清单 / bundles / YAML / 导出\n```\n\n冒烟覆盖：真实 429 报文命中、欠费措辞与 `ACCOUNT_QUOTA`/`RATE_LIMIT` 放行、其他 provider 放行、预算耗尽放行、`maxRetries: 0` 与 `enabled: false` 关闭、`providerRetryAfterMs` 遵守、取消与释放中止等待、畸形负载不抛。安装验证需要先设 `DSH_PROFILE` / `DSH_SOURCE`（`install.ps1` 会设好）。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 只处理 `QUOTA` code；若上游换措辞（例如又造一个新句子），需要往 `THROTTLE_PHRASES` 里补一条。\n- 等待期间不产出模型可见内容，界面只在会话里留下 `llm/retry` 记录，没有独立的倒计时提示。\n- 预算账本在进程内存里（以 session 为弱键）。进程重启后同一步骤重新计数，最多多花一轮等待预算；不会无限重试。\n\n---"
+    },
+    {
+      "section": "许可",
+      "text": "[MIT](LICENSE)\n\n> 本仓库不含 `node_modules`：依赖由 DSH profile 的扁平层解析。克隆后走设置页「导入插件…」选中本目录，或手动复制到 `<数据目录>/profiles/web/node_modules/`，再把包名加进该 profile `package.json` 的 `dsh.profile.bundles`。"
+    }
+  ],
+  "skipped": []
+}

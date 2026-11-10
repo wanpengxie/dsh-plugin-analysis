@@ -1,0 +1,241 @@
+{
+  "repo": "yezitotempeace/dsh-agent-team-roster",
+  "commit": "56b14a8141b4bb40677191e69a70ddb2547aacd0",
+  "extracted_at": "2026-11-10T21:57:50.364456+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 148414,
+    "lines_by_language": {
+      "JSON": 30,
+      "JavaScript": 2880,
+      "Markdown": 376,
+      "Other": 32,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "backup/lib.index.815-prefix.js",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "test/build-pristine.mjs",
+      "test/run-mount.mjs",
+      "test/run-tests.mjs",
+      "test/run-wiring.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-agent-team-roster",
+    "version": "0.2.0",
+    "private": true,
+    "description": "Agent Teams roster administration for dsh: newest-first display order, bulk cleanup, and teammate rename/delete -- 名册倒序显示、批量清理与成员改名/删除",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md"
+    ],
+    "keywords": [
+      "dsh",
+      "cordis",
+      "agent-teams",
+      "plugin"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: agent-team-roster\n      name: dsh-agent-team-roster\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_AGENT_TEAM_MODULE",
+      "kind": "env",
+      "where": "test/build-pristine.mjs:20"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-18T02:59:05Z",
+    "created_at": "2026-10-18T02:30:17Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-agent-team-roster",
+      "text": "[dsh](https://github.com/deepseek-ai) 的 Agent Teams 名册管理插件：**最新在最上**的显示顺序、\n**一键批量清理**，以及成员**改名 / 删除**。不修改上游代码，作为单个 Cordis bundle 行安装。\n\n[中文](#中文) · [English](#english) · [详细英文文档](README.en.md)\n\n---"
+    },
+    {
+      "section": "功能",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `rename_teammate { target, new_name }` | 原地改名：保留历史、会话、任务与未投递消息；新名字成为它的地址 |\n| `delete_teammate { target }` | 结束该成员当前回合、释放运行时、释放其未完成任务、丢弃未投递消息、释放名字 |\n| `cleanup_team { scope }` | 批量清理，`scope` 为 `teammates` / `tasks` / `all` |\n\n**批量清理的语义**：已结算（inactive/failed）成员会被删除；已完成任务会被删除。\n以下会被**跳过并报告**在 `skipped[]`（含原因），不会被误删：\n运行中的成员、仍在 provisioning 的成员、未完成的任务、仍阻塞着别的任务的任务。\n只有 Team Lead 能调用以上三个工具。\n\n**显示顺序**：团队名册、共享任务板、子智能体对话目录均为**最新在最上**；\nLead 行固定第一（它是当前会话的锚点，不是子成员）。"
+    },
+    {
+      "section": "实现方式（不修改上游包）",
+      "text": "- **改名 / 删除**：扩展已注册的 `agentTeam` 投影单元的 `def.apply`，把两种变更表达为\n  既有 `team/member` 事件的新取值（`renamedTo` 字段 / `phase: \"removed\"`），\n  因此名册、邮箱、任务板、工具、客户端视图全部照常读到变更。\n- **显示顺序**：包装 `agentTeam` 与 `subagentCatalog` 的 `def.wire.view`——那是客户端实际收到的值\n  （上游按 `wire.viewSchema.parse(wire.view(state))` 生成，冷会话的 `viewCheckpoint` 也走同一路径）。\n  有序值以**打包视图的引用**为键做 `WeakMap` 记忆化，保持上游「单元自身忽略的变化不重复发布」的契约。\n- **不变量**：投影状态、`stateVersion`、存储值、以及面向模型的服务契约\n  （`list_agents` / `team_task_list` 仍按上游顺序返回）一律不变；倒序只影响客户端可见视图。"
+    },
+    {
+      "section": "安装（dsh profile）",
+      "text": "1. 把本仓库放到任意目录，例如 `/root/dsh-agent-team-roster`\n2. 在 profile 的 `package.json` 依赖中加入：\n   `\"dsh-agent-team-roster\": \"link:/root/dsh-agent-team-roster\"`\n3. 在该 profile 的 bundle 插件列表中加入 `\"dsh-agent-team-roster\"`\n4. 若该 profile 是 `patchReload: startup`，重启 dsh 服务后生效"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnode test/build-pristine.mjs   # 从已安装的 dsh 生成上游模块副本并校验哈希\nnode test/run-tests.mjs        # 64 通过 / 0 失败\nnode test/run-wiring.mjs       # 14 通过 / 0 失败\nnode test/run-mount.mjs        # mount: ok（真实 ToolRuntime + SystemPrompt + 真实 Team 服务）\n\n测试需要本机已安装 `@deepseek-ai/dsh`；**本仓库不包含任何上游代码**，\n`test/core-pristine.js` 由 `build-pristine.mjs` 在本地生成（已加入 `.gitignore`）。"
+    },
+    {
+      "section": "验收记录",
+      "text": "本插件经过一名独立的第三方智能体两轮验收（它自己写脚本、自己下断言）：\n功能主张 A–F 全部证实；第一轮查出的一处缺陷（包装后的视图破坏上游引用记忆化契约，\n导致纯邮箱变更多发布一次）已修复，并在第二轮复验通过——纯 mailbox 事件的发布序列与\n未安装插件时逐字节一致。"
+    },
+    {
+      "section": "边界（如实说明）",
+      "text": "- **已删除成员的子会话无法物理删除**：dsh 没有会话删除 API。清理覆盖名册行与共享任务；\n  子智能体目录只有顺序生效。\n- 倒序只作用于客户端可见视图；面向模型的 `list_agents` / `team_task_list` 保持上游顺序。\n- 仅适配 dsh `0.2.0-rc.2`（依赖 `sessionProjections.registrations`、`journal` 等内部接缝）。\n  上游结构变化时插件会在激活阶段**显式报错**，而不是静默降级。\n- 像素级渲染无法在无浏览器的环境验证：已验证的是宿主交给客户端的值 +\n  上游客户端对该值不做二次排序 + 人工观察。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT，见 [LICENSE](LICENSE)。本仓库不包含上游 dsh 代码。\n\n---"
+    },
+    {
+      "section": "What it adds",
+      "text": "| Tool | Effect |\n|---|---|\n| `rename_teammate { target, new_name }` | Rename in place: history, session, tasks and undelivered mail are kept; the new name becomes its address |\n| `delete_teammate { target }` | Stop the member's current turn, release its runtime and unfinished shared tasks, drop undelivered mail, free the name |\n| `cleanup_team { scope }` | Bulk cleanup; `scope` is `teammates`, `tasks`, or `all` |"
+    },
+    {
+      "section": "What it adds",
+      "text": "**Cleanup semantics**: settled (inactive/failed) teammates and completed tasks are deleted.\nRunning teammates, teammates still provisioning, unfinished tasks, and tasks that still block\nanother task are **skipped and reported** in `skipped[]` with a reason, never deleted by mistake.\nOnly the Team Lead can call these tools."
+    },
+    {
+      "section": "What it adds",
+      "text": "**Display order**: the Team roster, the shared task board, and the subagent conversation catalog\nrender **newest first**; the Lead row stays pinned first because it anchors the current conversation."
+    },
+    {
+      "section": "How it works (no upstream package is modified)",
+      "text": "- **Rename / delete** extend the registered `agentTeam` projection unit's `def.apply`, expressing\n  both mutations as new values of the existing `team/member` event (`renamedTo`, `phase: \"removed\"`),\n  so every existing reader — roster, mailbox, task board, tools, client view — sees the change.\n- **Display order** wraps `def.wire.view` of `agentTeam` and `subagentCatalog` — the value the client\n  actually receives (upstream builds it as `wire.viewSchema.parse(wire.view(state))`, and cold-session\n  `viewCheckpoint` reads go through the same path). The ordered value is memoized by the packaged\n  value's reference in a `WeakMap`, preserving the upstream contract that a change the unit itself\n  ignores republishes nothing.\n- **Invariants**: fold state, `stateVersion`, stored values, and the model-facing service contracts\n  (`list_agents` / `team_task_list` keep the packaged order) are unchanged; ordering is display-only."
+    },
+    {
+      "section": "Install (dsh profile)",
+      "text": "1. Place this repository anywhere, e.g. `/root/dsh-agent-team-roster`\n2. Add `\"dsh-agent-team-roster\": \"link:/root/dsh-agent-team-roster\"` to the profile's `package.json` dependencies\n3. Add `\"dsh-agent-team-roster\"` to that profile's bundle plugin list\n4. Restart dsh when the profile uses `patchReload: startup`"
+    },
+    {
+      "section": "Tests",
+      "text": "```bash\nnode test/build-pristine.mjs   # materialize the installed upstream module and verify its hash\nnode test/run-tests.mjs        # 64 passed / 0 failed\nnode test/run-wiring.mjs       # 14 passed / 0 failed\nnode test/run-mount.mjs        # mount: ok (real ToolRuntime + SystemPrompt + real Team service)\n\nTests require an installed `@deepseek-ai/dsh`. **This repository contains no upstream code**:\n`test/core-pristine.js` is generated locally by `build-pristine.mjs` and is git-ignored."
+    },
+    {
+      "section": "Verification record",
+      "text": "An independent third-party agent verified this plugin in two rounds, writing its own scripts and\nassertions: claims A–F all confirmed. The one defect it found in round one — the wrapped view broke\nthe upstream reference-memoization contract, publishing one redundant event for mailbox-only\nchanges — was fixed and re-verified in round two, with mailbox-only publish sequences now\nbyte-identical to a run without the plugin."
+    },
+    {
+      "section": "Limits (stated plainly)",
+      "text": "- **A deleted member's child conversation cannot be physically deleted**: dsh exposes no\n  session-deletion API. Cleanup covers the roster row and shared tasks; only ordering applies to the\n  conversation catalog.\n- Ordering is display-only; the model-facing `list_agents` / `team_task_list` keep the packaged order.\n- Verified against dsh `0.2.0-rc.2` only (it depends on internal seams such as\n  `sessionProjections.registrations` and `journal`). When upstream changes shape the plugin **fails\n  loudly** at activation instead of degrading silently.\n- Pixel-level rendering cannot be verified without a browser: what is verified is the host-side value\n  the client receives, the upstream client rendering it without re-sorting, and human observation."
+    },
+    {
+      "section": "License",
+      "text": "MIT, see [LICENSE](LICENSE). No upstream dsh code is included."
+    },
+    {
+      "section": "dsh-agent-team-roster",
+      "text": "Agent Teams roster administration for the Team Lead, without patching the shipped\n`@deepseek-ai/dsh-experimental-agent-team` package: **rename a teammate**, **delete a\nteammate**, a **newest-first display order** for the roster, the shared task board and\nthe subagent conversation catalog, and a **bulk `cleanup_team`** tool. Installs as one\nCordis bundle row into the `web` profile."
+    },
+    {
+      "section": "What it adds",
+      "text": "- `rename_teammate { target, new_name }` — rename one settled teammate in place.\n  It keeps its history, session, context, tasks, and pending mail; the new name\n  becomes its address and the old name is free again. The teammate is not\n  notified, so a Lead that wants it to answer to the new name must message it.\n- `delete_teammate { target }` — stop the member's current turn, release its\n  runtime, release its unfinished shared tasks, drop its undelivered inbox, and\n  free its name. Durable history and the child Session log are kept; only the\n  roster row goes away.\n- `cleanup_team { scope }` — bulk cleanup with `scope` one of `teammates`\n  (every teammate whose turn is not running), `tasks` (every completed shared\n  task), or `all`. It deletes through exactly the same service paths as\n  `delete_teammate` and `team_task_update`, so a running teammate, a teammate\n  still provisioning, an unfinished task, and a task that still blocks another\n  task are left alone and reported in `skipped`.\n- Newest-first display order for the Team roster, the shared task board, and the\n  subagent conversation catalog: the Lead row stays first as the panel anchor,\n  and every teammate, task, and child"
+    },
+    {
+      "section": "What it adds",
+      "text": "Values: rename returns `{ previousName, name, status }`; delete returns\n`{ name, previousStatus, releasedTasks[], discardedMessages[] }`; cleanup returns\n`{ scope, teammates[], tasks[], releasedTasks[], skipped[{ kind, target, reason }] }`. Both refuse a\n`provisioning` member with `TEAM_MEMBER_BUSY` and a non-Lead caller with\n`TEAM_LEAD_REQUIRED`. Rename also refuses `TEAM_INVALID_TARGET` (the Lead),\n`TEAM_MEMBER_NOT_FOUND`, `TEAM_INVALID_MEMBER_NAME`, `TEAM_MEMBER_NAME_TAKEN`;\ndelete also refuses `TEAM_INVALID_TARGET` and `TEAM_MEMBER_NOT_FOUND`. Renaming\nto the current name returns the same name and appends no event."
+    },
+    {
+      "section": "How it works",
+      "text": "The packaged Agent Teams package owns the durable roster: a teammate exists\nwhile the folded `agentTeam` session projection keeps a member row, and that\nfold treats `name` as an immutable identity field. The fold is private, so this\nplugin extends the **live projection unit in place** instead of copying or\npatching the package:"
+    },
+    {
+      "section": "How it works",
+      "text": "- `installRosterFold(ctx.sessionProjections)` wraps\n  `sessionProjections.registrations.get('agentTeam').def.apply`, so two roster\n  mutations become expressible as new values of the existing `team/member`\n  event type:\n  - a member payload with `renamedTo` renames that member and keeps its real\n    phase, so readers see an ordinary active (or failed) row under the new name;\n  - a member payload with `phase: \"removed\"` drops that member row and its\n    undelivered mail.\n  Every other event is delegated to the packaged fold, so every existing reader\n  (roster, mailbox, task board, tools, client view) sees the change without\n  knowing about this plugin. State shape and `stateVersion` stay official, and\n  task `ownerName` is derived from the roster, so a rename updates ownership\n  display by itself.\n- `renameTeammate` and `removeTeammate` each perform one mutation through the\n  live service only: `membership` (Lead check), `journal.state` (name\n  resolution), `roster.memberName` (the packaged name rule), `ctx.agents.get`\n  (liveness), and — for deletion — `ctx.subagents.interrupt`, `updateTask(action:\n  'release')` per unfinished task, the target's in-flight `mailbox.dispatchTails`\n  "
+    },
+    {
+      "section": "How it works",
+      "text": "- The mutations are recorded as **new values of an existing event type**\n  (`team/member`), not as a new event type, because a plugin cannot append a new\n  type: an unrecognized stored type is only accepted when its writer can mark it\n  `ignorable`, which the live `Session.append()` cannot.\n- A rename keeps `phase` truthful and carries the intent in `renamedTo`, rather\n  than inventing a `renamed` phase: a phase is a lifecycle state, and the plugin\n  rewrites the stored row back to its real phase anyway.\n- A failed runtime drain is logged as a warning instead of raised: the deletion\n  is already durable at that point, so failing the call would misreport it.\n- Registering a scope is atomic: if the second registration throws, the plugin\n  undoes the first and rethrows. A half-installed scope would otherwise leave a\n  section or tool name owned by a dead fiber and block the next activation of\n  this plugin, which is exactly what happened during development and is now\n  covered by `test/run-wiring.mjs`."
+    },
+    {
+      "section": "How it works",
+      "text": "- `installDisplayOrder(ctx.sessionProjections)` wraps the `wire.view` of the\n  registered `agentTeam` and `subagentCatalog` units. The wire view is the value\n  the client receives (`dsh-session-projection` builds it as\n  `wire.viewSchema.parse(wire.view(state))`, including for cached checkpoints\n  through `viewCheckpoint`), so reordering it changes what the roster panel, the\n  task board, and the child-conversation catalog render, while fold state,\n  `stateVersion`, service contracts (`listTasks` keeps numeric creation order),\n  and stored values stay packaged. A missing `agentTeam` wire view fails\n  activation; a missing `subagentCatalog` one warns and orders the Team view\n  only. The ordered value is memoized by the packaged view's reference, so an\n  unchanged packaged value yields one unchanged ordered value: a state change\n  the packaged unit ignores (a mailbox-only Team change) still republishes\n  nothing, exactly as the packaged unit documents. Treat the ordered value as\n  read-only, as with the packaged value it replaced: it is the same object the\n  packaged unit hands out, and the shipped client only maps over it."
+    },
+    {
+      "section": "Install",
+      "text": "```bash"
+    },
+    {
+      "section": "from the harness, with Full access:",
+      "text": "plugin_manager install_bundle target=/root/dsh-agent-team-roster\n```\n\nThe profile resolves the plugin through a `link:` dependency, the same way the\nother local bundles in `~/.dsh/profiles/web/package.json` are installed. The\nprofile sets `patchReload: startup`, so **a dsh restart activates the row**."
+    },
+    {
+      "section": "from the harness, with Full access:",
+      "text": "The package declares no `dependencies` and no `@deepseek-ai/dsh-*`\n`peerDependencies`, so installation needs no registry and no version exemption,\nand a dsh upgrade does not block it. Its imports\n(`@deepseek-ai/dsh-experimental-agent-team`, `@deepseek-ai/dsh-tools`) resolve\nthrough the `node_modules` symlink in this directory, which points at the dsh\ninstallation's own `node_modules`; keep that symlink next to the package,\nbecause the plugin file's realpath is where module resolution starts."
+    },
+    {
+      "section": "from the harness, with Full access:",
+      "text": "**Do not run this plugin together with the hand-patched fork.** The patched\n`dsh-experimental-agent-team` / `dsh-experimental-tool-agent-team` copies in\n`/root/dsh-agent-team-delete/` also register `delete_teammate`, and two\nregistrations of one tool name in one Agent scope make the row fail to activate\n(`tool \"delete_teammate\" is already registered in this scope`). Keep the shipped\nmodules pristine while this plugin is installed."
+    },
+    {
+      "section": "Verification",
+      "text": "`test/run-tests.mjs` (64 tests) runs the shipped `lib/index.js` against the\n**pristine** packaged core (`test/core-pristine.js`, md5-checked against\n`512150bb996ca45cde8a5b6ea298e35a`), the **real**\n`@deepseek-ai/dsh-session-projection` registry, and the real Agent Teams\nservice/journal over fake runtime services. `test/run-wiring.mjs` (14 tests)\ndrives the real `apply(ctx)` and all three registered tools through the real\n`defineTool`. `test/run-mount.mjs` mounts the plugin against the **real**\n`Tools` (`ToolRuntime`) and `SystemPrompt` services next to the real registry and\nteam service, then renames, deletes, and cleans up members through `ctx.tools`,\nwhich is what a live activation does. Build the pristine copy with\n`node test/build-pristine.mjs` before running any suite."
+    },
+    {
+      "section": "Verification",
+      "text": "Covered for deletion: member dropped for `active`/`failed` and refused for\n`provisioning`, state shape unchanged, name reusable afterwards, undelivered\nmail dropped while delivered mail is kept, a late `team/message/delivered`\nacknowledgement tolerated, an unknown-message acknowledgement for a live target\nstill failing, foreign-team and other-domain events untouched, task release\nthrough the public API, interrupt/drain calls, result shape, refusal codes,\nmailbox consequence (`TEAM_MEMBER_NOT_FOUND` on send), drain failure logged not\nraised."
+    },
+    {
+      "section": "Verification",
+      "text": "Covered for rename: name and row rewritten with phase, description, provider,\nand context kept, `renamedTo` absent from the stored row, `active` and `failed`\nmembers accepted and `provisioning` refused, a name in use refused, a payload\nthat rewrites immutable fields refused, an unknown member refused, the current\nname a no-op that appends nothing, messages and delivered mail untouched, task\n`ownerName` updated while status and revision stay, no interrupt or drain call,\nthe old name no longer addressable, the freed name reusable by a new member, a\nforeign-team rename ignored, and a non-string `renamedTo` left to the packaged\nfold, which rejects it."
+    },
+    {
+      "section": "Verification",
+      "text": "Covered for display order: the Lead row stays first while teammates render\nnewest first, tasks render newest first, catalog entries render newest first by\nchild creation time, the packaged view is never mutated, the reordered Team view\nstill passes the packaged wire schema, the service contract still reports numeric\ncreation order, a second install is inert, one disposer restores both packaged\nviews, a missing `agentTeam` wire view throws, a missing catalog wire view warns\nwhile the Team view is still ordered, an unchanged packaged value keeps one\nordered reference, and an ignored state change still republishes nothing (a\nmailbox-only Team change, exercised against the real service in the mount\nsuite). Also covered: a second `apply(ctx)` in one context fails loudly at the\ntool layer and leaves the first activation's fold wrapper, wire views, and tools\nworking."
+    },
+    {
+      "section": "Verification",
+      "text": "Covered for cleanup: a settled teammate and a completed task are deleted while a\nrunning teammate is skipped with its reason, an unfinished task survives, a\ncompleted task owned by a teammate is deleted after its owner, an unfinished task\nowned by a deleted teammate is released and reported, an unknown scope is\nrejected by the tool parameters and by the service guard, and scope `teammates`\nleaves tasks alone."
+    },
+    {
+      "section": "Verification",
+      "text": "Covered for replay: a fresh projection cell over a log with a rename, and over a\nrename followed by a removal, folds cleanly; an unwrapped reader freezes on\neither payload. Covered for wiring: one grounding section plus one of each tool\nper Team member scope, idempotent per Agent, stale identities skipped, all three\ntools executable through the real service, every result rendering as compact\nJSON, `TEAM_LEAD_REQUIRED` enforced for a teammate caller, and a mid-install\nfailure undoing the registrations, the fold wrapper, and the wire-view wrappers\nit already made."
+    },
+    {
+      "section": "Limits",
+      "text": "- A dsh build **without** this plugin that reads a session log containing either\n  payload freezes that session's Team projection (`failure`), because the\n  packaged member schema is strict. This is verified, not inferred:\n  `test/run-tests.mjs` asserts the unwrapped reader behavior. Session history is\n  unaffected; only Team state for that session.\n- A renamed teammate keeps calling itself by the old name until the Lead tells\n  it otherwise: the name is baked into the prompt that created it.\n- The extension depends on internal seams (`sessionProjections.registrations`,\n  the `agentTeam` unit's `def.apply`, `journal`/`mailbox`/`roster` fields). It\n  feature-detects the projection table and the roster name rule and fails loudly\n  at activation rather than installing tools that cannot work.\n- **A subagent conversation cannot be deleted.** dsh exposes no session-deletion\n  API, so cleanup covers the roster row and the shared tasks; the child\n  conversation stays in the catalog and the Session log remains. Only the\n  ordering applies to that catalog.\n- The catalog seam is verified against a faithful registration in\n  `test/run-wiring.mjs`. The shipped `subagentCatalog` unit registers f"
+    }
+  ],
+  "skipped": []
+}

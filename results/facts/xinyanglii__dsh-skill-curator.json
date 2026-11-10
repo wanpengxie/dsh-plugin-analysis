@@ -1,0 +1,373 @@
+{
+  "repo": "xinyanglii/dsh-skill-curator",
+  "commit": "e6ce10c71742bec1ffe458d51f6611e1218b0ee9",
+  "extracted_at": "2026-11-10T21:45:33.898795+00:00",
+  "tree": {
+    "files": 24,
+    "bytes": 295861,
+    "lines_by_language": {
+      "JSON": 83,
+      "JavaScript": 4512,
+      "Markdown": 502,
+      "Other": 1585,
+      "Python": 506,
+      "YAML": 106
+    },
+    "outline": [
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "SECURITY.md",
+      "client.js",
+      "consolidate.js",
+      "cordis.patch.yml",
+      "dashboard.js",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "preset.js",
+      "scripts/skillctl",
+      "test/client.test.js",
+      "test/consolidate.test.js",
+      "test/dashboard.test.js",
+      "test/package.test.js",
+      "test/preset.test.js",
+      "test/test_skillctl.py"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-skill-curator",
+    "version": "0.3.2",
+    "description": "Hermes-style in-process background skill review and lifecycle curation for DeepSeek Harness, with a read-only dashboard.",
+    "type": "module",
+    "license": "MIT",
+    "author": {
+      "name": "Xinyang Li",
+      "email": "lxymario@gmail.com",
+      "url": "https://github.com/xinyanglii"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/xinyanglii/dsh-skill-curator.git"
+    },
+    "homepage": "https://github.com/xinyanglii/dsh-skill-curator#readme",
+    "bugs": {
+      "url": "https://github.com/xinyanglii/dsh-skill-curator/issues"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "skills",
+      "skill-management",
+      "agent",
+      "self-learning"
+    ],
+    "icon": "./icon.svg",
+    "exports": {
+      ".": "./index.js",
+      "./preset": "./preset.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "dashboard.js",
+      "consolidate.js",
+      "preset.js",
+      "client.js",
+      "scripts/skillctl",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-locale"
+        ]
+      }
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "scripts": {
+      "test": "node --test test/*.test.js && python3 -m unittest discover -s test -p 'test_*.py' -v",
+      "check": "node --check index.js && node --check dashboard.js && node --check preset.js && node --check client.js && python3 -m py_compile scripts/skillctl"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-skill-curator bundle patch.\n#\n# Two rows: the Host plugin that watches turns and starts the review child, and\n# the internal `skill-review` preset that gives that child its restricted tool\n# surface (persona + skill tools only; no shell, no file writes).\n#\n# Paths are computed at load time so the bundle follows $HOME instead of\n# pinning one machine. Override any value from the profile's cordis.patch.yml\n# by row id.\n- insert:\n    - id: skill-curator\n      name: 'dsh-skill-curator'\n      config:\n        skillsRoot: !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').homedir(), '.dsh', 'skills')\n        python: !!js process.env.DSH_CURATOR_PYTHON || 'python3'\n        nudgeAfterToolIters: 10\n        reviewEnabled: true\n        reviewPreset: skill-review\n        reviewProvider: spawn\n        reviewTimeoutMs: 900000\n        maxTranscriptChars: 40000\n        curatorEnabled: true\n        curatorEveryDays: 7\n        staleDays: 14\n        archiveDays: 30\n        # Optional Hermes-style umbrella-building pass. Off by default: it costs an\n        # extra model call and rewrites skill content, so it is opt-in.\n        consolidateEnabled: false\n        consolidatePreset: skill-consolidate\n        consolidateTimeoutMs: 1800000\n        consolidateBackupKeep: 2\n        selfTestOnFirstRun: true\n\n    - id: preset-skill-review\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: skill-review\n        name: Skill Review\n        description: Internal one-shot reviewer for the local skill library, started by the background skill curator. Not meant for user work.\n        order: 90\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: >-\n                You are DSH's background skill reviewer. You keep the local skill library\n                current: you read finished work, then create or patch class-level skills\n                through the skill tools. Work only through those tools.\n              complete: true\n              includeRuntimeContext: false\n          - id: skill-review-tools\n            name: 'dsh-skill-curator/preset'\n            config:\n              skillsRoot: !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').homedir(), '.dsh', 'skills')\n              python: !!js process.env.DSH_CURATOR_PYTHON || 'python3'\n\n    - id: preset-skill-consolidate\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: skill-consolidate\n        name: Skill Consolidation\n        description: Internal one-shot umbrella-building pass over the local skill library, started by the curator. Not meant for user work.\n        order: 91\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: >-\n                You are DSH's background skill curator. You run the umbrella-building\n                consolidation pass over the local skill library: you merge overlapping\n                class-level skills, demote narrow depth into references/templates/scripts,\n                and archive absorbed skills only with an explicit absorbed_into umbrella.\n                Work only through the skill tools.\n              complete: true\n              includeRuntimeContext: false\n          - id: skill-consolidate-tools\n            name: 'dsh-skill-curator/preset'\n            config:\n              skillsRoot: !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').homedir(), '.dsh', 'skills')\n              python: !!js process.env.DSH_CURATOR_PYTHON || 'python3'\n              consolidationMode: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "preset.js",
+    "client.js",
+    "package.json",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_CURATOR_PYTHON",
+      "kind": "env",
+      "where": "cordis.patch.yml:15"
+    },
+    {
+      "name": "DSH_CURATOR_PYTHON",
+      "kind": "env",
+      "where": "cordis.patch.yml:55"
+    },
+    {
+      "name": "DSH_CURATOR_PYTHON",
+      "kind": "env",
+      "where": "cordis.patch.yml:80"
+    },
+    {
+      "name": "DSH_CURATOR_PYTHON",
+      "kind": "env",
+      "where": "index.js:36"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "index.js:350"
+    },
+    {
+      "name": "DSH_CURATOR_PYTHON",
+      "kind": "env",
+      "where": "preset.js:27"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "preset.js:112"
+    },
+    {
+      "name": "FAKE_SKILLCTL_LOG",
+      "kind": "env",
+      "where": "test/preset.test.js:20"
+    },
+    {
+      "name": "FAKE_SKILLCTL_ENV_LOG",
+      "kind": "env",
+      "where": "test/preset.test.js:22"
+    },
+    {
+      "name": "DSH_CURATOR_CONSOLIDATION",
+      "kind": "env",
+      "where": "test/preset.test.js:23"
+    },
+    {
+      "name": "FAKE_SKILLCTL_LOG",
+      "kind": "env",
+      "where": "test/preset.test.js:65"
+    },
+    {
+      "name": "FAKE_SKILLCTL_ENV_LOG",
+      "kind": "env",
+      "where": "test/preset.test.js:164"
+    },
+    {
+      "name": "FAKE_SKILLCTL_ENV_LOG",
+      "kind": "env",
+      "where": "test/preset.test.js:172"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "dashboard.js:634"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xinyanglii",
+      "where": "package.json:10"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xinyanglii/dsh-skill-curator.git",
+      "where": "package.json:14"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xinyanglii/dsh-skill-curator#readme",
+      "where": "package.json:16"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xinyanglii/dsh-skill-curator/issues",
+      "where": "package.json:18"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 25,
+    "pushed_at": "2026-10-22T14:04:15Z",
+    "created_at": "2026-10-22T00:36:11Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "consolidate.js",
+    "cordis.patch.yml",
+    "dashboard.js",
+    "icon.svg",
+    "index.js",
+    "package.json",
+    "preset.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-skill-curator",
+      "text": "[](https://github.com/xinyanglii/dsh-skill-curator/actions/workflows/test.yml)\n[](LICENSE)\n[](package.json)\n\nHermes-style, in-process background skill learning for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).\n\nIt watches finished conversations, reviews them in a restricted child agent, writes\nclass-level skills through a validated CLI, keeps the library tidy with a\ndeterministic lifecycle curator, and ships a read-only dashboard panel."
+    },
+    {
+      "section": "What it does",
+      "text": "- **Post-turn review.** Counts model iterations per root session (one per assistant\n  step, parallel tool calls in a step count once) across turns. When a completed turn\n  crosses the threshold, it starts a review child in the same process.\n- **Restricted reviewer.** The child runs under the bundled `skill-review` agent preset:\n  a persona plus `skill_list` / `skill_read` / `skill_manage`. No shell, no direct file\n  writes, no network tools.\n- **Validated writes.** Every write goes through `skillctl` (vendored in `scripts/`):\n  name and frontmatter validation, read-before-write SHA checks, support-file path\n  confinement, append-only ledger with blobs, and archive instead of delete.\n- **Lifecycle curator.** Once per `curatorEveryDays` it runs `skillctl curator --apply`:\n  `active → stale` (14 days unused) → `archived` (30 days unused). Archive-only and\n  reversible.\n- **Optional consolidation pass.** Off by default. When enabled, the same run then starts\n  one restricted child that merges overlapping curator-managed skills into umbrellas,\n  demotes narrow depth into support files, and archives absorbed siblings with an explicit\n  `absorbed_into` mapping.\n- **Usage telemetry.** Skil"
+    },
+    {
+      "section": "How it works",
+      "text": "```\nsession events ──► iteration counter (root sessions only, persisted)\n                         │\n             completed turn, counter ≥ threshold\n                         ▼\n\nThe plugin never edits `SKILL.md` itself and never exposes a write API to the browser."
+    },
+    {
+      "section": "Requirements",
+      "text": "| Requirement | Notes |\n|---|---|\n| DeepSeek Harness | Developed against `0.2.1-rc.2`; bundles are ordinary profile patch layers. |\n| Node.js | `>= 20` for the host plugin. |\n| Python | `>= 3.9` on `PATH` (or set `python` / `DSH_CURATOR_PYTHON`). |\n| `zstd` | `zstdcat` is used to read session logs for transcripts and usage scans. Install with `brew install zstd` or `apt install zstd`. |"
+    },
+    {
+      "section": "Install",
+      "text": "A DSH bundle is a package with a `dsh.bundle.patch` layer. Installing the package does\nnot activate it; add it to the profile's bundle list as well."
+    },
+    {
+      "section": "From GitHub",
+      "text": "```bash"
+    },
+    {
+      "section": "1. Install the package into the profile (creates ~/.dsh/profiles/<name>/node_modules)",
+      "text": "dsh plugin --profile desktop add github:xinyanglii/dsh-skill-curator"
+    },
+    {
+      "section": "3. Restart the app once so the browser half is loaded.",
+      "text": "```\n\nUse `--profile web` (or another profile) to install into a different runtime. The\ndashboard only appears in Web/Desktop profiles; headless and ACP profiles have no\nbrowser surface."
+    },
+    {
+      "section": "From a local checkout",
+      "text": "```bash\ngit clone https://github.com/xinyanglii/dsh-skill-curator.git\ndsh plugin --profile desktop add /absolute/path/to/dsh-skill-curator"
+    },
+    {
+      "section": "then add \"dsh-skill-curator\" to dsh.profile.bundles",
+      "text": "```"
+    },
+    {
+      "section": "Verify",
+      "text": "```bash\ntail ~/.dsh/skills/.dsh-curator/plugin.log     # plugin.started / dashboard.registered\ncurl http://127.0.0.1:<port>/skill-curator/api/state\n```\n\nThe port is the profile's Web host; the desktop app proxies it internally."
+    },
+    {
+      "section": "Configuration",
+      "text": "Override any value from the profile's `cordis.patch.yml` by row id (`skill-curator`):\n\n```yaml\n- id: skill-curator\n  config:\n    nudgeAfterToolIters: 10\n    python: /usr/bin/python3"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `enabled` | `true` | Master switch. |\n| `skillsRoot` | `~/.dsh/skills` | Skill library root (shared by every profile). |\n| `skillctl` | packaged `scripts/skillctl` | Authoring CLI used for prompts and writes. |\n| `python` | `python3` | Interpreter for `skillctl` (`DSH_CURATOR_PYTHON` also works). |\n| `stateDir` | `<skillsRoot>/.dsh-curator` | `state.json` and `plugin.log`. |\n| `nudgeAfterToolIters` | `10` | Accumulated model iterations before a review. |\n| `reviewEnabled` | `true` | Trigger reviews at all. |\n| `reviewPreset` | `skill-review` | Agent preset mounted for the child. |\n| `reviewProvider` | `spawn` | Subagent provider used for the child. |\n| `reviewAgentProvider` / `reviewAgentModel` | empty | Explicit reviewer route; empty copies the parent session's live route. |\n| `reviewTimeoutMs` | `900000` | Hard timeout for one review. |\n| `maxTranscriptChars` | `40000` | Transcript budget passed to `skillctl review`. |\n| `curatorEnabled` | `true` | Run the deterministic lifecycle curator. |\n| `curatorEveryDays` | `7` | Minimum interval between curator runs. |\n| `staleDays` | `14` | Unused days before a skill becomes stale. |\n| `archiv"
+    },
+    {
+      "section": "Skill lifecycle and layout",
+      "text": "```\n~/.dsh/skills/\n├── <skill>/SKILL.md            # skills themselves\n├── .dsh-usage.json             # use counts, last-used, state, provenance\n├── .curator_ledger.jsonl       # append-only write ledger\n\nAvailable `skill_manage` actions: `create`, `patch`, `write_file`, `archive`.\nThere is deliberately no delete action; `skillctl restore` brings an archived skill back."
+    },
+    {
+      "section": "Write limits",
+      "text": "`skillctl` enforces these as **hard errors returned to the reviewer**; skill content is\nnever silently truncated. A rejected write leaves the library unchanged and the reviewer\ngets the measured size plus the limit, so it can split the skill or move detail into\n`references/` and retry."
+    },
+    {
+      "section": "Write limits",
+      "text": "| Item | Limit | Behavior |\n|---|---|---|\n| `SKILL.md` (whole file) | 100,000 characters | hard error |\n| One supporting file | 1 MiB | hard error |\n| `description` | 500 characters | hard error (DSH truncates above 500); 120 is the recommended routing length |\n| `SKILL.md` advisory | 24,000 bytes | warning only: \"should split into references/\" |"
+    },
+    {
+      "section": "Write limits",
+      "text": "These are write-path limits. The only truncation in the plugin is the review **input**\ntranscript (`maxTranscriptChars`, default 40,000 characters), which is a prompt budget, not\na skill-content limit. Skill injection/read behavior belongs to DSH itself."
+    },
+    {
+      "section": "Consolidation pass (optional)",
+      "text": "A library can fragment into many narrow siblings that no single review can see. The\nconsolidation pass is Hermes's answer: one extra background child that reads the whole\ncurator-managed library and builds umbrellas."
+    },
+    {
+      "section": "Consolidation pass (optional)",
+      "text": "- **Off by default.** Enabling it costs one model call per curator run and rewrites\n  skill content, so it is an explicit opt-in.\n- Runs after the deterministic stale/archive transitions, at most once per\n  `curatorEveryDays`.\n- Candidates are **curator-managed** skills (`created_by: agent`), excluding pinned\n  skills; user-authored/installed skills are never touched.\n- The child gets the same restricted tool surface (`skill_list`, `skill_read`,\n  `skill_manage`) and a dedicated prompt. It may merge into an existing umbrella, create a\n  new one, or demote depth into `references/`/`templates/`/`scripts/`.\n- Every archive must declare `absorbed_into=<existing umbrella>`; skillctl validates the\n  umbrella exists and records the mapping in the ledger and usage record. Without it the\n  archive is refused.\n- A whole-tree snapshot is taken first (`skillctl backup --keep N`); the run writes\n  `run.json` and `REPORT.md` under `<stateDir>/curator-runs/<timestamp>/` with the\n  consolidated/pruned classification, added skills, state transitions and the child's\n  final summary. Archives remain recoverable with `skillctl restore <name>`.\n- Manual trigger (Hermes `curator run --consolidate` equiv"
+    },
+    {
+      "section": "Read-before-write and loaded context",
+      "text": "- Before patching SKILL.md the reviewer must call `skill_read` and pass the returned\n  SHA to `patch`; a stale SHA is rejected.\n- `skill_read NAME --path=references/...` reads one support file and returns its SHA.\n  Overwriting an existing support file without that SHA is refused, so the reviewer\n  cannot silently replace work it never read.\n- `skillctl review --session <id>` also extracts the skills the primary agent actually\n  loaded in that session (`skill` tool calls or `<skill_content name=...>` events) and\n  puts them in the prompt: the reviewer must treat their conventions as binding."
+    },
+    {
+      "section": "Snapshots and recovery",
+      "text": "- `skillctl backup` writes `<skillsRoot>/.curator_backups/<timestamp>/skills.tar.gz`\n  plus a `manifest.json` (reason, skill list); `--reason` labels it, `--list` shows all.\n- `skillctl rollback --snapshot <id|latest>` restores the active skill tree from a\n  snapshot and takes a `pre-rollback` safety snapshot first.\n- `skillctl rollback <ledger-entry>` still restores one mutation; `--list` lists\n  snapshots."
+    },
+    {
+      "section": "Status, pause and dry runs",
+      "text": "- `skillctl status [--json]` reports library counts, origins, archived count, snapshots,\n  ledger size, last curator/consolidation times and pause/dry-run state.\n- `skillctl pause` / `skillctl resume` write/remove a pause marker; the host skips\n  automatic curator runs while paused (manual consolidation requests still run).\n- `skillctl curator --dry-run` previews deterministic transitions;\n  `skillctl curator --request-consolidation --dry-run` asks the host for a\n  consolidation pass in which every write is refused and the report is marked dry-run.\n- `skillctl prune --days N [--apply]` bulk-archives idle curator-managed skills;\n  `skillctl purge --days N [--apply]` deletes archived skills past a TTL.\n  Both are previews unless `--apply` is passed."
+    },
+    {
+      "section": "User-owned skills",
+      "text": "Skills with `created_by: manual`, `learn` or `installed` are user-owned. The background\nreviewer may read them, but it never writes to them:"
+    },
+    {
+      "section": "User-owned skills",
+      "text": "- The review prompt tags every skill with its origin; `[manual]`, `[learn]` and\n  `[installed]` are marked read-only.\n- If a user-owned skill already covers the workflow or lesson, the reviewer must say\n  `Nothing to save.` instead of creating a parallel agent skill.\n- `skillctl` refuses agent writes (patch, write_file, archive) to user-owned skills, and\n  the consolidation pass cannot absorb anything into one.\n- To let the curator maintain a hand-written skill, run `skillctl adopt <name>`; this\n  sets `created_by: agent` without touching its clocks."
+    },
+    {
+      "section": "Internal runs get their own header action",
+      "text": "The reviewer and consolidation children are internal work. The Host records each\nchild session id when it starts one; the browser half uses that id set (not labels) to\nsplit the catalogs:"
+    },
+    {
+      "section": "Internal runs get their own header action",
+      "text": "- the shipped subagents button keeps its UI and behavior but hides those rows and shows\n  only user subagents, so a normal code-review subagent called \"skill review\" is\n  unaffected;\n- a separate `N curator runs` header action lists the internal runs and opens them with\n  a portal-rendered dropdown (header stacking cannot swallow row clicks). Each row shows\n  its label, created time, mode and a short child-session id (full id on hover), so\n  repeated review labels remain distinguishable. Rows are newest first and legacy\n  labels are shown as `Skill Curator · …` without renaming the underlying sessions."
+    },
+    {
+      "section": "Dashboard",
+      "text": "- Sidebar entry **Skill Curator** → full-width main panel.\n- `GET /skill-curator/api/state`, `GET /skill-curator/api/skill?name=<name>`, and\n  `POST /skill-curator/api/config` for the editable settings.\n- All routes are loopback-only; the GET routes expose nothing outside\n  `<skillsRoot>/<name>/SKILL.md`. The POST route accepts JSON only, validates every key\n  against a fixed schema, and writes through the Host `configEditor` into the active\n  profile patch (live reload); paths, python, skillctl and plugin/preset identities are\n  not writable from the browser."
+    },
+    {
+      "section": "Security model",
+      "text": "- The review child sees only the three skill tools; the `skill-review` preset scope\n  denies every other global tool, incrementally and defensively.\n- The reviewer receives the conversation transcript (up to `maxTranscriptChars`) and the\n  skill list; it runs on the same model route as the session it reviews unless overridden.\n  Do not enable this plugin on sessions whose transcripts must not leave the model\n  provider you already use.\n- `skillctl` runs as the current user and writes only under `skillsRoot` (plus archive,\n  ledger, backups and state beneath it). It never reads credential files.\n- HTTP routes are loopback-only and expose no files outside the skill directory."
+    },
+    {
+      "section": "Tests",
+      "text": "- `node --test test/*.test.js` covers the manifest, bundle patch, dashboard routes\n  (200/400/403/405, traversal, dispose), preset tool registration and argument\n  validation against a fake `skillctl`, the consolidation report builder, and the\n  browser-half registration.\n- `python3 -m unittest discover -s test -p 'test_*.py'` covers the vendored `skillctl`:\n  create, patch with SHA checks, confined support files, archive/restore, validation,\n  consolidation candidates/prompt, `absorbed_into` guards, `list --json`, and the\n  reviewer prompt builder.\n- CI runs both on Node 20/22 with Python 3.11."
+    },
+    {
+      "section": "Compatibility notes",
+      "text": "- Counting matches Hermes's `_iters_since_skill`: one per model iteration, accumulated\n  across turns, checked at turn end. Hermes's separate memory nudge counter is not\n  implemented here; long-term memory belongs to your memory plugin.\n- Cron/scheduled sessions are not skipped. Only root sessions are counted; review\n  children are excluded.\n- The consolidation pass follows Hermes's guard shape (curator-managed only, pinned\n  skipped, archive-only with a validated umbrella, pre-run snapshot) but not its cron\n  reference rewrite, because DSH schedules do not carry structured skill references.\n- Adding or removing `dsh.client` metadata on an already-loaded package specifier needs\n  an App restart. Code-only changes to an installed bundle can be reloaded by removing\n  and reinstalling the bundle."
+    },
+    {
+      "section": "License",
+      "text": "MIT © 2026 dsh-skill-curator contributors"
+    }
+  ],
+  "skipped": []
+}

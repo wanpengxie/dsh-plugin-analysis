@@ -1,0 +1,253 @@
+{
+  "repo": "yuwang/dsh-matt-flow",
+  "commit": "2af1c75428c594afb36ba5edbf3e70852ff75347",
+  "extracted_at": "2026-11-10T22:11:11.349457+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 260715,
+    "lines_by_language": {
+      "JSON": 75,
+      "JavaScript": 1478,
+      "Markdown": 206,
+      "Other": 36,
+      "YAML": 147
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "assets/screenshot-1.jpg",
+      "assets/screenshot-2.jpg",
+      "client.js",
+      "contrib/yuwang__dsh-matt-flow.yml",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "screenshots.json",
+      "test/projection.test.mjs",
+      "test/tools.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-matt-flow",
+    "version": "0.7.3",
+    "description": "把 Matt Pocock 技能套件编成六阶段带前置条件的开发工作流预设：拷问、规范、任务、实现、评审、收尾。含输入框工具行的阶段胶囊与决策卡片。",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./package.json": "./package.json",
+      "./client": "./client.js"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "screenshots.json"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-tool"
+        ]
+      }
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/yuwang/dsh-matt-flow.git"
+    },
+    "homepage": "https://github.com/yuwang/dsh-matt-flow#readme",
+    "bugs": {
+      "url": "https://github.com/yuwang/dsh-matt-flow/issues"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "agent-preset",
+      "workflow",
+      "matt-pocock",
+      "skills"
+    ],
+    "scripts": {
+      "test": "node --test test/*.test.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-matt-flow bundle patch.\n#\n# Two rows, one package:\n#   1. a top-level row whose only job is to let the client boot graph compose\n#      `dsh.client` (it scans enabled Loader entries named by a package root).\n#      Its config sets uiOnly, so its apply() registers nothing on the Host.\n#   2. an agent preset that composes the shipped `standard` set plus this\n#      package's host behaviour (prompt section, tools, projection).\n# Nothing here touches session behaviour outside that preset.\n- insert:\n    - id: matt-flow-ui\n      name: 'dsh-matt-flow'\n      config:\n        uiOnly: true\n- insert:\n    - id: preset-matt\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: matt-flow\n        name: Matt 工程流\n        description: Matt Pocock 工程流：拷问 → 规范 → 任务 → 实现 → 评审，带前置条件\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n          - id: tool-plugin-market\n            name: '@deepseek-ai/dsh-plugin-market/tools'\n            disabled: true\n          - id: matt-flow\n            name: 'dsh-matt-flow'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "package.json",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_AGENTS_HOME",
+      "kind": "env",
+      "where": "index.js:508"
+    },
+    {
+      "name": "ComSpec",
+      "kind": "env",
+      "where": "index.js:578"
+    },
+    {
+      "name": "SHELL",
+      "kind": "env",
+      "where": "index.js:581"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/yuwang/dsh-matt-flow",
+      "where": "contrib/yuwang__dsh-matt-flow.yml:1"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/yuwang/dsh-matt-flow.git",
+      "where": "package.json:41"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/yuwang/dsh-matt-flow#readme",
+      "where": "package.json:43"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/yuwang/dsh-matt-flow/issues",
+      "where": "package.json:45"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-11-06T06:33:30Z",
+    "created_at": "2026-11-05T08:51:42Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-matt-flow",
+      "text": "把 [Matt Pocock Agent Skills](https://github.com/mattpocock/skills) 套件编成一条**带前置条件的开发工作流**，作为 DSH 的一个 agent 预设。技能从 `~/.agents/skills` 读取，缺了会自动安装。\n\n它不复制、不改写任何技能；`npx skills update` 之后行为自动跟随上游。"
+    },
+    {
+      "section": "它提供什么",
+      "text": "| 组成 | 作用 |\n|---|---|\n| `preset-matt` | 新增一个 agent 预设 `matt-flow`，插件集即官方 `standard` 预设 + 本包的 `matt-flow` 插件。在新建会话的预设选择器里出现。 |\n| 系统提示词段落 `matt-flow` | 告诉模型：哪些技能它能自己 `skill` 加载（`grilling`/`tdd`/`code-review`/`diagnosing-bugs`…），哪些只能由你 `/命令` 触发（`/to-spec`、`/to-tickets`…），以及 拷问 → 规范 → 任务 → 实现 → 评审 → 收尾 的顺序、每阶段该做什么。 |\n| 工具 `flow_stage` | 记录并推进某个 feature 的阶段，落盘到 `.scratch/<feature>/flow.json`。前进必须逐级、且要满足前置条件；回退（返工）允许。 |\n| 工具 `flow_ask` + 决策卡（`client.js`） | 拷问阶段把决策做成对话里的卡片：每题一组选项加一个补充输入框，一次最多三题。点「提交选择」后，答案作为你的下一条消息发出，模型接着往下走。卡片由本包自己的浏览器模块渲染，**不依赖 dsh-genui**。 |\n| 阶段胶囊（`client.js`） | 输入框工具行左侧的小胶囊：当前阶段、进度、下一阶段的前置条件。点开浮层看完整流程。只在 Matt 预设的会话里出现。 |"
+    },
+    {
+      "section": "一个包，两行挂载",
+      "text": "浏览器侧代码只能从**顶层** Loader 条目聚合，而宿主行为必须留在**预设子树**里（否则会污染所有会话）。同一个包因此挂两次：\n\n- 顶层 `matt-flow-ui` 行：只为让浏览器扫描到 `dsh.client`，它的 config 是 `uiOnly: true`，`apply()` 立刻返回，不注册任何东西\n- 预设里 `matt-flow` 行：真正的工作（提示词、三个工具、投影）\n\n这就是插件页只显示一个条目的原因。"
+    },
+    {
+      "section": "模式说明",
+      "text": "**它是什么**\n\n一条带前置条件的开发工作流。每个 feature 走同一条路：拷问 → 规范 → 任务 → 实现 → 评审 → 收尾。每一步做完，才能进下一步；跳级会被 `flow_stage` 拒绝。\n\n它不是新的 AI 能力，而是把 Matt Pocock 那套技能串成有顺序、有产出的流程——技能本身仍然从 `~/.agents/skills` 读取，插件只负责编排。\n\n**什么时候用它**\n\n- 有一个要落地的需求，且希望能留下可复查的决策与规范\n- 做多人协作，需要别人接手时能看懂「为什么这么做」\n- 想强制自己先想清楚再写代码（拷问阶段不允许写代码）\n\n不适合：一次性小脚本、纯问答、紧急线上排障（那种直接修，事后补记录）。\n\n**怎么用**\n\n1. 新建会话，预设选「Matt 工程流」\n2. 直接说需求。它会先拷问：把决策做成卡片（选项 + 补充输入框），一次最多三题\n3. 谈定后写规范、拆任务单、按单实现、评审、收尾\n4. 全程可以用输入框左侧的胶囊看进度；点开浮层能看到每一步要做什么\n\n三条命令按需使用："
+    },
+    {
+      "section": "模式说明",
+      "text": "| 命令 | 用途 |\n|---|---|\n| `/grill-with-docs` | 用户手动触发拷问（模型在预设里会自己加载同样两个技能） |\n| `/to-spec` | 只想要规范、不想走完整流程时 |\n| `/code-review` | 只想评审某个分支或 PR |\n\n**它会留下什么**\n\n- `.scratch/<feature>/decisions.md` — 这次变更的决策\n- `.scratch/<feature>/spec.md` — 规范\n- `.scratch/<feature>/issues/*.md` — 任务单，含阻塞关系\n- `CONTEXT.md` / `docs/adr/` — 术语与难以撤销的决定，**按需创建**（没有就不写）\n\n**第一次用之前**"
+    },
+    {
+      "section": "模式说明",
+      "text": "如果仓库还没定过 issue 放在哪，第一次进规范阶段前会要求写 `docs/agents/issue-tracker.md`。默认本地 markdown（`.scratch/`）即可；想要完整布局（triage 标签、域文档、`## Agent skills` 块）就自己跑一次 `/setup-matt-pocock-skills`。"
+    },
+    {
+      "section": "阶段与前置条件",
+      "text": "`拷问 → 规范 → 任务 → 实现 → 评审 → 收尾`\n\n进入下一阶段前要满足什么：\n\n| 进入 | 前置条件 |\n|---|---|\n| `grill` | 无，直接开始拷问 |\n| `spec` | `evidence` 写明拷问收口了什么决策；且 `docs/agents/issue-tracker.md` 存在 |\n| `tickets` | `.scratch/<feature>/spec.md` 存在且 ≥ 200 字符 |\n| `implement` | `.scratch/<feature>/issues/` 下至少 1 个 `.md` |\n| `review` | `evidence` 写明跑过的 typecheck 与测试 |\n| `done` | 说明评审结论与提交 |\n\n前置条件只校验**能校验的部分**（文件是否存在、内容是否够量、evidence 是否非空）。它不假装验证\"测试真跑过了\"——那句证据由模型自己写，你能在 `flow.json` 的 history 里看到它。"
+    },
+    {
+      "section": "为什么 spec 要求先记下 issue tracker",
+      "text": "Matt 的套件有一条前置：`/setup-matt-pocock-skills`，用来定下 issue 放哪（GitHub / GitLab / 本地 markdown）、triage 标签词表、以及 `CONTEXT.md` 与 ADR 的目录布局，产出写进 `docs/agents/*.md` 并在 CLAUDE.md/AGENTS.md 里留一个 `## Agent skills` 块。\n\n那一整套是用户命令，模型跑不了；但它的结论是下游技能的前提——`/to-spec`、`/to-tickets`、`/triage` 的正文里都写着\"若未配置，让用户先跑 `/setup-matt-pocock-skills`\"。\n\n所以这里只强制**最小的一步**：把 issue tracker 的结论落进 `docs/agents/issue-tracker.md` 才允许写 spec。默认值是本地 markdown（`.scratch/<feature>/`），因为流程本来就写在那里；想要完整的标签词表与域文档布局，再让用户跑一次 `/setup-matt-pocock-skills`。"
+    },
+    {
+      "section": "安装",
+      "text": "从 GitHub 装：\n\n```bash\ndsh plugin add git+https://github.com/yuwang/dsh-matt-flow\n```\n\n或在 DSH 的 Plugins 页面填这个地址。装完**重启一次**，再**新建会话**，在预设置换器里选「Matt 工程流 / Matt Flow」。\n\n也可以在本地开发时用目录安装：\n\n```bash\ndsh plugin --profile desktop add /path/to/dsh-matt-flow\n```\n\n已存在的会话不受影响：预设只在新建会话时装入。"
+    },
+    {
+      "section": "装好之后",
+      "text": "第一次进规范阶段前，仓库里需要有一份 `docs/agents/issue-tracker.md` 说明 issue 放在哪。没配过就跑一次 `/setup-matt-pocock-skills`，或者直接让模型按本地 markdown 写一份。\n\n技能套件（37 个）会在预设首次激活时自动安装到 `~/.agents/skills`，前提是机器上有 `node` 和 `npx`。装了什么、成没成功，让模型调 `flow_skills` 就能看到。"
+    },
+    {
+      "section": "在哪里选",
+      "text": "1. **新建会话的空白页**：底部输入区的工具行里，工作区选择器旁边有预设芯片（默认显示「标准 / Standard」），点开就是预设菜单，选「Matt 工程流」。\n2. **设置 → Agent 预设**（`settings.agentPreset`）：按「内置 / 自定义」分组列出卡片，「Matt 工程流」在自定义组；卡片可「查看配置」（只读 YAML），也可设为**新建会话的默认**。\n\n装好后若菜单里还没出现，刷新页面一次——预设名单在连接重置时刷新；当前已存在的会话不会切过去，必须新建。"
+    },
+    {
+      "section": "用起来是什么样",
+      "text": "1. 新建会话，选 `Matt Flow`，把你的想法说出来。\n2. 模型会拉 `grilling` 跟你把设计问清楚，而不是直接改代码。\n3. 它调 `flow_stage({action:\"advance\", to:\"spec\"})` 前进时，前置条件要求它先把决策写进 evidence。\n4. 规范写进 `.scratch/<feature>/spec.md`，任务单写进 `.scratch/<feature>/issues/`，实现阶段逐张任务单走 `tdd`，最后 `code-review`。\n5. 随时 `flow_stage({action:\"status\", feature:\"...\"})` 看进度和下一阶段的前置条件。"
+    },
+    {
+      "section": "本地开发",
+      "text": "改完代码后：\n\n- **`index.js` 改动**：必须重启 DSH。预设子树持有的模块在 Node 的 ESM 缓存里，`install_bundle` 会返回 `restart-required`（原因 `unmanaged-plugin`），热重载换不掉已加载的代码。重启后看系统临时目录的 `dsh-matt-flow-load.log` 确认版本号（macOS/Linux 在 `/tmp`，Windows 在 `%TEMP%`）。\n- **`client.js` 改动**：先 `node --check client.js`，再刷新页面。浏览器侧模块由 `dsh.client` 清单扫描后加载，不刷新拿不到新模块；注册成功后可在 `tool.call.toolview` 的 occupant 里看到 `flow_ask`。\n- **改完先跑一遍**：`npm test`（约 0.2 秒，43 条断言，不依赖网络）。"
+    },
+    {
+      "section": "运行时依赖",
+      "text": "**没有任何 npm 依赖。** 插件只使用 Node 内置模块（`fs`、`path`、`os`、`child_process`），浏览器侧只用宿主提供的 React。"
+    },
+    {
+      "section": "它会启动子进程",
+      "text": "`flow_skills` 工具和预设激活时的自动准备会执行：\n\n```\nnpx -y skills@latest add mattpocock/skills -g -s '*' -y\n```\n\n这会把 [mattpocock/skills](https://github.com/mattpocock/skills) 装进 `~/.agents/skills`，影响这台机器上**所有**读该目录的 agent（Claude Code 等）。\n\n触发条件很窄：\n\n- 只在 7 个必需技能缺失时才执行\n- 失败后 24 小时内不再自动重试\n- 可用 `flow_skills` 查看状态、或手动重试\n- 不想让它执行，就别用这个预设；插件不会在预设之外运行\n\n**前提**：机器上要有 `node` 和 `npx`，且能访问 npm registry 与 GitHub。缺失时不会崩溃，只会把状态记为 `failed`。"
+    },
+    {
+      "section": "它写哪些文件",
+      "text": "| 路径 | 内容 |\n|---|---|\n| `.scratch/<feature>/flow.json` | 阶段状态 |\n| `.scratch/<feature>/decisions.md`、`spec.md`、`issues/*.md` | 流程产物（由模型写，不是你手动维护） |\n| `docs/agents/issue-tracker.md` | 首次进规范阶段前要求存在的 tracker 说明 |\n| `~/.dsh/matt-flow-bootstrap.json` | 技能安装状态 |\n| 系统临时目录下的 `dsh-matt-flow-*.log` | 启动打点与安装日志 |"
+    },
+    {
+      "section": "权限范围",
+      "text": "插件不申请额外权限，不读取凭据，不发起除上述 `npx` 之外的网络请求。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **不接管模型行为**：提示词是强约束、不是硬约束。真正的强制只有 `flow_stage` 的前置条件——模型完全可以绕过它直接改代码。要更强的约束，得再加 `ctx.tools.guard()`。\n- **预设即快照**：插件集复制自官方 `standard` 预设。DSH 升级后 `standard` 若增删插件，这个预设不会自动跟随；升级后建议对照 `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` 同步一次。\n- **UI 有限**：只有一个状态胶囊（输入框工具行）+ 决策卡，没有任务看板。\n- **工具定义用普通 JSON Schema**：没有用 `defineTool()`，因为插件从工作区链接安装时解析不到 `@deepseek-ai/*`。发布为 npm 包后可以改回。\n- **未在 Windows 上实测**：已按平台适配日志目录、`npx.cmd`、`cmd.exe` 兜底和 `--copy`，但没有真机验证。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT，见 [LICENSE](./LICENSE)。"
+    },
+    {
+      "section": "排障",
+      "text": "`apply` 会往系统临时目录的 `dsh-matt-flow-load.log` 与 `dsh-matt-flow-apply.log` 各写一行启动打点（macOS/Linux 在 `/tmp`，Windows 在 `%TEMP%`）：前者证明模块被导入，后者证明 `apply` 执行、各注册项成功。出现任何\"预设加载失败\"时先看这两个文件——没有 load 行是导入问题，有 load 无 apply 是注入问题。确认稳定后可以删掉这两处打点。"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\ndsh plugin --profile desktop remove dsh-matt-flow\n```\n\n`.scratch/` 下的数据是你的，不会被清理。"
+    }
+  ],
+  "skipped": []
+}

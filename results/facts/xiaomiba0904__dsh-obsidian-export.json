@@ -1,0 +1,172 @@
+{
+  "repo": "xiaomiba0904/dsh-obsidian-export",
+  "commit": "32c5271753cbbe31a76f351b36f1011531654ff0",
+  "extracted_at": "2026-11-10T21:39:14.868705+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 63351,
+    "lines_by_language": {
+      "JSON": 40,
+      "JavaScript": 1473,
+      "Markdown": 107,
+      "Other": 53,
+      "YAML": 27
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "src/engine.js",
+      "src/index.js",
+      "src/obsidian-tools.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-obsidian-export",
+    "version": "0.1.0",
+    "description": "DeepSeek Harness (DSH) plugin: export conversations to an Obsidian vault, plus read/search/list/tags/backlinks tools and automatic vault discovery.",
+    "type": "module",
+    "main": "src/index.js",
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin",
+      "obsidian",
+      "vault",
+      "export",
+      "markdown",
+      "dsh"
+    ],
+    "exports": {
+      ".": {
+        "default": "./src/index.js"
+      },
+      "./engine": {
+        "default": "./src/engine.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src/"
+    ],
+    "license": "MIT",
+    "peerDependencies": {
+      "@deepseek-ai/dsh-tools": "^0.1.0-rc.6",
+      "@deepseek-ai/schemastery": "^3.18.1",
+      "@deepseek-ai/dsh-session-persistence": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-fs": "^0.1.0-rc.6"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-obsidian-export bundle patch.\n#\n# Mounts a model-facing Obsidian toolset: `obsidian_export` (export a DSH\n# conversation to the vault with dedupe / create / skip / update / overwrite),\n# plus `obsidian_read` / `obsidian_search` / `obsidian_list` / `obsidian_tags` /\n# `obsidian_backlinks` and `vault_discover`. Sessions come from the persistence\n# seam (ctx.sessionPersistence); vault files go through ctx.fs.\n#\n# The row references the plugin by its package name — installed into the\n# profile's node_modules by `dsh plugin`, so it resolves like any in-box row.\n\n- insert:\n    - id: obsidian-export-tool\n      name: 'dsh-obsidian-export'\n      inject: [tools, sessionPersistence]\n      config:\n        # Default vault directory; the model may override per call via `vaultDir`.\n        # Leave '' to rely on `vault_discover` (which scans `discoverRoots`).\n        vaultDir: ''\n        # Default mode when the model omits it: auto = create if new, skip if\n        # unchanged, update if changed.\n        defaultMode: auto\n        # Base directories `vault_discover` scans for `.obsidian/` vault roots.\n        # Add folders that (may) contain Obsidian vaults so the model can find\n        # your vault without being told the exact path.\n        discoverRoots:\n          - /Users/gehanbin/Work/obsidian-data\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "src/engine.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_SESSION_JSONL",
+      "kind": "env",
+      "where": "src/index.js:268"
+    },
+    {
+      "name": "DSH_SESSION_ID",
+      "kind": "env",
+      "where": "src/index.js:281"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "src/obsidian-tools.js:354"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-13T17:14:21Z",
+    "created_at": "2026-08-13T17:14:13Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/engine.js",
+    "src/index.js",
+    "src/obsidian-tools.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-obsidian-export",
+      "text": "DeepSeek Harness (DSH) plugin that integrates with an **Obsidian vault**\n(no Obsidian-app dependency — a vault is just a folder of Markdown files),\noffering a model-facing toolset: **export** conversations, plus common vault\noperations **read / search / list / tags / backlinks**."
+    },
+    {
+      "section": "Tools",
+      "text": "| tool | purpose |\n|---|---|\n| `obsidian_export` | export a DSH conversation to the vault as Markdown, with per-session **dedupe / create / skip / update / overwrite** semantics |\n| `obsidian_read` | read a note; returns body + parsed frontmatter, first H1 title, `[[wikilink]]` targets, `#tags` |\n| `obsidian_search` | search the vault — field `filename` (paths) or `content` (full-text) — and narrow by `tags` |\n| `obsidian_list` | list Markdown notes and folders under a vault path (recursive, optional `subpath`) |\n| `obsidian_tags` | aggregate distinct `#tags` used across the vault, with note counts |\n| `obsidian_backlinks` | find notes that `[[link]]` a given target (for graph traversal) |"
+    },
+    {
+      "section": "`obsidian_export` — export + dedup",
+      "text": "- Reads a session from the persistence seam (`ctx.sessionPersistence`) — current\n  session by default, or `sessionId`, or imports an exported\n  `session.jsonl` / `session.jsonl.zstd` via `path`.\n- Renders a transcript (user / assistant / tool calls) + a `_dashboard.md`\n  overview, and refreshes a vault `_index.md`.\n- Tracks each session's **content hash** in `<vault>/.dsh-obsidian/manifest.json`,\n  so it can tell whether the target exists and whether content changed."
+    },
+    {
+      "section": "Export modes (判断\"是否重复 / 更新 / 覆盖\")",
+      "text": "| mode | new session | content changed | content unchanged |\n|---|---|---|---|\n| `auto` (default) | `create` | `update` (rewrite in place) | `skip` |\n| `update` | `create` | `update` | `skip` |\n| `overwrite` | `create` | `overwrite` | `overwrite` (force) |\n| `skip` | `create` | `skip` | `skip` |\n| `dry-run` | `dry-run` | `dry-run` | `dry-run` (report only) |\n\nReturns `{ ok, action, reason, changed, note, sessionId, hash, dir }`\n— `action` ∈ `create | skip | update | overwrite | dry-run | error`."
+    },
+    {
+      "section": "Source resolution order",
+      "text": "1. `path` — import an exported `session.jsonl` / `.jsonl.zstd`.\n2. `sessionId` — that persisted session (via `ctx.sessionPersistence.readRaw`/`inspect`).\n3. otherwise — the **current** session (`exec.agent.session.id` / `DSH_SESSION_ID`)."
+    },
+    {
+      "section": "Files",
+      "text": "- `src/engine.js` — pure, framework-free export + manifest/dedupe engine (Node ESM).\n- `src/obsidian-tools.js` — the vault tools (read / search / list / tags / backlinks) over `ctx.fs`.\n- `src/index.js` — the Cordis plugin: `defineTool` wiring for all six tools,\n  `ctx.fs` / `ctx.sessionPersistence` use.\n- `cordis.patch.yml` — bundle patch that mounts the plugin row.\n- `package.json` — declares `\"dsh\": { \"bundle\": { \"patch\": \"./cordis.patch.yml\" } }`."
+    },
+    {
+      "section": "Install into a DSH profile",
+      "text": "```sh"
+    },
+    {
+      "section": "from any directory; relative specs anchor to your invoking directory",
+      "text": "dsh plugin --profile web add /absolute/path/to/dsh-obsidian-export\ndsh plugin --profile web add ./dsh-obsidian-export      # or file:/link:\n```"
+    },
+    {
+      "section": "from any directory; relative specs anchor to your invoking directory",
+      "text": "`dsh plugin` installs the package into the profile's `node_modules`, detects the\n`dsh.bundle.patch` declaration, and appends it to `dsh.profile.bundles` in\n`~/.dsh/profiles/<name>/package.json`.sh\n> # stop the running instance, then\n> dsh --profile web         # or dsh web\n> ```\n> Watch steps before restarting: confirm composition with\n> `dsh --profile web --dump-config` (no restart needed)."
+    },
+    {
+      "section": "from any directory; relative specs anchor to your invoking directory",
+      "text": "The plugin needs its `@deepseek-ai/*` peer packages resolvable. When installed via\npnpm `file:`/`link:` from a directory, provide them in the plugin's own\n`node_modules` (e.g. symlink to the DSH install's fallback dir) or rely on the\nprofile `node_modules` hoisting."
+    },
+    {
+      "section": "Model usage",
+      "text": "```\nobsidian_export(vaultDir=\"/path/to/vault\", mode=\"auto\")                 # current session\nobsidian_export(vaultDir=\"/path/to/vault\", path=\"exported/session.jsonl\")\nobsidian_export(vaultDir=\"/path/to/vault\", sessionId=\"session-<id>\", mode=\"dry-run\")"
+    },
+    {
+      "section": "Model usage",
+      "text": "Model flow for a common workflow: `obsidian_list` (see what's there) →\n`obsidian_read` (load a note) → `obsidian_search` (find related notes by\ncontent/tag) → `obsidian_backlinks` (follow the graph) → `obsidian_export`\n(save a conversation). Combine an export with a `dry-run` first to preview\nwhether a target would be created, skipped, updated, or overwritten."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

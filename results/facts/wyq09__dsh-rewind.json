@@ -1,0 +1,253 @@
+{
+  "repo": "wyq09/dsh-rewind",
+  "commit": "6f1c86c4633e09ded11e3e185c812171759a949f",
+  "extracted_at": "2026-11-10T21:32:01.824964+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 68687,
+    "lines_by_language": {
+      "JSON": 41,
+      "JavaScript": 1039,
+      "Markdown": 347,
+      "Other": 25,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "client/client.js",
+      "cordis.patch.yml",
+      "dsh/index.js",
+      "dsh/prompt.js",
+      "package.json",
+      "test/client-contract.test.js",
+      "test/rewind.integration.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-rewind",
+    "version": "1.1.1",
+    "description": "Checkpoint/rewind extension for the DeepSeek Harness (dsh) web UI, adapted from pi-rewind. 检查点/回退插件：每个 agent 回合自动 git 快照，diff 预览后一键还原，支持撤销/重做。",
+    "type": "module",
+    "main": "./dsh/index.js",
+    "exports": {
+      ".": "./dsh/index.js",
+      "./client": "./client/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "dsh",
+      "client",
+      "cordis.patch.yml"
+    ],
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "checkpoint",
+      "rewind",
+      "undo",
+      "redo",
+      "time-travel",
+      "git",
+      "snapshot",
+      "agent",
+      "plugin",
+      "回退",
+      "检查点"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": ">=18"
+    },
+    "scripts": {
+      "test": "node --test test/*.test.js",
+      "check": "node --check dsh/index.js && node --check dsh/prompt.js && node --check client/client.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-layout"
+        ],
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-rewind: mount the checkpoint/rewind engine into the host composition.\n- insert:\n    - id: dsh-rewind\n      name: 'dsh-rewind'\n"
+    }
+  ],
+  "entries": [
+    "dsh/index.js",
+    "client/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "dsh/index.js:514"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-08-23T14:37:36Z",
+    "created_at": "2026-08-22T23:43:49Z"
+  },
+  "runtime_files": [
+    "client/client.js",
+    "cordis.patch.yml",
+    "dsh/index.js",
+    "dsh/prompt.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-rewind",
+      "text": "`dsh-rewind` 是 DeepSeek Harness（DSH）Web Profile 的代码时光机。它记录每个任务回合前后的工作区状态，让你预览差异后回到任意已记录步骤，并支持撤销、重做。"
+    },
+    {
+      "section": "先理解它为什么能回退",
+      "text": "回退成立的前提不是“记住 AI 说了什么”，而是同时保存代码状态：\n\n```text\n任务开始前 S0 ── DSH 第 1 回合 ──> S1 ── DSH 第 2 回合 ──> S2\n       start                    turn-1                    turn-2\n```\n\n如果只在第 1 回合结束后保存 `S1`，唯一快照就等于当前代码，点击还原自然没有任何变化。v1.1.0 修复了这个根本问题：\n\n1. 选中工作区或任务开始时，先保存可见的 `S0`。\n2. 每个新回合开始时检查一次，捕获回合前的外部改动。\n3. `agent/turn-stopping` 时保存回合后的状态；文件树没变化就去重跳过。\n4. 还原前先保存 `before-restore` 安全快照，再把工作区切换到目标文件树。\n5. `undo` 回安全快照，`redo` 再回目标快照。\n\n底层是工作区内的 `.dsh-rewind/` 影子 Git 仓库。它不提交到项目自己的分支，也不修改项目自己的 Git HEAD、暂存区或提交历史。"
+    },
+    {
+      "section": "功能",
+      "text": "- 第一次任务前自动创建基线，不再出现“有快照但还原没效果”\n- 每个有文件变化的 DSH 回合后自动创建检查点\n- 时间线、diff 预览、二次确认还原\n- 多层撤销与重做\n- `rewind` 模型工具，DSH 可以按自然语言调用\n- 非 Git 项目也可用\n- 同一工作区的多个 DSH 会话使用独立时间线\n- 每个会话最多保留 50 个普通检查点\n- 元数据损坏时可从影子 Git ref 和提交信息恢复"
+    },
+    {
+      "section": "环境要求",
+      "text": "- DeepSeek Harness `dsh`，使用 `web` profile\n- Node.js 18 或更高版本\n- `git`\n- `pnpm`（`dsh plugin` 会调用它管理 Profile）\n- macOS 或 Linux；当前实现还依赖 `mkdir`、`tee`、`cat`、`rm`\n\n先检查：\n\n```bash\ndsh --version\nnode --version\ngit --version\npnpm --version"
+    },
+    {
+      "section": "方式一：安装当前本地源码（开发和验收推荐）",
+      "text": "进入本仓库根目录执行：\n\n```bash\ncd /absolute/path/to/dsh-rewind\ndsh plugin --profile web add .\n```\n\nDSH 会把该依赖加入 `~/.dsh/profiles/web/package.json`，并根据本包的 `dsh.bundle.patch` 自动把 `dsh-rewind` 加进 `dsh.profile.bundles`。不需要手改 `cordis.yml`。\n\n源码继续修改后，重新安装并重启：\n\n```bash\ndsh plugin --profile web add . --force\n```"
+    },
+    {
+      "section": "方式二：从 GitHub 安装",
+      "text": "仓库版本发布到远端后执行：\n\n```bash\ndsh plugin --profile web add 'github:wyq09/dsh-rewind#v1.1.1'\n```"
+    },
+    {
+      "section": "验证组合配置",
+      "text": "```bash\ndsh --profile web --dump-config | grep -A2 -B2 dsh-rewind\n```\n\n应看到类似：\n\n```yaml\n- id: dsh-rewind\n  name: dsh-rewind\n```"
+    },
+    {
+      "section": "启动",
+      "text": "先停止旧的 `dsh web` 进程，再启动：\n\n```bash\ndsh web\n```\n\n不想自动打开浏览器：\n\n```bash\ndsh web --no-open\n```\n\n终端应出现（版本号不低于 `v1.1.1`）：\n\n```text\n[dsh-rewind] host loaded v1.1.1\n```\n\n若服务地址是 `http://127.0.0.1:3000`，可直接自检后端：\n\n```bash\ncurl http://127.0.0.1:3000/dsh-rewind/health\n```\n\n应返回 `\"ok\":true` 和 `\"version\":\"1.1.1\"`。最后在浏览器强制刷新一次（macOS：`Cmd+Shift+R`；Windows/Linux：`Ctrl+F5`）。"
+    },
+    {
+      "section": "第一次使用：完整流程",
+      "text": "1. 打开 DSH Web，先选择一个工作区。\n2. 右下角应看到固定定位的 `⏪ N` 胶囊。点击展开。\n3. 面板会初始化任务前基线，列表出现 `T0 · start`。\n4. 给 DSH 一个会改文件的任务，例如“在 README 末尾增加一行测试文字”。\n5. 回合结束后列表出现新的 `T1` 检查点。\n6. 点击 `T0 · start`，下方 diff 展示从当前状态还原到 `S0` 会发生什么：红色是还原时删除，绿色是还原时加回。\n7. 点击“还原选中项”，再点击红色“确认还原”。\n8. 如果反悔，点击“撤销”；需要再次应用还原则点“重做”。\n\n面板按钮：\n\n| 按钮 | 作用 |\n| --- | --- |\n| `📸 立即快照` | 立即保存当前工作区；没有变化时自动跳过 |\n| `↺ 还原选中项` | 二次确认后还原目标检查点 |\n| `↩ 撤销` | 撤销最近一次还原 |\n| `↪ 重做` | 重做最近被撤销的还原 |\n| `⟳` | 立即刷新状态 |\n| `−` / `×` | 收起面板，保留右下角胶囊 |"
+    },
+    {
+      "section": "让 DSH 自己操作",
+      "text": "插件注册了模型工具 `rewind`。为了稳定触发，明确说“使用 rewind 工具”：\n\n```text\n使用 rewind 工具列出当前检查点。\n使用 rewind 工具预览还原到 start-0-... 会改哪些文件。\n使用 rewind 工具把工作区还原到 start-0-...。\n使用 rewind 工具撤销刚才的还原。\n\n工具动作对应关系：\n\n| action | 用途 | 是否需要 id |\n| --- | --- | --- |\n| `list` | 列出检查点 | 否 |\n| `preview` | 预览还原补丁 | 是 |\n| `restore` | 安全快照后还原 | 是 |\n| `undo` | 撤销最近一次还原 | 否 |\n| `redo` | 重做最近一次还原 | 否 |\n| `checkpoint` | 手动快照 | 否 |"
+    },
+    {
+      "section": "如何确认自动触发正常",
+      "text": "一次正常回合会满足三个可观察条件：\n\n1. 任务前已有 `start` 或 `turn-start`。\n2. DSH 修改文件并结束回合后，终端出现 `turn checkpoint ...`。\n3. 面板的检查点数量增加；若没增加，终端无报错且文件树未变化，说明被 tree-dedup 正常去重。\n\n查看本地数据：\n\n```bash\nls -la .dsh-rewind\ngit --git-dir=.dsh-rewind/git for-each-ref refs/dsh-rewind/\n```"
+    },
+    {
+      "section": "看不到右下角胶囊",
+      "text": "依次检查：\n\n```bash\ndsh --profile web --dump-config | grep dsh-rewind\ncurl http://127.0.0.1:3000/dsh-rewind/health\n```\n\n然后确认重启过 DSH 并强制刷新浏览器。v1.0.0 在面板未展开时没有挂载胶囊 CSS，胶囊可能显示成页面底部的一小段普通文本；v1.1.0 已修复。"
+    },
+    {
+      "section": "胶囊一直是 0",
+      "text": "先选择工作区。未选择工作区时会话没有 `cwd`，插件不知道该快照哪个目录。展开面板后若显示 `no-session`，新建或打开一个工作区会话。"
+    },
+    {
+      "section": "第一次还原没有效果",
+      "text": "确认列表中存在 `T0 · start`，并确认健康接口版本至少是 `1.1.0`。旧版只记录回合后的当前状态，这是本次修复的主要根因。"
+    },
+    {
+      "section": "终端报 `git not resolved` 或命令不存在",
+      "text": "确保 `git`、`mkdir`、`tee`、`cat`、`rm` 在启动 DSH 的 `PATH` 中。"
+    },
+    {
+      "section": "项目自己的 `git status` 出现 `.dsh-rewind/`",
+      "text": "这是本地运行数据，不应提交。把下面一行加入项目 `.gitignore`，或只加入项目本地的 `.git/info/exclude`：\n\n```gitignore\n.dsh-rewind/\n```"
+    },
+    {
+      "section": "数据、安全与限制",
+      "text": "- 只还原工作区文件，不回滚 DSH 对话记录。\n- 还原前总会尝试创建 `before-restore` 安全检查点。\n- 默认忽略 `node_modules`、`dist`、`build`、虚拟环境、缓存目录、`.git` 和 `.dsh-rewind`。\n- 新发现的单文件超过 10 MB 时不进入快照。\n- 同一目录一次新增 200 个或更多文件时，该目录跳过。\n- 二进制差异可能只显示统计信息。\n- `.dsh-rewind` 会占用磁盘；每会话普通检查点上限是 50，但 Git 对象回收仍由 Git 自己决定。\n- 不要把 `.dsh-rewind/` 提交、同步或分享，其中可能包含被删除代码和历史版本中的敏感内容。"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\ndsh plugin --profile web remove dsh-rewind\n```\n\n重启 `dsh web`。卸载不会自动删除各项目里的 `.dsh-rewind/`，便于误卸载后恢复；确认不再需要历史时再手动删除对应项目中的该目录。"
+    },
+    {
+      "section": "项目结构",
+      "text": "```text\ndsh-rewind/\n├── package.json\n├── cordis.patch.yml\n├── dsh/"
+    },
+    {
+      "section": "开发验证",
+      "text": "```bash\nnpm run check\nnpm test\n```\n\n许可证：MIT。设计参考 [arpagon/pi-rewind](https://github.com/arpagon/pi-rewind)。"
+    },
+    {
+      "section": "dsh-rewind",
+      "text": "Checkpoint / rewind extension for the **DeepSeek Harness (DSH)** web UI, adapted from [arpagon/pi-rewind](https://github.com/arpagon/pi-rewind).\n\nGit-based snapshots of the session workspace, including the state before the first agent turn, with a unified diff preview, safe restore, and undo/redo stacks — plus a browser timeline panel and a `rewind` model tool.\n\n> 中文说明见 [README.md](./README.md)。"
+    },
+    {
+      "section": "Features",
+      "text": "- **A real S0 baseline** — captures the workspace before the first agent turn, so the first change can actually be undone.\n- **Automatic checkpoints** — checks at turn start and snapshots after each agent turn that changes files (`agent/turn-stopping`).\n- **Smart dedup** — read-only turns create no checkpoint (tree-hash comparison).\n- **Descriptive labels** — `\"<user prompt>\" → write:file.ts, edit:other.ts`.\n- **Diff preview before restore** — `git diff --stat` + unified patch, oriented as \"what restoring would apply\".\n- **Safe restore** — creates a `before-restore` safety checkpoint first, then restores files without deleting pre-existing untracked files or skipped large items.\n- **Undo / redo stacks** (multi-level).\n- **Smart filtering** — 13 ignored dirs (`node_modules`, `dist`, `.venv`, …), files > 10 MiB, dirs with ≥ 200 new files.\n- **Works anywhere** — a shadow git repo at `<workspace>/.dsh-rewind/` snapshots even non-git workspaces and never touches a real repo's refs/branches.\n- **Per-session pruning** — 50 checkpoints max per session; safety checkpoints are exempt.\n- **Refs survive restarts** — metadata is also recoverable from commit messages."
+    },
+    {
+      "section": "Install",
+      "text": "> Requires DeepSeek Harness (`dsh`), `web` profile. Host needs `git` (plus `mkdir` / `tee` / `cat` / `rm`).\n\n```bash"
+    },
+    {
+      "section": "From this checkout (recommended for the current development version)",
+      "text": "cd /absolute/path/to/dsh-rewind\ndsh plugin --profile web add ."
+    },
+    {
+      "section": "Or from GitHub after the release is pushed",
+      "text": "dsh plugin --profile web add 'github:wyq09/dsh-rewind#v1.1.1'"
+    },
+    {
+      "section": "restart",
+      "text": "dsh web\n```\n\nVerify the host independently of the UI with `curl http://127.0.0.1:<port>/dsh-rewind/health`. See the Chinese [README.md](./README.md) for the complete first-principles install, verification, usage, and troubleshooting guide.\n\nUninstall:bash\ndsh plugin --profile web remove dsh-rewind\ndsh web\n```"
+    },
+    {
+      "section": "Standard plugin layout",
+      "text": "```\ndsh-rewind/\n├── package.json        # dsh.bundle / dsh.client manifest\n├── cordis.patch.yml    # bundle mount declaration (inserts one host row)\n├── dsh/"
+    },
+    {
+      "section": "Browser UI",
+      "text": "- Bottom-right floating pill **`⏪ N`** (draggable) opens the timeline panel.\n- Click a checkpoint to preview its diff; buttons: **Checkpoint now**, **Undo**, **Redo**, **Restore selected** (two-click confirm)."
+    },
+    {
+      "section": "Model tool",
+      "text": "The agent registers a `rewind` tool. Natural-language requests route to it:\n\n| Action | Effect |\n| --- | --- |\n| `list` | show checkpoints |\n| `preview <id>` | show the diff that restoring `<id>` would apply |\n| `restore <id>` | restore files to `<id>` (safety checkpoint created first) |\n| `undo` | undo the last restore |\n| `redo` | redo it |\n| `checkpoint` | snapshot now |"
+    },
+    {
+      "section": "Data location",
+      "text": "`<workspace>/.dsh-rewind/` — a shadow git repo plus `meta.json`. Excluded from its own snapshots via `info/exclude`. Add `.dsh-rewind/` to the real project's `.gitignore` or `.git/info/exclude`."
+    },
+    {
+      "section": "Limitations",
+      "text": "- Files-only restore; conversation state is not rewound (unsafe to truncate a live DSH session log from a plugin).\n- `node_modules`/`dist`/`.venv` and other ignored dirs are never snapshotted."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](./LICENSE). Lineage: [arpagon/pi-rewind](https://github.com/arpagon/pi-rewind) (MIT), [checkpoint-pi](https://github.com/prateekmedia/pi-hooks) and [pi-rewind-hook](https://github.com/nicobailon/pi-rewind-hook)."
+    }
+  ],
+  "skipped": []
+}

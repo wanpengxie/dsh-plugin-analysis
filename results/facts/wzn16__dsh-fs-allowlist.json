@@ -1,0 +1,194 @@
+{
+  "repo": "wzn16/dsh-fs-allowlist",
+  "commit": "8605d0c85b3c7474b5aae84028a3fa4a9a357f00",
+  "extracted_at": "2026-11-10T21:33:55.790335+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 36651,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 537,
+      "Markdown": 168,
+      "Other": 21,
+      "YAML": 5
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-fs-allowlist",
+    "version": "0.3.0",
+    "description": "Approval-free writes into whitelisted directories: wraps ctx.fs.checkedTarget for write/edit, auto-approves bash escalations that touch whitelisted paths, with a Settings GUI. 白名单目录写入免审批（write/edit + bash），设置页可视化调整。",
+    "license": "MIT",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": []
+      }
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "sandbox",
+      "allowlist",
+      "permissions"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/wangzhaonan16/dsh-fs-allowlist.git"
+    },
+    "bugs": {
+      "url": "https://github.com/wangzhaonan16/dsh-fs-allowlist/issues"
+    },
+    "homepage": "https://github.com/wangzhaonan16/dsh-fs-allowlist#readme",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-fs-allowlist：白名单目录写入免审批\n# 包装 dsh-fs-sandbox 挂载的 ctx.fs.checkedTarget 栅栏方法（详见 README.md）\n- insert:\n    - id: fs-allowlist\n      name: dsh-fs-allowlist\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:33"
+    },
+    {
+      "name": "APPDATA",
+      "kind": "env",
+      "where": "lib/index.js:40"
+    },
+    {
+      "name": "XDG_CONFIG_HOME",
+      "kind": "env",
+      "where": "lib/index.js:42"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/wangzhaonan16/dsh-fs-allowlist.git",
+      "where": "package.json:39"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wangzhaonan16/dsh-fs-allowlist/issues",
+      "where": "package.json:42"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wangzhaonan16/dsh-fs-allowlist#readme",
+      "where": "package.json:44"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-09-18T07:10:44Z",
+    "created_at": "2026-09-02T02:34:20Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-fs-allowlist",
+      "text": "[English](README.md) | [中文](README.zh.md)\n\nDSH plugin: **approval-free writes into whitelisted directories**. Let the `write`/`edit` file tools modify configured whitelist directories (e.g. your Obsidian vault) directly — no more \"sandbox denial → escalation retry → manual approval\" — plus a **Settings → Plugins → Directory Allowlist** GUI and **automatic approval for bash escalations** that touch whitelisted paths. Behavior everywhere else stays exactly as before."
+    },
+    {
+      "section": "Features",
+      "text": "| Layer | Mechanism | Covers |\n|---|---|---|\n| write/edit tools | Wraps the `ctx.fs.checkedTarget` fence; whitelisted paths pass early | Approval-free vault reads/writes |\n| bash commands | `tools/pre-execute` indexes the command text; `approval/request` auto-answers `allowed-once` when the command or escalation reason hits a whitelisted path (recursive check) | Approval-free bash writes (command text first; misses fall back to manual approval) |\n| Settings GUI | `settings.plugins.tab` section + server-side HTTP management routes | Add/remove directories, toggle bash auto-approve visually |"
+    },
+    {
+      "section": "Features",
+      "text": "Configuration is **hot-reloaded**: GUI edits apply instantly; manual edits to the config file are picked up within 3 seconds. No DSH restart needed."
+    },
+    {
+      "section": "write/edit layer",
+      "text": "Every write/edit tool call passes through the `ctx.fs.checkedTarget()` fence mounted by `dsh-fs-sandbox` (outside the workspace → `FS_SANDBOX_DENIED` → model retries with escalation → approval prompt). This plugin wraps that fence:\n\n- If the canonically-resolved target lands inside a whitelisted root → pass it through early (same fresh-target semantics as the fence);\n- Otherwise (miss / `read-only` mode / resolution failure) → delegate to the original fence untouched."
+    },
+    {
+      "section": "write/edit layer",
+      "text": "File semantics — atomic writes, version guards, read-before-write checks, diff events — live in the parent `dsh-fs-local` provider below the fence and are not touched. Whitelist matching uses the same realpath (deepest existing ancestor) semantics as the fence, so symlink redirection cannot escape the allowlist."
+    },
+    {
+      "section": "bash layer (approval auto-answer)",
+      "text": "bash runs under the Seatbelt process sandbox, whose profile cannot be extended from a plugin. Instead two listeners cooperate: `tools/pre-execute` records each bash call's command text by callId, and the `approval/request` answerer looks it up and matches the command text plus the escalation reason against the allowlist — path-like tokens are extracted, `~` is expanded to home, then recursively checked under whitelisted roots (**a parent entry covers all its children**). The command text almost always contains the target path, so approval no longer depends on the model writing it in the justification. Misses always fall back to the human prompt (fail-safe). Toggle it off any time in the settings page."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add /path/to/dsh-fs-allowlist\n```\n\nor from GitHub after release:\n\n```bash\ndsh plugin --profile web add \"github:wzn16/dsh-fs-allowlist#main\"\n```\n\nInstalls into `$DSH_HOME/profiles/web`; **restart DSH Desktop** to take effect (refreshing the browser is not enough). The profile links the source directory, so editing the source only needs a restart — no reinstall."
+    },
+    {
+      "section": "Configuration",
+      "text": "`$DSH_HOME/fs-allowlist.json` (default: `~/Library/Application Support/dsh-desktop/harness/fs-allowlist.json` on macOS; the resolver also understands `$DSH_HOME`, Windows `%APPDATA%`, Linux XDG paths, and the open-source `~/.dsh` layout):\n\n```json\n{\n  \"extraWritableRoots\": [\n    \"/Users/you/ObsidianVault\"\n  ],"
+    },
+    {
+      "section": "Configuration",
+      "text": "- Prefer the **Settings → Plugins → Directory Allowlist** page — no hand editing;\n- Missing file / invalid JSON / empty list → empty allowlist, the plugin is fully transparent (= uninstalled behavior): one-step rollback;\n- `bashAutoApprove` defaults to `true` when absent."
+    },
+    {
+      "section": "Behavior matrix",
+      "text": "| Scenario | Behavior |\n|---|---|\n| write/edit inside the workspace | approval-free (native, unchanged) |\n| write/edit inside a whitelisted root | **approval-free** |\n| write/edit anywhere else | deny → escalate → approval (unchanged) |\n| read-only mode writing a whitelisted root | still denied (stricter knob wins) |\n| bash touching a whitelisted root (command or reason matches) | **auto-approved, no prompt** |\n| any other bash escalation (no match) | normal approval prompt |"
+    },
+    {
+      "section": "Known limitations",
+      "text": "1. The bash auto-answer matches the command text plus the justification against the allowlist (recursive path check + substring fallback) — still a heuristic: if neither mentions a whitelisted path, a prompt appears (fail-safe); a match approves that one call.\n2. `checkedTarget` is an internal seam of the shipped bundle: if a DSH upgrade refactors it, the plugin degrades loudly to \"warn + transparent\" (equivalent to today's behavior) without breaking sessions; adapt per release.\n3. A whitelist entry means the agent may write there without asking — keep the list deliberately narrow."
+    },
+    {
+      "section": "Rollback",
+      "text": "`dsh plugin --profile web remove dsh-fs-allowlist` (or empty `fs-allowlist.json`) + restart DSH."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
