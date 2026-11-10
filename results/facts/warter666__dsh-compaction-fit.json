@@ -1,0 +1,231 @@
+{
+  "repo": "warter666/dsh-compaction-fit",
+  "commit": "5b9c4f9f0baa7fa072eb2109deda0b33b46a37d3",
+  "extracted_at": "2026-11-10T21:12:51.666135+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 55573,
+    "lines_by_language": {
+      "JSON": 60,
+      "JavaScript": 973,
+      "Markdown": 257,
+      "Other": 25,
+      "YAML": 24
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/PUBLISHING.md",
+      "index.js",
+      "package.json",
+      "test/guard.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-compaction-fit",
+    "version": "0.1.0",
+    "description": "Make DSH compaction summaries fit real gateway limits: CJK-aware prompt trimming, shrink-and-retry on prompt-too-long, and repair of pi-ai silent-overflow false positives.",
+    "type": "module",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "compaction",
+      "context-window",
+      "token-budget",
+      "openai-compatible",
+      "gateway",
+      "llm-middleware"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/warter666/dsh-compaction-fit.git"
+    },
+    "homepage": "https://github.com/warter666/dsh-compaction-fit#readme",
+    "bugs": {
+      "url": "https://github.com/warter666/dsh-compaction-fit/issues"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "scripts": {
+      "test": "node --test test/guard.test.mjs"
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "compatibility": {
+        "dshReleases": {
+          "0.2.1-rc.2": "compatible"
+        }
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "~4.0.5"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch — inserts this plugin into a profile's layer stack.\n# On install (`dsh plugin add` or the plugin market) this file is applied as a\n# bundle layer; users do not need to edit their own cordis.patch.yml.\n#\n# The config below is the neutral default. Per-gateway `budgets` are deliberately\n# left out: they depend on what the gateway actually accepts, not on what its\n# adapter declares. See README \"Configuration\" for when to pin one.\n- insert:\n    - id: compaction-fit\n      name: 'dsh-compaction-fit'\n      config:\n        trim: true\n        suppressFabricatedOverflow: true\n        suppressScope: all\n        retryOnPromptTooLong: true\n        maxRetries: 2\n        shrinkRatio: 0.5\n        contextRatio: 0.9\n        safetyTokens: 8192\n        minBudgetTokens: 16000\n        maxBudgetTokens: 1000000\n        keepHeadGroups: 2\n        # budgets:\n        #   \"your-provider/your-model\": 650000\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/warter666/dsh-compaction-fit.git",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/warter666/dsh-compaction-fit#readme",
+      "where": "package.json:34"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/warter666/dsh-compaction-fit/issues",
+      "where": "package.json:36"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-28T05:19:34Z",
+    "created_at": "2026-10-28T05:19:25Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "test/guard.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-compaction-fit",
+      "text": "让 DSH 的上下文压缩在**本地 OpenAI 兼容网关**上真正能跑完：摘要前按真实 token 预算裁剪、被上游拒绝时缩小预算重试，并修掉 pi-ai 把「已经完整到达的回答」误判成上下文溢出。\n\n[English](README.en.md) | 中文"
+    },
+    {
+      "section": "它解决的两个问题",
+      "text": "1. **摘要请求超出上游真实限制。** `dsh-compaction-basic` 把整段被压缩历史塞进摘要请求，既不裁剪也不重试；harness 的 token meter 又按 4 字符/token 估算，中文和 JSON 会被低估 3–4 倍。自建反代（Qoder / WorkBuddy / AutoClaw 等）实际窗口和 adapter 声明值经常对不上，摘要请求就这样被顶回去，整个压缩失败，原始报错浮到用户面前。\n2. **pi-ai 的静默溢出误判。** 当响应以 `stop` 结束、且 `input + cacheRead > contextWindow`（adapter 声明的窗口）时，pi-ai 不看内容是否已经到齐，直接伪造一条 `pi-ai detected context overflow for model \"...\"`。压缩摘要总是以 `stop` 结束，于是每一次成功的摘要都被丢弃；普通对话的最终文本回答同样会被毁掉。"
+    },
+    {
+      "section": "它做什么",
+      "text": "- **摘要前裁剪**：用 CJK 感知的估算器衡量 `purpose: 'compaction'` 请求；超预算时先按字符上限截断超长工具结果、assistant 文本、reasoning 和工具参数，仍不够再按「工具调用 + 结果」整组省略中间历史，插入一条省略说明。system、首组（通常是上一个 checkpoint）和最近若干组始终保留。\n- **缩小重试**：上游真的拒绝（`CONTEXT_WINDOW_EXCEEDED` 或 `prompt too long` 一类错误，且尚未产出任何内容）时，按 `shrinkRatio` 几何缩小预算重发，最多 `maxRetries` 次。已经流出的内容不会被撤回重试。\n- **纠正伪造溢出**：只在上游诊断是 pi-ai 的伪造措辞、没有 `status`/`requestId`、且流里已经有内容时，把 finish 改回 `stop` 并保留回答。真实上游拒绝没有内容、消息也是上游原文，不会被吞掉。"
+    },
+    {
+      "section": "它做什么",
+      "text": "插件只挂在 `llm/stream` 上，不修改 harness、不修改 `app.asar`、不改会话日志；被省略的原文仍完整保存在 session log 里。"
+    },
+    {
+      "section": "安装",
+      "text": "在市场（Discover）里搜 `dsh-compaction-fit` 点安装，或：\n\n```sh\ndsh plugin --profile web add dsh-compaction-fit\n```\n\n`package.json` 声明了 `dsh.bundle.patch`，安装时 `cordis.patch.yml` 会作为 bundle 层自动并入，无需手工编辑 profile 的 patch。装完重启 DSH（市场里的热安装不需要）。\n\n要求：Node `^22.19.0 || >=24.0.0`，DSH `0.2.1-rc.2`（cordis `~4.0.5`）已实测；其他 0.2.x 版本请以 `llm/stream` 的 chunk 形状为准。"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `trim` | `true` | 对 `purpose: 'compaction'` 请求做预算裁剪 |\n| `suppressFabricatedOverflow` | `true` | 纠正 pi-ai 伪造的溢出诊断 |\n| `suppressScope` | `all` | `all` 覆盖普通请求；`compaction` 只覆盖摘要 |\n| `retryOnPromptTooLong` | `true` | 真拒绝时缩小重试 |\n| `maxRetries` | `2` | 最多重试次数 |\n| `shrinkRatio` | `0.5` | 每次重试把预算乘以该系数 |\n| `contextRatio` | `0.9` | 未 pin 时，预算 = 窗口 × 该系数 − 输出预留 − 安全余量 |\n| `safetyTokens` | `8192` | 安全余量 |\n| `maxOutputReserveTokens` | `32768` | 输出预留上限 |\n| `minBudgetTokens` / `maxBudgetTokens` | `16000` / `1000000` | 预算夹取范围 |\n| `minRetryBudgetTokens` | `4000` | 重试预算下限 |\n| `keepHeadGroups` | `2` | 省略中间段时额外保留的开头组数 |\n| `budgets` | 空 | `provider/model → prompt token 预算`，显式覆盖声明窗口 |"
+    },
+    {
+      "section": "配置",
+      "text": "未 pin 的模型用 `max(声明 contextWindow, 本进程观察到的最大成功 prompt)` 作为容量，再套上面的公式。观察值来自正常完成的 `usage` 分片，进程重启后从声明窗口重新开始——所以如果你的网关实际窗口远大于声明值，建议直接 pin：\n\n插件作为 bundle 安装后，在你自己的 `cordis.patch.yml` 里按 id 追加覆盖层即可（同一 id 的后层配置覆盖前层）：\n\n```yaml\n- id: compaction-fit\n  config:\n    budgets:\n      \"qoder/deepseek-flash\": 650000\n\npin 的值应来自该网关**实际接受过**的 prompt 大小；写大了会被真实拒绝，然后自动缩半重试。"
+    },
+    {
+      "section": "行为细节",
+      "text": "- 消息按组处理：assistant 的 `tool-call` 与紧随其后的 `tool` 结果是一组，不会被拆开；省略说明只插在组边界。\n- 超长工具参数替换为合法 JSON 的 `{\"_compaction_fit_truncated\":true,\"originalChars\":N,\"preview\":\"...\"}`，避免上游校验失败。\n- 字符上限分 5 轮逐步收紧（最低工具结果 250 字符、assistant 500 字符）；仍不够就继续扩大被省略的中间段。\n- 观察日志：`%TEMP%\\dsh-compaction-fit.trace.log`（桌面端 info 日志可能被过滤）。启动时写 `apply called`；第一次命中 compaction 请求时写 `intercepting llm/stream`，之后是 `trimmed ...`、`suppressed fabricated overflow ...` 或 `retrying ... after: ...`。\n- trace 只记录路由、token 估算和错误摘要，不记录消息内容。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 预算用启发式估算，不是上游 tokenizer 的精确值；`safetyTokens` 和 `contextRatio` 就是为此留的余量。\n- 中间历史被省略后，本次摘要不会包含那部分细节；原始事件仍在 session log，但不会回到模型上下文。对已经有 checkpoint 覆盖早期内容的会话，这是代价最小的恢复方式。\n- 不处理图片 offload（交给 `dsh-compaction-image-offload`），也不拆分单个不可分单元（超大工具结果的剩余部分）。\n- 只对 `purpose: 'compaction'` 做裁剪与重试；伪造溢出纠正默认覆盖所有请求，因为同一条误判同样会毁掉普通回答。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\nnode --test test/guard.test.mjs\n```\n\n13 个测试覆盖 CJK 估算、组级裁剪与工具配对、伪造溢出纠正、真实溢出后的缩小重试、有内容时不重试，以及 `suppressScope: compaction` 不拦截普通请求。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-compaction-fit",
+      "text": "Make DSH compaction summaries finish reliably behind **local OpenAI-compatible gateways**: trim the summary prompt to a real token budget, shrink and retry when upstream actually rejects it, and repair pi-ai's false \"context overflow\" classification for answers that already arrived in full.\n\nEnglish | [中文](README.md)"
+    },
+    {
+      "section": "The two failures it fixes",
+      "text": "1. **The summary prompt exceeds the gateway's real limit.** `dsh-compaction-basic` sends the whole shadowed range as one summary request with no trimming and no retry, while the harness token meter assumes 4 characters per token — CJK text and JSON are undercounted by roughly 3–4×. Self-hosted relays (Qoder, WorkBuddy, AutoClaw, …) often serve a much larger window than their adapter declares, or reject long prompts outright, so the whole compaction attempt fails and the original request error surfaces.\n2. **pi-ai's silent-overflow false positive.** When a response ends with `stop` and `input + cacheRead > contextWindow`, pi-ai ignores whether content actually arrived and fabricates `pi-ai detected context overflow for model \"...\"`. Compaction summaries always end in `stop`, so every successful summary was discarded; ordinary final text answers above the declared window were destroyed the same way."
+    },
+    {
+      "section": "What it does",
+      "text": "- **Trim before summarizing.** For `purpose: 'compaction'` requests it measures the prompt with a CJK-aware estimator, then truncates oversized tool results, assistant text, reasoning and tool arguments, and finally drops whole middle message groups with an elision note. Tool-call/result pairs stay together; the system prompt, the first group (usually the previous checkpoint) and the most recent groups are always kept.\n- **Shrink and retry.** A genuine upstream rejection (`CONTEXT_WINDOW_EXCEEDED` or prompt-too-long wording) before any content is retried with `budget × shrinkRatio`, up to `maxRetries` times. Content already handed to the consumer is never retracted.\n- **Repair the fabricated diagnostic.** Only a failure that matches pi-ai's exact wording, carries no `status`/`requestId`, and arrives after content is rewritten to `stop`. A real upstream rejection has no content and keeps its own message, so it is never swallowed."
+    },
+    {
+      "section": "What it does",
+      "text": "The plugin only listens on `llm/stream`. It does not patch the harness, `app.asar`, or the session log; elided source events remain in the log."
+    },
+    {
+      "section": "Install",
+      "text": "Search for `dsh-compaction-fit` in the plugin market (Discover), or:\n\n```sh\ndsh plugin --profile web add dsh-compaction-fit\n```\n\nThe package declares `dsh.bundle.patch`, so its `cordis.patch.yml` is applied as a bundle layer automatically — no manual profile patch editing. Restart DSH after a CLI install; market installs are hot.\n\nRequires Node `^22.19.0 || >=24.0.0`. Tested on DSH `0.2.1-rc.2` (cordis `~4.0.5`); other 0.2.x releases depend on the same `llm/stream` chunk shapes."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `trim` | `true` | Budget-trim `purpose: 'compaction'` requests |\n| `suppressFabricatedOverflow` | `true` | Repair pi-ai's fabricated overflow diagnostic |\n| `suppressScope` | `all` | `all` covers ordinary requests too; `compaction` only summaries |\n| `retryOnPromptTooLong` | `true` | Shrink and retry a genuine rejection |\n| `maxRetries` | `2` | Retry attempts |\n| `shrinkRatio` | `0.5` | Budget multiplier per retry |\n| `contextRatio` | `0.9` | Unpinned budget = window × ratio − output reserve − safety |\n| `safetyTokens` | `8192` | Safety margin |\n| `maxOutputReserveTokens` | `32768` | Output-reserve cap |\n| `minBudgetTokens` / `maxBudgetTokens` | `16000` / `1000000` | Budget clamp |\n| `minRetryBudgetTokens` | `4000` | Retry-budget floor |\n| `keepHeadGroups` | `2` | Extra head groups kept when the middle is elided |\n| `budgets` | empty | `provider/model → prompt token budget`, overrides the declared window |"
+    },
+    {
+      "section": "Configuration",
+      "text": "An unpinned model uses `max(declared contextWindow, largest successful prompt observed in this process)` as capacity. Observed values reset when the process restarts, so if your gateway serves much more than the adapter declares, pin it. Once the bundle is installed, append an override layer by id in your own `cordis.patch.yml`:\n\n```yaml\n- id: compaction-fit\n  config:\n    budgets:\n      \"qoder/deepseek-flash\": 650000"
+    },
+    {
+      "section": "Configuration",
+      "text": "Pin a prompt size the gateway has actually accepted; a too-large value is rejected upstream and then shrunk automatically."
+    },
+    {
+      "section": "Behavior notes",
+      "text": "- Messages are handled in groups: an assistant tool call plus its following tool results never split. The elision note is inserted only at group boundaries.\n- Oversized tool arguments become valid JSON: `{\"_compaction_fit_truncated\":true,\"originalChars\":N,\"preview\":\"...\"}`.\n- Character caps tighten over five rounds (down to 250 chars for tool results, 500 for assistant text); after that the elided middle keeps growing.\n- Trace: `%TEMP%\\dsh-compaction-fit.trace.log` (desktop info logs may be filtered). `apply called` on boot, then `intercepting llm/stream` on the first compaction request, followed by `trimmed ...`, `suppressed fabricated overflow ...` or `retrying ... after: ...`. The trace records routes, token estimates and error summaries only — never message content."
+    },
+    {
+      "section": "Limitations",
+      "text": "- Budgets are heuristic, not the upstream tokenizer; `safetyTokens` and `contextRatio` exist for that gap.\n- Elided middle history is absent from that summary. The events stay in the session log but do not return to the model context; for a session whose earlier history is already covered by a checkpoint this is the cheapest recovery.\n- No image offload (that is `dsh-compaction-image-offload`), and no splitting of an indivisible unit (an oversized tool result whose remainder cannot be pruned).\n- Trimming and retry apply to `purpose: 'compaction'` only. Fabricated-overflow repair defaults to all requests because the same misclassification also destroys ordinary answers."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode --test test/guard.test.mjs\n```\n\nThirteen tests cover CJK estimation, group-level trimming and tool pairing, fabricated-overflow repair, shrink-retry after a genuine overflow, no retry after content, and `suppressScope: compaction` leaving ordinary requests alone."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,605 @@
+{
+  "repo": "windwhiterain/dsh-office",
+  "commit": "ec00b924b2e5e9e04dc515694c10a6666d8801af",
+  "extracted_at": "2026-11-10T21:19:33.221146+00:00",
+  "tree": {
+    "files": 24,
+    "bytes": 1091873,
+    "lines_by_language": {
+      "JSON": 64,
+      "JavaScript": 16793,
+      "Markdown": 3883,
+      "Other": 30,
+      "YAML": 130
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "articles/zhihu-dsh-office.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/data-model.md",
+      "docs/delivery.md",
+      "docs/design.md",
+      "docs/hot-reload.md",
+      "docs/testing.md",
+      "experience/README.md",
+      "experience/dispatch.md",
+      "experience/evidence.md",
+      "experience/leading.md",
+      "experience/people.md",
+      "index.js",
+      "locale/en.json",
+      "package.json",
+      "presets/boss-restrict.mjs",
+      "probe/panel-render.mjs",
+      "probe/session-tool-scan.mjs",
+      "probe/smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-office",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "A persistent office of colleague agents for DeepSeek Harness: a roster of ordinary sessions with channels, direct messages, and delivery that wakes a colleague when something is addressed to it.",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "agent",
+      "multi-agent",
+      "office",
+      "colleague",
+      "cordis",
+      "plugin",
+      "bundle"
+    ],
+    "license": "MIT",
+    "author": "windwhiterain",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/windwhiterain/dsh-office.git"
+    },
+    "homepage": "https://github.com/windwhiterain/dsh-office#readme",
+    "bugs": {
+      "url": "https://github.com/windwhiterain/dsh-office/issues"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./presets/boss-restrict.mjs": "./presets/boss-restrict.mjs",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "presets/*.mjs",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "experience/*.md"
+    ],
+    "dependencies": {
+      "yaml": "^2.4.5"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-layout",
+          "@deepseek-ai/dsh-client-ui-sidebar"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-office bundle patch.\n#\n# Two kinds of row, told apart by one thing: the row id. `office-host` is the HOST; every\n# other row is an OFFICE. The id decides rather than a config field, because a patch override\n# REPLACES the whole `config` — a field there would be lost by the first override that tunes\n# one value, and the office would be read as a second host.\n#\n# The host is a singleton. It owns everything that exists once per deployment — the agent\n# tool set and the Web panel with its `/dsh-office/*` routes — and holds no office of its\n# own, so its lifetime is independent of the registry. That is what lets the panel survive\n# every office being deleted, and it is why the tools and the routes take the office as an\n# argument.\n#\n# An office owns everything about storing and delivering its own messages: its domain, its\n# roster, and its channels. It registers no tool and no route.\n#\n# Both rows are active by default; disable them with `plugin_manager set_plugin` or a\n# higher-priority layer when the office should not run in a profile.\n- insert:\n    - id: office-host\n      name: 'dsh-office'\n      config:\n        bossPreset: office-boss\n        readLimit: 20\n        readLimitMax: 100\n\n    - id: office\n      name: 'dsh-office'\n      config:\n        # The name people and the model read and address; any script. The id beside it is the\n        # storage key, and here it is written out so the shipped office's unit stays\n        # `office` even if this row is ever renamed.\n        officeName: office\n        officeId: office\n        bossPreset: office-boss\n        userName: user\n        wakesEnabled: true\n        # Role -> session permission preset, for the roles that should run under one. This is the\n        # DSH permission setting (sandbox mode plus approval policy), a different axis from the\n        # office tools the role holds: mapping a role here confines its session without taking any\n        # office tool away. It ships empty, so every role keeps whatever permission its session has;\n        # a deployment that wants a role confined, or a rung run under a narrower sandbox than the\n        # rest of the office, maps it here, and an override of this row must restate the whole map.\n        rolePermissions: {}\n        # The roles whose sessions keep the harness's own `ask_user_question`. A colleague's turn\n        # is started by a delivered message rather than by a person, so a question asked inside it\n        # waits for a human who is not in that Chat; every other role asks the user with\n        # `office_dm`, which reaches the mailbox and holds no turn open. The list withdraws the\n        # tool rather than granting it, so it does nothing in a deployment whose presets mount no\n        # `tool-ask-user`. Writing both roles keeps it everywhere, and an empty list takes it\n        # from every colleague; a boss is not one of the roles, because its own preset decides its\n        # globals.\n        askUserRoles:\n          - leader\n\n    - id: preset-office-boss\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: office-boss\n        name: Office Boss\n        description: >-\n          An agent that runs an office: it manages the roster, reads any channel, posts to\n          it, and holds one persistent Git Bash for reading what colleagues produce. It\n          holds no other tool. The shell needs the danger-full-access permission mode,\n          because an MSYS2 bash cannot start under the Windows ACL restricted token.\n        order: 20\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: >-\n                You run an agent office. A colleague is an ordinary session in the roster,\n                addressed by its session title: hiring creates and titles one, adopting takes an\n                existing session, and dismissing removes it without deleting the session. Each\n                colleague's role — member or leader — decides the office tools it holds and the\n                session permission it runs under. You hold every office tool, so\n                manage the roster and its channels, read any channel, and post to it. You can\n                suspend the whole office with office_pause when it is spending on work that\n                should not continue, and resume it when it should answer again. Your one\n                other tool is a persistent bash shell, for inspecting what colleagues produced\n                on disk: you hold no file or search tools, so read the roster and the channels\n                instead, and reserve the shell for the files themselves. Running several\n                offices, you hold one set of office tools, each taking the office to act on.\n\n          # One Git Bash process per session, the same stack the `minimal-git-bash-persistent`\n          # agent preset mounts: environment, working directory, and history survive across\n          # calls, which is what makes it usable for reading a colleague's output.\n          #\n          # This row survives `office-boss-restrict` because that row denies GLOBAL names,\n          # and a name-scoped restriction is evaluated against the inherited set; see\n          # presets/boss-restrict.mjs for why an allow list cannot express this.\n          #\n          # The PTY registry is an agent-owned service, so it lives in an entry-local realm.\n          # Every row carries its own platform gate: the Loader treats a `group` row as\n          # always enabled, so a `disabled` on the group itself would be ignored.\n          - id: persistent-shell\n            name: cordis:group\n            group: true\n            isolate:\n              terminals: true\n            config:\n              - id: pty\n                name: '@deepseek-ai/dsh-terminal'\n\n              # The PTY backend hands `shellPath` straight to the native spawn, which does\n              # not search PATH, so a bare `bash` fails with \"File not found\" even when\n              # bash is on it. Resolve the absolute path here instead of pinning one\n              # machine's Git for Windows install, and fall back to the bare name so a\n              # deployment without bash loses only this one tool, not the whole preset.\n              - id: terminal-git-bash\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  shellDialect: bash\n                  shellPath: !!js \"(() => { const fs = process.getBuiltinModule('node:fs'); const path = process.getBuiltinModule('node:path'); const names = process.platform === 'win32' ? ['bash.exe'] : ['bash']; for (const dir of String(process.env.PATH || '').split(path.delimiter)) { if (dir === '') continue; for (const name of names) { const candidate = path.join(dir, name); if (fs.existsSync(candidate)) return candidate } } return 'bash' })()\"\n                  timeoutMs: 300000\n\n              - id: terminal-posix-bash\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform === 'win32'\n                config:\n                  timeoutMs: 300000\n\n              - id: persistent-bash\n                name: '@deepseek-ai/dsh-tool-bash-persistent'\n                config:\n                  timeoutMs: 300000\n\n          - id: office-boss-restrict\n            name: 'dsh-office/presets/boss-restrict.mjs'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "presets/boss-restrict.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "cordis.patch.yml:115"
+    },
+    {
+      "name": "DSH_OFFICE_PROBE_MODULES",
+      "kind": "env",
+      "where": "probe/panel-render.mjs:25"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "index.js:6809"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "index.js:6841"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "index.js:6867"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/windwhiterain/dsh-office.git",
+      "where": "package.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/windwhiterain/dsh-office#readme",
+      "where": "package.json:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/windwhiterain/dsh-office/issues",
+      "where": "package.json:26"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3081/",
+      "where": "probe/panel-render.mjs:77"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3081/",
+      "where": "probe/panel-render.mjs:182"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "yaml": "^2.4.5"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 55,
+    "pushed_at": "2026-10-14T02:07:10Z",
+    "created_at": "2026-09-25T09:39:55Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "presets/boss-restrict.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-office",
+      "text": "**A persistent office of colleague agents for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).**"
+    },
+    {
+      "section": "dsh-office",
+      "text": "Harness sessions are isolated, and a subagent dies with the task that spawned it. `dsh-office`\nturns sessions into **colleagues** instead: a roster you can hire into and dismiss from with a\npredefined role each, one public channel, a private channel between any two colleagues, a\n**mailbox** for everything addressed to you, and delivery that wakes a colleague when something\nis addressed to it."
+    },
+    {
+      "section": "dsh-office",
+      "text": "A colleague is not a new kind of agent. It is an ordinary DSH session with a title — the title\n*is* its name — so it keeps its own context, its own model, its own tools, and its own\nworkspace. The office is what outlives all of them: the roster, the channels, and every message\nlive in the office's own storage domain, so dismissing a colleague, restarting the host, or\ndeleting a workspace never loses the office's history or its identity. An office is addressed by\nits **name**, in any script; an internal id — never the name — is the storage key behind it."
+    },
+    {
+      "section": "dsh-office",
+      "text": "The package is **third-party**: it imports nothing from the harness and reaches every capability\nthrough the Cordis context, so it survives harness upgrades."
+    },
+    {
+      "section": "dsh-office",
+      "text": "- [dsh-office](#dsh-office)\n  - [What it looks like](#what-it-looks-like)\n  - [Quick start](#quick-start)\n  - [Roles and permissions](#roles-and-permissions)\n  - [Who a message wakes](#who-a-message-wakes)\n  - [Do not disturb](#do-not-disturb)\n  - [Pause](#pause)\n  - [Tools](#tools)\n    - [The boss's complete tool set](#the-bosss-complete-tool-set)\n    - [Colleagues](#colleagues)\n    - [Installation lifetime](#installation-lifetime)\n    - [Result shape](#result-shape)\n  - [Channels](#channels)\n  - [The user mailbox](#the-user-mailbox)\n  - [The idle notice](#the-idle-notice)\n  - [The boss preset](#the-boss-preset)\n  - [Configuration](#configuration)\n    - [The host row — row id `office-host`](#the-host-row--row-id-office-host)\n    - [An office row — any other row id](#an-office-row--any-other-row-id)\n  - [Multiple offices](#multiple-offices)\n  - [Web panel](#web-panel)\n    - [Folding a long history](#folding-a-long-history)\n    - [Panel state](#panel-state)\n    - [Mentions, levels, and channels](#mentions-levels-and-channels)\n  - [Web routes](#web-routes)\n  - [Known limitations](#known-limitations)\n  - [Documentation](#documentation)\n  - [License](#license)"
+    },
+    {
+      "section": "What it looks like",
+      "text": "You post to the office:\n\n```text\noffice_post  { \"text\": \"release is cut — review the diff before I tag it\", \"wake\": [\"$member\"] }\n\n[office] Posted general-12 to general.\nDelivery:\n\nEach colleague receives its own turn in its own conversation — not a line in a shared log:\n\n```text\n[office #general from the user | wake $member | general-12]\nrelease is cut — review the diff before I tag it\n\n(if you need reply to your colleagues, use office tool with `wake` parameter.)"
+    },
+    {
+      "section": "What it looks like",
+      "text": "The frame names the sender as a colleague or as the user, states the wake the message was written\nwith — the token the sender addressed, or the colleagues a named wake resolved to — and carries\nexactly one rule, in the second person: what a colleague writes itself reaches only the user, so\nreaching a colleague takes an office tool. The wake is stated rather than left to the body, because\nthe body need not spell it at all: whether the reader was named, reached as a rung, or was in a\nchannel the message addressed is what decides if the message is the reader's to answer. The rules\nthat keep one post from waking the office again — silence is the normal\nanswer, answer where the message stands, never post an acknowledgement — are standing context\ninstead, in `office_post`'s description and in a prompt section the office contributes to each\narmed colleague. A frame is written into the colleague's session, so a paragraph in it would be\ncopied into that history once per delivered message and re-sent with every later request; the one\nline stays because the colleague reads it in the message it was just handed."
+    },
+    {
+      "section": "What it looks like",
+      "text": "A colleague that is mid-turn is **not interrupted**. By default it reads the message at its next\nstep boundary — `steered`, above — so it hears about a correction while the work it corrects is\nstill running; `notify: \"turn-end\"` holds the message instead, and hands over everything that\narrived while the colleague worked as **one** turn when it stops, so nine messages cost one turn\nand one answer, and the hold is durable across a host restart. Two other ways a colleague changes\nwhat it is doing are deliberate: a **leader** holds `office_interrupt`, which cancels a running\nturn and lets the office hand over everything held for that colleague at once; and a colleague\nthat wants what is held for it *now* takes it itself with `office_read_notifications`, rather than\nwaiting for the turn to end:"
+    },
+    {
+      "section": "What it looks like",
+      "text": "```text\noffice_read_notifications  {}\n\n[office office] 1 notification was held for you, read here on request:\n\nAddress the user and the message lands in the user's mailbox instead of waking anybody:\n\n```text\noffice_dm  { \"wake\": [\"@user\"], \"text\": \"the release branch is missing a changelog entry\" }\n\n[office] Posted mailbox-3 to the user's mailbox.\nDelivery:"
+    },
+    {
+      "section": "Quick start",
+      "text": "**1. Install the bundle** from a session in the profile that should run the office:\n\n```text\nplugin_manager  install_bundle  target: github:windwhiterain/dsh-office\n```\n\nThat adds three rows: the `office-host` singleton, one office row named `office`, and the\n`office-boss` agent preset. Disable any of them with `plugin_manager set_plugin`."
+    },
+    {
+      "section": "Quick start",
+      "text": "**2. Hire a colleague** — from the Web panel's **Office** page (which can also **adopt** an\nexisting session instead), or from a session running the `office-boss` preset:\n\n```text\noffice_hire  { \"name\": \"alice\", \"role\": \"leader\", \"description\": \"owns the release process\" }\n```"
+    },
+    {
+      "section": "Quick start",
+      "text": "`alice` is a real session: it appears in the workspace sidebar, and it takes its first turn on a\nprivate onboarding message that tells it which office it joined, what its role is, and how it\ntakes part. Hiring writes nothing to `#general`, so the public channel stays a record of work\nrather than of arrivals. `role` is one of `member` (the default) or `leader`, and\n`description` is one or two sentences about what the colleague is for. A `leader` is told one\nthing more: the absolute path of [experience/README.md](experience/README.md), the notes written\nfor that seat, so the role arrives with what leading this office has already cost."
+    },
+    {
+      "section": "Quick start",
+      "text": "**3. Talk to it.**\n\n```text\noffice_post  { \"text\": \"morning\", \"wake\": [\"$member\"] }       # wakes the whole office\noffice_dm    { \"wake\": [\"@alice\"], \"text\": \"look at this\" }   # wakes one colleague\noffice_post  { \"text\": \"stop: wrong branch\", \"wake\": [\"@alice\"], \"notify\": \"turn-end\" }\n                                                              # holds it for alice's turn to end"
+    },
+    {
+      "section": "Quick start",
+      "text": "Then open **Office** in the Web sidebar: the panel lists every mounted office with its roster,\nits channel, your mailbox, and a composer that wakes exactly the colleagues its `@` names, the level\nits `$` calls, or the channel its `#` names. The roster and the mailbox are two side columns, each\nopened and closed from the panel header."
+    },
+    {
+      "section": "Roles and permissions",
+      "text": "`role` is not a job title: it is a **predefined permission set**, and its name is the key to two\nindependent decisions — which office tools the colleague's session holds, and, when the office row\nmaps it, which session permission that session runs under.\n\n**Which office tools the colleague's session holds:**"
+    },
+    {
+      "section": "Roles and permissions",
+      "text": "| Capability | `member` | `leader` |\n|---|---|---|\n| `office_read`, `office_read_notifications`, `office_colleagues`, `office_channels` | yes | yes |\n| `office_post`, `office_dm` | yes | yes |\n| `office_do_not_disturb` | yes | yes |\n| `office_pause` (the whole office) | — | yes |\n| `office_interrupt` | — | yes |\n| `office_compact`, `office_configure` | — | yes |\n| `office_channel_create`, `office_channel_delete`, `office_channel_members` | — | yes |\n| `ask_user_question` (the harness's own tool, not the office's) | — | yes |"
+    },
+    {
+      "section": "Roles and permissions",
+      "text": "The boss holds everything, because it runs the office. A colleague's tool set is the **union**\nof the roles it holds across the offices that adopted it, and every gated tool re-checks the\ncapability against the office a call actually resolved — so a session that is a leader of one\noffice and only a member of another cannot interrupt in the second. A role change withdraws\ntools from the live session (a demoted leader loses `office_interrupt`), rather than leaving\nthem to refuse at call time."
+    },
+    {
+      "section": "Roles and permissions",
+      "text": "**Which session permission its session runs under.** The office row's `rolePermissions` maps a\nrole to a DSH permission preset — sandbox mode plus approval policy, the same setting the\npermission control in the Web UI switches. It ships **empty**, because the two roles are defined\nby the office capabilities they hold and not by how confined their sessions are, and it is the\nextension point for a deployment that wants a role's own session narrowed:"
+    },
+    {
+      "section": "Roles and permissions",
+      "text": "A mapped role speaks into the office exactly as its capability set says while its session cannot\nwrite to disk — the office's own storage is not the session's sandbox, so the restriction only\nreaches the files, and no office tool is taken away by it. A role the map does not name — every\nrole, by default — keeps whatever permission its session already has. The preset is written when\nthe role is set (hire, adopt, or configure), and deliberately not re-applied on every turn:\nswitching a session's preset by hand is your own act, and the roster reports each colleague's\neffective permission so drift is visible rather than assumed. If your deployment's preset table\nhas no entry for a mapped name, the hire or configure is **refused** rather than storing a role\nwhose restriction cannot be enforced."
+    },
+    {
+      "section": "Roles and permissions",
+      "text": "**Which roles may ask the user a blocking question.** A colleague's session inherits the harness's\nown tools from its preset, and one of them — `ask_user_question` — pauses the turn until a human\nanswers it. A colleague's turn is started by a delivered message and you are reading the office\nrather than that colleague's Chat, so a question asked inside it waits for a human who is not in the\nroom. The office row's `askUserRoles` is therefore the list of roles whose sessions **keep** that\ntool:"
+    },
+    {
+      "section": "Roles and permissions",
+      "text": "Every other role asks by `office_dm` to your name, which writes the question to your mailbox where\nnothing blocks on it; listing both roles keeps the tool everywhere, and an empty list takes it\nfrom every colleague. The list is a list of *withdrawals*, not of grants: the office never mounts the\ntool, so a role listed here in an office whose preset carries no `tool-ask-user` still holds none.\nAcross offices the lists vote as a union, the way the roles' capabilities do — a colleague keeps the\ntool as soon as one office that adopted it lists the role it holds there, and loses it only when\nevery one of them leaves the role out. A boss is not in the list and cannot be: it runs the office,\nand which global tools its own preset gives it is that preset's business. An entry that names no\npredefined colleague role is **refused** at activation rather than ignored."
+    },
+    {
+      "section": "Roles and permissions",
+      "text": "Details, including how a stale stored role migrates and why the two axes are separate, are in\n[docs/design.md](docs/design.md)."
+    },
+    {
+      "section": "Who a message wakes",
+      "text": "Every office tool that puts a message into the office takes a **required** `wake`, and nothing\nwakes anybody by default. It has three spellings, and they are never mixed:\n\n```text\noffice_post  { \"text\": \"standup in ten\", \"wake\": [\"$member\"] }\noffice_post  { \"text\": \"leaders, the diff is ready\", \"wake\": [\"$leader\"] }\noffice_post  { \"text\": \"the diff is ready\", \"wake\": [\"@alice\", \"@bob\"] }\noffice_post  { \"text\": \"design review today\", \"wake\": [\"#dev\"] }"
+    },
+    {
+      "section": "Who a message wakes",
+      "text": "- **Names** wake exactly the colleagues they name, written as `@` and the session title. `@user`\n  is you, and reaches the mailbox instead of a session.\n- **A level** — `$member`, `$leader` — wakes every colleague at that rung **and every rung above\n  it**, so the lowest level reaches the whole office. The rung is the role itself, so the ladder\n  cannot drift from the capability table, and a level is an escalation rather than a second name\n  for a role.\n- **A channel** — `#general` or a group channel — wakes every colleague that channel holds,\n  wherever the message is posted: `#general` is the whole roster, and `#dev` reaches the members of\n  `dev` whether the post goes to `dev` or to any other channel. The mailbox and the `dm-…` channels\n  are not addressable this way, because `office_dm` is how one colleague is reached; a body that\n  spells `#mailbox` or a `dm-…` channel is prose."
+    },
+    {
+      "section": "Who a message wakes",
+      "text": "| `wake` | who is woken |\n|---|---|\n| `[\"$member\"]` | every colleague |\n| `[\"$leader\"]` | the leaders alone |\n| `[\"#dev\"]` | the members of the group channel `dev` |\n| `[\"#general\"]` | every colleague |\n| `[\"@alice\", \"@bob\"]` | exactly those two colleagues |\n| `[]` | nobody; the message is stored for whoever reads it |"
+    },
+    {
+      "section": "Who a message wakes",
+      "text": "A level and a channel each stand alone: combining either with names, or with the other, is refused\nrather than unioned, because each of them already decides the whole audience. A name that matches\nnobody is refused too, rather than dropped. **An empty list is a decision rather than an omission**\n— it writes the message to the record without waking anyone, which is how a note nobody has to read\njust now is posted. No caller is ever in its own audience."
+    },
+    {
+      "section": "Who a message wakes",
+      "text": "A level is scoped to the channel it is posted to, exactly as a channel's own broadcast is: in\n`#general` it reaches the whole roster, and in a group channel only that channel's members among\nthe rung it names. A channel token is scoped to the channel it names instead, wherever the message\nis posted, and it may name a channel its sender is not in: an address is not a read, exactly as\nnaming a colleague is. Writing is ungated for the same reason, so a post into a channel the sender\ndoes not subscribe to still wakes only that channel's subscribers; see [Channels](#channels). A\nnamed colleague is not scoped at all, because naming one is addressing it.\n`office_dm` names exactly one colleague and refuses a level and a channel alike: a private message\nis one conversation, and `office_post` is how a rung or a channel is reached."
+    },
+    {
+      "section": "Who a message wakes",
+      "text": "**A colleague that has set itself do-not-disturb is not woken by any of this.** Its delivery\noutcome says so and the message is held; see [Do not disturb](#do-not-disturb). A **paused office**\nis woken by none of it either, whatever the spelling — see [Pause](#pause)."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "A colleague can take itself out of the office's reach for a while — a long review, a build, any work\nthat must not be interrupted — and put itself back:\n\n```text\noffice_do_not_disturb  { \"enabled\": true, \"note\": \"heads down on the release cut until noon\" }\n\n[office office] Do not disturb is on: nothing wakes you until you release it (reason published:\nheads down on the release cut until noon)."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "While the state is set, **no office tool opens a turn in that colleague**. A post that names it, a\nlevel or a channel that reaches it, a private message, and the office's own idle notice are all\nheld — in the same durable hold a mid-turn colleague's mail waits in — so a colleague whose session\nis not loaded is never resumed to be told that it is away. That is what makes the state a promise\nrather than a filter. Nothing else changes: it keeps its role and every office tool, it can still\nread and post, and it can take what is held for it whenever it wants with\n`office_read_notifications`."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "**Every sender is warned, in the result of its own call.** The delivery outcome for such a colleague\nis `do-not-disturb`, and its detail quotes the state — when it was set, and the reason the colleague\npublished with it:\n\n```text\noffice_post  { \"text\": \"the diff is ready\", \"wake\": [\"@alice\"] }\n\n[office] Posted general-12 to general. Delivery:\n- alice: do-not-disturb (the colleague set itself do-not-disturb at 2026-09-27T04:10:00.000Z (its"
+    },
+    {
+      "section": "Do not disturb",
+      "text": "That is the whole warning, and it is deliberate that a sender needs no second call: the office\nanswers \"was it delivered\" with \"no, and here is why\" instead of reporting a delivery that will be\nread after the sender stopped waiting. `office_colleagues` reports the same state — `do not disturb`\nbeside the colleague's status, with the reason and the count of messages waiting — so a caller can\nlook before it posts, and the Web panel draws it from that same read."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "Releasing the state is what delivers: everything held goes into **the one turn that follows the turn\nthat released it**, exactly as a `turn-end` hold does, so a burst that arrived while the colleague\nwas away costs one turn rather than one per message."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "**Speaking is releasing.** An `office_post` or an `office_dm` that the colleague makes itself ends\nits own state, and the result of that call says so — beside the mail that was waiting, which arrives\nin the turn that follows, exactly as an explicit release does:\n\n```text\noffice_post  { \"text\": \"back on the spec\", \"wake\": [] }\n\n[office] Posted general-14 to general. No colleague was woken; the message waits in the office for\noffice_read."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "A colleague that writes to the office again is reachable again; a state that outlived the message\nwould be a colleague asking to be left alone while addressing the room. It also puts two acts in a\ndeliberate order: telling the office you are going quiet is itself a post, so say it **before** you\nset the state, not after. The state is cleared **after** the message is stored, never before, so a\ncall the office refuses — an unknown channel, a body past the message limit, a wake that matches no\ncolleague — leaves the colleague exactly as it found it. And reading is not speaking:\n`office_read`, `office_colleagues`, and `office_read_notifications` all leave the state alone."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "The office's own [idle notice](#the-idle-notice) is a message like any other, so it is held too. An\noffice whose whole audience has gone quiet asks once and then stops, because the question it asked\nis now the newest thing in the record and nothing new arms the next one — and the held question\narrives when the state is released. Nothing else about the notice changes."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "The state belongs to the **session**, not to one membership: one call writes it to every office that\nholds the colleague, and releasing it clears all of them. A colleague that belongs to two offices\nand asked not to be disturbed means it in both, and a tool that silenced only the office it happened\nto resolve would leave the other one waking it. Its result therefore names the offices it wrote\ninstead of the one `office` field every other office tool's result carries."
+    },
+    {
+      "section": "Do not disturb",
+      "text": "Only a **colleague** holds the tool — a boss is not on a roster and nothing wakes it through the\noffice — and it can only set its own state. The state is stored on the colleague's record, so it\nsurvives a host restart and a plugin reload, and a dismissal takes it with the record."
+    },
+    {
+      "section": "Pause",
+      "text": "An office can be **paused** as a whole — the room is suspended, nothing it is addressed wakes\nanybody, and what arrives meanwhile waits — and resumed when it should answer again. A leader and\nthe boss hold `office_pause`; the Web panel has the same control in its header, and a panel\npost — a user's own wake — is suspended by it like any other:\n\n```text\noffice_pause  { \"office\": \"office\", \"enabled\": true, \"note\": \"restoring the release branch — back at noon\" }"
+    },
+    {
+      "section": "Pause",
+      "text": "[office office] The office is paused: nothing it is addressed wakes anybody until it is resumed\n(reason published: restoring the release branch — back at noon). Colleagues already mid-turn are\n\nA pause is a **barrier on waking, not a stop button**, and that is the whole contract:"
+    },
+    {
+      "section": "Pause",
+      "text": "- **Nothing wakes.** A post that names a colleague, a level or a channel that reaches one, a\n  private message, and the office's own idle notice are all **held** rather than delivered, and\n  every sender is told so in the result of its own call, with the moment and the reason quoted.\n  Writing and reading go on: the message is in its channel, and the office keeps it.\n- **Nothing is interrupted.** A colleague that is mid-turn finishes the turn it is running. Pausing\n  does not cancel work, and the state that suspends an office is not a way to abandon a colleague\n  mid-step — that is what `office_interrupt` is for, one colleague at a time.\n- **A resume wakes nobody it has nothing for.** It asks the ordinary question — *who is the office\n  holding something for?* — and answers it with one merged turn each. A colleague that was idle\n  with no mail waiting, and was not addressed while the office was paused, is **not** woken: the\n  pause is not a message to the whole office, and a colleague with no task stays without one."
+    },
+    {
+      "section": "Pause",
+      "text": "```text\noffice_pause  { \"office\": \"office\", \"enabled\": false }\n\n[office office] The office is running again; woken: alice (2).\n```"
+    },
+    {
+      "section": "Pause",
+      "text": "Three things make it a state rather than a filter. It is **read before the session is** — resuming\na session is itself a way of reaching it, so a suspended office loads no colleague to tell it that\nsomething arrived; it is **stored on the office's own global slot**, so a host restart does not\nquietly start waking colleagues again; and it is **not ended by a colleague speaking**, which is the\none place it differs from [do not disturb](#do-not-disturb): a pause is somebody's decision about\nthe whole room, so only `office_pause` or the panel releases it."
+    },
+    {
+      "section": "Pause",
+      "text": "Two things it deliberately leaves alone: a colleague that is already running can still take its own\nheld mail with `office_read_notifications` (the pause gates what the office delivers, not what a\nsession reads about itself), and hiring into a paused office still greets the new colleague — the\ngreeting is what makes its session exist, and there is no hold that could deliver it later."
+    },
+    {
+      "section": "Pause",
+      "text": "`office_colleagues` reports it beside the roster — `paused`, `pausedAt`, `pauseNote` — because a\ncaller that reads the roster is exactly the caller deciding whether to post, and a colleague's own\nstatus says nothing about the office around it. The panel draws the same fact as a band above the\ncolumns, and the poll token moves with the state."
+    },
+    {
+      "section": "Tools",
+      "text": "**No office tool is global.** Each is installed into one agent's own scope according to the role\nit holds there, so a session with no office role sees none of them. The **host** installs them;\nan office row registers no tool at all."
+    },
+    {
+      "section": "Tools",
+      "text": "**Tool names carry no office.** There is one `office_post`, not one per office: the office is an\n*argument*. This is forced, not stylistic — a scope rejects a duplicate tool name\n([`NamedTools`](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/core/tools/src/index.ts)),\nso N independent office rows could not each register `office_post`."
+    },
+    {
+      "section": "Tools",
+      "text": "A **boss** must name the office it acts on; a **colleague** may omit it, because it is routed to\nthe office that adopted it. Every failure names the offices the caller may act on, so a caller\nthat guessed wrong recovers in one step."
+    },
+    {
+      "section": "The boss's complete tool set",
+      "text": "Installed into an agent whose session preset is *any* mounted office's `bossPreset`."
+    },
+    {
+      "section": "The boss's complete tool set",
+      "text": "| Tool | Purpose |\n|---|---|\n| `office_list` | List the offices this session runs, with their names and colleague counts. |\n| `office_roster` | List colleagues and channels; `include_unadopted` also lists sessions available to adopt, each with its workspace and its sidebar title — archived sessions, and sessions no workspace accounts, are not offered. |\n| `office_colleagues` | Every colleague with its role, description, live status — `running`, `idle`, `quota-retry` while it waits out an exhausted account quota, or `inactive` when its session is not loaded — effective permission, the agent preset it is bound to with the number of tools it holds (`none` means no preset tool at all: no shell, files, or skills), model route, the channels it subscribes to, held-message count, last activity, and whether it has set itself do-not-disturb with the reason it published — plus, beside the roster, whether the **office** is paused, when, and why. A pure query: it wakes nobody. |\n| `office_adopt` | Adopt an existing session, with an optional `name`, `role`, and `description`. |\n| `office_hire` | Create a session, title it, adopt it, and greet it **privately**. Accepts `role`, `description`, `age"
+    },
+    {
+      "section": "The boss's complete tool set",
+      "text": "The one office tool a boss does **not** hold is `office_do_not_disturb`: a boss is not on a roster,\nand nothing wakes one through the office. See [Do not disturb](#do-not-disturb).\n\nBesides the office tools, the preset mounts **one persistent Git Bash** as `bash`: one shell\nprocess per session, so environment, working directory, and history survive across calls. It\nexists so a boss can read files a colleague produced; the boss still holds **no file or\nsearch tools**."
+    },
+    {
+      "section": "The boss's complete tool set",
+      "text": "That shell is the reason the preset **requires the `danger-full-access` permission mode**.\n`terminal-bash` passes its argv through untouched only under that policy; every other mode\nwraps it through `ctx.sandbox`, and under the Windows ACL restricted token an MSYS2 bash\ncannot start at all, so the PTY never reaches readiness."
+    },
+    {
+      "section": "Colleagues",
+      "text": "Installed into every colleague's session, and into a session the moment it is adopted."
+    },
+    {
+      "section": "Colleagues",
+      "text": "| Tool | `member` | `leader` |\n|---|---|---|\n| `office_read` | yes | yes |\n| `office_read_notifications` | yes | yes |\n| `office_colleagues`, `office_channels` | yes | yes |\n| `office_post` | yes | yes |\n| `office_dm` | yes | yes |\n| `office_do_not_disturb` | yes | yes |\n| `office_pause` | — | yes |\n| `office_interrupt` | — | yes |\n| `office_compact` | — | yes |\n| `office_configure` | — | yes |\n| `office_channel_create`, `office_channel_delete`, `office_channel_members` | — | yes |\n| `ask_user_question` (the harness's own tool, which the office withdraws) | — | yes |"
+    },
+    {
+      "section": "Installation lifetime",
+      "text": "The host installs each agent's set once, reinstalls it when a role change moves that agent to a\ndifferent set, and withdraws it when the agent holds no office role at all. The withdrawal of the\nharness's `ask_user_question` is part of that set: it is installed with the office tools and lifted\nwith them, so dismissing a colleague hands the session back its own preset's tools. Nothing else\ninstalls or withdraws anything: an office mounting or unmounting, and a roster gaining, losing, or\nre-roling a session, each only ask the host to bring the affected agents back in line."
+    },
+    {
+      "section": "Installation lifetime",
+      "text": "**A colleague's agent is not owned by the office row.** Waking a cold colleague resumes its session\nthrough the process root context rather than the row's own, because Cordis binds a resumed agent's\nteardown to the context the resume was made through: a row-owned colleague would be disposed by the\nnext source hot reload, profile-patch reload, or remount of that row — killed mid-turn if it was\nworking — and the harness reports that disposal as a removal from the Web session list. The office\nis developed against a live host, so a generation reload has to be an event colleagues survive."
+    },
+    {
+      "section": "Installation lifetime",
+      "text": "**A wake carries the colleague's own preset.** The harness mounts an agent preset only through the\n`setup` a resuming caller hands `agents.resume()`, so the office passes one that mounts the preset\nthe session's log names — the same composition the Web surface builds. Without it a resumed\ncolleague holds no preset tool at all (no shell, no files, no skills, no delegation), which is a\nlive colleague that answers turns it cannot work with; a wake of a colleague found live *without*\nthat plane rebinds it instead, through the harness's own `recompose`. Either way a preset that\ncannot be mounted fails the wake and says so."
+    },
+    {
+      "section": "Result shape",
+      "text": "Every office tool's result carries `office`, the name of the office that produced it, so a\npresenter stays a pure function of the result it is given. `office_do_not_disturb` is the one\nexception, and it is the exception its subject forces: the state belongs to the session rather than\nto one office, so its result carries `offices` — every office it wrote — instead of naming one.\n`office_pause` names one office for the same reason every other tool does: a pause is a fact about\n*this* office, and a colleague of two pauses the one it names."
+    },
+    {
+      "section": "Channels",
+      "text": "The office ships two standing feeds: `#general` (`kind: 'public'`), which every colleague shares,\nand the user's mailbox, which no tool reaches. The boss and the leaders build more with the\n`channels` capability: a **group** channel is a shared feed whose stored members are its\n**subscribers** — a session reads it and is woken by a post there exactly as one of them,\n`#general`'s \"every colleague\" default becomes that channel's own member list, and a boss is\nprivy to all of them because it runs the office. A direct channel is created by the first\nmessage and needs no management: its members are the two sessions talking."
+    },
+    {
+      "section": "Channels",
+      "text": "**A subscription is an address, not a permission.** It decides who reads the\nchannel and whom a level posted there wakes, and it is what `office_colleagues` reports for each\ncolleague; it does not decide who may write, because **any colleague may write to any channel the\noffice holds**, subscribed or not, whether through `office_post` or from the panel. A colleague\nwriting outside its subscriptions therefore writes into a feed it cannot read back: what it\nposted is stored and reaches whoever the wake addressed, and any answer to it stays there until\nthat colleague is subscribed or reached by `office_dm`. `office_channels` lists what the caller\nitself subscribes to, and `office_read` refuses every other channel by name; `office_compact` is\nthe one write a subscription still gates, because it replaces a range the caller must be able to\nread first."
+    },
+    {
+      "section": "Channels",
+      "text": "Channels are addressed by name, `#` included or not, everywhere they are an argument:\n`office_read`, `office_post`, `office_compact`, and the channels the panel's switcher lists.\nA colleague's session title for a DM keeps the older address, and the mailbox is refused through\nevery spelling — a colleague may write to it, and nothing reads it."
+    },
+    {
+      "section": "The user mailbox",
+      "text": "You are not a session: nothing can wake you, and a colleague that answers you cannot do it by\nreplying into its own transcript. So the office gives you somewhere to be addressed.\n\n`userName` (default `user`) is your name, and it works everywhere a colleague name does:"
+    },
+    {
+      "section": "The user mailbox",
+      "text": "- `office_dm({ wake: [\"@user\"], text: \"…\" })` writes to your mailbox. Nothing is woken.\n- A public post whose body names `@user` is stored in `#general` **and** copied into the\n  mailbox, so the public record keeps the message and you get it in one place.\n- The panel's composer scans `@user` out of the body the same way it scans a colleague name."
+    },
+    {
+      "section": "The user mailbox",
+      "text": "The mailbox is a **channel** (`kind: 'mailbox'`) and no office tool reads its **messages**:\n`office_read` refuses it by name, and `office_read({ channel: \"*\" })` never reaches it, because\nthe wildcard walks the channels a colleague may read and the mailbox is not among them. It is\nyour private mail, and the panel is where you read it. Every predefined role holds `office_dm`,\nso any colleague — a `member` like anyone — may write to it."
+    },
+    {
+      "section": "The user mailbox",
+      "text": "In the panel the mailbox is a **sidebar** of its own, opened from the header toggle that carries\nits message count. It is a column beside `#general` rather than a band above it, so the two feeds\nnever share a width or a scrollport; the sidebar names the mailbox and the name that reaches it,\nand a message copied from a channel says where it was also said."
+    },
+    {
+      "section": "The idle notice",
+      "text": "An idle session has no turn to notice anything in, so an office in which everybody has stopped has\nnobody left to say what comes next. `idleNotice` gives the office one turn of its own: when a\ncolleague's turn ends and the whole roster has stopped, and something was written since the office\nlast asked, it posts one question addressed to the row's own `wake` — the leaders by default."
+    },
+    {
+      "section": "The idle notice",
+      "text": "The office row carries the whole notice. It is off by default, so the example opts in and restates\nthe values it would otherwise inherit:\n\n```yaml\nidleNotice:\n  enabled: true\n  channel: general\n  wake: ['$leader']"
+    },
+    {
+      "section": "The idle notice",
+      "text": "`wake` takes the same spellings every other message takes, so a deployment that would rather ask the\nwhole office writes `wake: ['$member']`, names colleagues outright, or names a channel; a notice\nwhose `wake` could reach nobody is **refused at activation**, because an enabled notice nobody\nreceives asks nothing.\nThe office asks once per idle transition at most, and only when the resolved audience is non-empty."
+    },
+    {
+      "section": "The idle notice",
+      "text": "It is **off until an office row enables it**, because it spends one turn of every session it\naddresses. A colleague receives it as an ordinary message in whichever channel `channel` names —\n`#general` by default — with its own sequence number, so the panel shows it, `office_read` finds\nit, and the colleagues answer it the way they answer anything else. It is authored by `office`\nrather than by a colleague or by you.\n\nTwo things bound it."
+    },
+    {
+      "section": "The idle notice",
+      "text": "- **It never repeats on its own.** The notice wakes its audience, their turns end, and the office\n  is idle again with the record it had before. So the office asks only when something was written\n  since the last notice, which makes real work — a colleague's post, your next request, a\n  compaction — the thing that arms the next question. An office in which nothing happens, or in\n  which the addressed colleagues answered without writing anything down, stays quiet instead of\n  waking them again.\n- **A silent office never asks.** `wakesEnabled: false` promises that no session is ever woken, and\n  the notice is a wake; such an office writes nothing. A configured channel the office does not\n  hold is reported and retried at the next idle transition, rather than ending the questions."
+    },
+    {
+      "section": "The boss preset",
+      "text": "The bundle's patch declares `office-boss`: a persona, the persistent shell rows, and\n[`presets/boss-restrict.mjs`](presets/boss-restrict.mjs).\n\nThe Web panel is your own console and reaches the same operations through `/dsh-office/*`; it\ndoes not need a boss session. The preset is the *agent-facing* route to that capability. Why the\npersona's tool mask is a deny list, and why the shell path is resolved rather than pinned, are in\n[docs/design.md](docs/design.md)."
+    },
+    {
+      "section": "Configuration",
+      "text": "Each row's `config`, validated at activation. A field belonging to the other kind of row is\nrefused, not ignored."
+    },
+    {
+      "section": "The host row — row id `office-host`",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `readLimit` | `20` | How many messages `office_read` returns by default, and how many a panel feed shows before it folds everything older behind one row. |\n| `readLimitMax` | `100` | Ceiling for the `limit` argument and for one unfold. |\n| `bossPreset` | `\"office-boss\"` | Agent preset new offices inherit when the panel creates them. |\n| `profilePatch` | launcher's | Overrides the profile patch the panel edits to create and delete offices. Without either source those routes answer 503. |"
+    },
+    {
+      "section": "An office row — any other row id",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `officeName` | — | The office's **name**, and **required**: what the panel, the model, and every request address it by. Any script; letters, digits, and underscores. Never defaulted, so an override must restate it. |\n| `officeId` | the row id | The office's **storage key**, matching `/^[a-z][a-z0-9_]*$/`. Renaming an office never changes it. |\n| `bossPreset` | `\"office-boss\"` | Agent preset id whose sessions are this office's boss. |\n| `userName` | `\"user\"` | The name that reaches **you**: `office_dm({ wake: [\"@user\"] })`, `@…` in a post, and the sender name the panel posts under. Any script. |\n| `rolePermissions` | `{}` (empty) | Role → session permission preset. It ships empty, because a role is defined by the office capabilities it holds rather than by how confined its session is, and it is the extension point for confining a role's own session without taking an office tool away. A role absent from the map keeps its session's own permission, and a name your deployment does not define is refused. |\n| `askUserRoles` | `[\"leader\"]` | Roles whose sessions **keep** the harness's `ask_user_question`. Every other role asks the user with `of"
+    },
+    {
+      "section": "Multiple offices",
+      "text": "One office is one `officeId`. Mounting the package with two office rows composes two fully\nindependent offices: separate domains, rosters, channels, and names. They share one tool set and\none route table, not one each.\n\n```yaml\n- insert:\n    - id: office\n      name: 'dsh-office'\n      config:"
+    },
+    {
+      "section": "Multiple offices",
+      "text": "The second row must sit inside an `insert` list. The Loader appends a patch entry's `insert`\nlist to the tree, but reads an entry **without** one as an id-targeted override of a row an\nearlier layer created: a top-level `- id: office_studio` therefore matches nothing and never\nmounts — the office silently does not exist, with no failure anywhere you would look. Why that is\nso, and how a delete decides between removing and disabling a row, is in\n[docs/design.md](docs/design.md)."
+    },
+    {
+      "section": "Multiple offices",
+      "text": "The panel's **Offices** control creates and deletes offices. Creating appends an `insert` list to\nthe profile patch and relies on the live configuration reload to mount it. Deleting erases the\noffice first and then acts on its row: a row inside an `insert` list is removed, a top-level\noverride of a mounted office is **disabled** (removing it would restore the layer's config and\nleave the office mounted), and a dead top-level row is removed."
+    },
+    {
+      "section": "Multiple offices",
+      "text": "Deleting the last office is safe: the host is a separate row, so the panel keeps answering,\nlists nothing, and can create the next office.\n\n**Sharing one `bossPreset` across offices makes a single boss that supervises all of them.** Its\ntool count is constant — the office is an argument rather than part of the name — and the offices\nstay isolated: no shared roster and no shared channel."
+    },
+    {
+      "section": "Web panel",
+      "text": "`client.js` registers two Client slots: a `sidebar.panellist` icon and the matching `main`\npanel, both under the id `office`. The page discovers the mounted offices from\n`/dsh-office/offices` and shows a switcher across the top when there is more than one."
+    },
+    {
+      "section": "Web panel",
+      "text": "Until the selected office's first snapshot arrives the page is a **loading state with no control on\nit**: a page whose roster is not known yet has nothing a click could mean, since the header's\nbuttons, every dialog, and the composer all act on what the snapshot carries. Only that first\nanswer gates — a later poll draws over a page that already resolved, so a refresh never takes the\ncontrols away from a reader who is using them. A first answer that *failed* is not a page still\nloading: it says so and offers **Retry**, which is the one control that state has."
+    },
+    {
+      "section": "Web panel",
+      "text": "A poll is also **dirty-only**. The snapshot carries an opaque token — its `revision` — that\ndescribes everything the page draws, and the next poll hands that token back: while nothing it\ndescribes has moved, the office answers `unchanged` in a few dozen bytes instead of rebuilding the\nsnapshot. Polls of one office and channel never overlap, so a slow answer cannot stack two more\nbehind it, while a channel switch is a different question and is asked at once. Opening one of the\npanel's own dialogs asks for a full snapshot at that click, because what a dialog offers — the\nsessions nobody has adopted, the workspaces, the presets, the models — changes without an office\nwrite and so is not something the token compares. Once a minute the panel asks for a full snapshot\nanyway, which is what catches any other fact no office write moved — a session renamed from the\nsidebar, say."
+    },
+    {
+      "section": "Web panel",
+      "text": "Everything below the switcher belongs to the selected office. The body is three columns — the\nroster, the channel, and the mailbox — and each of the two side columns is opened from a button in\nthe header, next to **Hire a colleague**, and closed either from that button again or from the\n**✕** in its own head. An open column's button is drawn in the brand color, and the choice is\nremembered like the panel's other controls."
+    },
+    {
+      "section": "Web panel",
+      "text": "**Pause office** sits in the same header, and it is the one control there that reports a state\nrather than opening a surface: it reads **Resume office**, in the brand color, while the office is\nsuspended. Either opens one dialog — a reason to publish while the office is running, and the\nreason it published plus the moment it was paused once it is not — and a **paused** office draws a\nband above the columns saying so, because a channel that has quietly stopped answering is\notherwise indistinguishable from one nobody replied in. The band carries its own **Resume**, and\nthe office's poll token moves with the state, so a pause made by a leader's `office_pause` shows up\nwithout a reload. See [Pause](#pause)."
+    },
+    {
+      "section": "Web panel",
+      "text": "Every message row carries its sequence number (`#12`), the number the office anchors a message id\nlike `general-12` on and `office_read` addresses a range with, so a human can cite an anchor\nwithout a tool call, and beside its sender it states the wake the office recorded: the token the\npost addressed (`$member`, `#dev`), the colleagues a named wake resolved to (`@alice @bob`),\n`nobody` for a message that woke nobody, or `@<userName>` for a mailbox record. A message written\nbefore levels moved to `$` records the old spelling and is shown as the level it means — `#leader`\nreads as `$leader` — because `#name` addresses a channel today and a channel spelled after a role is\nrefused as a wake; a compacted-range summary states no wake at all, since it addresses nobody. Each\nmessage view of the state route therefore carries `wake` and `channels` beside `mentions` and\n`audience`."
+    },
+    {
+      "section": "Web panel",
+      "text": "- **Colleagues** — a side column, open by default: the colleagues the channel column holds — the\n  whole office for `#general`, a group channel's own members — each with its role, live status\n  (including `quota-retry` for a colleague waiting out an exhausted account quota),\n  effective permission, held-message count, and description, plus **Edit** (role and description)\n  and **Dismiss**. The header's count is the same list. A name is the session's listed title, read\n  the way the Web session list reads it: a live session's own `title` projection, or the projection\n  cache's row for one that is not loaded. A colleague that has set itself do-not-disturb is drawn\n  with `do not disturb` beside its status and the reason it published under its name, so the reader\n  can see who is away and why before posting into the channel.\n- **Channel** — the column the page reads, named by a switcher in its own head: `#general` and\n  every group channel, one at a time, each with its own feed, composer, and stored reading\n  position. A switch is one question — an answer to the channel you left is dropped rather than\n  published, so the switch cannot be flipped back and the choice you made is the one"
+    },
+    {
+      "section": "Folding a long history",
+      "text": "Every message list — the channel column, whichever channel it reads, and the mailbox — renders the\nnewest page and **folds everything older behind one row**, `N earlier messages`, as the\nconversation view does with the history it has not loaded. One click loads the next page in place\nand keeps the reader's position: the feed moves its scroll offset by exactly the height the older\nmessages added, so opening history never drags you away from what you were reading. Following the\ntail is unaffected — a reader at the bottom stays at the bottom. A channel the office compacted\nshrinks under the reader, and the unfolded page is dropped rather than shown above the summary that\nreplaced it."
+    },
+    {
+      "section": "Folding a long history",
+      "text": "Opening or closing a column rewraps the channel at a new width, which the same accounting covers,\nso the reader keeps their place through a toggle. The mailbox sidebar is driven by the same\nmachinery as the channel: one follow intent with the same settled reader sampling, the same height\naccounting for unfolds and a rewrap, a stored position under `mail:<office>` that a close and a\nreopening restores, and the tail as the default it opens at when nothing is stored — so mail that\narrived while you were reading the channel is already in view."
+    },
+    {
+      "section": "Panel state",
+      "text": "The panel is registered in the `main` slot, so opening another page unmounts it, and a reload\nreplaces it entirely. What you typed and chose therefore lives outside React state, in one\n`localStorage` record under `dsh-office.panel`:"
+    },
+    {
+      "section": "Panel state",
+      "text": "| Field | Meaning |\n|---|---|\n| `office` | The office the page was showing. A name that no longer exists falls back to the first mounted office. |\n| `channel:<office>` | The channel the page's channel column reads, per office; an id the office no longer holds falls back to `#general` in the snapshot itself. |\n| `draft:<office>` | The composer draft, per office. |\n| `colleagues` | Whether the roster column is open. Open until you close it. |\n| `mailbox` | Whether the mailbox sidebar is open. Closed until you open it. |\n| `feed:<office>:<channel>` | Where the reader is in one channel: `null` while following the newest message, or the offset it is reading at. |\n| `mail:<office>` | Where the reader is in the mailbox, stored the same way `feed:<office>:<channel>` is. |"
+    },
+    {
+      "section": "Panel state",
+      "text": "None of it is authoritative, and each failure degrades to the value the panel would have started\nfrom anyway. Submitting a post clears the stored draft."
+    },
+    {
+      "section": "Mentions, levels, and channels",
+      "text": "Writing `@` in the composer opens the roster, `$` opens the wake levels, and `#` opens the channels\na wake may name, the way the harness composer opens its own trigger menu: arrow keys walk it, Enter\nor Tab accepts, Escape closes it, and an accepted token stays in the body in the reference color.\nWho a post notifies is decided from the **stored body**, on the server, not from what the panel\nclaims: a token is `@`, `$`, or `#` at the body's start or after whitespace, then a colleague's\nexact name — longest first — one level, or the id of a channel the office holds, ending at a\nboundary, so `@张三x` and `mail x@张三` are prose. The user's name is scanned by the same rule, and\nonly the public channel and the group channels are scanned at all, so a body that spells `#mailbox`\nor a `dm-…` channel is prose rather than a wake."
+    },
+    {
+      "section": "Mentions, levels, and channels",
+      "text": "That is the whole control: a panel post wakes the colleagues its `@` names, the level its `$`\ncalls, the channel its `#` names, or nobody when the body writes none of them. There is no\nseparate switch, because the audience is the body — and the model's `office_post` says the same\nthing structurally, with the required `wake` argument\n([Who a message wakes](#who-a-message-wakes)). Waking is not the same as reading: a post that wakes\nnobody is still written to the channel, where anyone can find it with `office_read`."
+    },
+    {
+      "section": "Mentions, levels, and channels",
+      "text": "A body that mixes the spellings — a colleague named beside a level or a channel, or a level beside\na channel — is refused rather than guessed at, and the refusal comes back in the composer."
+    },
+    {
+      "section": "Mentions, levels, and channels",
+      "text": "The panel has no timing control, so its posts carry the office's default: a colleague that is\nmid-turn reads a post from the panel at its next step boundary, exactly as it reads one from the\nmodel. A caller that wants the message held for the turn to end — merged with whatever else\narrives before it — expresses that with `notify: \"turn-end\"` on `office_post`, which the panel has\nno control for yet."
+    },
+    {
+      "section": "Web routes",
+      "text": "The panel reads two groups of routes registered on `ctx.webServer`.\n\n**Host routes** — the registry, owned by the host, answering with any number of offices mounted\nincluding none:"
+    },
+    {
+      "section": "Web routes",
+      "text": "| Route | Purpose |\n|---|---|\n| `GET /dsh-office/offices` | Every mounted office as `{ id, name }`. |\n| `POST /dsh-office/offices/create` | `{ name }` — append an `insert` list holding a new office row to the profile patch. |\n| `POST /dsh-office/offices/delete` | `{ office }` — erase that office and act on the row that mounts it. |\n| `POST /dsh-office/offices/rename` | `{ office, name }` — rename one office. |"
+    },
+    {
+      "section": "Web routes",
+      "text": "**Office routes** — registered by the host beside the registry, with the office named by the\n`office` query parameter, so one registration serves every office:"
+    },
+    {
+      "section": "Web routes",
+      "text": "| Route | Purpose |\n|---|---|\n| `GET /dsh-office/offices/state?office=<name>&channel=<channel>&since=<token>` | Colleagues, channels (with their members), the newest messages of `channel` — `#general` unless the request names a group channel, and the fallback is the public feed — beside the mailbox with their totals, the roles and their mapped presets, the user name, the adoptable sessions with their workspaces and titles (archived or unaccounted ones never offered), and the hire options. Each colleague carries its live status, its held count, and whether it has set itself do-not-disturb with the reason it published. The answer also carries the `revision` token that describes it: a request naming the token it already holds is answered `{ office, officeId, channel, revision, unchanged: true }` and nothing else, which is what makes a poll of an unmoved office a comparison rather than a snapshot. |\n| `GET /dsh-office/offices/history?office=<name>&channel=<channel>&before=<seq>&limit=<n>` | One page of messages older than `before`, oldest first, with the channel's `total` and whether anything older remains. This is what a folded row asks for; `channel` addresses the group channels the "
+    },
+    {
+      "section": "Web routes",
+      "text": "A request naming an office that is not mounted answers 404, and the office resolves by name or,\nfor a caller that holds an id, by storage key. The web server enforces no authentication of its\nown, so every route first calls `ctx.connection.requestRejection({ headers })` and answers its\n401/403 unchanged; with no connection service the routes answer 503 rather than serve the office\nunauthenticated."
+    },
+    {
+      "section": "Web routes",
+      "text": "The state route's token describes what the snapshot draws — the roster with its live status and\nheld counts, the channels, the channel being read, and the mailbox — and it is derived from the\noffice's own records on each request rather than counted by the writers, so no write path can\nforget to move it. What travels is a digest of those records, because the token is a query\nparameter and a roster with its descriptions is kilobytes. It is **not stored**: a plugin reload\nrestarts every office's counters, which is exactly right, because the panel that held a token then\nholds a stale one and is answered with a snapshot. A change the office never wrote — a session\nrenamed from the sidebar, a storage file edited by hand — moves no token, which is what the\npanel's own periodic full read covers."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **The panel's roster names come from the title projections.** A deployment that mounts neither\n  `sessionProjections` nor `sessionProjectionCache` has no listed title to read, so naming a\n  colleague falls back to folding its session log — the read that made a poll of a ten-colleague\n  office take as long as the office's whole history. The names are then correct and the page is\n  slow, which is the trade the projection pair exists to avoid.\n- **A fact no office wrote reaches the panel within a minute.** The token moves for what the\n  office stores and for its colleagues' live state; a session renamed from the sidebar, or a\n  storage file edited by hand, moves nothing, so the panel's own periodic full read is what shows\n  it. A reader who wants it sooner reloads the page.\n- **The idle notice has no panel control.** `idleNotice` is configured on the office row, so\n  switching it on means editing that row's config; the panel neither shows it nor edits it.\n- **Do not disturb is the colleague's own act, and nothing bounds what it holds.** The panel shows\n  the state and never sets it, and no roster tool silences a colleague or brings one back: ending it\n  takes that colleague's own ca"
+    },
+    {
+      "section": "Documentation",
+      "text": "- [docs/design.md](docs/design.md) — why the plugin is shaped this way: row kinds, the host/office\n  split, the boss preset's mask, the role model, and why a wake can be timed.\n- [docs/data-model.md](docs/data-model.md) — storage domains, tables, and identity.\n- [docs/delivery.md](docs/delivery.md) — waking, steering, merged turns, durable holds, frames,\n  reading what is held, and compaction.\n- [docs/hot-reload.md](docs/hot-reload.md) — what applies live, and how to iterate against a\n  running host.\n- [docs/testing.md](docs/testing.md) — the offline probe and the panel render check.\n- [experience/README.md](experience/README.md) — leading a team that lives in this office:\n  how to dispatch, how readings lie, and what to keep when someone leaves. A hired `leader` is\n  handed this file's absolute path in its onboarding turn, which is why `experience/` ships with\n  the package."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

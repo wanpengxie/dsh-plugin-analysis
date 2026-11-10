@@ -1,0 +1,263 @@
+{
+  "repo": "wkea/dsh-ptcc-mode",
+  "commit": "05c98b5d2c12048799cd2d8ea46bb60014744986",
+  "extracted_at": "2026-11-10T21:20:41.275928+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 2004504,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 392,
+      "Markdown": 348,
+      "Other": 34,
+      "YAML": 284
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "THIRD_PARTY_NOTICES.md",
+      "assets/banner.png",
+      "assets/interaction.png",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/tools.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-ptcc-mode",
+    "version": "1.2.4",
+    "private": true,
+    "type": "module",
+    "description": "PTC-C (Programmatic Tool Calling with Confirmation): a confirm-before-coding agent preset for DeepSeek Harness, with a sandboxed AI-authored Interaction widget.",
+    "license": "MIT",
+    "author": "wkea",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "agent-preset",
+      "ptc",
+      "interaction",
+      "ai-agent"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/wkea/dsh-ptcc-mode.git"
+    },
+    "homepage": "https://github.com/wkea/dsh-ptcc-mode#readme",
+    "bugs": {
+      "url": "https://github.com/wkea/dsh-ptcc-mode/issues"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "exports": {
+      ".": "./lib/index.js",
+      "./tools": "./lib/tools.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# PTC-C 模式(Programmatic Tool Calling with Confirmation):\n# 一个 `@deepseek-ai/dsh-agent-preset` 声明。\n#\n# 核心行为(开发前主动确认,减少犯错,意图理解优先):\n#   - persona 内置软门控(常开):开发/修改前先输出理解并等确认,\n#     再输出修改方向并等确认,之后才开始开发;意图非常明确时可省。\n#   - plan-mode 硬门控(输入框左侧计划开关):开启后,任何开发必须把\n#     「需求理解 + 开发方案」写成计划,通过 exit_plan_mode 的 UI 审批\n#     后才退出确认模式开始开发。\n#\n# 结构基于内置 ptc 预设(dsh-web-app/presets/ptc.patch.yml),\n# 内容迁移自遗留预设 .agent-presets/ptcc-agent/agent.cordis.yml。\n# 旧 preset-ptcc 行过渡禁用:卸载旧 bundle 后,此行因无匹配目标被跳过并告警,无害。\n- id: preset-ptcc\n  disabled: true\n\n- insert:\n    - id: preset-ptc-c\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: ptc-c\n        name: PTC-C\n        description: Programmatic Tool Calling with Confirmation —— 开发前主动确认 减少犯错 以及意图理解。\n        order: 5\n        plugins:\n          # ── identity ──────────────────────────────────────────────────────\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              # 提示词模板变量由系统提示注册表提供,本部署只有 provider/model;\n              # 工作目录由运行时上下文提供,persona 里不要写 {{cwd}} 之类的未知变量。\n              prefix: |-\n                You are a coding agent powered by the {{model}} model.\n\n                <语言要求>\n                1. 回复保持简短、准确、切中要点,不做无关展开。\n                </语言要求>\n\n                <PTC-C核心流程>\n                1. 用户提出开发/修改类请求时,先通过只读调查理解项目与需求,再进行意图确认。两步确认必须分两轮对话进行:每轮只问一步,问完就停下来等用户回复;绝不能在同一轮回复里连问两步:\n                   - 第 1 轮:回复\"我理解你的意思,你是要 xxx……\"(可附上简要调查结论),然后停下等待用户确认,避免理解错误、改错方向。\n                   - 第 2 轮:用户回复确认理解后,再回复\"我打算进行修改,大方向是 xxx xx……\",然后再次停下等待用户确认。\n                   - 两步都确认通过后,才开始开发。\n                2. 确认的适用与豁免:\n                   - 同一任务中,用户已确认过开发方向后,该范围内的后续实施步骤不再重复确认;仅当方向变化、新增功能或超出原确认范围时才重新确认。\n                   - 用户在请求中明确表示\"直接执行/不用确认\"时,视为已确认,按用户要求执行。\n                   - 意图非常明确的请求可以跳过确认;纯问答、解释、阅读类请求(不产生任何修改)直接回答。\n                3. 当用户开启计划确认开关(输入框左侧计划按钮)时,以上对话式两步确认由计划审批替代:把需求理解和开发方向写进计划,用 exit_plan_mode 提交审批,不再逐轮对话确认。\n                4. 修改或写代码前,尽可能收集足够的代码信息,确保不因漏改或遗漏而出错。\n                5. 收到请求时先思考用户的目的和意图,然后直接调查、理解并实施,不说废话。\n                </PTC-C核心流程>\n\n                <交互工具>\n                1. Interaction 工具能在聊天中渲染你编写的可交互组件(单选、复选、按钮等),把需要用户决策的内容做成清晰的可点选界面,比在回复里罗列一长串问题更容易回答。\n                2. 需求有多个可选方向、多个方案要比较、参数需要取舍或排序时,优先用 Interaction 收集选择;组件里可以同时复述你的理解,让用户直接确认或修正,配合核心流程完成逐步确认。\n                3. 只是一个是非确认、或一句话就能问清的问题,用 ask_user_question 或正文直接问,不要为琐碎问题渲染组件。\n                4. 调用 Interaction 后立即结束本轮,等用户操作;用户提交的答案会作为下一条用户消息到达。计划模式下也可以用它收集决策,但计划批准仍然只能通过 exit_plan_mode 完成。\n                </交互工具>\n\n                <代码规则>\n                1. 任何情况下,先理解项目再回答用户,而不是先猜测。\n                2. 不写任何形式的测试代码、测试脚本、示例代码、demo 等,以及超出需求范围的多余实现。\n                3. 你只负责写代码,不需要运行编译或构建命令,用户会自己运行。\n                4. 代码注释要合理、利于后续开发;代码变更时注释必须同步更新。\n                   - 注释永远从最终代码的视角写,不写\"修改说明\";没参与过这次修改的人读代码时,不能从任何注释看出是 AI 改的;没有脱离本对话就没有意义的注释不要写。\n                5. 写代码时绝不插入返回假数据或占位数据的函数或方法。\n                6. 开发 Python 脚本时,除非用户明确要求,不使用任何启动参数(argparse、sys.argv 等);所有可配置参数都定义为脚本内常量。\n                </代码规则>\n\n                <缺陷修复>\n                1. 修复 bug 时主动寻找根因;尝试修复后告诉用户 bug 的根因和所做的修复。\n                2. 修复超过 2 次仍不成功(用户反复说问题还在)时,插入调试信息或代码,请用户配合获取调试结果,以便更精确定位。\n                3. 修复一次后用户仍说 bug 存在时,回退上次修改并重新思考,更换修复思路。\n                </缺陷修复>\n\n                <开发硬约束(必须遵守)>\n                1) 默认在现有实现上就地改进,不无理由地新增并行实现、兼容分支或新函数。\n                2) 只有我明确说\"需要兼容旧行为\"时才允许写兼容代码。\n                3) 如果确实需要兼容,必须同时给出:兼容存在的明确理由、废弃条件、移除时机;否则兼容代码不允许提交。\n                4) 新增任何功能前,先说明\"为什么不能改原功能\"并等我确认。\n                5) 不凭主观假设扩展需求;需求不明确时先问,不自己补全。\n                6) 优先\"减少分支、收敛实现、让代码可删除\"。\n                </开发硬约束>\n\n                <项目结构>\n                1. 开发时遵循模块化开发,不把所有功能堆在一个文件里。\n                2. 开发过程中主动更新代码注释,避免遗留注释误导后续开发。\n                3. 优先复用已有函数与公共逻辑,合理抽象功能,在保证可读性和可维护性的前提下用最少的代码实现等价功能。\n                </项目结构>\n\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n\n          # ── shell ─────────────────────────────────────────────────────────\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n\n          # ── filesystem ────────────────────────────────────────────────────\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n\n          # ── background jobs ───────────────────────────────────────────────\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n\n          # ── skills ────────────────────────────────────────────────────────\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n\n          # ── goals ─────────────────────────────────────────────────────────\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n\n          # ── PTC-C 确认门控(硬门控,复用 plan-mode 通道)──────────────────\n          # 开启后(输入框左侧计划开关),开发前必须提交\n          # 「需求理解 + 开发方案」计划并通过 exit_plan_mode 的 UI 审批。\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |-\n                    你处于 PTC-C 确认模式。在用户批准你的「需求理解与开发方案」之前,不要修改或写入任何文件,不要运行任何会改变代码或配置的命令。\n\n                    确认模式开启期间,persona 中的对话式两步确认由本计划审批替代:需求理解和开发方向都写进同一份计划,一次审批。\n\n                    流程:\n                    1. 先理解:用只读调查(读代码、搜索、静态分析)弄清需求与现状;属于用户决策、调查无法回答的问题用 ask_user_question 提问,不要自行脑补需求。\n                    2. 再提交:把两部分写成完整的计划文档(以 # 标题开头)——「需求理解」:用自己的话复述用户要什么、目标与验收标准;「开发方案」:改动点按子系统/文件分组、涉及的技术方案、风险与假设。\n                    3. 提交审批:以 exit_plan_mode 作为该轮唯一的最后一个工具调用提交计划。用户的对话式同意(包括回答你问过的问题)不等于批准,不能结束确认模式;只有 exit_plan_mode 审批通过才算。\n                    4. 批准后:退出确认模式,从下一步开始按批准的计划实施。计划被拒绝时,把用户反馈合并进计划,重新提交。\n\n                    纯问答、解释、阅读类请求(不产生任何修改)可以直接回答,无需审批;一旦涉及开发、修改、写文件、跑命令,必须先完成上述确认流程。\n\n                    不要用 todo_write 跟踪本确认阶段:它跟踪的是计划批准后的实施,计划本身只通过 exit_plan_mode 提交。\n\n          # ── compaction ────────────────────────────────────────────────────\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n          # ── delegation and workflows ──────────────────────────────────────\n          # 与内置 ptc 预设一致:workflow 相关行默认禁用,\n          # 需要时由用户单独开启。\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n                  backgroundMode: continuable\n\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                disabled: true\n                config:\n                  provider: spawn\n\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n                disabled: true\n\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n\n          # ── remaining model-facing rows ───────────────────────────────────\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n\n          # ── Interaction:AI 编写 JS 的聊天内交互组件(PTC-C 扩展)──────\n          - id: tool-interaction\n            name: '@local/dsh-ptcc-mode/tools'\n\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n\n          # ── presentation ──────────────────────────────────────────────────\n          # 代码模式呈现(与参考预设的 Code Mode 对应;当前合法值为 ptc)。\n          - id: tool-presentation\n            name: '@deepseek-ai/dsh-agent-tool-presentation'\n            config:\n              mode: ptc\n\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n\n# ── Interaction 工具的浏览器端组件名册行────────────────────────────\n# 顶层行让宿主扫描本包的 dsh.client 声明并提供 /plugins bundle;\n# 宿主根入口(lib/index.js)是空插件,不注册工具 —— 工具只挂在\n# preset-ptc-c 内,因此仅 PTC-C 模式的会话可用。\n- insert:\n    - id: ptcc-interaction-client\n      name: '@local/dsh-ptcc-mode'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/tools.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "tailwindcss.com",
+      "url": "https://tailwindcss.com/docs/upgrade-guide#configure-content-sources\\",
+      "where": "lib/client.js:30"
+    },
+    {
+      "host": "evilmartians.com",
+      "url": "https://evilmartians.com/chronicles/postcss-8-plugin-migration`",
+      "where": "lib/client.js:30"
+    },
+    {
+      "host": "www.w3ctech.com",
+      "url": "https://www.w3ctech.com/topic/2226`",
+      "where": "lib/client.js:30"
+    },
+    {
+      "host": "tailwindcss.com`",
+      "url": "https://tailwindcss.com`",
+      "where": "lib/client.js:30"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/browserslist/browserslist#readme\\n",
+      "where": "lib/client.js:30"
+    },
+    {
+      "host": "twitter.com",
+      "url": "https://twitter.com/browserslist\\n\\n`;function",
+      "where": "lib/client.js:30"
+    },
+    {
+      "host": "mths.be",
+      "url": "https://mths.be/cssesc",
+      "where": "lib/client.js:30"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wkea/dsh-ptcc-mode.git",
+      "where": "package.json:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wkea/dsh-ptcc-mode#readme",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wkea/dsh-ptcc-mode/issues",
+      "where": "package.json:23"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-17T11:43:52Z",
+    "created_at": "2026-10-17T11:26:39Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/tools.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<p align=\"center\">\n  <img src=\"assets/banner.png\" alt=\"PTC-C Mode — 确认优先的 DeepSeek Harness Agent 预设\" width=\"100%\">\n</p>"
+    },
+    {
+      "section": "Introduction",
+      "text": "<p align=\"center\">\n  <a href=\"LICENSE\"><img src=\"https://img.shields.io/badge/license-MIT-3DA639?style=flat-square\" alt=\"MIT License\"></a>\n  <img src=\"https://img.shields.io/badge/DSH-Agent%20Preset-6F42C1?style=flat-square\" alt=\"DSH Agent Preset\">\n  <img src=\"https://img.shields.io/badge/version-1.2.4-0EA5E9?style=flat-square\" alt=\"Version 1.2.4\">\n  <img src=\"https://img.shields.io/badge/DSH-Desktop%20%2F%20Web-2EA44F?style=flat-square\" alt=\"DSH Desktop / Web\">\n</p>"
+    },
+    {
+      "section": "Introduction",
+      "text": "<p align=\"center\">\n  <strong>先确认，再动手。</strong><br>\n  PTC-C（Programmatic Tool Calling with Confirmation）是给\n  <a href=\"https://github.com/deepseek-ai/deepseek-harness\">DeepSeek Harness</a>\n  用的 Agent 预设：开发前先对齐意图，用计划审批守住方向，\n  再用可交互组件把需求问清楚。\n</p>\n\n> [!NOTE]\n> 非官方社区项目，与 DeepSeek 官方无关。目前主要在 Windows 版 DSH Desktop 上验证；macOS / Linux 使用同一套 Web 客户端与 Node 端代码，理论兼容，欢迎反馈。\n\n---"
+    },
+    {
+      "section": "为什么是 PTC-C？",
+      "text": "LLM 改代码很快，但“方向理解错”的返工很贵。PTC-C 把确认放在写代码之前：\n\n| | 默认模式 | PTC-C |\n| :-- | :-- | :-- |\n| 开发前 | 直接开始改 | 先只读调查，再复述理解 |\n| 方向 | 改完才发现偏了 | 两轮对话内纠正 |\n| 大改 | 边做边想 | 计划文档 + UI 审批 |\n| 需求收集 | 长段文字来回问 | 交互组件点选 |\n\n它不追求更快，而是把返工成本提前消掉。意图足够明确时，它会直接做。"
+    },
+    {
+      "section": "三种确认方式",
+      "text": "| 方式 | 触发 | 你要做什么 |\n| :-- | :-- | :-- |\n| 软门控 · 两轮确认 | 默认，开发 / 修改类请求 | 回一句“对”或直接纠偏 |\n| 硬门控 · 计划模式 | 打开输入框左侧的计划开关 | 在计划卡片上 Approve |\n| Interaction 组件 | 需求有多个方向、方案或取舍 | 点选卡片并提交 |"
+    },
+    {
+      "section": "软门控：两轮，只问一步",
+      "text": "1. 第 1 轮：agent 用自己的话复述“你是要……”，然后停下。\n2. 第 2 轮：你确认理解后，agent 说明“我打算改什么、大方向是……”，再次停下。\n3. 两步都确认后，才开始改代码。\n\n两步必须分两轮，不会在同一轮里连问。以下情况会跳过：\n\n- 你明确说“直接做 / 不用确认”；\n- 意图非常明确；\n- 纯问答、解释、阅读类请求（不产生修改）。"
+    },
+    {
+      "section": "硬门控：计划模式",
+      "text": "打开输入框左侧的计划开关后，agent 会把「需求理解 + 开发方案」写成一份计划，通过 `exit_plan_mode` 提交 UI 审批；只有审批通过才开始实施。计划被拒绝时，它会合并你的反馈后重新提交。"
+    },
+    {
+      "section": "Interaction：把选择题做成组件",
+      "text": "当需求不是一句话能说清时，agent 可以调用 `Interaction`，在聊天里渲染一个由它编写的交互组件：单选、复选、按钮、排序、参数权衡都可以。你点选提交后，答案会作为下一条用户消息回到 agent。"
+    },
+    {
+      "section": "工作流程",
+      "text": "```mermaid\nflowchart TD\n    A[\"开发 / 修改请求\"] --> B[\"只读调查\"]\n    B --> C{\"意图足够明确？\"}\n    C -->|是| G[\"实施\"]\n\n> 计划模式开启时，上面的两轮对话由一份计划 + `exit_plan_mode` 审批替代。"
+    },
+    {
+      "section": "前置条件",
+      "text": "- 已安装 DeepSeek Harness（桌面端或 `dsh web`）；\n- 有可编辑的 DSH profile，通常位于：\n  - Windows：`%USERPROFILE%\\.dsh\\profiles\\desktop`\n  - macOS / Linux：`~/.dsh/profiles/desktop`\n- 已安装 pnpm。"
+    },
+    {
+      "section": "方式 A：本地 link（推荐，便于改代码）",
+      "text": "1. 克隆仓库到本地：\n\n```bash\n   git clone https://github.com/wkea/dsh-ptcc-mode.git\n   cd dsh-ptcc-mode\n   ```\n\n2. 编辑对应 profile 的 `package.json`，在 `dependencies` 中加入：\n\n```json\n   \"@local/dsh-ptcc-mode\": \"link:C:/path/to/dsh-ptcc-mode\"\n   ```\n\n在 `dsh.profile.bundles` 末尾加入：\n\n```json\n   \"@local/dsh-ptcc-mode\"\n   ```\n\n只追加，不要覆盖原有的 bundles。\n\n3. 在 profile 目录安装并重启 DSH：\n\n```powershell\n   cd $HOME\\.dsh\\profiles\\desktop\n   pnpm install\n   ```\n\nmacOS / Linux 使用 `cd ~/.dsh/profiles/desktop`。"
+    },
+    {
+      "section": "方式 A：本地 link（推荐，便于改代码）",
+      "text": "4. 新建会话，在预设选择器中选择 **PTC-C**。"
+    },
+    {
+      "section": "方式 B：直接从 GitHub 安装",
+      "text": "把依赖改为：\n\n```json\n\"@local/dsh-ptcc-mode\": \"github:wkea/dsh-ptcc-mode\"\n```\n\n其余步骤相同。想跟随更新时，重新执行 `pnpm install` 即可。\n\n> [!TIP]\n> 插件是 DSH bundle，不需要单独构建。改完 `cordis.patch.yml` 后需要重启 DSH；preset 在启动时注册。"
+    },
+    {
+      "section": "一个例子",
+      "text": "```text\n你：给设置页加一个“导出当前配置为 JSON”的按钮，范围你定。\n\nAgent：我理解你的意思，你是要……"
+    },
+    {
+      "section": "Interaction 组件",
+      "text": "<p align=\"center\">\n  <img src=\"assets/interaction.png\" alt=\"Interaction 组件示意\" width=\"88%\">\n</p>\n\n<p align=\"center\">\n  <sub>示意图：实际组件由 AI 用 Tailwind 生成，外观会随主题与需求变化。</sub>\n</p>\n\n组件在沙盒 iframe 中运行，AI 代码可以操作：\n\n```js\n// #app 是唯一挂载点\nconst app = document.getElementById(\"app\");\napp.innerHTML = `<div class=\"p-4\">...</div>`;\n\n`console.log / warn / error` 也会转发到日志区。页面内置 Tailwind CSS v3 运行时，直接写工具类即可；颜色、间距、圆角、过渡都由 AI 现场生成。"
+    },
+    {
+      "section": "配置",
+      "text": "| 想调整 | 位置 |\n| :-- | :-- |\n| persona / 确认规则 | `cordis.patch.yml` → `preset-ptc-c` → `persona.prefix` |\n| 计划模式提示 | `cordis.patch.yml` → `planning` → `plan-mode.config.section` |\n| Interaction 代码上限 | `lib/tools.js` → `MAX_CODE_BYTES`（默认 64 KB） |\n| 答案 / 日志 / 初始高度 | `lib/client.js` → `MAX_RESULT_CHARS` / `MAX_LOGS` / `DEFAULT_HEIGHT` |\n| 交互样式 | `lib/client.js` 中的沙盒样式与 Tailwind 运行时 |"
+    },
+    {
+      "section": "配置",
+      "text": "> [!WARNING]\n> persona 是**严格模板**。当前 DSH 只注册 `{{provider}}` 和 `{{model}}` 两个变量；工作目录由运行时上下文提供。不要写 `{{cwd}}` 或其他未注册变量，否则整轮请求会直接失败（`unknown prompt variable`）。"
+    },
+    {
+      "section": "项目结构",
+      "text": "```text\ndsh-ptcc-mode/\n├── cordis.patch.yml        # DSH bundle patch：插入 preset-ptc-c\n├── lib/\n│   ├── index.js            # 宿主根入口：只承载客户端 bundle 名册"
+    },
+    {
+      "section": "工作原理",
+      "text": "1. DSH 读取 `package.json` 的 `dsh.bundle.patch`，把 `cordis.patch.yml` 合入 profile。\n2. patch 插入 `preset-ptc-c`：persona、计划门控、工具列表都在这里声明。\n3. `Interaction` 只挂在这个预设的插件列表里，因此只有 PTC-C 会话能看到它。\n4. `dsh.client` 指向 `lib/client.js`，它注册 `tool.call.toolview` 插槽；工具调用到达时创建沙盒 iframe。\n5. 用户提交答案后，客户端把答案整理成可读文本（标题行「Interaction 已提交 · 组件标题」，下面按 `- 键：值` 逐行列出），通过 `ctx.remote.session.prompt` 作为下一条用户消息发回。"
+    },
+    {
+      "section": "安全",
+      "text": "Interaction 运行的是 AI 生成的代码，按不可信内容处理：\n\n- iframe 使用 `sandbox=\"allow-scripts\"`，没有 `allow-same-origin`，源不透明，无法读取父页面、Cookie 或本地存储；\n- CSP 为 `default-src 'none'`、`connect-src 'none'`，没有网络请求；\n- 父子通信只接受来自当前 iframe 的 `answer / log / resize` 消息；\n- 代码上限 64 KB，答案上限 32K 字符，日志最多 200 行，高度 80–1200 px；\n- 组件只拿到 `#app` 挂载点与 `window.dsh` 两个 API。\n\n沙盒是纵深防御，不是对宿主本身的绝对安全保证。不要在组件里输入密钥、密码或其他敏感信息。"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\ngit clone https://github.com/wkea/dsh-ptcc-mode.git"
+    },
+    {
+      "section": "按“方式 A”把仓库 link 进 profile",
+      "text": "```\n\n- **无构建步骤**：DSH 直接加载 `lib/*.js` 与 `cordis.patch.yml`。\n- 改 `cordis.patch.yml` 后重启 DSH；preset 在启动时注册。\n- 改客户端组件后刷新页面或重启 DSH。\n- 修改 `package.json` 后，在 profile 目录执行一次 `pnpm install`。\n- JS 使用 tab 缩进，YAML 使用 2 空格。\n- 提交前至少验证一遍 YAML；如果改 persona，确认没有引入未注册的模板变量。"
+    },
+    {
+      "section": "FAQ",
+      "text": "<details>\n<summary><strong>安装后看不到 PTC-C？</strong></summary>\n\n- 确认 `@local/dsh-ptcc-mode` 同时出现在 profile 的 `dependencies` 和 `dsh.profile.bundles` 中；\n- 在 profile 目录执行 `pnpm install`；\n- 完全重启 DSH，而不是只刷新页面；\n- 新建会话时在预设选择器里查找 **PTC-C**。\n\n</details>\n\n<details>\n<summary><strong>Interaction 组件不显示或是一片空白？</strong></summary>\n\n- 确认 `@local/dsh-ptcc-mode` 在 bundles 中，并且 profile 已安装；\n- 组件只在 PTC-C 会话中注册；其他预设看不到这个工具；\n- 空白通常是 AI 生成的 JS 报错，展开调用下方的日志区查看；\n- 首次加载时 Tailwind 运行时需要一点时间，稍等即可。\n\n</details>"
+    },
+    {
+      "section": "FAQ",
+      "text": "<details>\n<summary><strong>报错 <code>unknown prompt variable \"{{cwd}}\"</code>？</strong></summary>\n\n这是旧版 persona 模板与当前 DSH 变量集合不匹配导致的。当前 DSH 只注册 `provider` 和 `model`；把 persona 里的 `{{cwd}}` 删掉即可。工作目录已经由运行时上下文提供。本仓库已修复。\n\n</details>\n\n<details>\n<summary><strong>能在 <code>dsh web</code> 里用吗？</strong></summary>\n\n可以。把 bundle 加到 `~/.dsh/profiles/web/package.json` 的 `dependencies` 与 `dsh.profile.bundles`，执行 `pnpm install` 后重启 `dsh web`。\n\n</details>"
+    },
+    {
+      "section": "FAQ",
+      "text": "<details>\n<summary><strong>会不会多花很多 token？</strong></summary>\n\n确认通常只是几轮很短的往返；计划模式多一份计划；Interaction 的代码受 64 KB 上限约束，且只有需要时才触发。相比改错方向后的返工，成本通常更低。\n\n</details>"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT © 2026 [wkea](https://github.com/wkea)\n\n内置的 Tailwind CSS 运行时（v3.4.16）来自 Tailwind Labs，按 MIT 许可分发；完整声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。\n\n---\n\n<p align=\"center\">\n  <sub>Built for <a href=\"https://github.com/deepseek-ai/deepseek-harness\">DeepSeek Harness</a> · 非官方项目</sub><br>\n  <sub>如果它帮你少返工一次，欢迎点个 ⭐</sub>\n</p>"
+    }
+  ],
+  "skipped": []
+}
