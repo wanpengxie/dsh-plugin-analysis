@@ -1,0 +1,356 @@
+{
+  "repo": "loyalchiiina/dsh-artifact-linker",
+  "commit": "93f0f473b3cecba714ebc6cf0fc19c1ea13e62e7",
+  "extracted_at": "2026-11-10T05:34:22.365235+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 226778,
+    "lines_by_language": {
+      "JSON": 79,
+      "JavaScript": 2298,
+      "Markdown": 883,
+      "Other": 37,
+      "YAML": 56
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/context-menu.png",
+      "icon.svg",
+      "lib/client.js",
+      "lib/index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/probe-hover.cjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-artifact-linker",
+    "version": "0.4.4",
+    "description": "DSH 产物路径联动器：常驻注入「产物路径铁律」让模型输出完整绝对路径，同时把聊天正文里的文件名/路径渲染成一键可点的产物芯片——左键在右侧边栏预览（对齐官方交付卡片，绝对路径 0 次解析直通，侧栏认领不了自动退回系统默认程序），Ctrl/Shift/Cmd+左键用系统默认程序打开，Alt+左键复制绝对路径，右键 8 项菜单（在侧栏打开 / 在浮窗中打开 / 在文件夹中显示 / 用默认程序打开 / 另存为… / 复制文件 / 复制文件路径 / 添加到对话框）。宿主端提供回环只读路由与 /saveas /copyfile 两个文件搬运动作（Shell COM 揭示、WinForms 保存对话框、CF_HDROP 剪贴板），客户端零侵入、不改 React 节点、不接管 markdown 图片语法。解决「产物要打开得先复制路径再粘到文件管理器」的反复割裂。/ Turn declared artifact paths into one-click chips: resident system-prompt rules force absolute paths, the client half renders file names as clickable chips, left click previews in DSH's built-in sidebar (absolute paths resolve in 0 round-trips; unclaimed types fall back to the default app), Ctrl/Shift/Cmd+click opens with the system default app, Alt+click copies the absolute path, and the right-click menu offers eight actions (open in sidebar / open in floating window / reveal in Explorer / open with default app / save-as / copy-file / copy-path / insert-into-composer). Host routes are loopback-only; zero telemetry.",
+    "type": "module",
+    "main": "lib/index.js",
+    "sideEffects": false,
+    "engines": {
+      "dsh": ">=0.2.1-rc.3",
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json",
+      "./locale/zh.json": "./locale/zh.json",
+      "./locale/en.json": "./locale/en.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "lib",
+      "lib/index.js",
+      "lib/client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "locale/*.json",
+      "icon.svg"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/loyalchiiina/dsh-artifact-linker.git"
+    },
+    "homepage": "https://github.com/loyalchiiina/dsh-artifact-linker#readme",
+    "bugs": {
+      "url": "https://github.com/loyalchiiina/dsh-artifact-linker/issues"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "artifact",
+      "path",
+      "absolute-path",
+      "artifact-linker",
+      "reveal-in-explorer",
+      "产物路径",
+      "一键打开"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime"
+        ],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh": ">=0.2.1-rc.3"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-artifact-linker — 产物路径联动器（双端插件）\n#\n# ── 宿主半边（lib/index.js）──────────────────────────────────────────────────\n#   1. 注册一条常驻 system-prompt 段（ctx.systemPrompt.section，order 200），\n#      让「产物一律输出完整绝对路径」在**每个会话／每个预设**生效，不依赖任何\n#      技能被加载（技能按需加载，prompt 段常驻）；\n#   2. 注册 6 条回环路由：\n#        /info          插件身份 + workspace 信息 + 各开关实际取值\n#        /resolve       {原样路径 | 相对路径 | 裸文件名} → 绝对路径（三源兜底）\n#        /stat          批量 stat + 10s TTL 缓存\n#        /flush-cache   清空宿主端路径解析与 stat 缓存\n#        /reveal        在系统资源管理器里揭示并选中该文件\n#        /open          用系统默认关联程序打开该文件\n#   3. 不写任何文件、不联网（零遥测）；唯一会 spawn 的是 reveal/open 两条\n#      显式路由，且走 execFile 参数数组（不经 shell，无命令注入面），\n#      并带 loopback 来源校验。\n#\n# ── 客户端半边（lib/client.js）──────────────────────────────────────────────\n#   **全程只读正文，一个 DOM 节点都不改、一条属性都不加**（改 React 管理的节点\n#   会在重渲染时白屏，这是本插件刻意规避的第一号风险）。可点性靠：\n#     · document 捕获期 click + caretRangeFromPoint 反查「用户点中了哪个词」，\n#       正则命中产物名/路径即拦截，按修饰键分流；\n#     · 右下角浮动胶囊「📎 N」把本会话检测到的产物聚成清单（Shadow DOM 挂 body）。\n#   修饰键分流：左键 = 资源管理器揭示并选中 / Ctrl·Shift·Cmd = 系统默认程序打开 /\n#               Alt = 复制完整路径。清单每行另有 📍 ↗ ⧉ 三个按钮。\n#   markdown 图片与链接语法一律不接管（避免把图改成芯片导致图不显示）。\n#\n# ── 开关（改完重启 DSH 生效）───────────────────────────────────────────────\n#   injectRules  (默认 true)  常驻 prompt 段：要求模型输出产物绝对路径、正文只写文件名\n#   clientChips  (默认 true)  客户端胶囊与点击接管；置 false 则纯注入模式（只剩 prompt 铁律）\n#   allowOutside (默认 true)  是否允许解析 workspace 之外的路径。产物几乎总在项目盘\n#                             （E:/D:）而不是 DSH workspace 里，所以默认放开。\n#                             **多用户/给别人用时改 false**——那是防止本插件变成\n#                             「模型说个路径就帮你打开任意文件」的安全闸。\n#   statTtlMs    (默认 10000) 宿主端 stat 缓存毫秒数。调小 = 更快反映「文件刚被删」，\n#                             调大 = DOM 重渲染反复问同一路径时更省 IO\n#   searchMaxDepth (默认 2，硬上限 8) 裸文件名反查的递归深度。调大能找回埋得更深的同名\n#                             文件，但 /resolve 的目录遍历成本随之上升\n#   hoverDelayMs (默认 40) 客户端悬停判定的节流间隔（毫秒，硬上限 1000）。\n#                             调小 = 手型/高亮跟手更快；0 = 不节流（每次 mousemove 都判定）。\n#                             原来客户端把这条写死成 150ms，鼠标划过时高亮明显慢半拍，\n#                             现已改为可配、默认 40（≈2.5 帧）。\n#   rulesText    (默认内置 6 条) 整体替换注入的铁律文本，可写数组或一个多行字符串。\n#                             想追加自己的规矩（例：「交付前先确认文件字节数非 0」）就写这里\n#                             —— 官方硬规则 #5 要求所有 tunable 必须能在 cordis.yml 改，\n#                             故上述全部可在 profile 的 cordis.patch.yml 里覆盖。\n#\n# 🔴 绝不要再在 profile 的 cordis.patch.yml 里手写同一段 insert —— 同一 entry id\n#    插两行会触发 duplicate loader entry id，插件市场更新时被差回滚。\n- insert:\n    - id: dsh-artifact-linker\n      name: dsh-artifact-linker\n      config:\n        injectRules: true\n        clientChips: true\n        allowOutside: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "locale/zh.json",
+    "locale/en.json",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:221"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "lib/index.js:800"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "lib/index.js:826"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "lib/index.js:877"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "lib/index.js:912"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loyalchiiina/dsh-artifact-linker.git",
+      "where": "package.json:35"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loyalchiiina/dsh-artifact-linker#readme",
+      "where": "package.json:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loyalchiiina/dsh-artifact-linker/issues",
+      "where": "package.json:39"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 16,
+    "pushed_at": "2026-11-05T09:54:23Z",
+    "created_at": "2026-10-28T01:25:01Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "lib/client.js",
+    "lib/index.js",
+    "locale/en.json",
+    "locale/zh.json",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-artifact-linker · 产物路径联动器",
+      "text": "> 让 DSH 交付的每一个产物，都能**点一下就到位**——不用再「复制路径 → 打开文件管理器 → 贴到地址栏 → 回车」。\n\n[English](README.en.md) · **简体中文** · [安装](#安装) · [交互](#交互) · [配置](#配置) · [边界](#它不做什么) · [排查](#排查)\n\n---"
+    },
+    {
+      "section": "它解决什么",
+      "text": "DSH 里预览器已经能开图片、代码、pdf、office。但**插件、脚本、Fluent 出图、打包产物、临时导出**这些文件，正文里只给一个名字，想打开它得走完四步机械劳动：\n\n```\n看到 \"结果.xlsx\" → 复制路径 → Win+E → 地址栏输入 → 回车 → 在一堆同级文件里找那一个\n```\n\n`dsh-artifact-linker` 把这条路压成 **0 步**：正文里的文件名本身就是入口。\n\n它做两件互相咬合的事：\n\n| 半边 | 做什么 |\n|---|---|\n| **宿主（提示词层）** | 常驻注入一条「产物路径铁律」，要求模型把产物写成**完整绝对路径**、而给用户看的正文**只写文件名**——路径有据可查，正文又不被长串路径污染 |\n| **客户端（渲染层）** | 正文里的产物名变成可点目标：**左键在右侧边栏预览**（对齐官方交付卡片）、右键**八项**菜单（在侧栏打开 / 在浮窗中打开 / 在文件夹中显示 / 用默认程序打开 / 另存为 / 复制文件 / 复制文件路径 / 添加到对话框）。**零常驻 UI、零扫描、零定时器** |"
+    },
+    {
+      "section": "它解决什么",
+      "text": "第 1 条管「模型把路径写对」，第 2 条管「用户点得动」。缺前者，路径经常是猜的、点开是死链；缺后者，路径再对也要人去复制。"
+    },
+    {
+      "section": "长什么样",
+      "text": "悬停到产物名上，会出现 Codex 风格的蓝色虚线框——这是唯一的视觉提示，正文一个字都不会被改写。右键弹出完整菜单：\n\n想看实操录屏？[点这里看效果视频（0.4.4 右键菜单演示）](https://github.com/loyalchiiina/dsh-artifact-linker/releases/download/v0.4.4/demo-0.4.4.mp4)。\n\n---"
+    },
+    {
+      "section": "交互",
+      "text": "正文里点一个文件名（或绝对路径）：\n\n| 操作 | 结果 |\n|---|---|\n| **左键** | 在 DSH 右侧边栏打开预览（和官方交付卡片同一条通道；完整绝对路径 **0 次解析直通**，侧栏认领不了的类型自动退回系统默认程序打开） |\n| **Ctrl / Shift / Cmd + 左键** | 用系统默认关联程序打开（Excel、PS、播放器……） |\n| **Alt + 左键** | 复制完整绝对路径到剪贴板 |\n| **右键**产物名 | 插件菜单，共八项（见下表） |\n| **右键**非产物文字 | 完全放行，宿主原生菜单照常出现 |\n| **悬停** | 只有**确认文件真的存在**才变手型、才画虚线 |\n| 文件不存在 / 解析不到 | 静默放行或一次性提示，**绝不假装成功** |"
+    },
+    {
+      "section": "右键菜单",
+      "text": "| 菜单项 | 作用 |\n|---|---|\n| **在侧栏打开** | 在 DSH 内置右侧边栏里打开，和聊天里点文件链接是同一条通道。**0.4.0 起对所有文件类型一律显示这一项**，不再按扩展名筛：能认领的查看器就渲染（PDF / Word / Excel / PowerPoint / Markdown / 纯文本 / CSV / 图片，装了 video-preview / audio-preview 等插件后还有音视频），认领不了的宿主会退回纯文本或默认程序。副作用是极少数类型点下去可能只得到一句「侧边栏打不开」——这是刻意接受的代价，为的是以后侧边栏补了新能力，本插件零改动自动跟上 |\n| **在浮窗中打开** | 在一个独立浮窗里打开预览（增强项；浏览器或宿主拦截弹窗时改用「在侧栏打开」） |\n| **用默认程序打开** | 交给系统关联（资源管理器 / Excel / 播放器……） |\n| **在文件夹中显示** | 打开所在目录并选中该文件 |\n| **另存为…** | 复制到你指定的位置 |\n| **复制文件** | 把文件**本身**放进剪贴板（`CF_HDROP`），可以直接粘到资源管理器、邮件、聊天窗口 |\n| **复制文件路径** | 把真实绝对路径放进剪贴板 |\n| **添加到对话框** | 把路径插入输入框，供下一条消息使用 |"
+    },
+    {
+      "section": "右键菜单",
+      "text": "---"
+    },
+    {
+      "section": "路径怎么解析（三源兜底）",
+      "text": "模型嘴里的话不可全信，插件按顺序试：\n\n1. **`/workspace/<...>`** —— DSH 工作区的虚拟根，映射到真实 workspace 目录；\n2. **原生绝对路径** —— `E:\\proj\\out\\a.xlsx` 直接用（盘符和 UNC 都认）；\n3. **会话相对路径** —— 以会话 workspace 为基准拼接；\n4. **各 workspace 根** —— 遍历所有已知的 profile / 会话 workspace，不只当前那一个；\n5. **裸文件名** —— 深浅递归搜同名文件（跳过 `node_modules/.git/dist/build/` 等），按「最近修改优先」+「目录深度浅优先」排序：\n   - 命中 **1 个** → 直接用；\n   - 命中 **多个** → 返回候选列表交给用户，**绝不猜**（猜错比不猜更糟）；\n   - 命中 **0 个** → 若 `allowOutside: true`，再在磁盘上按名字做一次浅层搜索。"
+    },
+    {
+      "section": "路径怎么解析（三源兜底）",
+      "text": "提到时若「提及吞掉了前面几个词」（`结果#1_速度云图.png` 只剩 `#1_速度云图.png`），会**从左逐段收缩重试**直到能命中。\n\n缓存两层：`stat` 10 秒、同名索引 30 秒——避免重复打满磁盘，同时刚删掉的文件也能很快翻成「已不存在」。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "```bash"
+    },
+    {
+      "section": "3. 完全重启 DSH（客户端 bundle 不随 Ctrl+R 重载）",
+      "text": "```\n\n> ⚠️ **`file:` 依赖的坑**：`file:` / `link:` 指向会在 profile 重装依赖时把目录内容**按快照恢复**，本地改动可能被回滚。长期使用建议 `npm pack` 成 tarball 后用 `file:` 指向 tgz，或直接发到 npm。\n\n装好后确认：\nGET http://127.0.0.1:<port>/dsh-artifact-linker/info\n```\n\n正常应返回插件名、版本、`workspace`、以及 `injectRules / clientChips / allowOutside` 三个开关的**实际生效值**（这一条是排障时唯一可信的地方——别信 README，信 `/info`）。\n\n---"
+    },
+    {
+      "section": "配置",
+      "text": "在 profile 的 `cordis.patch.yml` 里给本插件条目加 `config`（**不要在 profile 里手写第二段 `insert`**，同一 entry id 插两行会 `duplicate loader entry id`）：\n\n```yaml\n- id: dsh-artifact-linker\n  name: dsh-artifact-linker\n  config:\n    injectRules: true    # 常驻 prompt 铁律"
+    },
+    {
+      "section": "配置",
+      "text": "| 开关 | 默认 | 置 false / true 的效果 |\n|---|---|---|\n| `injectRules` | `true` | `false` = 不注入 prompt 段，模型不再被要求输出绝对路径 |\n| `clientChips` | `true` | `false` = 纯注入模式，不接管任何鼠标事件 |\n| `allowOutside` | `true` | `false` = 只允许打开 workspace 内的文件 |\n| `hoverDelayMs` | `40` | 悬停判定的节流间隔（毫秒，上限 1000）。`0` = 不节流；调大 = 更省 IO，但手型/高亮更迟钝 |\n\n**`hoverDelayMs` 说明**：0.4.2 及更早把这条写死成 `150ms`，鼠标划过一行文字时高亮会明显慢半拍（150ms ≈ 9 帧），而且判定用的是「排程那一刻」的坐标，不是判定那一刻的坐标，所以还会出现落点不准。0.4.3 起改为可配、默认 `40ms`（≈2.5 帧，肉眼已跟手），并且每次 `mousemove` 都会刷新坐标，判定时读最新值。"
+    },
+    {
+      "section": "配置",
+      "text": "**`allowOutside` 要特别说一句**：产物经常落在项目盘（`E:\\…`、`D:\\…`）而不是 DSH 的 workspace 里，所以默认放开。但它同时是安全闸——挡的是「模型说个 `C:\\Windows\\System32\\xxx.exe` 就帮你点开」这类情况。**自己一个人用保持 `true` 更顺手；给别人用、或者接入不可信模型，改成 `false`。**\n\n---"
+    },
+    {
+      "section": "它不做什么",
+      "text": "1. **不改任何 DOM 节点**。正文由 React 渲染，给文本包一层 `<span>` 就是移动 React 的节点，重渲染时整段白屏。本插件全程只读，可点性是「捕获期 click + 光标位置反查」实现的。\n2. **不接管 markdown 图片与链接语法**。`` 一旦被改写成芯片，图就不显示了。\n3. **不联网、零遥测**。全部路由只在 `127.0.0.1` 回环可用，外部来源一律 403。\n4. **不 spawn shell**。`reveal`/`open` 走 `execFile(cmd, args)` 参数数组，路径里的 `& | ; %VAR%` 全是字面量，没有命令注入面。\n5. **不猜多候选路径**。搜到多个同名文件时把选择权还给人。\n6. **不保证文件存在**。库里的文件随时可能被删、被移走、被别的进程占用——所以每次打开前都重新 stat，点开发现没了就明说「已不存在」，不会装作没事。\n7. **不给不存在的文件画芯片**。正文里长得像文件名的片段很多（日志摘录、示例路径、报错原文），只看「形状」就画成可点芯片，点开只会得到一句「没解析到」——那比根本不认识更糟。所以判定加了存在性闸门：悬停时先异步 `resolve`，**只有文件真的在**才变手型、画蓝色虚线；确认不是产物的就当普通文字，右键直接放行宿主原生菜单。解析结果进 30 秒 TTL 缓存，反复悬停不重复请求。"
+    },
+    {
+      "section": "它不做什么",
+      "text": "---"
+    },
+    {
+      "section": "排查",
+      "text": "| 症状 | 原因与处置 |\n|---|---|\n| 正文文件名不可点 | ① `clientChips` 被置 false；② 扩展名是可执行体（`exe`/`msi`/`dll`/`sys`/`so` 等，这是**唯一**仍刻意不认的一类，见 `lib/client.js` 的 `EXEC_EXT`）；③ 客户端 bundle 没重载——**Ctrl+R 不重载客户端 bundle，必须完全重启 DSH** |\n| 点开提示「解析不到绝对路径」 | 裸文件名不在 workspace 内，且 `allowOutside: false`。先确认文件真实路径，再决定是否放宽 |\n| 点开提示「文件已不存在」 | 路径是真的，文件被删/移了。清单里该行会打上删除线 |\n| 点产物名没反应 | ① 文件不在候选 base 下（访问宿主 `/info` 看 `bases`）；② 直接看 `/resolve?p=<名字>` 返回的 `reason`。**0.4.0 起不再有扩展名白名单**，任何字母或数字开头的扩展名都会被识别为候选（`7z`/`3mf` 这类数字开头的也算），误报由「必须先真实解析到磁盘文件」这道存在性闸门兜掉 |\n| 右键没出本插件菜单 | 该处文字没解析成文件（同上）；**对非产物右键本来就不接管**，出的是宿主原生菜单。0.3.3 起会先确认文件存在——不存在的片段既不画虚线也不接管右键 |\n| 日志里出现 N 份相同输出 | 热重载堆叠了多个实例。**Ctrl+R 无效，必须完全重启 DSH**；同时确认 `window.__dshArtifactLinkerV1.dispose()` 守卫在 |"
+    },
+    {
+      "section": "排查",
+      "text": "---"
+    },
+    {
+      "section": "目录",
+      "text": "```\ndsh-artifact-linker/\n├── package.json          # dsh.bundle + dsh.client（两个都要，缺 bundle 装不上）\n├── cordis.patch.yml      # 插件注册补丁（entry id = 包名，唯一）\n├── lib/\n\n---\n\n<a id=\"english-summary\"></a>"
+    },
+    {
+      "section": "English summary",
+      "text": "`dsh-artifact-linker` turns every delivered artifact into a one-click target, so you never copy a path into Explorer again."
+    },
+    {
+      "section": "English summary",
+      "text": "- **Host half** injects a resident system-prompt rule: always emit **absolute** artifact paths in tooling, but only the **file name** in user-facing prose.\n- **Client half** makes those names clickable — **left click** reveals and selects the file in Explorer, **right click** opens a seven-item menu: preview in sidebar, open with default app, reveal in Explorer, save as, copy the file itself, copy absolute path, add to composer. Hovering turns the cursor into a pointer only after the file is confirmed to exist. No floating UI, no document scanning, no timers.\n- Bare file names are resolved with a multi-tier fallback (native absolute → session-relative → every known workspace root → recursive same-name search), shrinking the mention from the left when leading words are swallowed. Ambiguous matches are surfaced as candidates rather than guessed.\n- All routes are loopback-only, telemetry-free, and spawn nothing through a shell. The client never mutates React-rendered DOM."
+    },
+    {
+      "section": "English summary",
+      "text": "MIT licensed.\n\n---"
+    },
+    {
+      "section": "License",
+      "text": "MIT © loyalchiiina"
+    },
+    {
+      "section": "dsh-artifact-linker",
+      "text": "**Every artifact your agent delivers is one click away — no more \"copy the path → open Explorer → paste into the address bar → Enter\".**\n**让 DSH 交付的每一个产物，都能点一下就到位 —— 不用再「复制路径 → 打开文件管理器 → 贴到地址栏 → 回车」。**\n\n**English** · [简体中文](README.md) · [Interaction](#interaction) · [Install](#install) · [Config](#config) · [Boundaries](#what-it-does-not-do) · [Troubleshooting](#troubleshooting)\n\n---"
+    },
+    {
+      "section": "The problem",
+      "text": "DSH already previews images, code, PDFs and Office files in the sidebar. But **scripts, Fluent exports, packed archives, temporary dumps** have no previewer — all you get in the transcript is a bare file name, so opening one costs four mechanical steps:\n\n1. Select and copy the path (assuming the model even printed one)\n2. Open File Explorer\n3. Paste into the address bar\n4. Press Enter"
+    },
+    {
+      "section": "The problem",
+      "text": "Worse: the model often prints a **relative path or just a file name**, so step 1 fails outright and you have to go hunting for the file first.\n\nThis plugin removes all four steps **and** removes the root cause."
+    },
+    {
+      "section": "What it does",
+      "text": "| Half | Responsibility |\n| --- | --- |\n| **Host** (`lib/index.js`) | Registers a **resident system-prompt section** so \"declare artifacts with full absolute paths\" holds in *every* session and *every* preset — no skill needs to be loaded. Exposes eight loopback-only routes for path resolution, `stat`, reveal, open, save-as and copy-file. |\n| **Client** (`lib/client.js`) | Turns artifact names in the transcript into clickable targets: **left click previews in the sidebar** (matching the official present card), right click opens an **eight-item** menu (open in sidebar, open in floating window, reveal in Explorer, open with default app, save-as, copy file, copy path, add to composer). **No resident UI, no scanning, no timers.** |"
+    },
+    {
+      "section": "What it does",
+      "text": "The host half closes the loop: even when the model only says `result.h5`, the route layer resolves it against the session workspace, then falls back to a shallow recursive basename search, and returns the real absolute path."
+    },
+    {
+      "section": "What it looks like",
+      "text": "Hover an artifact name and it picks up a Codex-style blue dashed outline — that is the only visual hint, nothing is rewritten in your transcript. Right click for the full menu:\n\nWant to see it in action? [Watch the demo video (0.4.4 right-click menu)](https://github.com/loyalchiiina/dsh-artifact-linker/releases/download/v0.4.4/demo-0.4.4.mp4)."
+    },
+    {
+      "section": "Interaction",
+      "text": "| Action | Result |\n| --- | --- |\n| **Left click** on a file name / path | Preview in DSH's built-in right sidebar (same route as the official present card; absolute paths resolve in **zero round-trips**; unclaimed types fall back to the default app) |\n| **Ctrl / Shift / Cmd + click** | Open with the system's default application |\n| **Alt + click** | Copy the full absolute path to the clipboard |\n| **Right click** on an artifact | Inline menu — eight actions, listed below |\n| **Right click** on non-artifact text | Fully passed through, the host's native menu appears as usual |\n| **Hover** | Cursor becomes a pointer *only after* the file is confirmed to exist |\n| File missing / unresolvable | Silent pass-through or a one-shot toast. **Never pretends to succeed.** |"
+    },
+    {
+      "section": "Right-click menu",
+      "text": "| Item | What it does |\n| --- | --- |\n| **Open in sidebar** | Opens the file in DSH's built-in right sidebar — the same route as clicking a file link in chat. **Since 0.4.0 this menu item is shown for every file type**, with no extension filtering: whatever viewer claims the address renders it (PDF / Word / Excel / PowerPoint / Markdown / plain text / CSV / images, plus audio and video once plugins such as video-preview / audio-preview are installed); anything unclaimed falls back to plain text or the default app. The trade-off is that a rare type may answer with a plain \"the sidebar cannot open this\" — accepted on purpose, so future viewer capabilities are picked up with zero changes here |\n| **Open in floating window** | Opens a preview in a separate floating window (enhancement; if a popup blocker or the host blocks it, use \"Open in sidebar\" instead) |\n| **Open with default app** | Hands the file to the OS association (Explorer / Excel / VLC / …) |\n| **Reveal in Explorer** | Opens the containing folder and selects the file |\n| **Save as…** | Copies the file to a location you pick |\n| **Copy file** | Puts the file *itself* on the clipboard (`CF_HDROP`), so you can paste it into E"
+    },
+    {
+      "section": "How paths resolve",
+      "text": "1. **Absolute** — used as-is (`E:\\project\\out\\case.h5`, `\\\\nas\\share\\a.zip`). Both drive letters and UNC are recognised.\n2. **Relative** — joined against the session workspace (`out\\case.h5` → `<workspace>\\out\\case.h5`).\n3. **Workspace roots** — every known profile and session workspace is tried, not only the current one.\n4. **Bare file name** — a shallow recursive basename search (depth 2 by default), used only when exactly one match is found. Multiple matches are surfaced as candidates instead of guessing. When a mention swallows leading words (`结果#1_速度云图.png` arriving as `#1_速度云图.png`), segments are shrunk from the left until one resolves."
+    },
+    {
+      "section": "How paths resolve",
+      "text": "Results are cached — 10 s for `stat`, 30 s for the basename index — so repeated hovers from DOM re-renders do not hammer the disk, while a just-deleted file still flips to \"gone\" quickly."
+    },
+    {
+      "section": "Install",
+      "text": "```bash"
+    },
+    {
+      "section": "3. Fully restart DSH — client bundles are NOT reloaded by Ctrl+R",
+      "text": "```\n\n> The host half needs `webServer` and `systemPrompt`; the client half is a `__ModuleLoader__` bundle. Peers declare `@deepseek-ai/dsh >=0.2.1-rc.3` — the installer compares the runtime version against that range and refuses a mismatch."
+    },
+    {
+      "section": "Config",
+      "text": "All tunables live in `cordis.patch.yml` (or the profile-level patch). Changing them requires a restart."
+    },
+    {
+      "section": "Config",
+      "text": "| Key | Default | Meaning |\n| --- | --- | --- |\n| `injectRules` | `true` | Register the resident prompt section |\n| `clientChips` | `true` | Client capsule + click takeover. `false` = pure injection mode |\n| `allowOutside` | `true` | Allow resolving paths outside the workspace |\n| `statTtlMs` | `10000` | Host-side `stat` cache lifetime |\n| `searchMaxDepth` | `2` (max 8) | Recursion depth for bare-filename lookup |\n| `hoverDelayMs` | `40` | Hover-probe throttle in ms (ceiling 1000). `0` = no throttling |\n| `rulesText` | built-in 6 lines | Replace the injected rules wholesale (array or multi-line string) |"
+    },
+    {
+      "section": "Config",
+      "text": "On `hoverDelayMs`: up to 0.4.2 this was hard-coded at `150ms`, which is long enough (~9 frames) that the cursor change and highlight visibly lagged behind the pointer while sweeping across a line. Worse, the probe used the coordinates captured when the timer was *scheduled*, not when it *fired*, so the highlight could also land in the wrong place. Since 0.4.3 it is configurable, defaults to `40ms` (~2.5 frames), and every `mousemove` refreshes the coordinates so the probe reads the current position."
+    },
+    {
+      "section": "Config",
+      "text": "On `allowOutside`: artifacts almost always live on a project drive (`E:\\`, `D:\\`) rather than inside the DSH workspace, so a strict default would make the plugin useless on first run. **Set it to `false` when shipping to other people** — that is the gate which stops this plugin from becoming \"the model names any path and your machine opens it\"."
+    },
+    {
+      "section": "What it does NOT do",
+      "text": "- **Never modifies a single DOM node.** React owns the transcript; mutating its nodes causes blank renders on re-render. Clickability comes from a capture-phase `click` listener plus `caretRangeFromPoint` to work out which word was hit.\n- **Never takes over markdown image or link syntax.** Rewriting `` into a chip would break the image.\n- **Never draws a chip for a file that does not exist.** Chat text is full of filename-shaped fragments — log excerpts, example paths, error messages. Turning those into chips produces a clickable target that only ever answers \"not resolved\", which is worse than not recognising the file at all. So there is an existence gate: on hover the client resolves asynchronously and only becomes a pointer / dashed highlight when the file is really there. Confirmed non-artifacts stay plain text and the right-click falls through to the host's native menu. Results are cached for 30 s.\n- **Never writes a file, never phones home.** Zero telemetry. The only `spawn` calls are the explicit `/reveal` and `/open` routes, using `execFile` with an argument array (no shell, no injection surface), guarded by a loopback-origin check.\n- **Never renames or moves anything.** Re"
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Symptom | Check |\n| --- | --- |\n| Nothing clickable | Was DSH **fully restarted**? `dsh.client` bundles do not hot-reload |\n| Capsule missing | `clientChips` is `true`; the loader reports `loaded without registering` if the bundle id mismatches `package.json` |\n| Click does nothing | File may have been deleted — the capsule marks it `gone` |\n| \"outside workspace\" | Either set `allowOutside: true`, or the path really is outside the project |\n| Injection not working | `injectRules` is `true`; look for the host log `artifact path rules registered` |\n| Theme colours look off | The plugin prefers `--dsw-alias-*` tokens, then self-detected light/dark, then hardcoded fallbacks |"
+    },
+    {
+      "section": "Layout",
+      "text": "```\ndsh-artifact-linker/\n├── package.json          # dsh.bundle + dsh.client, peer >=0.2.1-rc.3\n├── cordis.patch.yml      # the patch entry (never duplicate this id)\n├── lib/"
+    },
+    {
+      "section": "License",
+      "text": "MIT © loyalchiiina"
+    }
+  ],
+  "skipped": []
+}
