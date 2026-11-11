@@ -1,0 +1,166 @@
+{
+  "repo": "7771sd/dsh-text-guard",
+  "commit": "f68b836ee7a1cef57386c3808de827f2af08fbe5",
+  "extracted_at": "2026-11-11T06:50:33.789504+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 24920,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 307,
+      "Markdown": 160,
+      "Other": 24,
+      "YAML": 17
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/text-guard.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-text-guard",
+    "version": "1.0.0",
+    "private": false,
+    "description": "DeepSeek Harness plugin: neutralize configured code-point sequences in tool results and entering messages before the session log records them.",
+    "type": "module",
+    "license": "MIT",
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "content-filter",
+      "regional-indicator"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/7771sd/dsh-text-guard.git"
+    },
+    "engines": {
+      "node": "^22.19 || >=24"
+    },
+    "scripts": {
+      "test": "node test/text-guard.test.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-text-guard bundle patch.\n#\n# `regional-pairs` neutralizes any two consecutive regional indicators\n# (U+1F1E6-U+1F1FF), which is every flag emoji a peer can compose. Switch to\n# the narrow mode when only one recorded sequence needs neutralizing:\n#\n#   mode: exact\n#   sequences: [[0x1F1F9, 0x1F1FC]]\n- insert:\n    - id: text-guard\n      name: dsh-text-guard\n      config:\n        mode: regional-pairs\n        replacement: '[flag U+{codepoints}]'\n        toolResults: true\n        userMessages: true\n        log: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/7771sd/dsh-text-guard.git",
+      "where": "package.json:34"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-05T14:01:11Z",
+    "created_at": "2026-10-05T14:00:34Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "test/text-guard.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-text-guard",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that neutralizes configured code-point sequences in tool results and in the messages entering a step, **before the session log records them**.\n\n[中文说明](README.zh.md)"
+    },
+    {
+      "section": "The problem it solves",
+      "text": "The official DeepSeek API rejects a whole request with `400 INVALID_REQUEST (Content Exists Risk)` when it carries certain text. For the sequence observed in practice — the regional-indicator pair U+1F1F9 followed by U+1F1FC, which composes one flag emoji — character-level bisection showed the pair rejects the request while either character alone, the reversed pair, and other combinations are accepted."
+    },
+    {
+      "section": "The problem it solves",
+      "text": "Because every turn resends the stored history, a sequence that reaches the session log rejects **every following turn of that session**. The session becomes unusable: retrying does not help, restarting the app does not help, and the only way out is a new session. The usual way such a sequence arrives is not the user typing it, but fetched pages, file contents, or command output passing through a tool result."
+    },
+    {
+      "section": "What it does",
+      "text": "It rewrites the configured sequences where content enters the log:\n\n| Hook | Content covered |\n|---|---|\n| `tools/post-execute` | an accepted tool result — web fetches, file reads, command output, subagent and workflow results |\n| `tools/ptc-dispatch-log` | the durable log copy of one `run_code` sub-dispatch outcome |\n| `agent/pre-step` | the messages entering the step, including text a user pasted |"
+    },
+    {
+      "section": "What it does",
+      "text": "Content without a match passes through untouched and keeps its original object identity, so an unaffected dispatch costs one regular-expression probe. The rewrite happens before the append, which is what keeps `Session` replay, fork, and every later request consistent — and it never puts the sequence back, because the replacement is pure ASCII."
+    },
+    {
+      "section": "Install",
+      "text": "With the Harness CLI:\n\n```sh\ndsh plugin --profile <profile> add github:7771sd/dsh-text-guard\n```\n\nOr through the Plugin Manager's install field, using the same spec. The plugin has no dependencies and no build step."
+    },
+    {
+      "section": "Configuration",
+      "text": "The shipped bundle patch mounts it with the wide mode. Every field can be overridden in your profile's `cordis.patch.yml`:\n\n```yaml\n- id: text-guard\n  config:\n    mode: exact\n    sequences: [[0x1F1F9, 0x1F1FC]]"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `mode` | `regional-pairs` | `regional-pairs` matches any two consecutive regional indicators (U+1F1E6–U+1F1FF); `exact` matches the configured `sequences` only. |\n| `sequences` | `[[0x1F1F9, 0x1F1FC]]` | Code-point sequences `mode: exact` neutralizes; each entry is matched consecutively. |\n| `replacement` | `[flag U+{codepoints}]` | Replacement template; every `{codepoints}` becomes the matched code points, for example `U+1F1F9 U+1F1FC`. |\n| `toolResults` | `true` | Neutralize accepted tool results and `run_code` dispatch logs. |\n| `userMessages` | `true` | Neutralize the messages entering a step. |\n| `log` | `true` | Log one summary line per affected dispatch, naming the count and never the matched text. |"
+    },
+    {
+      "section": "Configuration",
+      "text": "Configuration changes are not hot: re-mount the bundle (disable and enable it) after editing the patch."
+    },
+    {
+      "section": "Why it hooks the log entry points",
+      "text": "`dsh-agent-loop` deep-freezes request messages and documents that `agent/request` listeners cannot change request messages; the Harness rule is that everything the model sees must be reconstructable from the session log. A rewrite after the append would break that reconstruction, so the neutralizer runs where content enters the log instead of at the wire."
+    },
+    {
+      "section": "Verified",
+      "text": "- `node test/text-guard.test.mjs` — nine offline checks: content and value-form rewriting, block decisions passing through, a clean result returning the identical reference, message rewriting that preserves identity and `startsRequestSeries`, no mutation of inputs, both surfaces disabling cleanly, pair matching, and lone indicators passing through.\n- End to end in a live profile: with the plugin configured to neutralize an ASCII probe, a command whose output contained the probe reached the model already rewritten."
+    },
+    {
+      "section": "Verified",
+      "text": "Not verified: the plugin has never been sent a real flag emoji by its author, because the experiment that proves the filter rejects one also destroys the session it runs in."
+    },
+    {
+      "section": "Limitations",
+      "text": "- Text that reaches a request through a system-prompt section — a skill file or an instruction file that itself contains a sequence — does not pass these entry points.\n- A rewritten user message is logged in its neutralized form while the chat client keeps displaying the text you sent, so the two views disagree about that message.\n- The rewrite is lossy by design. Do not mount it when the original text matters verbatim to the task."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

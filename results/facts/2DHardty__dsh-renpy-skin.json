@@ -1,0 +1,758 @@
+{
+  "repo": "2DHardty/dsh-renpy-skin",
+  "commit": "c2473a0046de6eecba33dd5854a078ae9cd72e62",
+  "extracted_at": "2026-11-11T06:34:46.516261+00:00",
+  "tree": {
+    "files": 50,
+    "bytes": 1571260,
+    "lines_by_language": {
+      "JSON": 173,
+      "JavaScript": 27673,
+      "Markdown": 3664,
+      "Other": 128,
+      "Python": 211,
+      "YAML": 97
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "Makefile",
+      "README.md",
+      "TODO.md",
+      "cordis.patch.yml",
+      "docs/ARCHITECTURE.md",
+      "docs/CONTRACTS.md",
+      "docs/STATUS.md",
+      "docs/VN-READ-AUDIT.md",
+      "lib/audio.js",
+      "lib/client.js",
+      "lib/home.js",
+      "lib/index.js",
+      "lib/manifest.js",
+      "lib/memory.js",
+      "lib/png.js",
+      "lib/renpy.js",
+      "lib/rpa3.js",
+      "lib/rpyc.js",
+      "lib/scantree.js",
+      "lib/stage.js",
+      "lib/vn.js",
+      "package.json",
+      "test/audio.test.mjs",
+      "test/audit-assets.test.mjs",
+      "test/audit-dialogbox.test.mjs",
+      "test/audit-media.test.mjs",
+      "test/audit-scripts.test.mjs",
+      "test/client.test.mjs",
+      "test/fixtures/rpa-indexes.json",
+      "test/home.test.mjs",
+      "test/make-rpa-fixtures.py",
+      "test/manifest-probe.mjs",
+      "test/memory.test.mjs",
+      "test/png.test.mjs",
+      "test/renpy.test.mjs",
+      "test/rpa-index-dump.mjs",
+      "test/rpa-probe.mjs",
+      "test/rpa.test.mjs",
+      "test/rpa_python_check.py",
+      "test/rpyc.test.mjs",
+      "test/scantree.test.mjs",
+      "test/skin.test.mjs",
+      "test/vn.test.mjs",
+      "tools/check-doctor.mjs",
+      "tools/launch-dsh-debug.cmd",
+      "tools/verify-agent-load.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-renpy-skin",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Ren'Py skin + sprite stage for the DSH web GUI: reads a Ren'Py game directory, reskins the interface from its gui.rpy/choice/background assets, and injects a stage-director prompt plus a renpy_stage Tool so the model drives sprites with native Ren'Py show/hide/scene/with syntax.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh": ">=0.2.0-rc.2",
+      "react": "^18.2.0"
+    },
+    "files": [
+      "lib/**/*.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-renpy-skin bundle patch.\n#\n# Contributes ONE host row. The plugin package declares `dsh.client` in\n# package.json, so the modules node half also composes its browser half\n# (lib/client.js) into window.__DSH_BOOT__ and serves it from /plugins.\n#\n# The host half has no hard load-time service dependency: it reads the game\n# directory lazily and registers everything (webServer routes, systemPrompt\n# sections, the renpy_stage tool) inside optional-service guards, so a profile\n# without an HTTP server still loads a usable Tool.\n- insert:\n    - id: renpy-skin\n      name: 'dsh-renpy-skin'\n    # A \"Ren'Py skin director\" agent preset. Selecting it gives the agent a\n    # persona whose job is to give the conversation the look of a visual novel\n    # and to help load and customise one. It deliberately carries no workflow of\n    # its own: the 「用 Agent 加载」 button ships the step-by-step prompt, and two\n    # copies of one workflow drift apart (they already had, on whether to search\n    # the disk for a game folder). The preset only adds a persona;\n    # `renpy_configure` / `renpy_read_manifest` / `renpy_save_vn` /\n    # `renpy_stage` are registered globally by this bundle's host half and are\n    # visible to every agent regardless.\n    - id: preset-renpy-skin\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: renpy-skin\n        name: Ren'Py skin director\n        description: Start or continue a visual-novel skin; locate the VN, load it, and customise the interface.\n        order: 50\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              suffix: ''\n              prefix: |\n                You are the \"Ren'Py skin director\": your job is to give this conversation the look of a Ren'Py visual novel, and to help the user load and customise one.\n\n                The four things you can do, in the words the tools use: load a VN's folder with `renpy_configure`, read the values the skin's scanner already holds for it with `renpy_read_manifest`, write your own conclusions about it with `renpy_save_vn`, and direct the sprite stage with `renpy_stage`. When the user's instruction is a step-by-step prompt — the skin's \"Load with Agent\" button sends exactly that — that prompt is the workflow; follow it rather than inventing an order.\n\n                Rules: never invent a game directory — use one the user gave you, or one the skin already has loaded. Stay within the sprite limit in the skin's settings. Do not start a character survey or \"learning\" mode; just make the interface look like the VN.\n    # A second preset, for playing the VN's characters against the real clock\n    # rather than for skinning the interface. The persona is the whole acting\n    # brief; `@deepseek-ai/dsh-time-context` is declared here because the\n    # shipped Web composition does not carry that row (standard, cordis and ptc\n    # declare their own) and the acting rules depend on knowing the current time\n    # and the gap since the previous turn. Stage syntax, the character roster\n    # and the sprite limit stay where they already live — the global stage brief\n    # this bundle injects — and `renpy_*` tools are registered globally, so no\n    # tool row appears here. Compaction keeps a long scene from dying young.\n    # The host's own roleplay section (roleplayBrief) adds the player's name,\n    # the user's extra directions and the per-character memories to every turn\n    # of a session running this preset; `renpy_memory` is registered globally\n    # like the other renpy_* tools, so it needs no row either.\n    - id: preset-renpy-scene\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: renpy-scene\n        name: 在场\n        description: 让 VN 里的人物按真实时间继续生活：你随时到场，他们说自己的话、做自己的事，每一轮都由立绘舞台演出来。\n        order: 60\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              suffix: ''\n              prefix: |\n                你是这场戏的演员班底：当前视觉小说里的角色都由你来演。用户是刚到场的人，不是角色之一——你可以和他说话，也可以让角色彼此交谈，但不要替他说话。\n\n                每轮开始时会有一条时间快照（当前时刻、时区、距上一条消息的间隔）。把它当作世界里的「现在」：角色按这个钟点生活——深夜会困、清晨还没醒透；也按间隔计算这段时间里发生过什么——隔了几天再见，语气里要有久别重逢的分寸。\n\n                然后判断这一幕：他在哪里、正在做什么、心情如何。依据是舞台说明里的角色名册与表情、剧情里已经发生的事、他自己的性格，以及上面的时间。不要问用户「他此刻在做什么」——那是你要演出来的判断；拿不准就演得保守一点，给用户留出纠正的余地；用户明确指定场景或时间线时以用户为准。\n\n                再把它演出来：游戏已加载时，每轮回复至少调用一次 `renpy_stage`，让舞台跟着话走——换场用 `scene`，换表情用同一 tag 的新属性，有人离开用 `hide`，节奏交给 `with`；只在文字里描述舞台而不用工具，等于这一轮没有演出。命令语法、立绘上限与安全区以宿主注入的舞台说明为准；舞台说明缺席时，先用 `renpy_read_manifest` 读到名册与背景。\n\n                同场出现的其他角色要真的在场：剧情涉及谁，就从名册里挑他的 tag 与表情，把他完整地带到台上，给他自己的台词与反应，而不是让一个正在说话的人只留在叙述里；人满时先 `hide` 再 `show`。\n\n                说话保持人物的声音：称呼、口癖、教养、句子长短都要对得上他。名字框不会自动换名字，同一场里换了说话人时用「名字：台词」开头，连续同一人说话就不必重复。\n\n                你的记忆：系统提示词里会列出每个角色「你记得的事」——那是跨会话保存、按角色分开的记忆，也是你在戏里真正记得的东西。出现值得留下的东西时（一个承诺、一次转折、用户特别在意的偏好），用 `renpy_memory` 追加一条，别让它随对话消失；要回忆更早的细节就先读一遍。记忆是你自己的：不要替别的角色编造他们没记下的事，也不要拿记忆里的内容当作用户没听过的台词直接倒出来。\n\n                用户的称呼：系统提示词会说明用户在这场戏里的名字（用户可以在设置里给全局或单独给某个会话设一个）。设过就按那个名字称呼他；没设就用「你」，不要替他起名字。\n\n                不要跳出戏：没加载游戏、工具报错、超出上限这类技术问题只用一句普通话说明，然后回到戏里；游戏还没加载时先问用户要游戏目录（或让他在设置里加载），不要凭空演出。\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n            config:\n              refreshIntervalMs: 0\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "RPA_INDEX_DEBUG",
+      "kind": "env",
+      "where": "lib/rpa3.js:470"
+    },
+    {
+      "name": "RPA_INDEX_DEBUG",
+      "kind": "env",
+      "where": "lib/rpa3.js:475"
+    },
+    {
+      "name": "RENPY_RPA_DEBUG",
+      "kind": "env",
+      "where": "lib/rpa3.js:587"
+    },
+    {
+      "name": "DSH_RENPY_RPYC_DEBUG",
+      "kind": "env",
+      "where": "lib/rpyc.js:174"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/rpyc.js:254"
+    },
+    {
+      "name": "DSH_RENPY_PYTHON",
+      "kind": "env",
+      "where": "lib/rpyc.js:284"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "lib/rpyc.js:402"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "lib/rpyc.js:450"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC_ROOT",
+      "kind": "env",
+      "where": "test/audit-scripts.test.mjs:36"
+    },
+    {
+      "name": "DSH_RENPY_CSE_RPYC",
+      "kind": "env",
+      "where": "test/audit-scripts.test.mjs:42"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC_ROOT",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:47"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:173"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:174"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:176"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:177"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:196"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:197"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:198"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:199"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:303"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:304"
+    },
+    {
+      "name": "DSH_RENPY_PYTHON",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:305"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:309"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:310"
+    },
+    {
+      "name": "DSH_RENPY_PYTHON",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:311"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:344"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:345"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:346"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:347"
+    },
+    {
+      "name": "DSH_RENPY_PYTHON",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:348"
+    },
+    {
+      "name": "DSH_RENPY_PYTHON",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:349"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:367"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:368"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:371"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:372"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:398"
+    },
+    {
+      "name": "DSH_RENPY_UNRPYC",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:399"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:400"
+    },
+    {
+      "name": "DSH_RENPY_TOOLS",
+      "kind": "env",
+      "where": "test/rpyc.test.mjs:401"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1234"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1253"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1260"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1272"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1279"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1337"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1350"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1394"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1420"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1475"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1490"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1576"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1635"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1672"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1682"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1713"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1723"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1757"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1768"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1814"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1826"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1897"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1909"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1941"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:1952"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2002"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2015"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2079"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2093"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2149"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2168"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2199"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2213"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2262"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2283"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2310"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2325"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2361"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2372"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2384"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2395"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2431"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2445"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2480"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2493"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2516"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2530"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2608"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2637"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2662"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2670"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2680"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2688"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2730"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2743"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2781"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2791"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2817"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2826"
+    },
+    {
+      "name": "DSH_RENPY_SKIN_HOME",
+      "kind": "env",
+      "where": "test/skin.test.mjs:2859"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "…",
+      "url": "https://…",
+      "where": "lib/client.js:3678"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/",
+      "where": "lib/index.js:2109"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CensoredUsername/unrpyc",
+      "where": "lib/index.js:2120"
+    },
+    {
+      "host": "codeload.github.com",
+      "url": "https://codeload.github.com/CensoredUsername/unrpyc/zip/refs/tags/v2.0.4",
+      "where": "lib/index.js:2123"
+    },
+    {
+      "host": "codeload.github.com",
+      "url": "https://codeload.github.com/CensoredUsername/unrpyc/zip/refs/tags/v2.0.4",
+      "where": "lib/rpyc.js:494"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/renpy-skin/asset?p=${encodeURIComponent(p",
+      "where": "test/manifest-probe.mjs:14"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "test/skin.test.mjs:1462"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${flag(",
+      "where": "tools/verify-agent-load.mjs:22"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 21,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-20T02:52:29Z",
+    "created_at": "2026-10-20T02:34:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/audio.js",
+    "lib/client.js",
+    "lib/home.js",
+    "lib/index.js",
+    "lib/manifest.js",
+    "lib/memory.js",
+    "lib/png.js",
+    "lib/renpy.js",
+    "lib/rpa3.js",
+    "lib/rpyc.js",
+    "lib/scantree.js",
+    "lib/stage.js",
+    "lib/vn.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-renpy-skin",
+      "text": "> **WIP** —— 这个插件仍在开发中：设置键、清单结构与界面行为都可能变化，尚不适合直接用于日常使用。\n\n一个 DSH 插件（plugin）包（bundle），用 Ren'Py 游戏自带的资源为 DSH Web GUI 换肤，\n并让模型拥有一个可用原生 Ren'Py 语法调度的**立绘（sprite）舞台（stage）**。\n\n两个相互独立的部分，各自单独使用都有价值："
+    },
+    {
+      "section": "dsh-renpy-skin",
+      "text": "| 半边 | 作用 |\n| --- | --- |\n| **换肤** | 读取你的游戏目录，并根据其中的 `gui.rpy` 值、背景图、对话框（dialogue box）与选项菜单（choice menu）样式重新装扮界面。底板不止一张的游戏可以在设置页的「Dialogue box art」里挑一张（只列这台游戏真正带的候选），选择按游戏保存在档案里，Agent 也能用 `renpy_save_vn` 换。`say` 屏自己的零件（名字框、白名单里的快捷菜单按钮）由模块层画在输入区上，可以用「Say-screen extras」关掉。 |\n| **色板** | 从游戏读到的八个颜色（强调色、悬停色、空闲色、对话文字色、界面文字色、名字色、选项文字色、选项悬停色）在设置页的色板卡片里逐项带来源列出，每项都能改，改过的行可以一键恢复；**文本框（对话）文字与 DSH 界面文字是两个独立槽位**，改一个不会连带改掉另一个。保存后清单与主题 token 立即重算。游戏从不写 `gui.accent_color` 时，插件会从对话框底板图片里采样主色兜底（清单里记 `image-sample`）。 |\n| **舞台导演** | 添加一段系统提示词小节和一个 `renpy_stage` 工具（Tool），让模型用 `show` / `hide` / `scene` / `with` 与 ATL 变换驱动一个绝对定位的立绘舞台。立绘画在会话主体内部：消息、输入框与会话列表都盖在它上面，立绘也不会越过左侧会话列。设置 →「界面」里可以隐藏会话列表或底部对话框，把窗口整个让给舞台。 |\n| **VN 加载器** | `renpy_configure` 工具按路径加载/切换当前 VN，`renpy_read_manifest` 只读交回本次扫描真正读到的值，`renpy_save_vn` 只写需要修正的部分；写完后由完成弹窗询问「立即更换 / 先保存」。点「用 Agent 加载」时，宿主先把这个游戏扫成两份目录树（紧凑地图 + 完整清单）放进配置目录，再把带着真实路径的提示词投进一个新会话——顺序不能反，Agent 拿到的路径必须已经存在。整个换肤可按 JSON 导入/导出。 |\n| **角色扮演预置** | 随包两个智能体预置：`Ren'Py skin director` 负责加载并定制皮肤；「在场」负责演进剧情——角色按真实时间生活，每轮回复都以 `renpy_stage` 演出，剧情涉及其他角色时把他一并带上台。它还有三样只属于它的东西：你在戏里的**名字**（可全局、可按会话覆盖）、追加给它的一段**额外要求**，以及按角色分开、跨会话保存的**记忆**——模型用 `renpy_memory` 追加，你在设置页或顶栏的记忆面板里直接编辑。`renpy_*` 工具是全局"
+    },
+    {
+      "section": "dsh-renpy-skin",
+      "text": "> **状态：已在配置档中安装并启用；Agent 加载链路已实机验收通过。**\n> 269 项无头测试全绿（262 通过 / 7 条需要真实 `unrpyc` 的用例在无工具的机器上跳过）；\n> Agent 加载链路（`ctx.inject` 等待服务、`POST /agent/prepare`、\n> 两层目录树、失败即 abort）已在 2026-10-19 用一次性 `verify` 配置档（端口 19487）\n> 实机跑通：点「用 Agent 加载」后新会话的请求里有 4 个 `renpy_*` 工具、系统提示词带\n> `## Ren'Py stage director` 区段、`cwd` 正是配置目录，模型依次调用了\n> `renpy_read_manifest` 与 `renpy_save_vn`。\n> **桌面宿主（27194）已经在跑新构建**（`/manifest` 带 `scripts` / `sources` /\n> `stats.unread`，`/agent/prepare` 不再回 405）。实机复查又抓到一个只影响「脚本全在\n> 归档里」的游戏的 bug：`/agent/prepare` 回 400，根因是 `lib/scantree.js` 多套了一层\n> 数组，已修并补了回归用例；**这条修复还需要再重启一次宿主才能实机复验**\n> （`tools/launch-dsh-debug.cmd` 会 `taskkill /T /F` 整棵进程树，只能由人运行），\n> 重启后先跑 `node tools/verify-agent-load.mjs --port <端口>` 与\n> `node tools/check-doctor.mjs`。\n> 见 [docs/STATUS.md](docs/STATUS.md)。"
+    },
+    {
+      "section": "环境要求",
+      "text": "- DSH `>= 0.2.0-rc.2`\n- Node `>= 22`（DSH 自带的运行时为 v24.21.0）\n- 可选：Python ≥3.9 与 `unrpyc`——只有游戏只带编译脚本（`.rpyc`）时才需要，\n  设置页的「环境配置」会显示当前状态并允许直接指定位置\n- 一个 Ren'Py 游戏目录——可以是 Ren'Py 根目录（含 `game/`），也可以就是\n  `game/` 目录本身\n\n**没有运行时 npm 依赖**，也**没有构建步骤**。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh"
+    },
+    {
+      "section": "在配置档目录下执行，前提是 release-age 策略已经允许",
+      "text": "pnpm add /path/to/dsh-renpy-skin\n```\n\n然后把插件指向一个游戏。可以使用 **设置 → Ren'Py skin**，也可以直接写配置文件：\n\n```jsonc\n// ~/.dsh/renpy-skin/config.json   (DSH_RENPY_SKIN_HOME overrides the folder)\n{\n  \"gameDir\": \"D:\\\\Games\\\\MyNovel\",\n  \"enabled\": true\n}\n```\n\n存储根按 `DSH_RENPY_SKIN_HOME` > `$DSH_HOME/renpy-skin` > `~/.dsh-renpy-skin`\n的顺序解析（空白视为未设置）。旧位置会**逐项合并**进新位置\n（`config.json`、`library.json`、`game/` 里缺哪项补哪项，已存在的条目不覆盖，powershell"
+    },
+    {
+      "section": "解压到 %USERPROFILE%\\Tools\\unrpyc-2.0.4\\，插件会自动找到它",
+      "text": "curl.exe -L -o \"$env:TEMP\\unrpyc.zip\" https://codeload.github.com/CensoredUsername/unrpyc/zip/refs/tags/v2.0.4\nExpand-Archive \"$env:TEMP\\unrpyc.zip\" \"$env:USERPROFILE\\Tools\" -Force\n```\n\n**这两个工具都可以在设置里直接指定位置，不必设环境变量。** 设置 →\nRen'Py skin →「环境配置」逐项列出 Node、Python、`unrpyc` 与数据目录的当前\n状态，给出下载地址，并接受 `python.exe` 与 `unrpyc.py` 的完整路径；`unrpyc`\n那一栏也可以直接填解压出来的 `unrpyc-2.0.4` 目录（会在其中查找 `unrpyc.py`）。\n填完点「重新检测」即可。同样的信息来自 `GET /renpy-skin/doctor`。"
+    },
+    {
+      "section": "解压到 %USERPROFILE%\\Tools\\unrpyc-2.0.4\\，插件会自动找到它",
+      "text": "也可以把 `unrpyc.py` 放进插件自带的 `vendor/unrpyc/`，或在设置里把「工具目录」\n指向检出目录。环境变量 `DSH_RENPY_UNRPYC`（具体文件）与 `DSH_RENPY_TOOLS`\n（搜索目录）仍然可用，但设置页里的值优先于它们。Python 不必自己装：插件会\n一并尝试 DSH 自带的运行时（`$DSH_HOME/dsh-runtimes/*/dependencies/python/`）。\n没有 `unrpyc` 时不会报错，只是**读不到编译脚本里的值**——这件事现在在清单的\n`scripts.reason` 与 `sources` 里是看得见的，`renpy_read_manifest` 也会给出\n可复制的安装指令。详见 [docs/CONTRACTS.md](docs/CONTRACTS.md)。"
+    },
+    {
+      "section": "命令",
+      "text": "```sh\nnode --test \"test/*.test.mjs\"      # 完整测试套件，无需 DSH 宿主\nmake test                          # 同上（本机尚未安装 GNU Make）\nmake check                         # 语法检查 + 测试\nmake probe GAME=\"D:\\Games\\MyNovel\"  # 针对真实游戏运行\n\n`tools/check-doctor.mjs`（`make doctor`）回答一个测试回答不了的问题：**这台机器上的\n清单可不可信**。它打印 Python 与 `unrpyc` 的实际位置和放弃原因、逐个打开 `.rpa` 归档\n（连同里面的脚本数）、指出两份数据目录并存的情况，并在「游戏只有编译脚本、`unrpyc`\n又不可用」时以退出码 1 结束——那种情况下清单照样生成得很正常，但值全是默认值，\n审计结论不成立。`--json` 输出机读报告。"
+    },
+    {
+      "section": "命令",
+      "text": "`tools/verify-agent-load.mjs` 打的是插件自己不鉴权的 HTTP 路由，所以不需要 CDP 或登录\ntoken：它会在重启 DSH 之后确认 `/renpy-skin/agent/prepare` 真的被服务、两棵目录树真的\n写出来、预算与 Ren'Py 判定都成立，任一项失败就非零退出并写出 JSON 报告。\n用 `--port` 指向别的宿主（例如一次性配置档起的临时实例）即可，不必动桌面应用。\n\n`tools/launch-dsh-debug.cmd` 用来带 `--remote-debugging-port=9222` 重启桌面应用做 CDP\n验证，但它开头的 `taskkill /IM \"DeepSeek Harness.exe\" /T /F` 会连同发起它的进程树一起\n杀掉——**只能由人在终端里双击/运行**，不能让 DSH 自己的会话去调用。"
+    },
+    {
+      "section": "命令",
+      "text": "**不需要重启桌面应用也能验收**：另起一个一次性配置档（`dsh --from-default-profile web\n--profile verify`、`dsh plugin --profile verify add link:<本仓库>`，然后\n`dsh --profile verify --port 19487 --no-open`）跑的是同一份 `lib/`。`dsh web` 会把\n`http://127.0.0.1:19487/?token=…` 打印到 **stdout**，用\n`Start-Process -RedirectStandardOutput` 起就能读到这个 token 并打开 SPA。"
+    },
+    {
+      "section": "命令",
+      "text": "桌面应用自己也会在一个随机端口上提供网页 UI（本机这次是 38342），但裸地址返回\n401：入口必须是启动时生成的 `?token=…`，而登录 cookie 绑定 host:port，重启后端口\n一变旧书签就失效。桌面应用不打印这个地址，所以要从浏览器进入网页版，请用安装目录\n下的 `resources/runtime/cli/bin/dsh.cmd web`（它会打印完整 URL）。另外，`dsh web`\n读取你指定的配置档；`web` 配置档默认只含 `@deepseek-ai/dsh-base` 与\n`@deepseek-ai/dsh-web-app`，**不含本插件**——想在网页版里用皮肤与 `renpy_*` 工具，\n先把本仓库加进那个配置档：`dsh plugin --profile web add link:E:/ProjectFiles/dsh-renpy-skin`。"
+    },
+    {
+      "section": "命令",
+      "text": "> 当前开发机上**没有安装** `make`。\n> [Makefile](Makefile) 是权威的任务清单，但每个目标都只是一条\n> `node` 命令——在 Make 可用之前直接运行即可。\n\n请传入**带引号的 glob**，而不是 `test/`——目录参数在 Node\n22 和 Node 24 上都会失败。"
+    },
+    {
+      "section": "模型能做什么",
+      "text": "`renpy_configure` 工具（Tool）按绝对路径加载或切换当前 VN。\n`renpy_read_manifest` 工具（Tool）只读，把本次扫描*真正读到的值*——画布、对话框与\n几何、选项按钮、颜色、字体、角色、变换、背景——以 JSON 代码块交回，形状与\n`renpy_save_vn` 的 `config` 一致，因此 Agent 可以先读、再改。\n`renpy_save_vn` 工具（Tool）把 Agent 对这个游戏读出来的结论——目录树、修正过的值、\n会话摘要——写进插件自己的 VN 配置文件（数据目录下的 `game/<VN 名>/`），插件下次\n自己加载它，不必再从编译过的脚本里猜；写完界面上会弹出「立即更换 / 先保存」。\n`renpy_stage` 工具（Tool）接收一段 Ren'Py 脚本字符串：\n\n```\nscene bg classroom with fade\nshow eileen happy at center\nshow lucy sad at left zorder 2\nhide eileen\n\n接受的子集："
+    },
+    {
+      "section": "模型能做什么",
+      "text": "| 语句 | 语法 |\n| --- | --- |\n| 场景 | `scene <bg> [with <transition>]` |\n| 显示 | `show <tag> <attributes...> [at <transform>] [as <tag>] [behind <tag>] [zorder <int>]` |\n| 隐藏 | `hide <tag>` |\n| 转场 | `with <transition>` |\n| 守卫 | `... if <variable> <op> <value>` |\n\n转场仅限于 `dissolve`、`fade` 和 `none`。`at` 可以接受\n内置变换（`left`、`center`、`right`、`truecenter`，以及各个角与边）、\n游戏自身定义的 `transform` 块，或内联的\n`Transform(xpos=0.5, zoom=0.9, ...)`。"
+    },
+    {
+      "section": "模型能做什么",
+      "text": "拒绝是能自我纠正的：未知的图像、属性或变换会抛出\n一个 `StageError`，其中携带**确实**存在的名称列表；该列表\n以结构化数据的形式返回给模型，让它无需猜测即可重试。"
+    },
+    {
+      "section": "文档",
+      "text": "| 文件 | 内容 |\n| --- | --- |\n| [AGENTS.md](AGENTS.md) | 工作约定、约束与易踩的坑。请先读。 |\n| [docs/STATUS.md](docs/STATUS.md) | 当前实际可用的功能，以及尚不可用的部分。 |\n| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 模块地图与数据流。 |\n| [docs/CONTRACTS.md](docs/CONTRACTS.md) | 平台 API、HTTP 路由、设置项 schema、清单结构。 |\n| [TODO.md](TODO.md) | 已知缺口，按优先级排列。 |\n| [CHANGELOG.md](CHANGELOG.md) | 发布说明。 |"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT。"
+    }
+  ],
+  "skipped": []
+}

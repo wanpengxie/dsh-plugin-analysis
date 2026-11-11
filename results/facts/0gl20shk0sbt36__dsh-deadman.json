@@ -1,0 +1,261 @@
+{
+  "repo": "0gl20shk0sbt36/dsh-deadman",
+  "commit": "8f642fea9e155757a08eaa9fd261b6eeeadaba49",
+  "extracted_at": "2026-11-11T06:14:09.529849+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 79217,
+    "lines_by_language": {
+      "JSON": 47,
+      "JavaScript": 923,
+      "Markdown": 252,
+      "Other": 24,
+      "YAML": 357
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "pnpm-lock.yaml",
+      "tests/fake-host.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-deadman",
+    "version": "0.2.0",
+    "description": "DSH deadman switch: run a command unless a living agent keeps holding it off. Arms a watchdog that asks the owning session on every firing, skips when somebody holds, and acts when nobody answers.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      }
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "deadman-switch",
+      "watchdog",
+      "scheduler"
+    ],
+    "scripts": {
+      "test": "node tests/fake-host.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "~4.0.4",
+      "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-invariants": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-session": "0.2.0-rc.2"
+    },
+    "dependencies": {
+      "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-tools": "0.2.0-rc.2"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-deadman — bundle patch\n#\n# 插入看门狗条目。所有凭据/路径都不写死在这里：数据目录默认落在\n# $DSH_HOME/plugins/dsh-deadman, 也可用下面的 dataDir 覆盖。\n- insert:\n    - id: deadman\n      name: 'dsh-deadman'\n      config:\n        # 全部 agent 都\"没有推进\"之后, 等待多久才执行(秒)\n        holdWindowSeconds: 60\n        # 巡检周期(秒)\n        checkIntervalSeconds: 20\n        # 总上限(分钟): 从触发那一刻起, 最多被拖这么久, 到顶一律放行\n        maxHoldMinutes: 30\n        # 被\"待用户回答的提问\"卡住时, 最长等待(秒), 到点放行\n        questionBlockSeconds: 600\n        # 会话彻底投递不到时(不存在/恢复失败): execute 照常执行 | skip 放弃本次\n        onUndeliverable: execute\n        # 活跃度判据范围: global 整机安静才执行(默认, 自动关机场景该用这个)\n        #                | owner 只看属主会话及其直接子代理是否推进\n        progressScope: global\n        # 多条动作命令是否排队串行执行(默认 false = 并发)\n        serializeCommands: false\n        # 单条动作命令的执行超时(秒)\n        commandTimeoutSeconds: 300\n        # 可选: 数据目录默认 $HOME/.dsh/plugins/dsh-deadman\n        # dataDir: '/your/path'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:37"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:38"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+      "@deepseek-ai/dsh-tools": "0.2.0-rc.2"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-09-30T12:13:33Z",
+    "created_at": "2026-09-02T07:15:32Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-deadman",
+      "text": "[English](README.en.md) | 中文\n\nDeepSeek Harness（dsh）的**死手开关**（deadman switch）：布防后定期巡检\"还有人活着干活吗\"，没人报活就执行你指定的命令。\n\n适合无人值守的长任务——夜间编译、训练、批量渲染、云实例跑批。常规\"到点无条件关机\"会误杀还在跑的工作；死手开关反过来问一句：**还有人在推进吗？没有就把资源收掉。**"
+    },
+    {
+      "section": "与 dsh 内置「自动化任务」的区别",
+      "text": "| | dsh 内置 `dsh-schedule` | dsh-deadman |\n|---|---|---|\n| 到点做什么 | 把一条消息投回会话收件箱，**由模型决定干什么** | **直接执行 shell 命令**，不经模型 |\n| 阻止机制 | 无 | **报活闸门**：有 agent 在推进就自动顺延，无人报活才执行 |\n| 典型场景 | 日程提醒、叫醒会话 | 无人值守止损：活儿干完/挂掉了，自动关机 |\n\n两者互补，不冲突。内置那套的前提是\"模型还活着能处理消息\"；资源该被收回的时刻，往往正是模型已经挂掉或额度耗尽的时刻。"
+    },
+    {
+      "section": "安装",
+      "text": "要求 dsh **0.2.0-rc.2**（`peerDependencies` 精确对齐；版本不匹配时 dsh 会拒绝安装并给出提示）。\n\n```sh"
+    },
+    {
+      "section": "本地路径",
+      "text": "dsh plugin --profile web add /path/to/dsh-deadman"
+    },
+    {
+      "section": "或从 GitHub",
+      "text": "dsh plugin --profile web add github:OWNER/dsh-deadman\n```\n\nWeb / 桌面端：在插件页启用 **dsh-deadman**。CLI：`dsh plugin --profile <name> remove dsh-deadman` 卸载。\n\n> 装在**长期运行**的 profile（如 `web`）里才有意义，原因见[已知限制](#已知限制)。\n> 依赖一律精确锁定 0.2.0-rc.2：从 GitHub 安装时 pnpm 会按 `dependencies` 自动装好；用**本地路径**安装时 pnpm 走 `link:`，不会解析依赖，所以插件目录里必须先有 `node_modules`（在插件目录执行一次 `pnpm install`）。"
+    },
+    {
+      "section": "模型工具",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `deadman_arm` | 布防：`name` / `command` / `after_minutes` / `interval_minutes` / `description`。首次巡检在 `after_minutes` 后；被报活则 `interval_minutes` 后重新巡检；**执行成功一次即收工**，无需事后取消 |\n| `deadman_hold` | 报活：\"我还在干活\"，跳过本轮，按周期重排。**任何会话都能报活**（fail-safe 语义） |\n| `deadman_disarm` | 撤防。仅布防会话（或其直接子代理）可用；其他会话需显式 `force=true`，且会被记入日志 |\n\n任务名在进程内**全局唯一**；同名布防会被拒绝，并告诉你被哪个会话占着。\n\n斜杠命令：`/deadman`（本会话）· `/deadman all`（全部会话）· `/deadman cancel <name>`。"
+    },
+    {
+      "section": "一次触发的判定顺序",
+      "text": "1. **解析属主会话**：先 `ctx.agents.get()`；会话没打开就 `ctx.agents.resume()` 把它**恢复出来**再投递（只要会话还存在，提示就不会掉进黑洞）。\n2. **投递巡检询问**：用 `agent.send(message, \"next-step\", true)` —— 运行中的 agent 在下个步骤边界看到，空闲的会被唤醒。询问文案里明确要求对方**不要向用户提问、不要请求确认**，只能二选一：报活或保持沉默。\n3. **巡检循环**，判据是**活跃度**而不是状态：\n   - 任一 agent 自上次巡检有新事件（`session.seq` 推进）⇒ 还在推进，继续等；\n   - 全部无推进 ⇒ 开始计宽限 `holdWindowSeconds`；\n   - 有\"待用户回答的提问\"（`userQuestions` 投影里 `state === 'open'`）⇒ 单独计时，最长 `questionBlockSeconds` 后放行；\n   - 从触发那一刻起的总上限 `maxHoldMinutes`，到顶一律放行（fail-open）。\n4. **放行** ⇒ 执行命令；成功后**任务自动收工**并给属主留一条通知；被报活 ⇒ 重排下一周期。"
+    },
+    {
+      "section": "报活通道",
+      "text": "1. `deadman_hold` 工具（主代理、或被授予该工具的子代理）；\n2. 在当前工作目录建标记文件 `.deadman-hold-<name>`（子代理工具白名单里没有 `deadman_hold` 时可用）；\n3. 在插件数据目录 `hold/` 下建以任务名命名的文件（外部脚本、人工介入）。"
+    },
+    {
+      "section": "多会话行为",
+      "text": "- 每个任务记着自己的**属主会话**，只向属主投递巡检询问；属主正在运行时，也会顺带通知其它正在运行的 agent（现场执行者）。\n- 活跃度判据默认是**全局**的（`progressScope: global`）：只要整机还有活在推进，所有看门狗都往后顺延——对\"自动关机\"这是正确语义。想让某个看门狗只看自己那一伙，设 `progressScope: owner`。\n- 多个看门狗同时到期会**并发执行**各自的命令（无全局锁）；需要串行就打开 `serializeCommands`。\n- 报活无权限限制（谁都能喊停），**撤防有权限限制**（见 `deadman_disarm`）。"
+    },
+    {
+      "section": "配置",
+      "text": "写在 profile 的 `cordis.patch.yml` 里覆盖 bundle 默认值：\n\n```yaml\n- id: deadman\n  config:\n    holdWindowSeconds: 60\n```"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `holdWindowSeconds` | `60` | 全部 agent 无推进后，再等多久执行 |\n| `checkIntervalSeconds` | `20` | 巡检周期 |\n| `maxHoldMinutes` | `30` | 从触发起的总上限，到顶一律放行 |\n| `questionBlockSeconds` | `600` | 被\"待回答的提问\"卡住时的最长等待，到点放行 |\n| `onUndeliverable` | `execute` | 属主会话彻底投递不到时：`execute` 照常执行 / `skip` 放弃本轮 |\n| `progressScope` | `global` | 活跃度判据范围：`global` 整机 / `owner` 仅属主及其直接子代理 |\n| `serializeCommands` | `false` | 多条动作命令是否排队串行执行 |\n| `commandTimeoutSeconds` | `300` | 单条动作命令的执行超时 |\n| `dataDir` | `$DSH_HOME/plugins/dsh-deadman` | 数据目录（`tasks.json` + `hold/`） |"
+    },
+    {
+      "section": "数据与持久化",
+      "text": "- `tasks.json`：任务表，插件启动时载入，**重启不丢**（逾期的一次性任务会在下次巡检立刻处理）。\n- `hold/`：外部报活标记目录。\n- 字段：`name` / `command` / `description` / `dueAt` / `intervalMin` / `sessionId` / `createdAt` / `firedCount`。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **只在长期运行的实例里有效**：调度器活在 dsh 进程内。在 headless 一次性进程里布防，进程退出后没人巡检（除非之后有长驻实例启动时把它载入）。\n- **单写者假设**：`tasks.json` 是普通 JSON 文件，多进程同时写会互相覆盖。不要在多进程里同时布防；本插件按\"只装长期运行 profile\"设计。\n- `progressScope: owner` 只统计属主与它的**直接**子代理，更深层的孙代理不计入。\n- 提问阻塞闸门依赖会话投影 `userQuestions`；宿主没有该投影时该闸门不生效（只会走其它闸门，不会误判）。\n- 不保证\"恰好执行一次\"：宿主崩溃可能留下已执行但未记账的任务。\n- 三条闸门（`progressScope` 两种取值的差别、提问阻塞放行、`maxHoldMinutes` 到顶放行）已由 `npm test` 的假宿主测试套件覆盖（`tests/fake-host.mjs`，确定性复现）；**未覆盖**的是\"真实会话里等满 600 秒提问超时\"这一长等待过程，以及多进程布防。"
+    },
+    {
+      "section": "安全",
+      "text": "- 执行的命令**完全由布防方指定**：只调度你信任的命令。\n- 默认语义是 **fail-open**（无人报活即执行）——这正是死手开关的本意，但请为关键动作设定合理的巡检周期与宽限。\n- 插件不联网、不收集数据；数据只写在本机数据目录。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\npnpm install            # 依赖已随仓库锁定在 0.2.0-rc.2\nnode --check lib/index.js\n```\n\n改动代码后**必须重启 dsh 进程**才生效（ESM 模块在启动时载入，热更新只覆盖 profile 配置层）。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-deadman",
+      "text": "English | [中文](README.md)\n\nA **deadman switch** for DeepSeek Harness (dsh): once armed, it periodically checks whether any work is still advancing, and runs your command when nobody holds it off.\n\nBuilt for unattended long runs — overnight builds, training, batch rendering, cloud batch jobs. A plain \"shut down at 03:00\" kills work that is still running; a deadman switch asks the opposite question: **is anybody still making progress? If nobody is, reclaim the resource.**"
+    },
+    {
+      "section": "How it differs from the built-in scheduled tasks",
+      "text": "| | built-in `dsh-schedule` | dsh-deadman |\n|---|---|---|\n| What happens when due | a message is enqueued into the session inbox and **the model decides what to do** | the configured **shell command runs directly**, no model involved |\n| Blocking mechanism | none | **hold gate**: while any agent keeps advancing, execution is postponed; it runs only when nobody holds |\n| Fits | calendar reminders, waking a session | unattended stop-loss: shut the machine or instance down once the work is done or the agent is gone |"
+    },
+    {
+      "section": "How it differs from the built-in scheduled tasks",
+      "text": "They complement each other. The built-in scheduler assumes the model is alive to handle the message; the moment a resource should be reclaimed is often exactly the moment the model has died or run out of quota."
+    },
+    {
+      "section": "Install",
+      "text": "Requires dsh **0.2.0-rc.2** (`peerDependencies` are pinned exactly; dsh refuses to install plugins whose peers do not match, and says so).\n\n```sh"
+    },
+    {
+      "section": "from a local path",
+      "text": "dsh plugin --profile web add /path/to/dsh-deadman"
+    },
+    {
+      "section": "or from GitHub",
+      "text": "dsh plugin --profile web add github:OWNER/dsh-deadman\n```\n\nWeb / Desktop: enable **dsh-deadman** on the Plugins page. CLI: `dsh plugin --profile <name> remove dsh-deadman` to uninstall."
+    },
+    {
+      "section": "or from GitHub",
+      "text": "> Install it into a **long-running** profile (such as `web`); see [Known limitations](#known-limitations).\n> Dependencies are pinned to 0.2.0-rc.2. Installing from GitHub lets pnpm install them from `dependencies`; installing from a **local path** uses pnpm's `link:` protocol, which does not resolve dependencies — run `pnpm install` inside the plugin directory first so its own `node_modules` exists."
+    },
+    {
+      "section": "Model-facing tools",
+      "text": "| Tool | Purpose |\n|---|---|\n| `deadman_arm` | Arm: `name` / `command` / `after_minutes` / `interval_minutes` / `description`. First inspection after `after_minutes`; a held round re-inspects after `interval_minutes`; **one successful execution ends the task**, nothing has to be cancelled afterwards |\n| `deadman_hold` | Report \"still working\": skip the current round and re-arm. **Any session may hold** (fail-safe semantics) |\n| `deadman_disarm` | Disarm. Only the arming session (or one of its direct subagents) may; other sessions need an explicit `force=true`, which is logged |"
+    },
+    {
+      "section": "Model-facing tools",
+      "text": "Task names are **globally unique within the process**; arming an existing name is rejected and names the session that owns it.\n\nSlash command: `/deadman` (this session) · `/deadman all` (every session) · `/deadman cancel <name>`."
+    },
+    {
+      "section": "Decision order of one firing",
+      "text": "1. **Resolve the owning session**: try `ctx.agents.get()`; if the session is not open, `ctx.agents.resume()` brings it back so delivery cannot fall into a black hole.\n2. **Deliver the inspection notice** with `agent.send(message, \"next-step\", true)` — a running agent sees it at its next step boundary, an idle one is woken. The notice explicitly forbids asking the user or requesting confirmation: hold, or stay silent.\n3. **Inspection loop**, keyed on **progress** rather than status:\n   - any agent produced new session events since the last check (`session.seq` advanced) ⇒ still advancing, keep waiting;\n   - nothing advanced ⇒ start the grace window `holdWindowSeconds`;\n   - a pending user question exists (`state === 'open'` in the `userQuestions` projection) ⇒ timed separately, released after at most `questionBlockSeconds`;\n   - total ceiling `maxHoldMinutes` since the firing — whatever happens, it runs when the ceiling is reached (fail-open).\n4. **Released** ⇒ run the command; on success the task **finishes by itself** and leaves a notice for the owner; if it was held ⇒ re-arm for the next interval."
+    },
+    {
+      "section": "Hold channels",
+      "text": "1. the `deadman_hold` tool (the lead agent, or a subagent granted it);\n2. a marker file `.deadman-hold-<name>` in the current working directory (useful when a subagent's tool allowlist has no `deadman_hold`);\n3. a file named after the task inside the plugin's `hold/` directory (external scripts, manual intervention)."
+    },
+    {
+      "section": "Behaviour with several sessions",
+      "text": "- Every task remembers its **owning session** and asks only that session; while the owner is running it also notifies other running agents (the ones actually doing the work).\n- The progress criterion is **global** by default (`progressScope: global`): as long as anything anywhere still advances, every switch waits — the correct semantics for \"shut the machine down\". Set `progressScope: owner` to watch only the owner and its direct subagents.\n- Switches that come due together **run their commands concurrently** (there is no global lock); enable `serializeCommands` to queue them instead.\n- Holding is unrestricted (anyone may call work off); **disarming is restricted** (see `deadman_disarm`)."
+    },
+    {
+      "section": "Configuration",
+      "text": "Override the bundle defaults in the profile's `cordis.patch.yml`:\n\n```yaml\n- id: deadman\n  config:\n    holdWindowSeconds: 60\n```"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `holdWindowSeconds` | `60` | how long to wait after every agent stopped advancing before executing |\n| `checkIntervalSeconds` | `20` | inspection period |\n| `maxHoldMinutes` | `30` | total ceiling counted from the firing; released unconditionally when reached |\n| `questionBlockSeconds` | `600` | longest wait while blocked by a pending user question, then released |\n| `onUndeliverable` | `execute` | when the owning session cannot be delivered to at all: `execute` anyway / `skip` this round |\n| `progressScope` | `global` | progress criterion: `global` (whole harness) or `owner` (owner plus its direct subagents) |\n| `serializeCommands` | `false` | queue action commands instead of running them concurrently |\n| `commandTimeoutSeconds` | `300` | execution timeout of a single action command |\n| `dataDir` | `$DSH_HOME/plugins/dsh-deadman` | data directory (`tasks.json` + `hold/`) |"
+    },
+    {
+      "section": "Data and persistence",
+      "text": "- `tasks.json`: the task table, loaded at plugin start and **durable across restarts** (an overdue task is handled on the next inspection).\n- `hold/`: external hold markers.\n- Fields: `name` / `command` / `description` / `dueAt` / `intervalMin` / `sessionId` / `createdAt` / `firedCount`."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **Only effective in a long-running instance**: the scheduler lives inside the dsh process. A switch armed in a one-shot headless process has nobody to inspect it after that process exits (unless a later long-running instance loads it at boot).\n- **Single-writer assumption**: `tasks.json` is a plain JSON file; concurrent writers overwrite each other. Do not arm from several processes at once — the plugin is meant to be installed only in the long-running profile.\n- `progressScope: owner` counts the owner and its **direct** subagents only; deeper descendants are not counted.\n- The question gate depends on the `userQuestions` session projection; without that projection the gate is simply inactive (the other gates still apply, nothing is misjudged).\n- Exactly-once execution is not guaranteed: a host crash can leave an executed action unrecorded.\n- The three gates (both `progressScope` values, the question-block release, and the `maxHoldMinutes` ceiling) are covered by the fake-host suite in `npm test` (`tests/fake-host.mjs`, deterministic). **Not** covered: the real 600-second question timeout inside a live session, and arming from several processes."
+    },
+    {
+      "section": "Safety",
+      "text": "- The command is **entirely caller-supplied**: only schedule commands you trust.\n- The default semantics are **fail-open** (nobody holds ⇒ it runs). That is the point of a deadman switch, but choose sensible intervals and grace windows for destructive actions.\n- The plugin makes no network calls and collects nothing; it only writes inside its own data directory."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\npnpm install            # dependencies are pinned to 0.2.0-rc.2\nnode --check lib/index.js\n```\n\n**Restart the dsh process** after changing the code: ESM modules are loaded at startup, and hot reload only covers the profile configuration layer."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

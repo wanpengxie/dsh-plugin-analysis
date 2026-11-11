@@ -1,0 +1,657 @@
+{
+  "repo": "805808786/dsh-plugin-model-news-radar",
+  "commit": "8f7befd734fc200e22fe6b7f9392e466a9c46423",
+  "extracted_at": "2026-11-11T06:53:26.314877+00:00",
+  "tree": {
+    "files": 25,
+    "bytes": 133615,
+    "lines_by_language": {
+      "JSON": 394,
+      "JavaScript": 1913,
+      "Markdown": 111,
+      "Other": 3,
+      "YAML": 17
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "bin/scan.mjs",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/collect.js",
+      "lib/dedupe.js",
+      "lib/fetch.js",
+      "lib/parse-feed.js",
+      "lib/parse-html.js",
+      "lib/paths.js",
+      "lib/radar.js",
+      "lib/report.js",
+      "lib/schedule.js",
+      "lib/sources.js",
+      "lib/summarize.js",
+      "lib/validate.js",
+      "package.json",
+      "sources.sample.json",
+      "test/apply.test.js",
+      "test/loader.mjs",
+      "test/parse.test.js",
+      "test/register.mjs",
+      "test/stubs/dsh-tools.js",
+      "test/stubs/schemastery.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-model-news-radar",
+    "version": "0.1.1",
+    "description": "模型资讯雷达：按厂商官方来源清单（RSS、Hugging Face 与 GitHub 组织接口、变更页；自带 6 家示例清单，完整清单读 ~/.dsh/model-news-radar/sources.json）定时采集大模型发布资讯，去重后写成日报 / 周报 / 月报，并起一个 DSH 会话写摘要。只读，不登录任何平台，无第三方依赖。 · Scheduled model-news radar for DeepSeek Harness: collects official release announcements from LLM vendors through RSS, Hugging Face and GitHub organisation APIs and changelog pages (6-vendor sample list bundled, user list read from ~/.dsh/model-news-radar/sources.json), deduplicates them into daily / weekly / monthly Markdown reports and opens a DSH session that writes the summary. Read-only, no logins, no third-party dependencies.",
+    "license": "MIT",
+    "author": "805808786",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/805808786/dsh-plugin-model-news-radar.git"
+    },
+    "homepage": "https://github.com/805808786/dsh-plugin-model-news-radar#readme",
+    "bugs": {
+      "url": "https://github.com/805808786/dsh-plugin-model-news-radar/issues"
+    },
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "bin",
+      "sources.sample.json",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "bin": {
+      "model-news-radar": "./bin/scan.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "llm",
+      "model-news",
+      "rss",
+      "huggingface"
+    ],
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-tools": "^0.1.5-rc.3 || ^0.2.0-rc.1",
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "scripts": {
+      "test": "node --test test/parse.test.js && node --import ./test/register.mjs --test test/apply.test.js",
+      "scan": "node bin/scan.mjs"
+    },
+    "engines": {
+      "node": ">=20"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 模型资讯雷达的默认配置。安装后在 DSH 的插件页改这些值，或在对话里让模型调 model_news_radar_configure。\n- insert:\n    - id: model-news-radar\n      name: dsh-plugin-model-news-radar\n      config:\n        enabled: true\n        period: daily          # daily / weekly / monthly\n        runAt: \"07:30\"\n        timeZone: Asia/Shanghai\n        weekday: 1             # weekly 时：0 周日 … 6 周六\n        monthDay: 1            # monthly 时：1–28\n        tiers: [A, B]          # A 前沿旗舰 / B 主力 / C 区域或专项 / D 观察\n        vendors: []            # 填厂商 id 就只盯这些家\n        sourcesPath: \"\"        # 留空：~/.dsh/model-news-radar/sources.json，没有就用自带示例清单\n        summarize: true        # 采集后起一个 DSH 会话写摘要\n        language: zh\n        catchUp: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "bin/scan.mjs",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "lib/collect.js:80"
+    },
+    {
+      "name": "GH_TOKEN",
+      "kind": "env",
+      "where": "lib/collect.js:80"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/api/models?author=${encodeURIComponent(author",
+      "where": "lib/collect.js:61"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/${model.id",
+      "where": "lib/collect.js:68"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com/orgs/${encodeURIComponent(org",
+      "where": "lib/collect.js:78"
+    },
+    {
+      "host": "api.gitcode.com",
+      "url": "https://api.gitcode.com/api/v5/orgs/${encodeURIComponent(org",
+      "where": "lib/collect.js:124"
+    },
+    {
+      "host": "gitcode.com",
+      "url": "https://gitcode.com/${org",
+      "where": "lib/collect.js:132"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/805808786/dsh-plugin-model-news-radar.git",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/805808786/dsh-plugin-model-news-radar#readme",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/805808786/dsh-plugin-model-news-radar/issues",
+      "where": "package.json:13"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news",
+      "where": "sources.sample.json:39"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news",
+      "where": "sources.sample.json:42"
+    },
+    {
+      "host": "platform.claude.com",
+      "url": "https://platform.claude.com/docs/en/release-notes/overview",
+      "where": "sources.sample.json:49"
+    },
+    {
+      "host": "platform.claude.com",
+      "url": "https://platform.claude.com/docs/en/release-notes/overview",
+      "where": "sources.sample.json:52"
+    },
+    {
+      "host": "openai.com",
+      "url": "https://openai.com/news/rss.xml",
+      "where": "sources.sample.json:80"
+    },
+    {
+      "host": "openai.com",
+      "url": "https://openai.com/news/",
+      "where": "sources.sample.json:83"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/api/models?author=openai&sort=lastModified&direction=-1&limit=20",
+      "where": "sources.sample.json:90"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/openai",
+      "where": "sources.sample.json:93"
+    },
+    {
+      "host": "developers.openai.com",
+      "url": "https://developers.openai.com/rss.xml",
+      "where": "sources.sample.json:100"
+    },
+    {
+      "host": "developers.openai.com",
+      "url": "https://developers.openai.com/api/docs/changelog",
+      "where": "sources.sample.json:103"
+    },
+    {
+      "host": "blog.google",
+      "url": "https://blog.google/innovation-and-ai/models-and-research/google-deepmind/rss/",
+      "where": "sources.sample.json:132"
+    },
+    {
+      "host": "blog.google",
+      "url": "https://blog.google/innovation-and-ai/models-and-research/google-deepmind/",
+      "where": "sources.sample.json:135"
+    },
+    {
+      "host": "blog.google",
+      "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/rss/",
+      "where": "sources.sample.json:142"
+    },
+    {
+      "host": "blog.google",
+      "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/",
+      "where": "sources.sample.json:145"
+    },
+    {
+      "host": "deepmind.google",
+      "url": "https://deepmind.google/blog/rss.xml",
+      "where": "sources.sample.json:152"
+    },
+    {
+      "host": "deepmind.google",
+      "url": "https://deepmind.google/blog/rss.xml",
+      "where": "sources.sample.json:155"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/api/models?author=google&sort=lastModified&direction=-1&limit=20",
+      "where": "sources.sample.json:162"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/google",
+      "where": "sources.sample.json:165"
+    },
+    {
+      "host": "deepseek.com",
+      "url": "https://deepseek.com/en/news/",
+      "where": "sources.sample.json:190"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com/",
+      "where": "sources.sample.json:193"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai",
+      "where": "sources.sample.json:200"
+    },
+    {
+      "host": "www.deepseek.com",
+      "url": "https://www.deepseek.com/",
+      "where": "sources.sample.json:203"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/updates/",
+      "where": "sources.sample.json:210"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/updates/",
+      "where": "sources.sample.json:213"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/api/models?author=deepseek-ai&sort=lastModified&direction=-1&limit=20",
+      "where": "sources.sample.json:220"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/deepseek-ai",
+      "where": "sources.sample.json:223"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/MoonshotAI",
+      "where": "sources.sample.json:250"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/moonshotai",
+      "where": "sources.sample.json:253"
+    },
+    {
+      "host": "platform.kimi.com",
+      "url": "https://platform.kimi.com/blog/posts/changelog",
+      "where": "sources.sample.json:260"
+    },
+    {
+      "host": "platform.kimi.com",
+      "url": "https://platform.kimi.com/docs/",
+      "where": "sources.sample.json:263"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/api/models?author=moonshotai&sort=lastModified&direction=-1&limit=20",
+      "where": "sources.sample.json:275"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/moonshotai",
+      "where": "sources.sample.json:278"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/QwenLM",
+      "where": "sources.sample.json:304"
+    },
+    {
+      "host": "qwenlm.github.io",
+      "url": "https://qwenlm.github.io/blog/",
+      "where": "sources.sample.json:307"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/api/models?author=Qwen&sort=lastModified&direction=-1&limit=20",
+      "where": "sources.sample.json:314"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/Qwen",
+      "where": "sources.sample.json:317"
+    },
+    {
+      "host": "qwenlm.github.io",
+      "url": "https://qwenlm.github.io/blog/index.xml",
+      "where": "sources.sample.json:324"
+    },
+    {
+      "host": "qwenlm.github.io",
+      "url": "https://qwenlm.github.io/blog/",
+      "where": "sources.sample.json:327"
+    },
+    {
+      "host": "openai.com",
+      "url": "https://openai.com/index/gpt-6/",
+      "where": "test/parse.test.js:18"
+    },
+    {
+      "host": "openai.com",
+      "url": "https://openai.com/x",
+      "where": "test/parse.test.js:19"
+    },
+    {
+      "host": "openai.com",
+      "url": "https://openai.com/index/gpt-6/",
+      "where": "test/parse.test.js:25"
+    },
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2005/Atom",
+      "where": "test/parse.test.js:31"
+    },
+    {
+      "host": "x",
+      "url": "https://x/self",
+      "where": "test/parse.test.js:31"
+    },
+    {
+      "host": "deepmind.google",
+      "url": "https://deepmind.google/blog/gemma-4",
+      "where": "test/parse.test.js:31"
+    },
+    {
+      "host": "deepmind.google",
+      "url": "https://deepmind.google/blog/gemma-4",
+      "where": "test/parse.test.js:34"
+    },
+    {
+      "host": "deepseek.com",
+      "url": "https://deepseek.com/en/news/v4",
+      "where": "test/parse.test.js:41"
+    },
+    {
+      "host": "aws.amazon.com",
+      "url": "https://aws.amazon.com/blogs/machine-learning/category/learning-levels/advanced-300",
+      "where": "test/parse.test.js:48"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news",
+      "where": "test/parse.test.js:52"
+    },
+    {
+      "host": "www.anthropic.com",
+      "url": "https://www.anthropic.com/news/claude-fable-5-2",
+      "where": "test/parse.test.js:54"
+    },
+    {
+      "host": "deepseek.com",
+      "url": "https://deepseek.com/en/news/v4",
+      "where": "test/parse.test.js:54"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/updates/",
+      "where": "test/parse.test.js:71"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/updates/#nov-2",
+      "where": "test/parse.test.js:74"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/updates/#v41",
+      "where": "test/parse.test.js:77"
+    },
+    {
+      "host": "x",
+      "url": "https://x/",
+      "where": "test/parse.test.js:79"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/parse.test.js:88"
+    },
+    {
+      "host": "x",
+      "url": "https://x/",
+      "where": "test/parse.test.js:97"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/x",
+      "where": "test/parse.test.js:103"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/gone",
+      "where": "test/parse.test.js:104"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/moved",
+      "where": "test/parse.test.js:105"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/blocked",
+      "where": "test/parse.test.js:106"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/org/model",
+      "where": "test/parse.test.js:107"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/",
+      "where": "test/parse.test.js:113"
+    },
+    {
+      "host": "a",
+      "url": "https://a/b",
+      "where": "test/parse.test.js:124"
+    },
+    {
+      "host": "a",
+      "url": "https://a/b",
+      "where": "test/parse.test.js:126"
+    },
+    {
+      "host": "a",
+      "url": "https://a/c",
+      "where": "test/parse.test.js:127"
+    },
+    {
+      "host": "a",
+      "url": "https://a/d",
+      "where": "test/parse.test.js:128"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/",
+      "where": "test/parse.test.js:133"
+    },
+    {
+      "host": "blog.google",
+      "url": "https://blog.google/x",
+      "where": "test/parse.test.js:149"
+    },
+    {
+      "host": "a",
+      "url": "https://a/b.png",
+      "where": "test/parse.test.js:149"
+    },
+    {
+      "host": "openai.com",
+      "url": "https://OpenAI.com/index/x/?utm_source=rss&id=1",
+      "where": "test/parse.test.js:154"
+    },
+    {
+      "host": "docs.example.com",
+      "url": "https://docs.example.com/changelog/#nov-2",
+      "where": "test/parse.test.js:155"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/1?utm_medium=x",
+      "where": "test/parse.test.js:157"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/2",
+      "where": "test/parse.test.js:158"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/1",
+      "where": "test/parse.test.js:159"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/x/",
+      "where": "test/parse.test.js:169"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/y",
+      "where": "test/parse.test.js:170"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/x",
+      "where": "test/parse.test.js:171"
+    },
+    {
+      "host": "a",
+      "url": "https://a/rss",
+      "where": "test/parse.test.js:197"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/a",
+      "where": "test/parse.test.js:197"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/api/models?author=c",
+      "where": "test/parse.test.js:198"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-11-05T01:48:32Z",
+    "created_at": "2026-11-05T01:48:19Z"
+  },
+  "runtime_files": [
+    "bin/scan.mjs",
+    "cordis.patch.yml",
+    "index.js",
+    "lib/collect.js",
+    "lib/dedupe.js",
+    "lib/fetch.js",
+    "lib/parse-feed.js",
+    "lib/parse-html.js",
+    "lib/paths.js",
+    "lib/radar.js",
+    "lib/report.js",
+    "lib/schedule.js",
+    "lib/sources.js",
+    "lib/summarize.js",
+    "lib/validate.js",
+    "package.json",
+    "test/apply.test.js",
+    "test/parse.test.js",
+    "test/register.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-model-news-radar · 模型资讯雷达",
+      "text": "DeepSeek Harness（DSH）插件。按一份「厂商官方资讯来源清单」定时采集各大模型厂商的发布资讯，去重后写成 Markdown 日报 / 周报 / 月报，并在 DSH 里起一个会话用你当前的默认模型写摘要。\n\n- 只读：不登录任何平台，不发任何东西，不伪装浏览器。\n- 零依赖：RSS / Atom、Hugging Face 组织 API、GitHub 组织 API、官网页面粗提全部自己写，没有第三方包。\n- 抓不到就说抓不到：每份报告末尾列出失败通道和不采集的通道（X、公众号、LinkedIn、YouTube）。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash"
+    },
+    {
+      "section": "从 GitHub 装（DSH 0.2.0-rc.2 及以上）",
+      "text": "dsh plugin --profile web add github:805808786/dsh-plugin-model-news-radar"
+    },
+    {
+      "section": "或本地目录",
+      "text": "dsh plugin --profile web add /path/to/dsh-plugin-model-news-radar\n```\n\n桌面版没有 `dsh` 命令时，在 DSH 的「插件」页搜索 `dsh-plugin-model-news-radar` 一键安装；或把本目录加进 `~/.dsh/profiles/desktop/package.json` 的 `dependencies`（`link:` 路径）和 `dsh.profile.bundles`，重启 DSH。\n\n装好后在对话里说「扫一遍模型资讯」，模型会调 `model_news_scan`；说「改成每周一早上八点」，模型会调 `model_news_radar_configure`。"
+    },
+    {
+      "section": "清单",
+      "text": "插件自带 `sources.sample.json`：6 家厂商（Anthropic、OpenAI、Google DeepMind、DeepSeek、月之暗面、阿里 Qwen）、20 条机器可读通道。\n\n完整清单放在 `~/.dsh/model-news-radar/sources.json`（和示例同一格式），插件优先读它。格式：\n\n```json\n{\n  \"vendors\": [\n    {\n      \"id\": \"deepseek\", \"name\": \"DeepSeek（深度求索）\", \"tier\": \"A\","
+    },
+    {
+      "section": "清单",
+      "text": "| 通道类型 | 插件怎么采 | 判断依据 |\n|---|---|---|\n| `rss` | 解析 RSS 2.0 / Atom | `pubDate` / `updated` 在窗口内 |\n| `hf-org-api` | 调 Hugging Face 组织 API | 模型仓库 `createdAt` 在窗口内 = 新权重 |\n| `github-org` | 调 GitHub 组织 API | 仓库 `created_at` 在窗口内 = 新仓库 |\n| `gitcode-org` | 调 GitCode v5 接口（华为盘古开源在这里） | 同上 |\n| `release-notes` | 抓 HTML，按「日期行 → 标题行」分段；行尾带日期的短标题也算 | 日期在窗口内，链接带页面锚点 |\n| `news-list` / `blog-list` | 抓 HTML，找「链接 + 附近日期」；找不到就退回按日期分段 | 日期在窗口内，标题按厂商关键词分「模型相关 / 其他」 |\n| `social-*` / `wechat` | 不采集 | 报告末尾列为未覆盖通道 |"
+    },
+    {
+      "section": "清单",
+      "text": "`tier`：A 前沿旗舰 / B 主力 / C 区域或专项 / D 观察。默认只采 A、B。"
+    },
+    {
+      "section": "配置",
+      "text": "`cordis.patch.yml` 里的默认值；在 DSH 插件页改，或在对话里让模型调 `model_news_radar_configure`（写到 `~/.dsh/model-news-radar/config.json`，优先级更高）。"
+    },
+    {
+      "section": "配置",
+      "text": "| 项 | 默认 | 说明 |\n|---|---|---|\n| `enabled` | true | 定时开关；关掉仍可手动扫 |\n| `period` | daily | daily / weekly / monthly，窗口 1 / 7 / 31 天 |\n| `runAt` | 07:30 | 触发时刻 |\n| `timeZone` | Asia/Shanghai | IANA 时区 |\n| `weekday` | 1 | weekly 时周几（0 周日 … 6 周六） |\n| `monthDay` | 1 | monthly 时几号（1–28） |\n| `tiers` | [A, B] | 采哪些档 |\n| `vendors` | [] | 只盯这些厂商 id，填了就忽略 tiers |\n| `sourcesPath` | 空 | 清单路径；空 = 数据目录下的 sources.json，没有就用示例清单 |\n| `dataDir` | 空 | 数据目录；空 = `~/.dsh/model-news-radar` |\n| `summarize` | true | 采集后起会话写摘要；关掉零 token |\n| `language` | zh | 摘要语言 zh / en |\n| `catchUp` | true | 启动时发现错过上次触发，90 秒后补跑 |"
+    },
+    {
+      "section": "工具",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `model_news_scan` | 立刻扫一次；可指定 period / since / tiers / vendors / summarize |\n| `model_news_sources` | 列清单；`probe=true` 逐条探测通道可达性 |\n| `model_news_radar_status` | 当前配置、下一次触发、上一次结果、报告路径 |\n| `model_news_radar_configure` | 改配置，立刻生效 |"
+    },
+    {
+      "section": "输出",
+      "text": "- `~/.dsh/model-news-radar/reports/<period>-<时间>.md`：先是摘要会话写的报告，再是原始条目。条目按厂商分组：厂商是二级标题，每条「#### 序号、标题」下一行正文、再一行「日期 · 原文链接」，条目之间空一行；关键词没命中的条目放在「其他」下，日期前带厂商名。\n- 摘要会话的回复用同一套格式，标题和正文译成中文（模型名、产品名保留原文），正文 2 到 4 句，只输出资讯本身。提示词模板内置在 `lib/summarize.js`；在数据目录放 `prompt.zh.md`（或 `prompt.en.md`）可以覆盖，保留 `{{period}}` 和 `{{entries}}` 两个占位符即可。\n- 发给会话的是条目不是清单：每条「厂商 | 日期 | 标题 | 正文（最多 400 字）| 链接」；模型相关条目最多 120 条，关键词未命中的最多 15 条。链接必须原样进提示词，DSH 会话里显示的是模型的原话，用编号替代会让界面上的链接失效。日报窗口通常几条到十几条，提示词两三千 token；月窗口才会到几万。\n- 无效条目不进报告：标题是导航碎片的（「8 min read」「Video thumbnail」）、链接 404/410、连不上、跳回站点首页的，都剔掉，列在 channels 文件里。每次最多实际请求 80 条链接，接口来的权重和仓库不再请求。\n- `reports/<同名>.channels.md`：通道状态表、未覆盖通道、剔除的无效条目，不进主报告，排查用。\n- DSH 会话「模型资讯雷达 · 日报 YYYY-MM-DD」：摘要在这里，可以追问。会话用登记的 preset `model-news-radar-summary-v1`，不挂任何工具。\n- `state.json`：上次运行时间、条数、报告路径；`seen.jsonl`：报告过的条目台账。"
+    },
+    {
+      "section": "边界",
+      "text": "- DSH 的定时只在 Host 开着时跑；桌面版关了就不跑，重开后按 `catchUp` 补一次。真要无人值守，用 `dsh web` 挂在常开机器上。\n- 前端渲染的官网页面（Gemini API changelog、Kimi 开放平台文档等）抓不到条目，报告里标「可达但无条目」；同一厂商的 Hugging Face / 变更页兜底。\n- 拒绝脚本访问的站（x.ai 403、ai.meta.com 400）如实报告，不绕。\n- GitHub 组织接口匿名每小时 60 次，一天一跑够用；频繁手动扫会撞限速，报告里会写明。给 DSH 的环境设 `GITHUB_TOKEN` 可放宽到每小时 5000 次。\n- 只在社交平台官宣的消息会晚到，等官网或 Hugging Face 出现才收到。"
+    },
+    {
+      "section": "命令行",
+      "text": "不进 DSH 也能跑（不出摘要）：\n\n```bash\nnode bin/scan.mjs --period weekly --tiers A,B --sources ~/.dsh/model-news-radar/sources.json --print\n```\n\n测试：`npm test`。"
+    }
+  ],
+  "skipped": []
+}

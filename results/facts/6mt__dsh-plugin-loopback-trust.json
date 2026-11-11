@@ -1,0 +1,167 @@
+{
+  "repo": "6mt/dsh-plugin-loopback-trust",
+  "commit": "838ddf0d79fb977be896c6cb5dcd0bba68015832",
+  "extracted_at": "2026-11-11T06:49:37.384709+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 14474,
+    "lines_by_language": {
+      "JSON": 35,
+      "JavaScript": 74,
+      "Markdown": 224,
+      "Other": 24,
+      "YAML": 8
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-loopback-trust",
+    "version": "0.1.1",
+    "description": "Restore Host-persisted settings in dsh web behind a reverse proxy: marks the page's connection as host-owning so the settings/model pages work on non-loopback hostnames. · 反代部署下恢复 dsh 设置页的 host 持久化。",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js"
+    },
+    "engines": {
+      "dsh": ">=0.1.7 <0.3"
+    },
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "reverse-proxy",
+      "settings"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/6mt/dsh-plugin-loopback-trust.git"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plugin-loopback-trust\n# Marks the web page's connection as host-owning (ownsHost) so the settings\n# pages keep Host persistence when dsh web is reached through a reverse\n# proxy on a non-loopback hostname. All logic lives in the client entry.\n\n- insert:\n    - id: loopback-trust\n      name: 'dsh-plugin-loopback-trust'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/6mt/dsh-plugin-loopback-trust.git",
+      "where": "package.json:24"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-10-14T04:26:19Z",
+    "created_at": "2026-09-29T06:08:15Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-loopback-trust",
+      "text": "English | [中文](README.zh.md)\n\nRestore Host-persisted settings in [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) web when it is reached through a reverse proxy."
+    },
+    {
+      "section": "The problem",
+      "text": "dsh 0.1.7 deliberately gates the Settings pages (especially the Models page) on a\nloopback check: settings persistence is only offered to pages opened on\n`127.0.0.1` / `localhost` / `::1`.\n\n```js\n// dsh-client-ui-settings\nconst persistence = ctx.remote.$host.isLoopback ? \"host\" : \"memory\";\n```"
+    },
+    {
+      "section": "The problem",
+      "text": "`isLoopback` is derived from the browser hostname. When dsh listens on\n`127.0.0.1:3080` behind nginx (or any reverse proxy) and you open the UI through\na domain name, the page is classified as non-privileged: settings silently\ndegrade to in-memory mode and the Models page reports\n*\"settings are unavailable in this browser\"*."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "It marks the page's connection as host-owning — the same fact the official\ndesktop shell asserts — so the settings pages keep Host persistence on\nnon-loopback origins. Chat and everything else were never affected and stay\nbyte-identical: the plugin changes exactly one boolean in the client's\nconnection state."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "- Sits in the boot prefetch tier and runs before any client plugin applies\n- Never clobbers a real (desktop) transport; does nothing on loopback pages\n- Zero dependencies, no host-side code, ~60 lines of client JavaScript\n- Requires dsh **0.1.7 – 0.2.x** (`engines.dsh: \">=0.1.7 <0.3\"`; verified against\n  0.1.7 and 0.2.0-rc.2)"
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add 6mt/dsh-plugin-loopback-trust\n```\n\nRestart `dsh web` (a new bundle must boot), then hard-refresh the browser page.\nThe plugin takes effect on every page load; nothing shows up in the UI."
+    },
+    {
+      "section": "How it works",
+      "text": "`dsh-client-connection`'s client entry reads `globalThis.__DSH_TRANSPORT__` at\nplugin start; a transport with `ownsHost: true` makes\n`connection.isLoopback === true`. Bundle scripts in the immediate prefetch tier\nexecute strictly before any plugin applies, so a top-level assignment lands\nbefore that read:\n\n```js\nglobalThis.__DSH_TRANSPORT__ = { ownsHost: true };\n```"
+    },
+    {
+      "section": "How it works",
+      "text": "The fake transport is inert everywhere else: `rpc`/`fetch`/`openStream`\nundefined falls back to `globalThis.fetch` (identical to a plain browser page),\nand every `streamBaseUrl` reader optional-chains to `document.baseURI` /\n`window.location.origin`. A fallback in the plugin's `apply` also patches the\nlive `connection.isLoopback` property and invalidates api-gateway's cached\n`$host` snapshot if ordering ever drifts."
+    },
+    {
+      "section": "How it works",
+      "text": "The server-side `/api` Host fence is **not** touched. See\n[Security notes](#security-notes)."
+    },
+    {
+      "section": "Verify",
+      "text": "1. Open Settings → Models through your domain: it loads, no\n   \"settings are unavailable\" banner.\n2. Change a setting, reload the page: the change persisted.\n3. The browser console shows no `[loopback-trust] could not patch` warning."
+    },
+    {
+      "section": "Security notes",
+      "text": "The loopback gate is intentional: settings writes (model providers, API keys)\nare restricted to pages the host can bind to loopback. Installing this plugin\ndeclares *\"this origin is trusted\"* for your deployment:"
+    },
+    {
+      "section": "Security notes",
+      "text": "- Make sure your reverse proxy enforces whatever access control you expect in\n  front of the domain — dsh's `/api` Host fence still applies its own rules\n  unchanged.\n- Do not expose the domain to untrusted networks without protection.\n- If a future dsh release makes `--trusted-host` cover the client-side\n  classification too, prefer that and uninstall this plugin."
+    },
+    {
+      "section": "Security notes",
+      "text": "This plugin does not exfiltrate anything, has no telemetry, and contains no\nhost-side code — the entire payload is [client.js](client.js), which you can\naudit in one sitting."
+    },
+    {
+      "section": "Compatibility",
+      "text": "Hook points are dsh-0.1.7 internals (`__DSH_TRANSPORT__.ownsHost` semantics,\nprefetch-tier timing, the `$host` cache) with no compatibility promise. The\npackage declares `engines.dsh: \">=0.1.7 <0.2\"` so incompatible hosts refuse to\ninstall rather than break silently. On breakage the symptom is loud (the\nsettings page returns to its unavailable state) — check\n[dsh-client-connection](https://www.npmjs.com/package/@deepseek-ai/dsh-client-connection)\nin your installed version and adjust `client.js` accordingly."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```sh\ndsh plugin --profile web remove dsh-plugin-loopback-trust\n```"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}
