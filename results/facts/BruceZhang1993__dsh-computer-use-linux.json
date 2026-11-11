@@ -1,0 +1,446 @@
+{
+  "repo": "BruceZhang1993/dsh-computer-use-linux",
+  "commit": "a5c48c0fa104743fb7d4ed8224678e6e36874075",
+  "extracted_at": "2026-11-11T08:26:24.101661+00:00",
+  "tree": {
+    "files": 32,
+    "bytes": 154037,
+    "lines_by_language": {
+      "JSON": 69,
+      "JavaScript": 1655,
+      "Markdown": 1468,
+      "Other": 45,
+      "YAML": 282
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+      ".gitignore",
+      ".npmrc",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "THIRD_PARTY.md",
+      "bin/computer-use-linux-mcp.mjs",
+      "cordis.patch.yml",
+      "docs/installation.md",
+      "docs/installation.zh-CN.md",
+      "docs/releasing.md",
+      "docs/releasing.zh-CN.md",
+      "lib/binary.mjs",
+      "lib/index.js",
+      "lib/mcp-probe.mjs",
+      "lib/skill.mjs",
+      "package.json",
+      "scripts/check-package.mjs",
+      "scripts/doctor.mjs",
+      "scripts/install-binary.mjs",
+      "scripts/release-version.mjs",
+      "scripts/selftest.mjs",
+      "skills/computer-use-linux/SKILL.md",
+      "test/binary.test.mjs",
+      "test/launcher.test.mjs",
+      "test/package.test.mjs",
+      "test/release.test.mjs",
+      "test/skill.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@brucezhang1993/dsh-computer-use-linux",
+    "version": "0.1.1",
+    "publishConfig": {
+      "registry": "https://npm.pkg.github.com",
+      "access": "public"
+    },
+    "description": "Linux desktop computer use for DeepSeek Harness: the computer-use-linux MCP server (AT-SPI accessibility trees, screenshots, compositor window targeting, Wayland/X11 input) bridged into DSH as native tools, with the bundled skill and an optional computer-use provider registration.",
+    "type": "module",
+    "license": "MIT",
+    "engines": {
+      "node": ">=20"
+    },
+    "os": [
+      "linux"
+    ],
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./launcher": "./bin/computer-use-linux-mcp.mjs",
+      "./binary": "./lib/binary.mjs",
+      "./skills/*": "./skills/*",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "bin",
+      "scripts",
+      "skills",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh-CN.md",
+      "LICENSE",
+      "THIRD_PARTY.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "install-binary": "node scripts/install-binary.mjs",
+      "selftest": "node scripts/selftest.mjs",
+      "doctor": "node scripts/doctor.mjs",
+      "check": "node scripts/check-package.mjs",
+      "test": "node --test"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "mcp",
+      "computer-use",
+      "linux",
+      "at-spi",
+      "accessibility",
+      "wayland",
+      "x11",
+      "desktop-automation"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/BruceZhang1993/dsh-computer-use-linux"
+    },
+    "bugs": {
+      "url": "https://github.com/BruceZhang1993/dsh-computer-use-linux/issues"
+    },
+    "homepage": "https://github.com/BruceZhang1993/dsh-computer-use-linux#readme"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-computer-use-linux — DSH bundle patch layer.\n#\n# This bundle adds one `@deepseek-ai/dsh-mcp-client` row that speaks to the\n# `computer-use-linux` MCP server over stdio, so the model sees its tools as\n# `mcp__cul__<tool>` (doctor, list_windows, get_app_state, click, ...), plus the\n# JS half of this package (`lib/index.js`), which registers the bundled skill on\n# `ctx.skills` and claims the harness's computer-use provider slot when\n# `@deepseek-ai/dsh-computer-use` is mounted.\n#\n# The skill is NOT delivered through `skill-filesystem.bundledSkillDir`: that\n# config key is a single slot whose default is `$DSH_BUNDLED_SKILL_DIR`, so a\n# bundle patch that sets it would replace whatever else owns it. Runtime\n# registration through `ctx.skills.register()` is additive instead.\n#\n# Path resolution: `!!js` expressions are evaluated against the boot tree's\n# context, whose `baseUrl` is the PROFILE directory (where cordis.yml lives),\n# not this package's directory. Resolving the launcher through a\n# createRequire anchored at the profile's package.json therefore works in any\n# profile under any $DSH_HOME and survives the pnpm store layout, with no\n# hard-coded paths. `process.execPath` is the host executable: `node` for the\n# CLI/headless apps, or the Electron executable for DSH Desktop. The\n# child-only `ELECTRON_RUN_AS_NODE` flag makes Electron run the launcher as\n# Node; ordinary Node ignores it.\n#\n# The desktop session variables the server needs (`WAYLAND_DISPLAY`, `DISPLAY`,\n# `XAUTHORITY`, `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS`,\n# `XDG_CURRENT_DESKTOP`, `DESKTOP_SESSION`, `YDOTOOL_SOCKET`, and the\n# `COMPUTER_USE_LINUX_*` knobs) survive the mcp-client's credential scrub, so\n# they are deliberately *not* restated here. Only names matching\n# /KEY|PASSWORD|SECRET|TOKEN/i and `DSH_*` are scrubbed.\n\n- insert:\n    - id: mcp-computer-use-linux\n      name: '@deepseek-ai/dsh-mcp-client'\n      disabled: !!js \"process.platform !== 'linux'\"\n      config:\n        serverName: cul\n        transport: stdio\n        command: !!js process.execPath\n        args:\n          - !!js \"process.getBuiltinModule('node:module').createRequire(new URL('package.json', baseUrl)).resolve('@brucezhang1993/dsh-computer-use-linux/launcher')\"\n        env:\n          ELECTRON_RUN_AS_NODE: '1'\n        # Desktop observation can legitimately take longer than the 60 s default:\n        # a first-run binary download, an un-cached AT-SPI tree, or a portal\n        # consent dialog all happen inside a single tools/call.\n        toolCallTimeoutMs: 120000\n        failOnStartupError: false\n\n    - id: dsh-computer-use-linux\n      name: 'dsh-computer-use-linux'\n      disabled: !!js \"process.platform !== 'linux'\"\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "bin/computer-use-linux-mcp.mjs",
+    "lib/binary.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "GITHUB_OUTPUT",
+      "kind": "env",
+      "where": "scripts/release-version.mjs:69"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com",
+      "where": ".github/workflows/release.yml:4"
+    },
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com",
+      "where": ".github/workflows/release.yml:54"
+    },
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com/${name",
+      "where": ".github/workflows/release.yml:102"
+    },
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com",
+      "where": ".github/workflows/release.yml:150"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/agent-sh/computer-use-linux/releases/download/v${version",
+      "where": "lib/binary.mjs:108"
+    },
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com",
+      "where": "package.json:5"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BruceZhang1993/dsh-computer-use-linux",
+      "where": "package.json:63"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BruceZhang1993/dsh-computer-use-linux/issues",
+      "where": "package.json:66"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BruceZhang1993/dsh-computer-use-linux#readme",
+      "where": "package.json:68"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BruceZhang1993/dsh-computer-use-linux",
+      "where": "scripts/check-package.mjs:42"
+    },
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com",
+      "where": "scripts/check-package.mjs:48"
+    },
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com",
+      "where": "scripts/check-package.mjs:49"
+    },
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com",
+      "where": "test/package.test.mjs:26"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 5,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-10-10T01:55:51Z",
+    "created_at": "2026-10-09T06:16:27Z"
+  },
+  "runtime_files": [
+    "bin/computer-use-linux-mcp.mjs",
+    "cordis.patch.yml",
+    "lib/binary.mjs",
+    "lib/index.js",
+    "lib/mcp-probe.mjs",
+    "lib/skill.mjs",
+    "package.json",
+    "scripts/check-package.mjs",
+    "scripts/doctor.mjs",
+    "scripts/install-binary.mjs",
+    "scripts/selftest.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-computer-use-linux",
+      "text": "[](https://github.com/BruceZhang1993/dsh-computer-use-linux/actions/workflows/ci.yml)\n[](LICENSE)\n[](package.json)\n[](https://www.kernel.org)\n[](https://github.com/deepseek-ai/deepseek-harness)\n[](https://modelcontextprotocol.io)\n\n**English** · [简体中文](README.zh-CN.md)"
+    },
+    {
+      "section": "dsh-computer-use-linux",
+      "text": "**Linux desktop computer use for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** —\nthe [`computer-use-linux`](https://github.com/agent-sh/computer-use-linux) MCP\nserver bridged into DSH as native tools, with its skill bundled."
+    },
+    {
+      "section": "dsh-computer-use-linux",
+      "text": "The agent can observe the local desktop (AT-SPI accessibility trees, window\nlists, screenshots) and act on it (focus/move/resize windows, click, drag,\nscroll, type, press keys, invoke accessibility actions) — on Wayland or X11,\nthrough the same tools Claude Code and Codex get from the upstream plugin.\n\nNo DSH modifications. No runtime dependencies. The bridge is the in-box\n`@deepseek-ai/dsh-mcp-client` plugin."
+    },
+    {
+      "section": "Architecture",
+      "text": "```\nDSH agent\n  │  tools: mcp__cul__doctor, mcp__cul__get_app_state, mcp__cul__click, … (18)\n  ▼\n@deepseek-ai/dsh-mcp-client        ← in-box DSH bridge (official MCP SDK, stdio)\n\nTwo decisions define this integration:"
+    },
+    {
+      "section": "Architecture",
+      "text": "- **Bridge, don't reimplement.** The upstream server is the supported desktop\n  engine and it already speaks MCP. Wrapping it as DSH native tools keeps every\n  upstream fix one version bump away, and the DSH MCP bridge owns naming,\n  reconnection, image projection, and cancellation.\n- **Isolate the device layer.** A small resolver owns the only piece that is\n  inherently machine-specific: which binary to run. That is the one place worth\n  custom code, and it is testable without a desktop."
+    },
+    {
+      "section": "Requirements",
+      "text": "- Linux (x86_64 or arm64). The plugin is disabled on other platforms.\n- DeepSeek Harness with the in-box `@deepseek-ai/dsh-mcp-client` available\n  (every shipped profile already has it).\n- Node 20+ for the launcher. Inside DSH Desktop the launcher runs under the\n  Electron binary via `ELECTRON_RUN_AS_NODE=1`.\n- A desktop session. Accessibility, window targeting, and input backends are\n  per-compositor concerns — run `mcp__cul__doctor` and see\n  `skills/computer-use-linux/references/setup.md`."
+    },
+    {
+      "section": "Install",
+      "text": "Install the plugin as a DSH bundle — there is no manual patch or config edit.\nThe full guide, including GitHub Packages authentication and the pre-download\nstep, is [docs/installation.md](docs/installation.md)."
+    },
+    {
+      "section": "CLI profiles — from GitHub Packages (normal install)",
+      "text": "```sh\ndsh plugin --profile web add @brucezhang1993/dsh-computer-use-linux          # latest\ndsh plugin --profile web add @brucezhang1993/dsh-computer-use-linux@0.1.0    # pin a version\n```"
+    },
+    {
+      "section": "CLI profiles — from GitHub Packages (normal install)",
+      "text": "`dsh plugin` delegates to pnpm in the profile directory, checks the package\nagainst the running DSH version before downloading anything, and once the\ninstall succeeds selects the bundle in the profile's `dsh.profile.bundles` —\nthat selection is what makes the profile layer load. Then restart the harness.\nThe model's tool list gains `mcp__cul__doctor`, `mcp__cul__get_app_state`,\n`mcp__cul__list_windows`, `mcp__cul__click`, and the rest."
+    },
+    {
+      "section": "CLI profiles — from GitHub Packages (normal install)",
+      "text": "The package is served by GitHub Packages and installs are authenticated there.\nMake the scope mapping visible to the profile, and log in once per machine:\n\n```sh\nprintf '@brucezhang1993:registry=https://npm.pkg.github.com\\n' \\\n  >> \"${DSH_HOME:-$HOME/.dsh}/profiles/web/.npmrc\"\nnpm login --scope=@brucezhang1993 --auth-type=legacy \\\n  --registry=https://npm.pkg.github.com"
+    },
+    {
+      "section": "CLI profiles — from GitHub Packages (normal install)",
+      "text": "`--auth-type=legacy` is required on npm 9+ so the CLI prompts instead of opening\na browser, and the password is a **classic personal access token** with\n`read:packages` — not the token `gh auth login` stores. See\n[docs/installation.md](docs/installation.md#authenticate-to-github-packages-once-per-machine)\nfor the token scopes, why the token goes to `~/.npmrc`, and how to make the\npackage public if you want unauthenticated installs."
+    },
+    {
+      "section": "DSH Desktop — from GitHub Packages",
+      "text": "Open the plugin manager and install `@brucezhang1993/dsh-computer-use-linux`\nfrom the registry (search by name). Desktop profiles are managed exclusively by\nthe app, so `dsh plugin --profile desktop add …` is refused by design."
+    },
+    {
+      "section": "From a local checkout (development)",
+      "text": "While working on this repository, install the working copy instead of the\npublished tarball:\n\n```sh\ndsh plugin --profile web add /absolute/path/to/dsh-computer-use-linux\n```\n\npnpm links the directory, so the bundle behaves exactly like the npm install\nand your edits apply on the next restart. No `npm pack`/`npm publish` step in\nbetween. See [Development](#development) for the repository layout and its\nself-checks."
+    },
+    {
+      "section": "Verify",
+      "text": "In a session, ask the agent to call `mcp__cul__doctor` first: it returns the\nplatform, portals, accessibility, windowing and input backends, and a readiness\nsummary.\n\nFrom a source checkout:\n\n```sh\nnode scripts/check-package.mjs   # static: patch, exports, skill consistency\nnode --test                      # unit + launcher tests\nnode scripts/doctor.mjs          # desktop readiness report, no DSH needed\nnode scripts/selftest.mjs        # MCP handshake + tools/list through the launcher"
+    },
+    {
+      "section": "Verify",
+      "text": "`check-package` and the unit tests live in the source tree; the runtime probes\nship inside the package, so an installed copy can still run `selftest.mjs` and\n`doctor.mjs`. The exact commands, including the installed-copy paths, are in\n[docs/installation.md](docs/installation.md#verify-the-install)."
+    },
+    {
+      "section": "Tools",
+      "text": "All 18 default upstream tools are exposed, namespaced as `mcp__cul__<tool>`.\n\n| Group | Tools |\n| --- | --- |\n| Diagnostics | `doctor`, `setup_accessibility`, `setup_window_targeting` |\n| Discovery | `list_apps`, `list_windows`, `focused_window` |\n| Observation | `get_app_state`, `screenshot` |\n| Input | `click`, `drag`, `scroll`, `press_key`, `type_text` |\n| Semantic | `perform_action`, `set_value` |\n| Windows | `activate_window`, `move_window`, `resize_window` |"
+    },
+    {
+      "section": "Tools",
+      "text": "Two conditional upstream tools stay off unless the environment opts in:\n`run_shell` (`COMPUTER_USE_LINUX_ENABLE_SHELL=1`, deliberately unsandboxed — DSH\nalready has a sandboxed shell tool) and `complete_interaction`\n(`COMPUTER_USE_LINUX_NOTIFY_ON_COMPLETE=1`)."
+    },
+    {
+      "section": "How the binary is resolved",
+      "text": "1. `COMPUTER_USE_LINUX_BIN` — an absolute path (a local build, or\n   `cargo install computer-use-linux`).\n2. `~/.cache/computer-use-linux/plugin/v<version>/computer-use-linux` — the\n   plugin cache. **The same layout as the upstream Claude Code / Codex plugin**,\n   so one download serves every host on the machine.\n3. the `@agent-sh/computer-use-linux` npm package, if installed.\n4. `computer-use-linux` on `PATH`.\n5. a GitHub release download, verified against the published `.sha256`."
+    },
+    {
+      "section": "How the binary is resolved",
+      "text": "Downloads are staged and renamed, so concurrent first starts and killed\ndownloads cannot leave a half-written binary. Version and mirror are\noverridable: `COMPUTER_USE_LINUX_VERSION`, `COMPUTER_USE_LINUX_DOWNLOAD_BASE`,\n`COMPUTER_USE_LINUX_SKIP_DOWNLOAD`.\n[docs/installation.md](docs/installation.md#binary-resolution) covers each hit\nand when to prefer it."
+    },
+    {
+      "section": "What the bundle adds",
+      "text": "```yaml"
+    },
+    {
+      "section": "cordis.patch.yml — the whole declarative surface",
+      "text": "- insert:\n    - id: mcp-computer-use-linux      # one MCP server row, tools named mcp__cul__*\n      name: '@deepseek-ai/dsh-mcp-client'\n      ...\n    - id: dsh-computer-use-linux      # the JS half: skill + provider slot\n      name: 'dsh-computer-use-linux'\n```\n\nEverything else lives in the plugin entry (`lib/index.js`):"
+    },
+    {
+      "section": "cordis.patch.yml — the whole declarative surface",
+      "text": "| Contribution | Mechanism | Why not a patch |\n| --- | --- | --- |\n| The 18 desktop tools | `@deepseek-ai/dsh-mcp-client` stdio row | — |\n| The `computer-use-linux` skill | `ctx.skills.register()` | `skill-filesystem.bundledSkillDir` is a **single** slot defaulting to `$DSH_BUNDLED_SKILL_DIR`; overriding it would displace whatever else owns it |\n| Provider exclusivity | `ctx.computerUse.register()` when the registry is mounted | needs runtime service access |\n| Binary diagnostics | activation log line | needs runtime |"
+    },
+    {
+      "section": "cordis.patch.yml — the whole declarative surface",
+      "text": "The launcher path is resolved through `createRequire` anchored at the *profile*\ndirectory (`baseUrl`), never hard-coded, so the bundle works in any profile\nunder any `$DSH_HOME` and survives the pnpm store layout."
+    },
+    {
+      "section": "cordis.patch.yml — the whole declarative surface",
+      "text": "The desktop session variables the server needs (`WAYLAND_DISPLAY`, `DISPLAY`,\n`XAUTHORITY`, `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS`,\n`XDG_CURRENT_DESKTOP`, `DESKTOP_SESSION`, `YDOTOOL_SOCKET`, and the\n`COMPUTER_USE_LINUX_*` knobs) are **not** restated in the patch: the\nmcp-client's credential scrub only drops names matching\n`/KEY|PASSWORD|SECRET|TOKEN/i` and `DSH_*`, so they reach the server intact."
+    },
+    {
+      "section": "Provider exclusivity",
+      "text": "If `@deepseek-ai/dsh-computer-use` is mounted in the same composition, this\nplugin claims the single computer-use provider slot\n(`ctx.computerUse.register('dsh-computer-use-linux')`). A second desktop driver\nthen fails to register instead of silently fighting over the pointer. If the\nregistry is absent — a stock profile — the plugin logs and continues; the tools\nare unaffected."
+    },
+    {
+      "section": "Safety",
+      "text": "- `doctor`, `list_apps`, `list_windows`, `focused_window`, `get_app_state` are\n  read-only. `click`, `drag`, `press_key`, `type_text`, `perform_action`, and\n  `set_value` carry `destructiveHint` — they can submit, delete, send, or\n  purchase in whatever application is targeted.\n- Focus is global: activating a window steals the user's keyboard.\n- Screenshots can capture secrets; `get_app_state` accepts\n  `include_screenshot: false`.\n- `ydotoold` gives any process that can reach its socket full input synthesis.\n  Keep the socket in the user runtime directory (`0600`), never `/tmp`.\n- The on-screen indicator shows what the agent is doing. Leave it on.\n- Session approval policy still applies; the harness asks before calls\n  according to its own policy, and these tools do not bypass it."
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "Start with `node scripts/doctor.mjs`, then\n`skills/computer-use-linux/references/troubleshooting.md` for the DSH-side\nchecklist (tools missing, calls failing, timeouts, screenshots arriving as\ntext) and the full environment variable reference."
+    },
+    {
+      "section": "Development",
+      "text": "Working on the plugin itself? Install the checkout with the local-path command\nunder [Install](#from-a-local-checkout-development) and restart the harness\nafter a change. The layout:\n\n```\nlib/binary.mjs        binary resolution, verified download, server exec\nlib/mcp-probe.mjs     dependency-free MCP stdio probe (selftest + tests)\nlib/skill.mjs         bundled-skill frontmatter loader\nlib/index.js          plugin entry: skill registration + provider slot"
+    },
+    {
+      "section": "Development",
+      "text": "`node --test` is used rather than a runner dependency: this package's\nruntime is DSH's own Node/Electron, so its tests target that runtime directly\nand the package ships with zero dependencies.\n\nMaintainers: publishing, CI, and release mechanics are in\n[docs/releasing.md](docs/releasing.md)."
+    },
+    {
+      "section": "License",
+      "text": "MIT. See [LICENSE](LICENSE) and [THIRD_PARTY.md](THIRD_PARTY.md) — the desktop\nengine is [agent-sh/computer-use-linux](https://github.com/agent-sh/computer-use-linux)\n(MIT), and the bundled skill is adapted from it."
+    },
+    {
+      "section": "dsh-computer-use-linux",
+      "text": "[](https://github.com/BruceZhang1993/dsh-computer-use-linux/actions/workflows/ci.yml)\n[](LICENSE)\n[](package.json)\n[](https://www.kernel.org)\n[](https://github.com/deepseek-ai/deepseek-harness)\n[](https://modelcontextprotocol.io)\n\n[English](README.md) · **简体中文**\n\n**[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Linux 桌面操作能力** ——\n把 [`computer-use-linux`](https://github.com/agent-sh/computer-use-linux) MCP\nserver 桥接成 DSH 的原生工具，并内置配套 skill。"
+    },
+    {
+      "section": "dsh-computer-use-linux",
+      "text": "Agent 可以观察本机桌面（AT-SPI 无障碍树、窗口列表、截图），并对其执行操作（聚焦/移动/缩放窗口、点击、拖拽、滚动、输入文本、按键、调用无障碍动作）—— Wayland 与 X11 都支持，与 Claude Code、Codex 通过上游插件拿到的是同一套工具。\n\n不改动 DSH 本体，无运行时依赖。桥接方就是 DSH 内置的\n`@deepseek-ai/dsh-mcp-client` 插件。"
+    },
+    {
+      "section": "架构",
+      "text": "```\nDSH agent\n  │  tools: mcp__cul__doctor, mcp__cul__get_app_state, mcp__cul__click, … (18)\n  ▼\n@deepseek-ai/dsh-mcp-client        ← DSH 内置桥接（官方 MCP SDK，stdio）\n\n这套集成由两个决定定义：\n\n- **只桥接，不重写。** 上游 server 是官方支持的桌面引擎，而且本身就说 MCP。把它包装成 DSH 原生工具，意味着上游的每个修复都只差一次版本升级；而命名、重连、图片投影与取消这些事交给 DSH 的 MCP 桥接层负责。\n- **把设备层隔离出来。** 一个小 resolver 只负责那件本质上与机器绑定的事：该运行哪个二进制。这是唯一值得自己写代码的地方，而且不需要桌面就能测试。"
+    },
+    {
+      "section": "环境要求",
+      "text": "- Linux（x86_64 或 arm64）。其他平台上插件自动禁用。\n- 装有内置 `@deepseek-ai/dsh-mcp-client` 的 DeepSeek Harness（各发行 profile 都已自带）。\n- Node 20+ 用于 launcher。在 DSH Desktop 内部，launcher 通过\n  `ELECTRON_RUN_AS_NODE=1` 跑在 Electron 二进制下。\n- 一个桌面会话。无障碍、窗口定位与输入后端属于「每个合成器各自的问题」——请运行\n  `mcp__cul__doctor`，并参考\n  `skills/computer-use-linux/references/setup.md`。"
+    },
+    {
+      "section": "安装",
+      "text": "把插件当作一个 DSH bundle 安装即可 —— 不需要手改 patch 或配置。完整指南（含\nGitHub Packages 认证与预下载步骤）见 [docs/installation.zh-CN.md](docs/installation.zh-CN.md)。"
+    },
+    {
+      "section": "CLI profile —— 从 GitHub Packages 安装（常规方式）",
+      "text": "```sh\ndsh plugin --profile web add @brucezhang1993/dsh-computer-use-linux          # 最新版\ndsh plugin --profile web add @brucezhang1993/dsh-computer-use-linux@0.1.0    # 锁定版本\n```\n\n`dsh plugin` 会在 profile 目录里调用 pnpm；下载之前先按当前 DSH 版本做兼容性检查，\n安装成功后把该 bundle 选入 profile 的 `dsh.profile.bundles` —— 正是这一步让 profile\n层生效。然后重启 harness。模型的工具列表里就会出现 `mcp__cul__doctor`、\n`mcp__cul__get_app_state`、`mcp__cul__list_windows`、`mcp__cul__click` 等工具。\n\n本包由 GitHub Packages 提供，安装需要认证。先把 scope 映射放到 profile 能看到的位置，\n然后每台机器登录一次："
+    },
+    {
+      "section": "CLI profile —— 从 GitHub Packages 安装（常规方式）",
+      "text": "```sh\nprintf '@brucezhang1993:registry=https://npm.pkg.github.com\\n' \\\n  >> \"${DSH_HOME:-$HOME/.dsh}/profiles/web/.npmrc\"\nnpm login --scope=@brucezhang1993 --auth-type=legacy \\\n  --registry=https://npm.pkg.github.com\n\nnpm 9+ 必须加 `--auth-type=legacy`，否则会走浏览器登录；密码是带 `read:packages` 的\n**classic personal access token**，不是 `gh auth login` 存的那个 token。token 的 scope\n说明、为什么它写在 `~/.npmrc`、以及想免认证安装时如何把包改成 public，都在\n[docs/installation.zh-CN.md](docs/installation.zh-CN.md#先认证-github-packages每台机器一次)。"
+    },
+    {
+      "section": "DSH Desktop —— 从 GitHub Packages 安装",
+      "text": "打开插件管理器，从 registry 里按名字搜索并安装\n`@brucezhang1993/dsh-computer-use-linux`。Desktop 的 profile 由应用独占管理，因此\n`dsh plugin --profile desktop add …` 会被设计性地拒绝。"
+    },
+    {
+      "section": "从本地检出安装（开发用）",
+      "text": "如果要改这个仓库本身，就安装工作副本，而不是已发布的 tarball：\n\n```sh\ndsh plugin --profile web add /absolute/path/to/dsh-computer-use-linux\n```\n\npnpm 会链接该目录，因此 bundle 的行为与 npm 安装完全一致，改动在下次重启后生效，\n中间不需要任何 `npm pack`／`npm publish` 步骤。仓库结构与自检见[开发](#开发)。"
+    },
+    {
+      "section": "验证",
+      "text": "在会话里，让 agent 先调用 `mcp__cul__doctor`：它会返回平台、portal、无障碍、窗口与\n输入后端，以及一份就绪摘要。\n\n在源码检出里：\n\n```sh\nnode scripts/check-package.mjs   # 静态检查：patch、exports、skill 一致性\nnode --test                      # 单元 + launcher 测试\nnode scripts/doctor.mjs          # 桌面就绪报告，不需要 DSH\nnode scripts/selftest.mjs        # 经 launcher 走一遍 MCP 握手 + tools/list\n\n`check-package` 与单元测试在源码树里，而运行时探针随包发布，所以已安装的副本同样能跑\n`selftest.mjs` 与 `doctor.mjs`。具体命令（含已安装副本的路径）见\n[docs/installation.zh-CN.md](docs/installation.zh-CN.md#验证安装)。"
+    },
+    {
+      "section": "工具",
+      "text": "上游默认的 18 个工具全部暴露，命名空间为 `mcp__cul__<tool>`。\n\n| 分组 | 工具 |\n| --- | --- |\n| 诊断 | `doctor`、`setup_accessibility`、`setup_window_targeting` |\n| 发现 | `list_apps`、`list_windows`、`focused_window` |\n| 观察 | `get_app_state`、`screenshot` |\n| 输入 | `click`、`drag`、`scroll`、`press_key`、`type_text` |\n| 语义 | `perform_action`、`set_value` |\n| 窗口 | `activate_window`、`move_window`、`resize_window` |"
+    },
+    {
+      "section": "工具",
+      "text": "上游还有两个条件性工具默认关闭，需显式开启：`run_shell`\n（`COMPUTER_USE_LINUX_ENABLE_SHELL=1`，刻意不加沙箱——DSH 已经有带沙箱的 shell 工具）与 `complete_interaction`\n（`COMPUTER_USE_LINUX_NOTIFY_ON_COMPLETE=1`）。"
+    },
+    {
+      "section": "二进制如何解析",
+      "text": "按顺序，命中即止：\n\n1. `COMPUTER_USE_LINUX_BIN` —— 绝对路径（本地构建，或\n   `cargo install computer-use-linux`）。\n2. `~/.cache/computer-use-linux/plugin/v<version>/computer-use-linux` ——\n   插件缓存。**与上游 Claude Code / Codex 插件完全相同的布局**，所以一次下载即可服务机器上所有宿主。\n3. `@agent-sh/computer-use-linux` npm 包（若已安装）。\n4. `PATH` 上的 `computer-use-linux`。\n5. 从 GitHub release 下载，并与发布的 `.sha256` 校验。"
+    },
+    {
+      "section": "二进制如何解析",
+      "text": "下载采用「先落临时文件再重命名」，因此并发的首次启动与被中断的下载都不会留下半截二进制。\n版本与镜像可覆盖：`COMPUTER_USE_LINUX_VERSION`、`COMPUTER_USE_LINUX_DOWNLOAD_BASE`、\n`COMPUTER_USE_LINUX_SKIP_DOWNLOAD`。\n每一项的含义与何时该用它，见\n[docs/installation.zh-CN.md](docs/installation.zh-CN.md#二进制解析)。"
+    },
+    {
+      "section": "这个 bundle 新增了什么",
+      "text": "```yaml"
+    },
+    {
+      "section": "cordis.patch.yml —— 完整的声明式集成面",
+      "text": "- insert:\n    - id: mcp-computer-use-linux      # 一行 MCP server，工具名为 mcp__cul__*\n      name: '@deepseek-ai/dsh-mcp-client'\n      ...\n    - id: dsh-computer-use-linux      # JS 那半：skill + provider 槽位\n      name: 'dsh-computer-use-linux'\n```\n\n其余都在插件入口（`lib/index.js`）里："
+    },
+    {
+      "section": "cordis.patch.yml —— 完整的声明式集成面",
+      "text": "| 贡献 | 机制 | 为什么不用 patch |\n| --- | --- | --- |\n| 那 18 个桌面工具 | `@deepseek-ai/dsh-mcp-client` 的 stdio 行 | — |\n| `computer-use-linux` skill | `ctx.skills.register()` | `skill-filesystem.bundledSkillDir` 是**单一**槽位，默认值为 `$DSH_BUNDLED_SKILL_DIR`；覆盖它会挤掉别的占用者 |\n| Provider 互斥 | 当注册表已挂载时调用 `ctx.computerUse.register()` | 需要运行时服务访问 |\n| 二进制诊断 | 激活时打一行日志 | 需要运行时 |\n\nlauncher 路径通过锚定在 *profile* 目录（`baseUrl`）上的\n`createRequire` 解析，绝不硬编码，因此在任意 `$DSH_HOME` 下的任意 profile 都能工作，也能扛住 pnpm store 的目录布局。"
+    },
+    {
+      "section": "cordis.patch.yml —— 完整的声明式集成面",
+      "text": "server 需要的那些桌面会话变量（`WAYLAND_DISPLAY`、`DISPLAY`、\n`XAUTHORITY`、`XDG_RUNTIME_DIR`、`DBUS_SESSION_BUS_ADDRESS`、\n`XDG_CURRENT_DESKTOP`、`DESKTOP_SESSION`、`YDOTOOL_SOCKET`，以及\n`COMPUTER_USE_LINUX_*` 开关）**不会**在 patch 里重复声明：\nmcp-client 的凭据清洗只丢匹配 `/KEY|PASSWORD|SECRET|TOKEN/i` 和 `DSH_*`\n的名字，所以它们能原样到达 server。"
+    },
+    {
+      "section": "Provider 互斥",
+      "text": "如果同一套组合里挂载了 `@deepseek-ai/dsh-computer-use`，本插件会占用唯一的 computer-use provider 槽位\n（`ctx.computerUse.register('dsh-computer-use-linux')`）。这样第二个桌面驱动会注册失败，而不是悄悄和它抢指针。如果该注册表不存在（标准 profile），插件只打一条日志然后继续；工具不受影响。"
+    },
+    {
+      "section": "安全",
+      "text": "这些工具会改变真实应用的状态。\n\n- `doctor`、`list_apps`、`list_windows`、`focused_window`、`get_app_state`\n  是只读的。`click`、`drag`、`press_key`、`type_text`、`perform_action` 与\n  `set_value` 带有 `destructiveHint` —— 它们可以在被指向的任意应用里提交、删除、发送或购买。\n- 焦点是全局的：激活窗口会抢走用户的键盘。\n- 截图可能拍到密钥；`get_app_state` 支持\n  `include_screenshot: false`。\n- `ydotoold` 会让任何能触及它 socket 的进程获得完整的输入合成能力。\n  请把 socket 放在用户运行时目录（`0600`），绝不要放 `/tmp`。\n- 屏幕上的指示器会显示 agent 正在做什么。请保持开启。\n- 会话审批策略依然生效；harness 会按自己的策略在调用前询问，这些工具不会绕过它。"
+    },
+    {
+      "section": "故障排查",
+      "text": "先跑 `node scripts/doctor.mjs`，再看\n`skills/computer-use-linux/references/troubleshooting.md` 里的 DSH 侧清单（工具没出现、调用失败、超时、截图变成文本）以及完整的环境变量参考。"
+    },
+    {
+      "section": "开发",
+      "text": "要改插件本身？按[安装](#从本地检出安装开发用)里的本地路径命令安装检出，改完重启 harness。目录结构：\n\n```\nlib/binary.mjs        二进制解析、带校验的下载、server 执行\nlib/mcp-probe.mjs     无依赖的 MCP stdio 探针（selftest 与测试共用）\nlib/skill.mjs         内置 skill 的 frontmatter 加载器\nlib/index.js          插件入口：注册 skill + 占用 provider 槽位\n\n这里用 `node --test` 而不是引入 runner 依赖：本包运行时就跑在 DSH\n自己的 Node/Electron 上，所以测试直接针对那个运行时，而包本身保持零依赖。\n\n维护者：发布、CI 与 release 机制见\n[docs/releasing.zh-CN.md](docs/releasing.zh-CN.md)。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT。见 [LICENSE](LICENSE) 与 [THIRD_PARTY.md](THIRD_PARTY.md) —— 桌面引擎是\n[agent-sh/computer-use-linux](https://github.com/agent-sh/computer-use-linux)\n（MIT），内置 skill 改编自它。"
+    }
+  ],
+  "skipped": []
+}

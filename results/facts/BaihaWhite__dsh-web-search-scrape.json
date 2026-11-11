@@ -1,0 +1,426 @@
+{
+  "repo": "BaihaWhite/dsh-web-search-scrape",
+  "commit": "0d10fe4c14f57b6f832ab0e966bad891b9356123",
+  "extracted_at": "2026-11-11T08:06:48.404450+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 117875,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 1972,
+      "Markdown": 417,
+      "Other": 51,
+      "YAML": 67
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "web-search-scrape",
+    "version": "1.3.1",
+    "private": true,
+    "type": "module",
+    "license": "MIT",
+    "description": "Six-tier web search provider for the ctx.web seam: free local scraping with a billing-guarded official fallback (allowOfficial, default off), a tier-capable web_search_deep tool a preset cannot shadow, and a settings card.",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "web-search",
+      "scrape",
+      "cordis"
+    ],
+    "homepage": "https://github.com/BaihaWhite/dsh-web-search-scrape#readme",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/BaihaWhite/dsh-web-search-scrape.git"
+    },
+    "bugs": {
+      "url": "https://github.com/BaihaWhite/dsh-web-search-scrape/issues"
+    },
+    "files": [
+      "lib/",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "publishConfig": {
+      "registry": "https://registry.npmjs.org/",
+      "access": "public"
+    },
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "engines": {
+        "dsh": ">=0.1.5-rc.2"
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-store",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# web-search-scrape bundle patch.\n#\n# Shipped as this package's `dsh.bundle.patch` (see package.json), so installing\n# the plugin as a profile dependency makes the loader apply this layer for you —\n# no hand-editing of the profile's own cordis.patch.yml. The layer is applied\n# over dsh-base, in bundle order.\n#\n# Manual installs (clone + symlink) do NOT apply this automatically; copy the\n# entries below into ~/.dsh/profiles/<name>/cordis.patch.yml instead.\n\n# 1) Point the web seam's search at this plugin's router provider. The router\n#    then chooses per the settings card's `backend` (local scraping vs the\n#    built-in official search).\n#    NB: patch semantics REPLACE a row's whole `config`, so re-state every field\n#    the row needs — `fetchProvider` would otherwise be dropped.\n- id: web\n  config:\n    searchProvider: web-scrape\n    fetchProvider: http\n\n# 2) The built-in tool-web row provides `web_search`/`web_fetch` on the profile\n#    plane wherever it is enabled. Disable only its SEARCH so this plugin's\n#    `web_search` can register without a same-scope name collision; leave fetch\n#    enabled (the model keeps `web_fetch`).\n#    Patch semantics replace the whole config, so re-state `fetch` and the\n#    timeouts even though only `search` changes.\n- id: tool-web\n  config:\n    fetch: true\n    search: false\n    searchTimeoutMs: 60000\n    searchMaxResults: 8\n    searchMaxQueries: 4\n\n# 3) web-search-deepseek stays ENABLED on purpose: it is the delegation target\n#    for `backend: official` and it owns the official \"Web search\" settings card\n#    (endpoint / model / key). Its own `deepseek-official` provider is never\n#    selected, because entry 1 pins `searchProvider` to `web-scrape`.\n\n# 4) Mount this plugin's row.\n- insert:\n    - id: web-search-scrape\n      name: 'web-search-scrape'\n      config:\n        # local = six-tier scraping pipeline (calls no paid API)\n        # official = delegated DeepSeek search — BILLED per token\n        backend: local\n        # Billing guard: `backend: official` alone does nothing while this is\n        # false. The official path then refuses and makes no network call, so a\n        # stray backend value cannot produce an invoice. Flip both to use it.\n        allowOfficial: false\n        # Cap the AUTO tier at 3. Tiers 4-6 spawn an LLM \"WebSearch\" subagent,\n        # billed on the session's own model, and autoTier escalates on ordinary\n        # words (分析 / 对比 / 趋势 / 报告) — so an uncapped auto tier can buy an\n        # LLM child from a keyword. An explicit `tier` argument is unaffected;\n        # raise this to 6 to restore silent escalation.\n        maxAutoTier: 3\n        # also register `web_search_deep`, the tier-capable surface a preset\n        # cannot shadow (see README: \"为什么有两个工具\")\n        deepTool: true\n        engines: [duckduckgo, bing, baidu, google, yandex]\n        socials: [weixin, bilibili, weibo, x, zhihu, douyin, reddit]\n        verify: true\n        subagentVerify: true\n        defaultTier: 0\n        toolBudgetMs: 300000\n        searchMaxResults: 130\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "html.duckduckgo.com",
+      "url": "https://html.duckduckgo.com/html/?q=${encodeURIComponent(query",
+      "where": "lib/index.js:393"
+    },
+    {
+      "host": "lite.duckduckgo.com",
+      "url": "https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query",
+      "where": "lib/index.js:394"
+    },
+    {
+      "host": "cn.bing.com",
+      "url": "https://cn.bing.com/search?q=${encodeURIComponent(query",
+      "where": "lib/index.js:404"
+    },
+    {
+      "host": "cn.bing.com",
+      "url": "https://cn.bing.com/search?q=${encodeURIComponent(query",
+      "where": "lib/index.js:405"
+    },
+    {
+      "host": "www.baidu.com",
+      "url": "https://www.baidu.com/s?wd=${encodeURIComponent(query",
+      "where": "lib/index.js:417"
+    },
+    {
+      "host": "m.baidu.com",
+      "url": "https://m.baidu.com/s?wd=${encodeURIComponent(query",
+      "where": "lib/index.js:418"
+    },
+    {
+      "host": "www.google.com",
+      "url": "https://www.google.com/search?q=${encodeURIComponent(query",
+      "where": "lib/index.js:424"
+    },
+    {
+      "host": "yandex.com",
+      "url": "https://yandex.com/search/?text=${encodeURIComponent(query",
+      "where": "lib/index.js:432"
+    },
+    {
+      "host": "yandex.ru",
+      "url": "https://yandex.ru/search/?text=${encodeURIComponent(query",
+      "where": "lib/index.js:433"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/${idMatch[1",
+      "where": "lib/index.js:452"
+    },
+    {
+      "host": "x.com${href",
+      "url": "https://x.com${href",
+      "where": "lib/index.js:485"
+    },
+    {
+      "host": "www.douyin.com",
+      "url": "https://www.douyin.com/video/${match[1",
+      "where": "lib/index.js:539"
+    },
+    {
+      "host": "www.reddit.com${post.permalink",
+      "url": "https://www.reddit.com${post.permalink",
+      "where": "lib/index.js:558"
+    },
+    {
+      "host": "weixin.sogou.com${href",
+      "url": "https://weixin.sogou.com${href",
+      "where": "lib/index.js:573"
+    },
+    {
+      "host": "search.bilibili.com",
+      "url": "https://search.bilibili.com/all?keyword=${encodeURIComponent(query",
+      "where": "lib/index.js:585"
+    },
+    {
+      "host": "s.weibo.com",
+      "url": "https://s.weibo.com/weibo?q=${encodeURIComponent(query",
+      "where": "lib/index.js:590"
+    },
+    {
+      "host": "twitter.com",
+      "url": "https://twitter.com/search?q=${encodeURIComponent(query",
+      "where": "lib/index.js:595"
+    },
+    {
+      "host": "www.zhihu.com",
+      "url": "https://www.zhihu.com/search?type=content&q=${encodeURIComponent(query",
+      "where": "lib/index.js:600"
+    },
+    {
+      "host": "www.douyin.com",
+      "url": "https://www.douyin.com/search/${encodeURIComponent(query",
+      "where": "lib/index.js:605"
+    },
+    {
+      "host": "old.reddit.com",
+      "url": "https://old.reddit.com/search.json?q=${encodeURIComponent(query",
+      "where": "lib/index.js:610"
+    },
+    {
+      "host": "weixin.sogou.com",
+      "url": "https://weixin.sogou.com/weixin?type=2&query=${encodeURIComponent(query",
+      "where": "lib/index.js:617"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BaihaWhite/dsh-web-search-scrape#readme",
+      "where": "package.json:16"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BaihaWhite/dsh-web-search-scrape.git",
+      "where": "package.json:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BaihaWhite/dsh-web-search-scrape/issues",
+      "where": "package.json:22"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "package.json:31"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-09-13T17:46:30Z",
+    "created_at": "2026-09-13T12:30:06Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-web-search-scrape",
+      "text": "DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。\n\n用 Node 内置 `fetch` 直接抓取搜索引擎与社交平台的公开结果页，为 `ctx.web` 注册一个名为 `web-scrape` 的搜索 provider，并接管模型侧的 `web_search` 工具——**无需任何搜索 API key**。"
+    },
+    {
+      "section": "功能",
+      "text": "- **可切换搜索后端**：设置卡片里选 `backend`，即时生效、无需重启 ——\n  - `local`（默认）：本插件的六档抓取管线；\n  - `official`：复用内置 `@deepseek-ai/dsh-web-search-deepseek` 的 provider（进程内委托），端点/模型/密钥仍由官方「Web search」卡片管理。\n- **六档检索深度（T1 极速 → T6 研究）**：模型可传 `tier` 参数，缺省时按查询特征自动选档。\n- **双池引擎**：P0 搜索引擎池 + P1 社交平台池，按档位取前 N 个。\n- **可选验证与子代理查证**：确定性启发式评级（域名信誉 + 相似度聚类），T4 以上派发 WebSearch 子代理分诊，T5/T6 可用 `curl` 打开页面核查上游来源，输出证据等级。\n- **设置页卡片**：浏览器半在「设置 → 插件」注册配置卡片，配置经 `dsh-settings` 持久化。\n  **卡片默认收起**（与同页其他插件卡片一致），点标题栏展开；展开状态记在\n  `localStorage`（键 `web-search-scrape.card.open`），收起时会显示一行摘要\n  （当前后端 / 缺省档位 / 是否有未保存修改）。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\n.\n├── package.json      # 包元信息（name/exports/dsh.engines/dsh.client 声明）\n├── LICENSE           # MIT\n├── cordis.patch.yml  # 随包补丁（dsh.bundle.patch），安装时自动应用\n\n> 本仓库直接存放可运行的 ESM 源码，无构建步骤：`lib/*.js` 即发布产物。"
+    },
+    {
+      "section": "1.3.1",
+      "text": "修复 DuckDuckGo 解析的两个缺陷（会导致**结果重复**与**静默丢结果**）：\n\n- **`uddgUrl` 对非跳转的直接链接返回空串** —— `parseDdgHtml` 里 `if (!url) continue`\n  因此把 DDG 给出的直链结果**全部丢弃**。现在无 `uddg=` 参数时回退为直链本身\n  （与既有 `yandexUrl` 的写法一致；`cleanUrl` 仍负责过滤非 http(s) 的 href）。\n- **`parseDdgLite` 未解包 `l/?uddg=` 跳转** —— lite 端点的包装链接与 html 端点的直链\n  在调用方 `seen` 集合里是两个不同的 URL，去重不上，同一篇文章会在一次结果里出现两次。\n  现在 lite 同样走 `uddgUrl`。\n\n实测（同一查询）：结果里 URL 含 `duckduckgo.com/l/` 的条数由 5 降为 **0**。"
+    },
+    {
+      "section": "1.3.0",
+      "text": "- **新增 `allowOfficial`（默认 `false`）—— 计费硬保险**：`backend: official` 从此不再等于消费许可。\n  未授权时官方路径直接抛错、**零网络请求**，误改配置不会产生账单。要用官方搜索需显式打开。\n- **新增 `maxAutoTier`（随包补丁默认 `3`）**：T4–T6 会派发 LLM 子代理（按会话模型计费），\n  而 `autoTier` 会被「分析/对比/趋势/报告」这类常见词抬到 T5 —— 自动档位封顶可避免静默产生\n  模型费用；模型显式传 `tier` 不受上限影响。\n- README 新增「计费」章节：两处成本点、各自的硬开关、实测证据，以及最省心的配置片段。"
+    },
+    {
+      "section": "1.2.0",
+      "text": "- **新增 `web_search_deep` 工具**（`deepTool`，默认开）：DSH `>= 0.1.5` 把模型侧的\n  `web_search` 移到了 agent 预设平面，预设的同名工具会遮蔽本插件的注册，导致 `tier`\n  传不进来、且结果被预设的 `searchMaxResults: 8` 截断。名字不同的工具不会被遮蔽，\n  深度控制因此在任何预设下都可用。详见上文「为什么有两个工具」。\n- **新增 `dsh.bundle.patch`**：仓库自带 `cordis.patch.yml`，安装时由 loader 自动并入\n  profile 层栈 —— **不再需要手工编辑 profile 的补丁文件**。方式 B（符号链接）仍需手工应用。"
+    },
+    {
+      "section": "1.1.0",
+      "text": "- **新增 `backend` 设置**：可在「设置 → 插件」卡片里于 `local`（本地六档抓取）与 `official`（内置 DeepSeek 搜索）之间实时切换，无需重启。\n- **设置卡片改为默认收起**：标题栏可点开/收起，展开状态持久化到 `localStorage`，收起时显示一行摘要。\n- **修复 DSH 0.1.5-rc.2 兼容性**（1.0.0 在该版本上会直接加载失败）：\n  - 设置 API 迁移到 `ctx.settings.installSection(...)`（`installSettingsSection` / `settingsNamespace` 已从 `dsh-settings` 移除）。\n  - 修正 `setSource` 的 thunk 语义：旧代码把 `() => T` 当值用，导致**设置卡片改了不生效**。\n  - 浏览器半：`@deepseek-ai/dsh-client-runtime` → `@deepseek-ai/dsh-client-store`。\n  - 浏览器半：设置卡片注册改用 keyed slot 要求的 `key`（原 `id` 会**抛错**导致卡片不显示）。\n- 新增 MIT LICENSE；`package.json` 补 `dsh.engines.dsh` 版本要求。"
+    },
+    {
+      "section": "1.0.0",
+      "text": "- 首个版本：六档分级抓取式检索。"
+    },
+    {
+      "section": "为什么有两个工具：`web_search` 与 `web_search_deep`",
+      "text": "DSH `>= 0.1.5` 把**面向模型的 `web_search` 工具挪到了 agent 预设平面**（每个预设里的\n`tool-web` 行，作用域是 agent 级）。按 `dsh-scope` 的层级语义，**agent 级的同名工具会遮蔽\n本插件在 profile 层注册的同名工具**。实测证据：实时工具列表里 `web_search` 的参数是\n`queries`（数组），不是本插件的 `query` + `tier`。\n\n这带来两个后果：\n\n1. **`tier` 参数传不进来** —— 模型无法显式指定深度，只能靠查询特征自动选档，或用设置卡片里的 `defaultTier` 固定档位；\n2. **结果被截到 8 条** —— `tool-web` 的 `searchMaxResults` 默认是 `8`，而 seam 会按请求的 `maxResults` 截断返回值。也就是说即便 T5/T6 抓了 50+80 条，模型最终也只看得到 8 条。"
+    },
+    {
+      "section": "为什么有两个工具：`web_search` 与 `web_search_deep`",
+      "text": "**解决方式**：本插件同时注册一个**名字不同**的工具 `web_search_deep`。名字不同就不会被遮蔽\n（没有别的注册者占用该名字），并且它按本插件的配置发请求（`searchMaxResults: 130`），\n所以深度控制和结果预算在任何预设下都可用，**不需要用户切换或改造预设**。\n\n| 工具 | 注册者 | 何时生效 | 参数 | 结果上限 |\n|------|--------|----------|------|----------|\n| `web_search` | 预设的 `tool-web`（0.1.5+） | 总是（遮蔽本插件的同名注册） | `queries: string[]` | 8（预设配置） |\n| `web_search` | 本插件 | 仅当预设**不带** web 工具时 | `query`, `tier` | 130（本插件配置） |\n| `web_search_deep` | 本插件 | **总是**（名字不冲突） | `query`, `tier` | 130（本插件配置） |"
+    },
+    {
+      "section": "为什么有两个工具：`web_search` 与 `web_search_deep`",
+      "text": "三个都走同一个 provider，所以无论模型点哪一个，六档管线、消息甄别、多源验证都在生效。\n不想多一个工具就把 `deepTool` 设为 `false`。\n\n> **想要\"只留一个工具\"？** 见下一节的预设配方。"
+    },
+    {
+      "section": "💰 计费：什么时候会花钱，怎么保证不会",
+      "text": "抓取本身**永远免费**（只是 HTTP 抓公开结果页）。会产生费用的只有两处，两处都有硬开关：\n\n| # | 成本点 | 计费方式 | 默认 | 硬保险 |\n|---|--------|----------|------|--------|\n| A | `backend: official` | 走 `{baseURL}/messages`（Anthropic 兼容 Messages API），**按 token 计费** | `local`（免费） | **`allowOfficial: false`** |\n| B | 档位 T4–T6 的 WebSearch 子代理 | 派生一个 LLM 子代理，**按会话所用模型计费** | 仅显式 T4+ 触发 | **`maxAutoTier: 3`** |"
+    },
+    {
+      "section": "A. 官方搜索：双重开关",
+      "text": "`allowOfficial` 默认 **false**。此时即使 `backend` 被写成 `official`，插件也会**拒绝执行并直接抛错**，\n**一个请求都不会发出**：\n\n```\nbackend is \"official\" but allowOfficial is false — refusing to call the billed\nDeepSeek search API. To allow billed official searches, enable \"allowOfficial\"\nin this plugin's settings card. To keep searching for free, set backend back to \"local\".\n```"
+    },
+    {
+      "section": "A. 官方搜索：双重开关",
+      "text": "也就是说：`backend: official` **本身不是消费许可**。要真的用官方搜索，必须**两个都打开**\n（卡片里选「官方 DeepSeek 搜索（⚠️ 按 token 计费）」+ 打开「⚠️ 允许计费 API」）。\n要回到免费，把 backend 切回 `local` 即可，无需清理 `allowOfficial`。\n\n> 实测：`allowOfficial: false` + `backend: official` → `available()` 返回 false，\n> `search()` 抛 `WEB_PROVIDER_UNAVAILABLE`，官方 API 调用次数 **0**。"
+    },
+    {
+      "section": "B. T4–T6 子代理：自动档位可能\"静默\"升档",
+      "text": "T4 起会派生一个 LLM 子代理做分诊。它的费用不在搜索 API 上，而在**你当前会话的模型**上。\n麻烦的是 `autoTier` 的关键词表包含 `分析` `对比` `趋势` `报告` 这类**极常见的词**：\n\n```\n查询「对比一下这两款产品并分析趋势」  →  autoTier 选中 T5（派发子代理）\n```\n\n`maxAutoTier` 就是给自动档位设天花板。默认随包补丁给的是 **3**，即：\n\n- 自动档位最高到 T3（全引擎 + 1 个社媒，纯抓取，**零模型费用**）；\n- 模型**显式**传 `tier: 5` 仍然照做（`maxAutoTier` 只约束自动分支）；\n- 想恢复原有行为（不设限）就改成 `6`。\n\n```yaml\nmaxAutoTier: 3   # 1-6；3 = 自动最高到\"标准\"，T4-T6 只能显式调用\n```\n\n想彻底关掉子代理（连显式 T5/T6 也不派发），把 `subagentVerify` 设为 `false`。"
+    },
+    {
+      "section": "最省心的配置",
+      "text": "```yaml\nbackend: local          # 不碰付费搜索 API\nallowOfficial: false    # 就算 backend 写错也不会请求\nmaxAutoTier: 3          # 自动档位不会静默买 LLM 子代理\nsubagentVerify: false   # 连显式 T5/T6 也不派发子代理（可选，最严格）"
+    },
+    {
+      "section": "配方：用自定义预设做「正统替换」",
+      "text": "如果你更想要**一个** `web_search`（而不是 `web_search` + `web_search_deep` 两个），可以做一个\n自定义 agent 预设，把模型侧的搜索工具交还给本插件。这是平面上更\"正统\"的做法：模型侧工具\n本来就归预设管，改预设即可，不需要和遮蔽机制对抗。\n\n**代价**：只在选了该预设的会话里生效，新建会话时需要切一下预设。"
+    },
+    {
+      "section": "步骤",
+      "text": "**1)** 从官方 `standard` 复制一份到用户预设根 `${DSH_HOME:-~/.dsh}/.agent-presets/<id>/`：\n\n```sh\nmkdir -p ~/.dsh/.agent-presets/dsh-scrape\nP=<dsh 安装目录>/node_modules/@deepseek-ai/dsh-agent-presets/presets/standard\ncp \"$P/agent.cordis.yml\" \"$P/preset.yml\" ~/.dsh/.agent-presets/dsh-scrape/\n```\n\n也可以在 GUI「设置 → Agent 预设」里用\"复制\"完成这一步。\n\n**2)** 把复制出来的 `agent.cordis.yml` 里的 `tool-web` 行改成：\n\n```yaml\n- id: tool-web\n  name: '@deepseek-ai/dsh-tool-web'\n  config:\n    fetch: true        # web_fetch 仍由这里提供"
+    },
+    {
+      "section": "步骤",
+      "text": "**3)** 改 `preset.yml` 的 `name` / `description`（可选，否则选择器里只有目录名）。\n\n**4)** 新建会话时选这个预设。模型侧就只剩本插件的 `web_search`，**带 `tier` 参数**，\n结果上限取本插件的 `searchMaxResults`（默认 130，不再是预设的 8）。"
+    },
+    {
+      "section": "验证",
+      "text": "不必先开会话，可以让宿主单独组合一遍这个预设（真实 mount，但不启动任何会话）：在 `cordis`\n预设的会话里用动态 Cordis 插件注入 `agentPresets`，调用 `standingKeyFor('<预设 id>')` ——\n正常返回即组合可用；抛错会给出四种失败原因之一（包无法解析 / config 非法 / 有行未激活 /\n行把服务发布到了进程全局域）。\n\n> 注意 `standingKeyFor` 是一次**真实 mount**：成功后会在该进程内驻留一个 standing\n> generation 直到进程退出；失败则清理干净、不留痕迹。"
+    },
+    {
+      "section": "撤销",
+      "text": "```sh\nrm -rf ~/.dsh/.agent-presets/<id>\n```\n\n再把新会话切回 `standard` 即可 —— **已经在跑的会话仍用它启动时的预设**，不受影响。"
+    },
+    {
+      "section": "六档深度",
+      "text": "| 档位 | 名称 | 耗时量级 | 引擎 | 社交 | 结果数 | 验证方式 |\n|------|------|----------|------|------|--------|----------|\n| T1 | 极速 | ~4s | 1 | 0 | 6 | 不验证 |\n| T2 | 快速 | ~10s | 2 | 0 | 10 | 启发式评级 |\n| T3 | 标准 | ~20s | 全部 | 1 | 20+10 | 启发式评级 |\n| T4 | 增强 | ~60s | 全部 | 全部 | 50+80 | 子代理分诊 |\n| T5 | 深度 | ~150s | 全部 | 全部 | 50+80 | 子代理 + ≤6 页核实 |\n| T6 | 研究 | ~280s | 全部 | 全部 | 50+80 | 子代理 + ≤15 页多轮阅读 |\n\n`engines` / `socials` 配置是**池**：档位按配额取前 N 项（T1=1 个引擎，T2=2 个，T3 及以上=全部）。"
+    },
+    {
+      "section": "引擎池",
+      "text": "- **P0 搜索引擎**：`duckduckgo`、`bing`、`baidu`、`google`、`yandex`\n- **P1 社交平台**：`weixin`、`bilibili`、`weibo`、`x`、`zhihu`、`douyin`、`reddit`"
+    },
+    {
+      "section": "前置条件",
+      "text": "- **DSH `>= 0.1.5-rc.2`**（见 `package.json` 的 `dsh.engines.dsh`）。本插件直接引用若干宿主包的内部 API，跨小版本可能断裂：\n  - `ctx.settings.installSection(...)`（`dsh-settings`，0.1.5-rc.2 起；旧的 `installSettingsSection` / `settingsNamespace` 导出已移除）\n  - `createSnapshotStore` 来自 `@deepseek-ai/dsh-client-store`（旧的 `dsh-client-runtime` 已不存在）\n  - 设置卡片注册到 `settings.plugin.item` 这个 **keyed** slot，必须传 `key`（命名空间）而非 `id`\n  - `DeepSeekSearchProvider` / `WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE`（`backend: official` 委托用）\n- DSH 已安装，且使用 `web` profile（`~/.dsh/profiles/web`）。\n- `pnpm-workspace.yaml` 建议包含 `nodeLinker: hoisted`：本插件不声明依赖（宿主包由 DSH 提供），严格布局下包解析可能失败。\n- 本仓库为**公开**仓库，git 安装无需任何认证。"
+    },
+    {
+      "section": "方式 A：从 GitHub 安装（推荐，零配置）",
+      "text": "**本插件不需要发布到 npm** —— GitHub 即可完整分发，三条路径任选：\n\n```sh"
+    },
+    {
+      "section": "A1) 装最新（跟 main）",
+      "text": "dsh plugin --profile web add github:BaihaWhite/dsh-web-search-scrape"
+    },
+    {
+      "section": "A2) 锁定版本（tag，推荐生产用）",
+      "text": "dsh plugin --profile web add github:BaihaWhite/dsh-web-search-scrape#v1.3.0"
+    },
+    {
+      "section": "A3) Release tarball（无需 git，走 HTTPS 下载）",
+      "text": "dsh plugin --profile web add \\\n  https://github.com/BaihaWhite/dsh-web-search-scrape/releases/download/v1.3.0/web-search-scrape-1.3.0.tgz\n```\n\n`dsh plugin` 是 pnpm 的包装命令：写完依赖后会**按已安装状态重整 profile 的层栈** —— 任何声明了\n`dsh.bundle` 的依赖会自动加入 `dsh.profile.bundles`，而本仓库正是这样声明的：\njson\n\"dsh\": { \"bundle\": { \"patch\": \"./cordis.patch.yml\" } }\n```"
+    },
+    {
+      "section": "A3) Release tarball（无需 git，走 HTTPS 下载）",
+      "text": "于是仓库自带的 [`cordis.patch.yml`](./cordis.patch.yml) 会作为一层补丁自动应用\n（`web.searchProvider` 改指本插件、停用 `tool-web` 的 search、插入本插件行）——\n**不需要手工编辑 profile 的 `cordis.patch.yml`**。装完重启 `dsh web` 即可。\n\n> 该机制按 node_modules 里**解析到的依赖**判定，与来源无关：git / tarball / link / npm 都成立。\n> 已装过的用户升级后同样生效：`dsh plugin --profile web update` 会重新对账层栈。\n\n> 仓库带有 `dsh-plugin` topic，因此也会被 DSH 插件商店（按 GitHub topic 检索）收录。\n>\n> 若发布了 npm 版本，也可用 `dsh plugin --profile web add web-search-scrape`（短名 + semver），\n> 但那只是便利性差异，**不是分发的前提**。"
+    },
+    {
+      "section": "发布到 npm（可选，本项目不需要）",
+      "text": "本仓库**以 GitHub 分发**，`package.json` 保留了 `\"private\": true` 以防手滑误发\n（npm 会以 `EPRIVATE` 拒绝）。若哪天真要发 npm：\n\n```sh"
+    },
+    {
+      "section": "2) 本机默认 registry 是 npmmirror 只读镜像，publishConfig 已锁定官方源",
+      "text": "npm login --registry https://registry.npmjs.org/\nnpm publish          # publishConfig 会把包发到 registry.npmjs.org\n```\n\n包名 `web-search-scrape` 目前未被占用（2026-09 核对）。"
+    },
+    {
+      "section": "方式 B：本地目录 + 符号链接（开发调试）",
+      "text": "> 注意：克隆目录**必须放在 profile 目录内**（如下），否则 Node 按真实路径解析裸导入时\n> 找不到宿主包。放到 `/tmp` 之类的目录会报 `Cannot find package '@deepseek-ai/dsh-...'`。\n>\n> 方式 B **不会**自动应用仓库自带的补丁，需要手工把 `cordis.patch.yml` 的内容复制进\n> profile 的补丁层（见下一节）。\n\n```sh\ncd ~/.dsh/profiles/web\ngit clone https://github.com/BaihaWhite/dsh-web-search-scrape.git web-search-scrape\nln -s ../web-search-scrape node_modules/web-search-scrape\n```\n\n符号链接让补丁里的 `name: 'web-search-scrape'` 能被解析到包目录。"
+    },
+    {
+      "section": "手动安装时的补丁配置",
+      "text": "方式 A 会自动应用，**此节仅方式 B（或想自定义）时需要**。把以下条目加进\n`~/.dsh/profiles/web/cordis.patch.yml`（内容与仓库自带补丁一致）：\n\n```yaml"
+    },
+    {
+      "section": "本插件是该 id 的 router：真正走哪条后端由设置卡片的 backend 决定。",
+      "text": "- id: web\n  config:\n    searchProvider: web-scrape"
+    },
+    {
+      "section": "2) tool-web 行：停用内置 web_search，交给本插件注册同名工具",
+      "text": "- id: tool-web\n  config:\n    fetch: false\n    search: false\n    searchTimeoutMs: 180000\n    searchMaxResults: 130"
+    },
+    {
+      "section": "4) 挂载本插件",
+      "text": "- insert:\n    - id: web-search-scrape\n      name: 'web-search-scrape'\n      config:\n        backend: local          # local | official（设置卡片里可随时切换）\n        engines: [duckduckgo, bing, baidu, google, yandex]\n        socials: [weixin, bilibili, weibo, x, zhihu, douyin, reddit]\n        verify: true\n        subagentVerify: true\n        defaultTier: 0\n        toolBudgetMs: 300000\n        searchMaxResults: 130\n```"
+    },
+    {
+      "section": "生效",
+      "text": "```sh"
+    },
+    {
+      "section": "预检：确认没有 Cannot find package 报错",
+      "text": "dsh --profile web --dump-config | grep -i \"cannot find\""
+    },
+    {
+      "section": "重启 dsh web（页面刷新不够）",
+      "text": "```"
+    },
+    {
+      "section": "配置项",
+      "text": "| 字段 | 类型 | 默认值 | 说明 |\n|------|------|--------|------|\n| `allowOfficial` | boolean | `false` | **计费硬保险**。为 false 时 `backend: official` 会被拒绝且不发请求；见上文「计费」 |\n| `maxAutoTier` | number | `6`（随包补丁给 3） | 自动档位上限，只约束自动分支；显式 `tier` 不受影响 |\n| `deepTool` | boolean | `true` | 是否额外注册 `web_search_deep`（名字不同、不被预设遮蔽、带 `tier`、结果上限取本插件的 `searchMaxResults`） |\n| `backend` | `local` \\| `official` | `local` | 搜索后端。`local` = 本插件六档抓取；`official` = 委托内置 DeepSeek 搜索。**改动即时生效**（每次搜索重新取快照） |\n| `engines` | string[] | `[duckduckgo, bing, baidu, google, yandex]` | P0 搜索引擎池 |\n| `socials` | string[] | `[weixin, bilibili, weibo, x, zhihu, douyin, reddit]` | P1 社交平台池 |\n| `engineResults` | number | `50` | 单引擎抓取结果上限 |\n| `socialResults` | number | `80` | 社交平台结果上限 |\n| `socialPerSite` | number | `30` | 单社交站点结果上限 |\n| `verify` | boolean | `true` | 是否启用启发式验证评级 |\n| `subagentVerify` | boolean | `true` | 是否派发 WebSearch 子代理查证 |\n| `subagentTimeoutMs` | number | `120000` | 子代理超时（毫秒） |\n| `subagentMaxSources` | number | `60` | 交给子代理的来源上限 |\n| `scrapeTimeoutMs` | number | `20000` | 抓取阶段截止时间（毫秒） |\n| `toolBudgetMs` | number | `60000` | `web_search` 工具层强制超时，子代理预算据此自适应 |\n| `defaultTier` | number | `0` | `0` = 自动启发式；`1`-`6` = 固定档位 |\n| `searc"
+    },
+    {
+      "section": "配置项",
+      "text": "> 档位自身拥有预算与验证模式：显式传入的 `tier` 会**覆盖**上述 `engineResults` 等字段。"
+    },
+    {
+      "section": "注意事项",
+      "text": "- `toolBudgetMs` 与工具超时相关；把工具超时改大（例如 180s）需要**重启 dsh web** 才生效。\n- 抓取的是搜索引擎/社交平台的公开结果页，对方改版或限流会导致该引擎失败——插件会记录失败项并在结果里给出说明，而非静默丢弃。\n- T5/T6 会启动子代理并可能执行 `curl` 打开外部页面，耗时与资源消耗显著高于 T1/T2。\n- 本插件开发与验证环境：DSH `0.1.0-rc.6`，profile `~/.dsh/profiles/web`。在更高版本 DSH 上使用前建议先在测试 profile 验证。"
+    },
+    {
+      "section": "卸载 / 回滚",
+      "text": "```sh"
+    },
+    {
+      "section": "方式 A 安装的：",
+      "text": "dsh plugin --profile web remove web-search-scrape"
+    },
+    {
+      "section": "方式 B 安装的：",
+      "text": "rm ~/.dsh/profiles/web/node_modules/web-search-scrape\nrm -rf ~/.dsh/profiles/web/web-search-scrape\n```\n\n随后从 `cordis.patch.yml` 中删除第 4 项 insert 段（若要恢复内置搜索，再一并删除第 1-3 项补丁），重启 `dsh web`。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT License，见 [LICENSE](LICENSE)。"
+    }
+  ],
+  "skipped": []
+}

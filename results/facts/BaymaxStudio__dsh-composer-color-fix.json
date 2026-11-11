@@ -1,0 +1,193 @@
+{
+  "repo": "BaymaxStudio/dsh-composer-color-fix",
+  "commit": "c81383d4bc978bf80ca67fde49ff03c0eeb2c4ce",
+  "extracted_at": "2026-11-11T08:10:54.995261+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 499628,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 157,
+      "Markdown": 309,
+      "Other": 21,
+      "Shell": 127,
+      "YAML": 12
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/UPSTREAM-REPORT.md",
+      "docs/diagrams/dsh-composer-color-fix.dark.png",
+      "docs/diagrams/dsh-composer-color-fix.light.png",
+      "install.sh",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-composer-color-fix",
+    "version": "0.1.0",
+    "description": "Fix for the DeepSeek Harness (DSH) composer bug where typed text becomes invisible. A client-only DSH profile bundle that detects a transparent-painted composer surface and forces the theme foreground colour back on.",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "composer",
+      "input-bar",
+      "client-plugin",
+      "workaround"
+    ],
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": []
+      }
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml"
+    ],
+    "engines": {
+      "node": ">=18"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-composer-color-fix\n#\n# Server half: a no-op cordis entry.\n#\n# This shim does all of its work in the browser (lib/client.js). The entry\n# exists only so that `dsh.profile.bundles` can name this package — the\n# client-modules registry then reads the `dsh.client` declaration from\n# package.json and serves lib/client.js into the boot graph.\n\n- insert:\n    - id: dsh-composer-color-fix\n      name: 'dsh-composer-color-fix'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/",
+      "where": "install.sh:126"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-03T05:14:40Z",
+    "created_at": "2026-09-01T12:29:42Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-composer-color-fix",
+      "text": "> **English TL;DR** — DeepSeek Harness (DSH) `0.1.1-rc.x` styles its composer `<textarea>` as\n> `color: transparent; -webkit-text-fill-color: transparent` and paints the text you actually read\n> in a sibling `.backdrop` overlay. When that overlay falls out of sync with the textarea value\n> (reliably reproducible after refreshing a long-lived session), you keep typing but **see nothing**.\n> This is a client-only DSH profile bundle that detects the transparent-painted surface at runtime\n> and forces the theme foreground colour back on. It is deliberately self-disabling: once upstream\n> ships a composer with an opaque `color`, the shim does nothing at all, so you can leave it\n> installed across upgrades."
+    },
+    {
+      "section": "dsh-composer-color-fix",
+      "text": "修复 DSH（DeepSeek Harness）输入框「**能打字但看不见字**」的问题。"
+    },
+    {
+      "section": "工作原理 / How it works",
+      "text": "<picture>\n  <source media=\"(prefers-color-scheme: dark)\" srcset=\"docs/diagrams/dsh-composer-color-fix.dark.png\">\n  <img src=\"docs/diagrams/dsh-composer-color-fix.light.png\" alt=\"DSH Composer Color Fix 安装、探测与自动退役流程\">\n</picture>\n\n<sub>主要处理路径、异常分支和人工检查点。 / The main processing path, exception branches, and human review points.</sub>\n\n---"
+    },
+    {
+      "section": "症状",
+      "text": "在一个聊了较久的会话里：\n\n1. 输入框突然完全无法输入；\n2. `Cmd+R` 刷新后能输入了，但**键入的字符不显示**——\n   光标在动、发送按钮会亮、底部状态栏字数在涨、@ 补全下拉也能弹出，\n   **就是看不见字**。\n\n新建一个会话却一切正常。所以它是**会话状态相关的 bug**，不是 DSH 整体坏了。"
+    },
+    {
+      "section": "根因",
+      "text": "在 `@deepseek-ai/dsh` **0.1.1-rc.2** 里，composer（`InputBar`）是一个**双层结构**：\n\n```css\n/* packages/client/ui-conversation/src/client/skeleton/InputBar.module.css */\n.input {\n  position: absolute;\n  color: transparent;                    /* ← 故意透明 */\n\n- 真正持有 `value` 的是 `<textarea>`，但**故意不可见**；\n- 你看到的字（含语法高亮、文件 chip、@ 引用）来自同位置的 `.backdrop` 叠加层；\n- 一旦 React 没把某次草稿更新同步进 backdrop，**value 进去了、视觉上空了**。\n\n这不是任何第三方插件造成的——`@deepseek-ai/dsh-client-ui-conversation` 的原生设计。"
+    },
+    {
+      "section": "根因",
+      "text": "一个佐证：`.input` 的注释里写着「caret is the textarea's and every visible glyph is the\nbackdrop's」，作者知道这个耦合，但没给失同步时兜底。"
+    },
+    {
+      "section": "影响范围",
+      "text": "| 版本 | 状态 |\n| --- | --- |\n| `0.1.1-rc.2`（npm `latest`，2026-08-21） | ❌ 有 bug —— 本仓库的目标版本 |\n| `0.1.2-alpha.3`（npm `alpha`，2026-08-31） | ✅ 已修：composer 重写为 Lexical `contenteditable`，`color: var(--dsw-alias-label-primary)`，透明层与 backdrop 全部移除 |\n| 更新版本（推测） | ✅ 沿用重写后的实现 |\n\n**注意**：官方仓库 `deepseek-ai/deepseek-harness` 的 issue tracker 是关闭的\n（`has_issues: false`），所以这个问题**全网没有现成的公开方案**，也没有地方提交。"
+    },
+    {
+      "section": "修复思路",
+      "text": "本 shim 不猜类名、不改选择器，只做一件事：**问浏览器「这块可编辑区域现在是不是被画成全透明了」，是就把主题前景色强行贴回去。**\n\n三个设计原则，都是为了让它在 DSH 升级后**自动退役**而不是崩掉：\n\n1. **运行时探测，不猜类名**\n   `textarea[class*=\"_input\"]` 这类写法依赖 CSS-module 哈希（`uV2eYG_`），换个构建就废。\n   这里只调 `getComputedStyle()` 看 `color` / `-webkit-text-fill-color` 的 alpha 是否为 0。\n\n2. **内联 `!important` 终结特异性军备竞赛**\n   按 CSS Cascade Level 4，作者样式的优先级是：\n   `普通声明 < 内联样式 < !important 声明 < 内联 !important`。\n   直接把属性写到元素的 `style` 上，无论未来 DSH 用什么选择器都盖不住它。"
+    },
+    {
+      "section": "修复思路",
+      "text": "3. **自废**\n   ```js\n   if (!isTransparent(fill) && !isTransparent(color)) return false;\n   ```\n   上游修好之后（alpha 提到 0.1.2+ 即生效），探针返回 false，shim 一行代码都不执行。\n   **可以放心留着跨版本升级，不用惦记卸载。**\n\n覆盖范围：`textarea` / `input` / `[contenteditable]` 全扫，`MutationObserver` 盯整棵子树\n（composer 挂载晚、切会话会重挂），外加 `focusin` + 三次延迟补偿。"
+    },
+    {
+      "section": "一键脚本（推荐）",
+      "text": "```bash\ngit clone https://github.com/BaymaxStudio/dsh-composer-color-fix.git\ncd dsh-composer-color-fix\nchmod +x install.sh\n./install.sh web          # 参数是 profile 名，默认 web\n\n脚本会：拷贝源码到 `~/.dsh/profiles/<profile>/_shims/` → 软链到 `node_modules/`\n→ 写入 `dependencies` 和 `dsh.profile.bundles` → 用 `dsh --dump-config` 自检（失败自动回滚）。\n\n**装完必须重启 DSH web 服务**——客户端 bundle 清单一只在服务启动时构建一次：\n\n```bash\npkill -f \"dsh web\"\ncd \"<你的工作区目录>\" && dsh web --no-open\n```\n\n然后在浏览器里 **Cmd+Shift+R** 硬刷新。"
+    },
+    {
+      "section": "手动安装",
+      "text": "```bash\nSHIM=~/.dsh/profiles/web/_shims/dsh-composer-color-fix\nmkdir -p \"$SHIM/lib\"\ncp package.json cordis.patch.yml \"$SHIM/\"\ncp lib/*.js \"$SHIM/lib/\"\n\n再编辑 `~/.dsh/profiles/web/package.json`，加两处：\n\n```jsonc\n{\n  \"dependencies\": {\n    \"dsh-composer-color-fix\": \"file:/Users/<你>/.dsh/profiles/web/_shims/dsh-composer-color-fix\"\n  },"
+    },
+    {
+      "section": "三个必须知道的坑",
+      "text": "1. **`dsh.profile.bundles` ≠ `dependencies`。**\n   `ClientModuleRegistry.flush()` 只扫 `bundles`。写进 `dependencies` 的包**不会**被装进\n   `__DSH_BOOT__` 清单（DSH 没有 client 插件自动发现机制）。\n2. **profile bundle 必须声明 `dsh.bundle.patch`**，指向一个 `cordis.patch.yml`，\n   否则 `loadProfile` 直接抛错。\n3. **HTML 里的 `__DSH_BOOT__` 是服务启动时一次性构建的**，注册新 bundle 后不重启不会生效。"
+    },
+    {
+      "section": "验证",
+      "text": "```bash"
+    },
+    {
+      "section": "1) profile 配置能加载",
+      "text": "dsh --profile web --dump-config"
+    },
+    {
+      "section": "2) shim 出现在启动清单里",
+      "text": "curl -s http://127.0.0.1:3080/ | grep -c \"dsh-composer-color-fix\"   # 期望 >= 1"
+    },
+    {
+      "section": "3) bundle 能被服务",
+      "text": "curl -s -o /dev/null -w \"%{http_code}\\n\" \\\n  http://127.0.0.1:3080/plugins/dsh-composer-color-fix/client.js    # 期望 200\n```\n\n浏览器里 DevTools Console 跑一行看补丁有没有打上：\n\n```js\ndocument.querySelector('textarea').dataset.dshTextFix   // 期望 \"1\"\n```\n\n打上之后 `getComputedStyle(textarea).color` 应该是实际颜色（如 `rgb(15, 17, 21)`），\n而不是 `rgba(0, 0, 0, 0)`。"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\n./install.sh --uninstall web\n```\n\n或手动三步：删软链 → 从 `package.json` 的 `dependencies` 和 `dsh.profile.bundles` 里去掉条目\n→ `rm -rf ~/.dsh/profiles/web/_shims/dsh-composer-color-fix`，然后重启 DSH。"
+    },
+    {
+      "section": "已知副作用",
+      "text": "启用后，textarea 本身的文字会显示出来，而 backdrop 仍在原位置画它的富文本层。\n因此在**粘贴图片、@ 引用文件**产生 chip 的位置，两层会有轻微叠影。\n不影响输入与发送——这是「看不见字」和「chip 偶尔叠一下」之间的取舍。"
+    },
+    {
+      "section": "给上游的话",
+      "text": "根因不在插件层，而在 `InputBar` 的双层耦合本身：把「持有 value」和「负责显示」拆到两个元素上，\n就必然要承担它们失同步的风险，且失同步时**没有降级路径**（用户拿到的是一个静默不可用的输入框）。\n\n`0.1.2-alpha.3` 改成 Lexical `contenteditable` + 正常 `color` 是对的方向。\n在此之前，更稳妥的兜底是：backdrop 未跟上时，让 textarea 自己显示文字。\n\n详细的 bug report 模板见 [`docs/UPSTREAM-REPORT.md`](docs/UPSTREAM-REPORT.md)。"
+    },
+    {
+      "section": "环境",
+      "text": "在以下环境实测通过：\n\n- macOS (darwin)，Chrome\n- `@deepseek-ai/dsh` 0.1.1-rc.2，profile `web`\n- 同时加载 8 个 profile bundle（含 `@linxin666/dsh-web-ui-all`、`@nanmicoder/dsh-agent-teams`、\n  `@omdsh-dev/dsh-genui`、`@anionex/dsh-vision-toolkit`）"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

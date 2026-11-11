@@ -1,0 +1,196 @@
+{
+  "repo": "Ayowait/dsh-send-photos",
+  "commit": "ce6686166422383f43d9a3074259a32a1b93f645",
+  "extracted_at": "2026-11-11T08:01:46.752806+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 13593,
+    "lines_by_language": {
+      "JSON": 58,
+      "JavaScript": 110,
+      "Markdown": 141,
+      "Other": 41,
+      "YAML": 13
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-send-photos",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Declare image input for relay routes whose endpoint omits modality metadata, so DeepSeek Harness admits photos instead of refusing them.",
+    "license": "MIT",
+    "type": "module",
+    "main": "index.js",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Ayowait/dsh-send-photos.git"
+    },
+    "homepage": "https://github.com/Ayowait/dsh-send-photos#readme",
+    "bugs": {
+      "url": "https://github.com/Ayowait/dsh-send-photos/issues"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin",
+      "dsh-bundle",
+      "vision",
+      "image-input",
+      "modalities"
+    ],
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "LICENSE",
+      "locale/*.json",
+      "icon.svg"
+    ],
+    "icon": "./icon.svg",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Added to a profile when this bundle is installed: one Host row that declares\n# image input on routes whose endpoint never supplied modality metadata.\n#\n#   providers   routes to cover; an empty list means every mounted route\n#   modalities  the declaration the resolver reports\n- insert:\n    - id: dsh-send-photos\n      name: dsh-send-photos\n      config:\n        providers: []\n        modalities:\n          - text\n          - image\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ayowait/dsh-send-photos.git",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ayowait/dsh-send-photos#readme",
+      "where": "package.json:13"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ayowait/dsh-send-photos/issues",
+      "where": "package.json:15"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-17T15:05:50Z",
+    "created_at": "2026-10-17T15:05:44Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-send-photos",
+      "text": "English: [README.en.md](README.en.md)\n\n让 DSH 接受本会被拒收的图片，用在那些**收得下图、却没有声明多模态能力**的中转站/反代上。"
+    },
+    {
+      "section": "问题",
+      "text": "DSH 判断一个模型能不能收图，只读 `llm-pi-ai` 解析出来的模型元数据。中转站的 `/v1/models` 通常不返回模态信息，配置里于是没有 `input`，落到默认值 `[\"text\"]`。图片在到达上游之前就被本地两道闸门拦掉：\n\n| 层 | 位置 | 表现 |\n|---|---|---|\n| 会话准入 | `dsh-api-session-controller` `prompt()` | `session/attachment-invalid`，reason `MODEL_DOES_NOT_SUPPORT_IMAGES` |\n| 请求适配 | `dsh-llm-pi-ai` `streamWithSnapshot()` | `LlmError` `UNSUPPORTED_CONTENT` |\n\n所以模型明明认得图，DSH 却在你按下发送时就拒绝。"
+    },
+    {
+      "section": "做法",
+      "text": "两道闸门读的是同一个值：adapter 的 `modelOf()` 解析出的模型对象。插件只在这个方法外面套一层，对管辖范围内的路由，把缺失的 `image` 补进 `input`。\n\n- **不写配置**：不碰 `cordis.patch.yml`，不碰 settings 文档，不动 profile。\n- **不改请求**：图片仍以标准 OpenAI image part 发出，没有编码、拆分或伪装。\n- **可逆**：插件卸载时把 `modelOf` 原样还原。\n- 只作用于存在 `modelOf` 的适配器（pi-ai 路由）。官方 DeepSeek 账号路由走另一个适配器，不受影响。\n- 监听 `llm/adapters-updated`，后挂载的路由、后新增的模型同样被覆盖。"
+    },
+    {
+      "section": "安装",
+      "text": "这是一个 DSH bundle 包（`dsh.bundle.patch`），不是普通 npm 脚本。\n\n```powershell"
+    },
+    {
+      "section": "桌面版：在插件管理器里以本地目录安装，或",
+      "text": "dsh plugin --profile <你的 profile> add link:<本目录绝对路径>\n```\n\n安装后 profile 的 `package.json` 会增加一条依赖，Loader 里多一行 `dsh-send-photos`。\n\n卸载：在插件管理器中移除该 bundle（`plugin_manager` 的 `remove_bundle`），或powershell\ndsh plugin --profile <你的 profile> remove dsh-send-photos\n```"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml\n- id: dsh-send-photos\n  name: dsh-send-photos\n  config:\n    providers: []          # 要覆盖的 route；空数组 = 全部已挂载路由\n\n只作用于某个中转站：\n\n```yaml\n    providers:\n      - my-relay\n```"
+    },
+    {
+      "section": "注意",
+      "text": "- 这是**补声明**，不是让上游变强。某个模型上游确实不收图时，请求会在上游失败；把该 route 从 `providers` 里排除即可。\n- 显式写了 `[\"text\"]` 的模型也会被覆盖（解析后无法区分“声明为纯文本”和“没声明”）。如果某个 route 上有这类模型，用 `providers` 缩小范围，或只保留需要的那条。\n- 依赖 `llm-pi-ai` 路由（`api: openai-completions` 这类）。若将来 DSH 改了适配器内部方法名，插件会打一条 warn 并保持无害的空转。\n- 在 DSH `0.2.1-rc.2` 上验证通过。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-send-photos",
+      "text": "Let DSH accept photos on relays that can see images but never say so."
+    },
+    {
+      "section": "The problem",
+      "text": "A relay's `/v1/models` usually returns no modality metadata, so the configured model declares no `input` and falls back to `[\"text\"]`. Two gates then refuse the image before it ever reaches the endpoint:\n\n| Layer | Where | Symptom |\n|---|---|---|\n| Prompt admission | `dsh-api-session-controller` `prompt()` | `session/attachment-invalid`, reason `MODEL_DOES_NOT_SUPPORT_IMAGES` |\n| Request adapter | `dsh-llm-pi-ai` `streamWithSnapshot()` | `LlmError` `UNSUPPORTED_CONTENT` |"
+    },
+    {
+      "section": "The problem",
+      "text": "The model can see images; DSH rejects the message on send anyway."
+    },
+    {
+      "section": "How it works",
+      "text": "Both gates read the same value: the model object resolved by the pi-ai adapter's `modelOf()`. This plugin wraps that method for the routes in scope and adds `image` to a model whose resolved input lacks it."
+    },
+    {
+      "section": "How it works",
+      "text": "- **No config writes** — no `cordis.patch.yml`, no settings document, no profile changes.\n- **No request rewriting** — images still go out as standard OpenAI image parts.\n- **Reversible** — unload restores the untouched resolver.\n- Only adapters exposing `modelOf` (pi-ai routes) are touched; the official DeepSeek account route uses a different adapter and is unaffected.\n- Listens for `llm/adapters-updated`, so routes mounted later are covered too."
+    },
+    {
+      "section": "Install",
+      "text": "This is a DSH bundle package (`dsh.bundle.patch`), not a plain npm package.\n\n```powershell\ndsh plugin --profile <your-profile> add link:<absolute path to this directory>\n```\n\nOr install the local directory from the plugin manager. After install the profile gains one dependency and one Loader row (`dsh-send-photos`).\n\nUninstall with `remove_bundle`, or:\n\n```powershell\ndsh plugin --profile <your-profile> remove dsh-send-photos\n```"
+    },
+    {
+      "section": "Configuration",
+      "text": "```yaml\n- id: dsh-send-photos\n  name: dsh-send-photos\n  config:\n    providers: []          # routes to cover; empty = every mounted route\n\nNarrow it to one relay:\n\n```yaml\n    providers:\n      - my-relay\n```"
+    },
+    {
+      "section": "Caveats",
+      "text": "- This **adds a declaration**; it does not make an endpoint capable. If a model genuinely rejects images, the request fails upstream — exclude that route via `providers`.\n- Models that explicitly declare `[\"text\"]` are overridden too (after resolution, \"declared text-only\" and \"never declared\" are indistinguishable). Narrow `providers` if a route mixes both.\n- Requires a `llm-pi-ai` route (`api: openai-completions` and friends). If a future DSH version renames the internal method, the plugin logs a warning and becomes a no-op.\n- Verified on DSH `0.2.1-rc.2`."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

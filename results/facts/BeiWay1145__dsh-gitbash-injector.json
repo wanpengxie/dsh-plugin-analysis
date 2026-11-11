@@ -1,0 +1,195 @@
+{
+  "repo": "BeiWay1145/dsh-gitbash-injector",
+  "commit": "1fdea5f16260151c9732d641fe1b494e80aae98f",
+  "extracted_at": "2026-11-11T08:12:05.413060+00:00",
+  "tree": {
+    "files": 15,
+    "bytes": 78031,
+    "lines_by_language": {
+      "JSON": 40,
+      "JavaScript": 1040,
+      "Markdown": 643,
+      "Other": 31,
+      "YAML": 14
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README_EN.md",
+      "cordis.patch.yml",
+      "docs/plugin-authoring-findings.md",
+      "lib/executor.js",
+      "lib/index.js",
+      "package.json",
+      "test/bash-tool.test.mjs",
+      "test/executor.test.mjs",
+      "test/guard.test.mjs",
+      "test/injection.test.mjs",
+      "test/schema.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-gitbash-injector",
+    "version": "0.1.0",
+    "description": "DSH plugin: inject a Git-for-Windows bash shell provider into selected agent sessions, without modifying or adding any agent preset.",
+    "type": "module",
+    "main": "lib/index.js",
+    "files": [
+      "lib",
+      "docs",
+      "README.md",
+      "README_EN.md",
+      "CHANGELOG.md",
+      "cordis.patch.yml",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "gitbash",
+      "shell",
+      "windows",
+      "sandbox"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/BeiWay1145/dsh-gitbash-injector.git"
+    },
+    "bugs": {
+      "url": "https://github.com/BeiWay1145/dsh-gitbash-injector/issues"
+    },
+    "homepage": "https://github.com/BeiWay1145/dsh-gitbash-injector#readme"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-gitbash-injector bundle patch layer.\n#\n# A profile BUNDLE must (a) declare `dsh.bundle.patch` in package.json and\n# (b) actually INSERT its own row here. An empty array satisfies (a) but mounts\n# nothing: the bundle layer would contribute no entry, the plugin would never be\n# imported, and (because nothing errors) the failure is silent — the plugin\n# simply never runs.\n#\n# The row is inserted with its default config. A profile's own cordis.patch.yml\n# is applied AFTER every bundle layer, so per-deployment tuning (shellPath,\n# timeoutMs, verbose, ...) is written there by id and overrides this row.\n- insert:\n    - id: gitbash-injector\n      name: dsh-gitbash-injector\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/BeiWay1145/dsh-gitbash-injector.git",
+      "where": "package.json:34"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BeiWay1145/dsh-gitbash-injector/issues",
+      "where": "package.json:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/BeiWay1145/dsh-gitbash-injector#readme",
+      "where": "package.json:39"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 5,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-09-27T07:00:22Z",
+    "created_at": "2026-09-15T14:07:51Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/executor.js",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-gitbash-injector",
+      "text": "给 **DeepSeek Harness (DSH)** 的 Windows 会话一个真正的 **Git Bash**，\n**不新增、不修改任何 agent preset**。\n\n[English](README_EN.md) | 中文\n\n[](LICENSE)\n\n```\n模型调用 bash  ->  jq --version && uname -s\n                     jq-1.7.1\n                     MINGW64_NT-10.0-26200\n```\n\n---"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "Windows 上 DSH 只装配 **PowerShell** 的 shell seam：`dsh-base` 给 `bash-sandbox`\n和 `tool-bash` 都写了 `disabled: process.platform === 'win32'`。\n\n把这两行按 id 打开**并不管用**，有两个互不相干的原因：\n\n1. **PTY** — 内核自带的持久 bash 走 PTY 后端，而 `dsh-subprocess-local`\n   在 win32 上不实现它。\n2. **沙箱** — Windows ACL 沙箱用 WRITE_RESTRICTED 令牌拉起子进程，\n   而 MSYS 运行时在受限令牌内**起不来**。它建不了 signal pipe，直接死掉：\n\n```\n   bash: *** fatal error - couldn't create signal pipe, Win32 error 5\n   ```\n   （退出码 `0xC0000142` / `STATUS_DLL_INIT_FAILED`）"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "本机实测：`Git\\bin\\bash.exe` 与 `Git\\usr\\bin\\bash.exe` **两个都一样**。\n\n本插件绕开这两个障碍：在**宿主平面**为每个 agent 提供自己的 shell 服务，\n放在一个隔离 realm 后面——这正是内核自带预设对自己服务做的事。"
+    },
+    {
+      "section": "工作原理",
+      "text": "```js\nctx.on('agent/created', ({ agent }) => {\n  const scoped = agent.ctx.isolate('shell')        // 把服务名隔离进私有 realm\n  scoped.provide('shell', gitBashExecutor)         // 用 Git Bash 而不是 pwsh\n  scoped.tools.register({ name: 'bash', ... })     // 只落进这个 agent 的层\n\n几个反直觉但关键的细节："
+    },
+    {
+      "section": "工作原理",
+      "text": "- **`isolate('shell')` 收的是字符串（服务名）**。DSH 规定宿主只能有一个\n  `ctx.shell` 提供者，所以跑第二个必须把名字隔离进子 realm。\n  传对象会隔离一个名为 `\"[object Object]\"` 的属性，随后的 `provide`\n  会以 `service \"shell\" has been registered at <SandboxPwshExecutor>` 失败。\n- **工具 schema 必须是真的 JSON Schema**。`tools.register` 把 `parameters`\n  **原样转发**给 provider，所以内核自带工具用的那种逐属性 `required: true` 写法\n  会被拒：`Invalid schema for function 'bash'`。\n  那个形状只有经 `defineTool()` 编译才合法，而插件在 kernel 的 `node_modules`\n  之外无法 import 它。"
+    },
+    {
+      "section": "安全性：诚实的边界",
+      "text": "提供者**故意不声明 `sandboxMode`**——它不受限，声称受限就是撒谎，\n而工具层会照着这个声明行动。\n\n取而代之的是**门控**：\n\n| 会话策略 | 行为 |\n|---|---|\n| `danger-full-access` | 放行 |\n| 无策略（部署未装配沙箱） | 放行 |\n| `workspace-write` / `read-only` | **拒绝**，并给出可操作指引 |\n\n拒绝而非静默绕过你要求的安全边界。工具同时暴露 `sandbox_permissions` +\n`justification`，让模型能在有审批的会话里走正常流程申请单次放宽。\n\n> **子代理里审批是禁用的**——升级会被自动拒绝。\n> 工具描述已指引模型在那种场景改用 `pwsh`（它受沙箱约束，任何策略下都能跑）。"
+    },
+    {
+      "section": "安装",
+      "text": "```powershell\ncd $env:USERPROFILE\\.dsh\\profiles\\<你的 profile>\npnpm add \"link:<本仓库路径>\"\n```\n\n然后把 `\"dsh-gitbash-injector\"` 加进该 profile 的 `package.json` 里的\n`dsh.profile.bundles`，跑一次 `pnpm install`，重启 DSH。"
+    },
+    {
+      "section": "四个实测踩过的坑",
+      "text": "**1. bundle 的 patch 不能是空数组。**\nbundle 必须**自己 insert 自己那一行**。写成 `[]` 能通过\n`declares no dsh.bundle` 检查，但**静默不挂载**——无报错，插件永不运行。\n\n**2. 包名必须进 `dsh.profile.bundles`。**\n只写进 `dependencies` 会以 `profile bundle \"...\" declares no dsh.bundle` 启动失败。\n\n**3. 用 `link:` 而不是 `file:`。**\npnpm 对 `file:` 本地依赖是**拷贝**而非链接，所以改源 `package.json` 不生效\n（读出来是 `null`）。\n\n**4. profile 层只能写 config，不能再 `insert`。**\nbundle 层已经插入了那一行；重复插入会以 `duplicate loader entry id` 中止启动。"
+    },
+    {
+      "section": "绝对不要 disable `pwsh-sandbox`",
+      "text": "win32 上它是**唯一的**宿主 `ctx.shell` 提供者。关掉它会让\n`dsh-permission-presets` 永远等 `shell` 服务，DSH 启动失败：\n\n```\n@deepseek-ai/dsh-permission-presets: pending (waiting for service: shell)\ndsh: 1 entry did not activate\n```\n\n本插件与它**并存**——隔离 realm 买的就是这一点。"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认 | 说明 |\n|---|---|---|\n| `shellPath` | 自动探测 | 显式路径优先；也认 `GIT_BASH` 环境变量 |\n| `timeoutMs` / `maxTimeoutMs` | `120000` / `600000` | 单次超时与上限 |\n| `maxOutputBytes` / `maxSpillBytes` | `64000` / `67108864` | 输出保留量、spill 文件上限 |\n| `graceMs` | `3000` | 终止宽限期 |\n| `verbose` | `false` | 把每次注入决策打到 host logger |"
+    },
+    {
+      "section": "配置",
+      "text": "**shell 探测顺序**：`GIT_BASH` → `ProgramFiles`、`ProgramFiles(x86)`、`LOCALAPPDATA`\n下的标准安装目录 → PATH 上每个非 WSL 的 `bash.exe` → 兜底裸 `bash`。\n`System32`/`SysWOW64` 下的 `bash.exe` 是 **WSL 启动器**（不是真 bash），会被跳过。\n\n**`workdir`** 接受原生路径或 Git Bash 盘符路径：`/d/foo` 会转成 `D:\\foo`。\n`/usr/bin` 这类 MSYS 根路径保持不变（否则会被误转成 `U:\\sr\\bin`）。"
+    },
+    {
+      "section": "验证",
+      "text": "以下全部在真实 DSH 实例上实测，不是从源码推断的。\n\n| 场景 | 结果 |\n|---|---|\n| **PTC 预设**（默认）经 `run_code` 调 `tools.bash` | 可用；工具出现在生成的 SDK 声明里 |\n| PTC + `workspace-write` | 门控拒绝 → 模型升级 → `jq-1.7.1` / `MINGW64_NT-10.0-26200` |\n| PTC + `danger-full-access` | **首次调用即成功**，无需升级 |\n| `standard` / `cordis` 预设 | catalog 里含 `bash` |\n| `minimal` 预设 | 正好补上空缺——该预设 win32 上本就禁用了自己的持久 shell |\n| 3 个会话并发 | 各自独立注入，零冲突 |\n| 会话第二轮对话 | 再次注入生效 |\n| **子代理**（受限策略下） | 工具存在但升级被拒（DSH 策略）→ 回退到 `pwsh` |\n\n有 4 个 bug **只在真实会话才暴露**，均已修复："
+    },
+    {
+      "section": "验证",
+      "text": "| 症状 | 根因 |\n|---|---|\n| 插件加载了但从不注入 | 守卫问「是否解析到 shell」——而宿主 PowerShell 执行器总是能解析到，所以永远拒绝 |\n| `service \"shell\" has been registered` | `isolate()` 收字符串，不是对象 |\n| `Invalid schema for function 'bash'` | 参数必须是真 JSON Schema |\n| 升级重试仍然同样失败 | 执行器读会话固定策略，忽略了每次调用的 `sandbox_permissions` |"
+    },
+    {
+      "section": "测试",
+      "text": "```sh\nnode test/executor.test.mjs    # 22 用例：路径转换、WSL 跳过、探测、配置校验、门控\nnode test/guard.test.mjs       #  8 用例：注入判定表\nnode test/schema.test.mjs      #  8 用例：参数必须是真 JSON Schema\nnode test/injection.test.mjs   # 真实 cordis：isolate + provide + 注册"
+    },
+    {
+      "section": "环境要求",
+      "text": "- **Windows** 上的 DSH（DeepSeek Harness）\n- [Git for Windows](https://git-scm.com/download/win) —— 默认期望在\n  `C:\\Program Files\\Git`，或用 `shellPath` / `GIT_BASH` 指定\n- 只用 Node 内置模块，**无运行时依赖**\n\nPOSIX 上插件**故意不生效**：那边的内核自带 bash 行本来就能用。"
+    },
+    {
+      "section": "卸载",
+      "text": "从 profile 的 `package.json` 里移除 `dsh.profile.bundles` 与 `dependencies` 中的\n`dsh-gitbash-injector`，跑 `pnpm install`，重启 DSH。"
+    },
+    {
+      "section": "相关文档",
+      "text": "- [CHANGELOG.md](CHANGELOG.md) —— 版本变更\n- [docs/plugin-authoring-findings.md](docs/plugin-authoring-findings.md) —— **编写 DSH 插件前值得先读的 10 条实测事实**（PTC 双事件族、`isolate()` 签名、schema 原样透传、静默不挂载等），每条都标注核验状态"
+    },
+    {
+      "section": "许可",
+      "text": "MIT —— 见 [LICENSE](LICENSE)。"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,143 @@
+{
+  "repo": "BharathBillawa/dsh-tool-ddgs",
+  "commit": "1bb2ad57cf13fed25474229243e0b1f83e350255",
+  "extracted_at": "2026-11-11T08:13:58.934498+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 24974,
+    "lines_by_language": {
+      "JSON": 349,
+      "JavaScript": 307,
+      "Markdown": 66,
+      "Other": 1,
+      "YAML": 25
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package-lock.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tool-ddgs",
+    "version": "2.0.0",
+    "description": "DuckDuckGo web search and fetch tools for DeepSeek Harness. Zero Python dependency — search is pure Node, fetch uses @mozilla/readability with optional trafilatura fallback for better extraction.",
+    "type": "module",
+    "main": "index.js",
+    "private": false,
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "web-search",
+      "duckduckgo",
+      "ddgs",
+      "dsh-plugin"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "node": ">=24.0.0"
+    },
+    "dependencies": {
+      "@mozilla/readability": "^0.6.0",
+      "linkedom": "^0.18.13"
+    },
+    "optionalSystemDependencies": {
+      "note": "Python + trafilatura is optional — improves content extraction quality but not required",
+      "python3": ">=3.9",
+      "pip": [
+        "trafilatura"
+      ]
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tool-ddgs bundle patch\n# Disables the built-in DeepSeek web search and tool-web,\n# points the web seam at our ddgs provider, and inserts our plugin.\n\n# Use our ddgs provider for native Search\n- id: web\n  config:\n    searchProvider: ddgs\n\n# Disable DeepSeek web search backend\n- id: web-search-deepseek\n  disabled: true\n\n# Disable built-in tool-web (we provide web_search and web_fetch)\n- id: tool-web\n  disabled: true\n\n# Enable file read so model can access full fetched content\n- id: tool-fs\n  disabled: false\n\n# Insert our plugin\n- insert:\n    - id: tool-ddgs\n      name: dsh-tool-ddgs\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "lite.duckduckgo.com",
+      "url": "https://lite.duckduckgo.com/lite/",
+      "where": "index.js:15"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@mozilla/readability": "^0.6.0",
+      "linkedom": "^0.18.13"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-08-22T11:20:28Z",
+    "created_at": "2026-08-22T10:10:20Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tool-ddgs",
+      "text": "DuckDuckGo web search and URL fetch tools for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).\n\nZero required system dependencies — search is pure Node.js, fetch uses `@mozilla/readability` with optional `trafilatura` fallback for higher quality extraction."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add github:BharathBillawa/dsh-tool-ddgs\n```\n\nThen restart dsh. The bundle patch automatically:\n- Registers `web_search` (DuckDuckGo Lite, pure Node)\n- Registers `web_fetch` (content extraction, saves to file)\n- Wires the native Search action to use ddgs\n- Disables the built-in DeepSeek web search provider\n- Enables the file read tool for accessing full fetched content"
+    },
+    {
+      "section": "Requirements",
+      "text": "- Node.js >= 24 (required by DeepSeek Harness)\n- **Optional**: Python 3.9+ with `pip install trafilatura` for better content extraction"
+    },
+    {
+      "section": "`web_search`",
+      "text": "Search the web using DuckDuckGo Lite. Pure Node.js — no Python, no subprocess, no API key.\n\n- Accepts 1-4 queries\n- Returns deduplicated sources with titles, URLs, and snippets\n- Wired to the native Search action via `ctx.web` provider"
+    },
+    {
+      "section": "`web_fetch`",
+      "text": "Fetch a URL and extract readable text content:\n\n1. Downloads the page with browser-like headers\n2. Extracts clean text using `trafilatura` (if available) or `@mozilla/readability`\n3. Saves the **full content** to `/tmp/dsh-web-fetch/<url-slug>.md`\n4. Returns a **5000-char preview** + the file path + total line count"
+    },
+    {
+      "section": "`web_fetch`",
+      "text": "If the preview answers the question, the model responds immediately. If more detail is needed, the model uses dsh's built-in `read` tool with `offset`/`limit` to read specific sections from the saved file — just like reading any local file.\n\nThis avoids dumping 100K+ chars into context for a simple question about one section of a long article."
+    },
+    {
+      "section": "How it works",
+      "text": "- **Search**: Direct POST to DuckDuckGo Lite + HTML regex parsing. No headless browser, no API key, no subprocess.\n- **Fetch**: Node native `fetch()` → `@mozilla/readability` (DOM extraction via `linkedom`). Falls back to `trafilatura` via Python subprocess when available (better quality on complex pages).\n- **File storage**: Full fetched content is saved to `/tmp/dsh-web-fetch/<url-slug>.md`"
+    },
+    {
+      "section": "Architecture",
+      "text": "The plugin registers both:\n- A **`ctx.web` search provider** (`id: \"ddgs\"`) — powers the native Search action in the agent loop\n- **`web_search` and `web_fetch` tools** — directly callable by the model"
+    },
+    {
+      "section": "Configuration",
+      "text": "The bundle patch configures itself. No manual `cordis.patch.yml` editing needed."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}
