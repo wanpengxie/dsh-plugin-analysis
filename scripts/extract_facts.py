@@ -92,7 +92,7 @@ def redact_secrets(value):
  if isinstance(value,dict):return {k:redact_secrets(v) for k,v in value.items()}
  return value
 
-def extract(row):
+def extract(row, output_dir=None):
  repo,commit=row["repo"],row["commit"];root=ROOT/"work"/repo.replace("/","__")
  meta=json.loads((root/".analysis-source.json").read_text())
  if meta.get("commit")!=commit:raise ValueError("downloaded commit does not match list")
@@ -180,17 +180,18 @@ def extract(row):
   "quality_raw":{"test_files":test_files,"has_ci":any(p.relative_to(root).as_posix().startswith(".github/workflows/") for p in ps),"has_lint":any(p.name.lower() in {"eslint.config.js","eslint.config.mjs",".eslintrc",".eslintrc.json","ruff.toml",".flake8","biome.json"} for p in ps),"typed":any(p.suffix.lower() in {".ts",".tsx"} or p.name in {"py.typed","mypy.ini"} for p in ps),"commits":int(row.get("commits") or 0),"pushed_at":row.get("pushed_at") or "","created_at":row.get("created_at") or ""},
   "runtime_files":sorted(p.relative_to(root).as_posix() for p in runtime),"readme":readme,"skipped":[x["path"] for x in meta.get("skipped",[])]}
  facts=redact_secrets(facts)
- out=ROOT/"results"/"facts";out.mkdir(parents=True,exist_ok=True);target=out/(repo.replace("/","__")+".json")
+ out=pathlib.Path(output_dir) if output_dir else ROOT/"results"/"facts"
+ out.mkdir(parents=True,exist_ok=True);target=out/(repo.replace("/","__")+".json")
  target.write_text(json.dumps(facts,ensure_ascii=False,indent=2)+"\n")
  return {"repo":repo,"files":facts["tree"]["files"]}
 
 def main():
- ap=argparse.ArgumentParser();ap.add_argument("--list",default=str(ROOT/"lists"/"calibration-top30.csv"));ap.add_argument("--repo",action="append");a=ap.parse_args()
+ ap=argparse.ArgumentParser();ap.add_argument("--list",default=str(ROOT/"lists"/"calibration-top30.csv"));ap.add_argument("--repo",action="append");ap.add_argument("--output-dir");a=ap.parse_args()
  with open(a.list,newline="",encoding="utf-8-sig") as f:rows=list(csv.DictReader(f))
  if a.repo:rows=[r for r in rows if r["repo"] in set(a.repo)]
  fail=0
  for row in rows:
-  try:print(json.dumps(extract(row),ensure_ascii=False),flush=True)
+  try:print(json.dumps(extract(row,a.output_dir),ensure_ascii=False),flush=True)
   except Exception as e:fail+=1;print(json.dumps({"repo":row["repo"],"error":f"{type(e).__name__}: {e}"},ensure_ascii=False),flush=True)
  return bool(fail)
 if __name__=="__main__":raise SystemExit(main())
