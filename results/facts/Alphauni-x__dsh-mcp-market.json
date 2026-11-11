@@ -1,0 +1,523 @@
+{
+  "repo": "Alphauni-x/dsh-mcp-market",
+  "commit": "ed1bf341413558a4011028fb67650a112f4ac884",
+  "extracted_at": "2026-11-11T07:29:09.770643+00:00",
+  "tree": {
+    "files": 41,
+    "bytes": 481606,
+    "lines_by_language": {
+      "JSON": 1376,
+      "JavaScript": 8708,
+      "Markdown": 777,
+      "Other": 31,
+      "YAML": 941
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README-zh.md",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/client.js",
+      "lib/codec.js",
+      "lib/market/cache.js",
+      "lib/market/convert.js",
+      "lib/market/filter.js",
+      "lib/market/gateway.js",
+      "lib/market/scheduler.js",
+      "lib/market/sync.js",
+      "lib/mcp/gateway.js",
+      "lib/mcp/host-path.js",
+      "lib/mcp/model.js",
+      "lib/mcp/package-runner.js",
+      "lib/mcp/patch-editor.js",
+      "lib/mcp/paths.js",
+      "lib/mcp/probe.js",
+      "lib/mcp/status.js",
+      "lib/modelscope/client.js",
+      "lib/wire.js",
+      "package-lock.json",
+      "package.json",
+      "pnpm-lock.yaml",
+      "test/client-render.test.mjs",
+      "test/fixtures/broken-npx-cache.mjs",
+      "test/fixtures/crash-with-stderr.mjs",
+      "test/gateway-live.test.mjs",
+      "test/host-path.test.mjs",
+      "test/keywords.test.mjs",
+      "test/market.test.mjs",
+      "test/package-runner.test.mjs",
+      "test/patch.test.mjs",
+      "test/probe-close.test.mjs",
+      "test/probe-recovery.test.mjs",
+      "test/scheduler.test.mjs",
+      "test/status.test.mjs",
+      "test/wire-contract.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-mcp-market",
+    "version": "0.1.0",
+    "description": "Browse, scan and sync ModelScope MCP marketplace into DeepSeek Harness, then install / enable / disable / remove MCP servers in one click.",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "mcp",
+      "modelscope",
+      "marketplace"
+    ],
+    "type": "module",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-api-gateway",
+          "@deepseek-ai/dsh-client-ui-layout",
+          "@deepseek-ai/dsh-client-ui-sidebar"
+        ]
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT",
+    "publishConfig": {
+      "access": "public"
+    },
+    "packageManager": "pnpm@11.7.0",
+    "files": [
+      "./index.js",
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README-zh.md",
+      "LICENSE"
+    ],
+    "dependencies": {
+      "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
+      "@modelcontextprotocol/sdk": "^1.12.0",
+      "yaml": "^2.9.0",
+      "zod": "^4.4.3"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "devDependencies": {
+      "react": "^19.3.0",
+      "react-dom": "^19.3.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-mcp-market bundle patch.\n# When this package is installed with `dsh plugin --profile <profile> add ...`,\n# the profile auto-appends it to dsh.profile.bundles and applies this layer,\n# so the plugin mounts without any manual cordis.patch.yml editing.\n#\n# These are the defaults. To change them, add a row with the SAME id to your\n# profile's cordis.patch.yml — the profile layer wins, and a patch replaces the\n# row's whole `config`, so restate every key you want to keep.\n#\n#   - id: mcp-market\n#     name: dsh-mcp-market\n#     config:\n#       autoSync: false\n#       intervalHours: 12\n#       maxRequests: 200\n- insert:\n    - id: mcp-market\n      name: dsh-mcp-market\n      config:\n        # 周期性把广场全量索引同步到本地（0.25 ~ 168 小时）。\n        autoSync: true\n        intervalHours: 24\n        # 启动时若本地缓存缺失或已过期（> 6 小时），自动补一次同步。\n        syncOnStart: true\n        # 启动补同步的延迟，给宿主其它插件让出启动带宽。\n        startDelayMs: 15000\n        # 单次同步的请求预算。匿名配额把单条查询锁在 300 条，同步靠关键词\n        # 扇出，所以按请求数计：约 100 次请求覆盖 7132/12520，400 次约 3~5 分钟。\n        maxRequests: 400\n        # 桌面版从 Dock 启动时，宿主只继承 launchd 的默认 PATH，里面没有用户\n        # 自己装的 npx / uvx / pnpm，stdio 型 MCP 会一律 ENOENT。开启后会把\n        # ~/.local/bin 等候选目录补进宿主 process.env.PATH —— 官方 MCP 客户端\n        # 读的是同一份 process.env，所以「测试连接」与真实启动会同时修好，\n        # 且不写任何配置文件。详见 lib/mcp/host-path.js。\n        fixHostPath: true\n        # 补 PATH 时是否额外用 $SHELL -lc 取登录 shell 的完整 PATH（覆盖 nvm、\n        # pnpm 等自定义目录）。关掉则只用内置候选目录。\n        probeLoginShell: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "cordis.patch.yml:32"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "index.js:35"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/mcp/host-path.js:10"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/mcp/host-path.js:15"
+    },
+    {
+      "name": "SHELL",
+      "kind": "env",
+      "where": "lib/mcp/host-path.js:248"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/mcp/package-runner.js:80"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/mcp/probe.js:314"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "test/host-path.test.mjs:4"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "test/host-path.test.mjs:182"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "test/host-path.test.mjs:301"
+    },
+    {
+      "name": "SKIP_ONLINE",
+      "kind": "env",
+      "where": "test/keywords.test.mjs:36"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/scheduler.test.mjs:17"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/scheduler.test.mjs:326"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "example.com",
+      "url": "https://example.com/mcp",
+      "where": "lib/client.js:1149"
+    },
+    {
+      "host": "modelscope.cn",
+      "url": "https://modelscope.cn/mcp",
+      "where": "lib/market/gateway.js:78"
+    },
+    {
+      "host": "modelscope.cn",
+      "url": "https://modelscope.cn/api/v1/dolphin/mcpServers",
+      "where": "lib/modelscope/client.js:5"
+    },
+    {
+      "host": "modelscope.cn",
+      "url": "https://modelscope.cn",
+      "where": "lib/modelscope/client.js:24"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/mcp",
+      "where": "test/market.test.mjs:86"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/mcp",
+      "where": "test/market.test.mjs:92"
+    },
+    {
+      "host": "x",
+      "url": "https://x/sse",
+      "where": "test/market.test.mjs:104"
+    },
+    {
+      "host": "modelscope.cn",
+      "url": "https://modelscope.cn/mcp/servers/@a/b",
+      "where": "test/market.test.mjs:159"
+    },
+    {
+      "host": "modelscope.cn",
+      "url": "https://modelscope.cn/mcp",
+      "where": "test/market.test.mjs:160"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com",
+      "where": "test/market.test.mjs:173"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com",
+      "where": "test/market.test.mjs:185"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/mcp",
+      "where": "test/package-runner.test.mjs:188"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/mcp",
+      "where": "test/patch.test.mjs:144"
+    },
+    {
+      "host": "should-be-ignored.example.com",
+      "url": "https://should-be-ignored.example.com",
+      "where": "test/patch.test.mjs:162"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/mcp",
+      "where": "test/patch.test.mjs:176"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/mcp",
+      "where": "test/patch.test.mjs:181"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/mcp",
+      "where": "test/patch.test.mjs:192"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/mcp",
+      "where": "test/patch.test.mjs:203"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.6",
+      "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
+      "@modelcontextprotocol/sdk": "^1.12.0",
+      "yaml": "^2.9.0",
+      "zod": "^4.4.3"
+    },
+    "devDependencies": {
+      "react": "^19.3.0",
+      "react-dom": "^19.3.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 14,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 10,
+    "pushed_at": "2026-09-26T15:04:36Z",
+    "created_at": "2026-09-24T16:17:06Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/client.js",
+    "lib/codec.js",
+    "lib/market/cache.js",
+    "lib/market/convert.js",
+    "lib/market/filter.js",
+    "lib/market/gateway.js",
+    "lib/market/scheduler.js",
+    "lib/market/sync.js",
+    "lib/mcp/gateway.js",
+    "lib/mcp/host-path.js",
+    "lib/mcp/model.js",
+    "lib/mcp/package-runner.js",
+    "lib/mcp/patch-editor.js",
+    "lib/mcp/paths.js",
+    "lib/mcp/probe.js",
+    "lib/mcp/status.js",
+    "lib/modelscope/client.js",
+    "lib/wire.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">"
+    },
+    {
+      "section": "dsh-mcp-market",
+      "text": "**Browse, scan and sync the ModelScope MCP marketplace inside DeepSeek Harness — then install, enable, disable or remove MCP servers with one click.**\n\n</div>\n\n---"
+    },
+    {
+      "section": "dsh-mcp-market",
+      "text": "`dsh-mcp-market` adds an **MCP Market** panel to the DSH Web sidebar. It pulls the server catalogue\nfrom [modelscope.cn/mcp](https://modelscope.cn/mcp) (12,000+ services), translates each record into a\nDSH-compatible MCP configuration, and writes it into your profile's `cordis.patch.yml` — where DSH\nhot-reloads it via HMR, no restart required.\n\n[English](README.md) · [简体中文](README-zh.md)"
+    },
+    {
+      "section": "Features",
+      "text": "- 🛒 **Market tab** — search, sort (relevance / stars / popularity / recently updated), filter by\n  category and by hosted-vs-local, then install. Category names come from ModelScope's own Chinese\n  labels (the API returns English slugs only; the Chinese names live in the site's i18n dictionary and\n  all 100 categories are bundled) — hover a chip to see the raw slug. Sort and filter use DSH's native\n  dropdown menu, so they match the neighbouring buttons.\n- 📦 **Installed tab** — see every MCP server in your profile with its live state\n  (running / failed / loading / disabled), registered tool count, and per-server actions:\n  enable, disable, test connection, remove. Removal asks for confirmation **inline in the card**\n  rather than via `window.confirm` — the native dialog blocks the renderer thread and looks out of\n  place in a themed panel. After an install or a toggle, the card settles to its final state on its\n  own; no manual refresh needed.\n- 🔄 **Catalog sync** — build a local index so search, sorting and category filters work without\n  hitting the network on every keystroke. ModelScope caps anonymous queries at 300 rows, so the sync\n  walks a keyword fan-out (~160 requests) an"
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile <profile> add dsh-mcp-market\n```\n\nOr from a tarball:\n\n```bash\ndsh plugin --profile <profile> add ./dsh-mcp-market-0.1.0.tgz\n```\n\nThe bundle patch mounts the plugin automatically — no manual `cordis.patch.yml` editing.\nRestart that profile once, then open **MCP Market** in the left sidebar."
+    },
+    {
+      "section": "Install",
+      "text": "> **On pnpm 9:** if the install fails with\n> `ERR_PNPM_ADDING_TO_ROOT — Running this command will add the dependency to the workspace root`,\n> the profile directory contains a DSH-generated `pnpm-workspace.yaml` (`packages: [.]`) which pnpm\n> treats as a workspace root. Do what the message says and add `-w`:\n>\n> ```bash\n> dsh plugin --profile <profile> add -w dsh-mcp-market\n> ```\n>\n> pnpm 10+ dropped this check, so you will not hit it there. It is a pnpm/DSH interaction, unrelated\n> to this plugin."
+    },
+    {
+      "section": "How it works",
+      "text": "```\nMarket panel (browser)\n   │  Typert Remote\n   ▼\nCordis host plugin\n\n**One MCP server is one row** in `~/.dsh/profiles/<profile>/cordis.patch.yml`:\n\n```yaml\n- id: mcp-market-<serverName>\n  name: \"@deepseek-ai/dsh-mcp-client\"\n  # disabled: true          # ← \"disable\" is exactly this flag\n  config:\n\nSo installing appends a row, removing drops one, and disabling sets `disabled: true`. Edits take\neffect through HMR."
+    },
+    {
+      "section": "Configuration mapping",
+      "text": "| ModelScope field | DSH config |\n|---|---|\n| `StreamableHTTPServerConfig` | `transport: streamable-http` + `url` (+ `headers`) |\n| `ServerConfig` | `transport: stdio` + `command` / `args` / `env` |\n| `SSEServerConfig` | *not supported* — DSH has no SSE transport; the panel marks these \"unsupported\" |\n| `EnvSchema` | rendered as an install-time form; placeholder values like `<required>` are never written |\n\nPriority is remote → local. Measured across the whole 8,377-record index:"
+    },
+    {
+      "section": "Configuration mapping",
+      "text": "| Config found | Share |\n|---|---|\n| `ServerConfig` (local, stdio) | 67.5% |\n| `StreamableHTTPServerConfig` (direct endpoint) | 8.4% |\n| `SSEServerConfig` only → **not installable** | 24.1% |\n\n**75.9% of indexed services are installable**; 23.4% of them need at least one environment variable."
+    },
+    {
+      "section": "Configuration mapping",
+      "text": "> ModelScope *hosted* deployments (`DeployedUrl`) require a signed-in account and return an SSE\n> address, which DSH cannot use. This plugin deliberately does not support them — local and direct\n> connections cover the majority of the catalogue without any credentials."
+    },
+    {
+      "section": "Why the index stops at ~67%, and what the sync actually does",
+      "text": "The public catalogue API enforces an **offset cap of 300 for anonymous requests**: once\n`(PageNumber − 1) × PageSize` reaches 300, every further page comes back empty *and* `TotalCount`\ndrops to 0. Measured across 11 page-width/page-number combinations — the stop is always exactly 300,\nso it is a server-side quota, not a paging bug. A plain \"page until exhausted\" sync therefore stops\nat 300 of 12,520 services (2.4%)."
+    },
+    {
+      "section": "Why the index stops at ~67%, and what the sync actually does",
+      "text": "What does work is `Query` — it is a genuine keyword search (`finance` → 20 hits, `搜索` → 222,\n`map` → 44). So the sync fans out over a keyword list (the 26 letters, 10 digits, ~50 common terms\nand the catalogue's own category names) and unions the results by id:\n\n| Keywords | Indexed | Coverage | Requests |\n|---|---|---|---|\n| 36 (letters + digits) | 7,132 | 57.0% | 100 |\n| 80 | 8,331 | 66.6% | ~155 |\n| 160 | 8,403 | 67.1% | 236 |"
+    },
+    {
+      "section": "Why the index stops at ~67%, and what the sync actually does",
+      "text": "Returns flatten out fast — the last 80 keywords added 72 records — so the default word list stops at\n96. One sync takes roughly 4 minutes and ~160 requests, which is why it runs in the background and\nshares an in-flight lock with the manual button.\n\nThe remaining gap is covered at search time: when you type a query, the panel asks the marketplace\nlive as well and merges both result sets."
+    },
+    {
+      "section": "Why stdio MCPs fail in the desktop app (launched from the Dock)",
+      "text": "The desktop build (`DeepSeek Harness.app`) inherits only launchd's default `PATH`\n(`/usr/bin:/bin:/usr/sbin:/sbin`) when started from the Dock or Finder — none of which contains\nthe user's own `npx` / `uvx` / `pnpm`, and those are exactly what most marketplace stdio servers\nuse as their command. The symptom is `连接失败：spawn uvx ENOENT`: **HTTP servers keep working,\nevery local-command server fails.** It looks like \"some servers are broken\" when in fact the\nlaunch method simply left a few directories out of the host environment."
+    },
+    {
+      "section": "Why stdio MCPs fail in the desktop app (launched from the Dock)",
+      "text": "Launching the same app from a terminal is unaffected (`zsh` has already exported the paths from\n`.zprofile` / `.zshrc`), so this is about *how the app was started*, not about a wrong config."
+    },
+    {
+      "section": "Why stdio MCPs fail in the desktop app (launched from the Dock)",
+      "text": "The plugin repairs it by itself: on load, any candidate directory that exists but is missing from\nthe host `PATH` (`~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`, …) is\nprepended to `process.env.PATH`. Writing that one place is enough — the official\n`@deepseek-ai/dsh-mcp-client` builds child environments from the very same `process.env`, so the\n**connection test and the real startup are fixed together**, with no config file touched."
+    },
+    {
+      "section": "Why stdio MCPs fail in the desktop app (launched from the Dock)",
+      "text": "| Option | Default | Meaning |\n|---|---|---|\n| `fixHostPath` | `true` | set to `false` to never touch the host `PATH` |\n| `probeLoginShell` | `true` | also ask the login shell (`$SHELL -lc`) for its full `PATH` (falling back to `/bin/zsh` → `/bin/bash` → `/bin/sh` when `$SHELL` is unset); set to `false` to use only the built-in candidates |\n\nBoundaries:"
+    },
+    {
+      "section": "Why stdio MCPs fail in the desktop app (launched from the Dock)",
+      "text": "- prepend only — not a single inherited entry is dropped; only directories that **exist** and are\n  not already on the `PATH` are added;\n- when the host `PATH` is already fine (e.g. terminal launch) **not a byte is changed**;\n- once every directory is present the pending set is empty, so repeated loads are idempotent;\n- disabled on Windows (different separator and `PATHEXT` semantics);\n- a **runtime** repair: no file is written, and restarting the app restores the system as it was."
+    },
+    {
+      "section": "Why stdio MCPs fail in the desktop app (launched from the Dock)",
+      "text": "To keep control yourself, set `fixHostPath: false` and put a `PATH` in the `env` of the row\ninstead (`config.env` merges after the parent environment, and the official client and the plugin's\nprobe behave identically):\n\n```yaml\n- id: mcp-market-fetch\n  name: \"@deepseek-ai/dsh-mcp-client\"\n  config:\n    transport: stdio"
+    },
+    {
+      "section": "Why \"Test connection\" answers instantly",
+      "text": "A stdio connection spends nearly all of its time on **startup**, not on the protocol itself.\nMeasured with the real SDK:\n\n| Scenario | connect | listTools | close | Total |\n|---|---|---|---|---|\n| `uvx` stdio, **first run** | 5023ms | 4ms | 74ms | 5.1s |\n| Same server, **second run on** | ~475ms | 2ms | 71ms | 545ms |\n| HTTP transport | 128ms | 69ms | 1ms | 197ms |"
+    },
+    {
+      "section": "Why \"Test connection\" answers instantly",
+      "text": "`uvx --help` takes 14ms — the uv binary is not the problem; it is the per-run rebuild of the\npackage environment. `listTools` itself costs 2ms. So every optimisation targets \"stop paying\nthe startup cost twice\":"
+    },
+    {
+      "section": "Why \"Test connection\" answers instantly",
+      "text": "1. **A running server is read from the host**: the live connection already exists, so its\n   registered tools are read straight from the host instead of spawning another process\n   (545ms → sub-millisecond).\n2. **Closing is off the return path**: the result is handed back immediately and the child\n   process is reaped in the background (~70ms saved).\n3. **The button shows elapsed seconds**: a first run can take several seconds, and a frozen\n   \"Testing…\" is harder to wait for than a ticking counter."
+    },
+    {
+      "section": "Why \"Test connection\" answers instantly",
+      "text": "There is a boundary worth keeping on point 1: a row only counts as live when the fiber is\n`active` **and** at least one tool is registered. A stdio server that fails to start still leaves\nthe fiber `active` (the official default is `failOnStartupError: false`) — only the tool count\nstays honestly at 0. Those rows go through a real connection, otherwise you would be shown\n\"Connected, 0 tools\", which is harder to debug than an outright error."
+    },
+    {
+      "section": "Why \"Test connection\" answers instantly",
+      "text": "Remember this signature when debugging: **green dot + `stdio` + 0 tools = it never started.**"
+    },
+    {
+      "section": "\"Connection closed\": where the reason went, and why some servers never install",
+      "text": "Once the `PATH` fix lands, the error changes from `spawn npx ENOENT` to\n`MCP error -32000: Connection closed`. That is progress, not a new fault: the process\nstarted, and then crashed on its own. But the interface still shows nothing useful — the\nreason is printed to the child's stderr, and the transport defaults to `stderr: \"inherit\"`,\nso those lines go straight to the host's stderr and never reach the panel."
+    },
+    {
+      "section": "\"Connection closed\": where the reason went, and why some servers never install",
+      "text": "Stdio transports now use `stderr: \"pipe\"` and fold the tail (6 lines / 2 KB max, ANSI\ncolour codes stripped) into the error:\n\n```\nConnection failed: MCP error -32000: Connection closed\n子进程输出：\nboom: cannot find module '@modelcontextprotocol/sdk/types.js'\n详情：模块解析失败，请检查依赖是否装全\n\nThe `子进程输出：` header is verbatim: host-side probe messages are still Chinese-only,\nunlike the panel's bilingual copy. The child's own output is passed through untouched."
+    },
+    {
+      "section": "\"Connection closed\": where the reason went, and why some servers never install",
+      "text": "There is a second, nastier trap: **\"Test connection\" kills the install it is waiting on.**\n\nThe first `npx -y <pkg>` run has to download the package into `~/.npm/_npx/<hash>/`. One\nreal case (`12306-mcp`) pulls 200+ dependencies and ran **8m44s** without finishing\n`node_modules`, while the 15-second probe timeout had long since killed it. What npm leaves\nbehind after an interrupted unpack does not self-heal:"
+    },
+    {
+      "section": "\"Connection closed\": where the reason went, and why some servers never install",
+      "text": "- the nested `node_modules` is an empty directory;\n- `.package-lock.json` records the dependency as `{}`;\n- a pile of `.pkg-<random>` staging directories is left around.\n\nnpx never repairs that state — so every tap on \"Test connection\" interrupts the install\nagain, forever. The current handling:"
+    },
+    {
+      "section": "\"Connection closed\": where the reason went, and why some servers never install",
+      "text": "| Stage | Behaviour |\n|---|---|\n| Cold-start detection | Command is `npx` and `~/.npm/_npx` has no such package → cold |\n| Budget | 60 s when cold (15 s stays the warm budget) |\n| **On timeout** | **The process is not killed** — it keeps running for 3 minutes to finish |\n| Panel | After 5 s it says \"first run downloads dependencies…\" and shows elapsed seconds |\n| Button | Disabled while testing — two package runners writing one cache only makes it worse |"
+    },
+    {
+      "section": "\"Connection closed\": where the reason went, and why some servers never install",
+      "text": "So \"test once → wait a minute → test again\" succeeds, and the wait is visibly making progress.\n\nDetection is deliberately conservative: only `npx` can be checked precisely; `uvx` / `pnpx` /\n`bunx` all report \"unknown\" and are treated as warm. Better to skip a long budget than to make\nevery server wait a minute.\n\nIf you are already stuck on a broken cache, the plugin now recognises it and puts the path\nstraight into the error:"
+    },
+    {
+      "section": "\"Connection closed\": where the reason went, and why some servers never install",
+      "text": "```\nConnection failed: MCP error -32000: Connection closed\n子进程输出：\n  code: 'ERR_MODULE_NOT_FOUND',\n  url: 'file:///Users/you/.npm/_npx/a1b2c3d4e5f60718/node_modules/mcp-http-server/node_modules/@modelcontextprotocol/sdk/types.js'\n\nThere are two ways out: **repair in place** (fast, recommended) or **start over** (slow, but\nguaranteed clean).\n\nnpm keeps downloaded packages in its content-addressed store at `~/.npm/_cacache`, so\nre-unpacking them needs no download:"
+    },
+    {
+      "section": "\"Connection closed\": where the reason went, and why some servers never install",
+      "text": "```bash\nD=~/.npm/_npx/<hash>          # the path from the error"
+    },
+    {
+      "section": "Half-finished debris: `.pkg-<random>` staging directories npm left mid-unpack",
+      "text": "find \"$D/node_modules\" -maxdepth 1 -type d -name '.*-*' -delete"
+    },
+    {
+      "section": "Empty shells: the directory exists but has no files — this is what npx keeps loading from",
+      "text": "find \"$D/node_modules\" -type d -empty -delete\n\ncd \"$D\" && npm install        # unpack whatever package-lock.json says is missing\n```\n\nOnly empty directories and npm's own staging leftovers are removed — neither holds real data,\nand the packages that did install are left alone.\nbash\nrm -rf ~/.npm/_npx/<hash>\nnpx -y <pkg>     # the command from your MCP config; it starts and stays there once installed — wait, then Ctrl+C\n```"
+    },
+    {
+      "section": "Scheduled sync",
+      "text": "Two triggers, one shared lock — a manual sync and a scheduled one never run at the same time:\n\n| Trigger | When | Default |\n|---|---|---|\n| **Manual** | You press **Sync catalog** in the panel | always available |\n| **Startup** | Once per boot, only if the local cache is missing or older than 6 hours | on, 15 s after boot |\n| **Interval** | Every `intervalHours` while DSH runs | every 24 h |"
+    },
+    {
+      "section": "Scheduled sync",
+      "text": "Configure it by adding a row with the **same `id`** to your profile's `cordis.patch.yml` — the\nprofile layer wins, and a patch replaces the whole `config`, so restate every key you want to keep:\n\n```yaml\n- id: mcp-market\n  name: dsh-mcp-market\n  config:\n    autoSync: false        # turn the interval off entirely"
+    },
+    {
+      "section": "Scheduled sync",
+      "text": "Config edits hot-reload through HMR. The panel's status line always shows the current schedule and\nthe last sync time. Timers are bound to the plugin's lifetime and are cleared on unload or reload,\nso nothing keeps polling after the plugin is disabled."
+    },
+    {
+      "section": "Compatibility",
+      "text": "| Surface | Status |\n|---|---|\n| DeepSeek Harness | `0.1.7-rc.1` (verified) |\n| Node | `^22.19.0 \\|\\| >=24.0.0` |\n| Platforms | All (plain ESM, no native code) |\n| Model | Any (no model interaction) |"
+    },
+    {
+      "section": "Development",
+      "text": "```bash\nnode test/patch.test.mjs         # config-file safety (rewrite, coexistence, validation)\nnode test/market.test.mjs        # filtering, conversion, diffing + live catalogue checks\nnode test/scheduler.test.mjs     # sync schedule: config clamping, lifecycle, concurrency\nnode test/keywords.test.mjs      # keyword fan-out + the 300-row anonymous cap"
+    },
+    {
+      "section": "Development",
+      "text": "`market.test.mjs` and `keywords.test.mjs` need network access; set `SKIP_ONLINE=1` (or lose the\nconnection) to run only their offline sections. `client-render.test.mjs` installs the client bundle\nthrough a stub module loader and renders it with `react-dom/server` — it catches runtime-only faults\nsuch as an undefined identifier that would otherwise blank the panel. It also carries a set of\n**source-contract guards** for things a syntax check cannot see: theme-token spelling (below) and\nstray uses of native `window.confirm`."
+    },
+    {
+      "section": "Theme tokens (a trap worth knowing)",
+      "text": "A misspelled CSS custom property **fails silently** — it just falls back to the inherited colour, so\nthe panel looks subtly wrong with nothing in the console. Measured against the light theme:\n\n- `--dsw-alias-state-warn-primary` ✅ exists (`#f59e0b`)\n- `--dsw-alias-state-warning-primary` ❌ undefined"
+    },
+    {
+      "section": "Theme tokens (a trap worth knowing)",
+      "text": "Two places in this plugin used the latter, which left the `loading` status dot with no background\ncolour at all. They now use a fallback chain,\n`var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b))`, and\n`client-render.test.mjs` checks every token used against a verified allowlist."
+    },
+    {
+      "section": "Theme tokens (a trap worth knowing)",
+      "text": "> The theme tokens are injected at runtime onto `<body>` — not `document.documentElement`, and not\n> as enumerable CSSOM rules. The only way to check them is `getComputedStyle(document.body)`."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```bash\ndsh plugin --profile web remove dsh-mcp-market\n```\n\nServers you installed stay in `cordis.patch.yml` (they are ordinary DSH MCP rows). Remove them from\nthe Installed tab first if you want the file left clean."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

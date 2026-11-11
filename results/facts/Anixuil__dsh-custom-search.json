@@ -1,0 +1,582 @@
+{
+  "repo": "Anixuil/dsh-custom-search",
+  "commit": "038b588d4217d1d7e3ecf1f3badf56fe028e409d",
+  "extracted_at": "2026-11-11T07:38:01.544604+00:00",
+  "tree": {
+    "files": 22,
+    "bytes": 589148,
+    "lines_by_language": {
+      "JSON": 91,
+      "JavaScript": 4042,
+      "Markdown": 608,
+      "Other": 44,
+      "Python": 194,
+      "YAML": 58
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "dev/asar.py",
+      "dev/bundle-rows.mjs",
+      "dev/degraded-probe.mjs",
+      "dev/peer-closure.py",
+      "dev/smoke.mjs",
+      "dev/stubs/hooks.mjs",
+      "dev/stubs/typert-protocol.js",
+      "dev/validate.mjs",
+      "docs/install-from-github.png",
+      "docs/installed.png",
+      "engines.js",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-custom-search",
+    "version": "0.4.3",
+    "description": "Replace the built-in DeepSeek web search with a configurable engine (SearXNG / Tavily / Exa / Brave / Serper / Bing / Google CSE).",
+    "license": "MIT",
+    "author": "Anixuil",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Anixuil/dsh-custom-search.git"
+    },
+    "homepage": "https://github.com/Anixuil/dsh-custom-search#readme",
+    "bugs": {
+      "url": "https://github.com/Anixuil/dsh-custom-search/issues"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": "*",
+      "@deepseek-ai/dsh-credentials": "*",
+      "@deepseek-ai/dsh-launch-environment": "*",
+      "@deepseek-ai/dsh-typert-protocol": "*",
+      "@deepseek-ai/dsh-web": "*"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/dsh-credentials": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-launch-environment": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-typert-protocol": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-web": {
+        "optional": true
+      }
+    },
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "icon": "./icon.svg",
+    "files": [
+      "index.js",
+      "client.js",
+      "engines.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "docs/*.png",
+      "README.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "search",
+      "searxng",
+      "tavily",
+      "brave",
+      "serper",
+      "web-search"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-plugin-manager",
+          "@deepseek-ai/dsh-api-remotes"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch for dsh-custom-search.\n#\n# Two kinds of entry live in a patch file, and confusing them is a trap:\n#\n#   * A row under `insert:` is a NEW row this bundle brings into being. It is\n#     attributed to this bundle — the plugin manager counts it as one of \"this\n#     bundle's components\" and refuses to uninstall the bundle while any of\n#     them is still mounted.\n#   * A top-level row WITHOUT `insert:` is an OVERRIDE of a row some earlier\n#     layer already declared. `name:` is an assertion that is checked against\n#     the target. Overrides are NOT attributed to this bundle, so they never\n#     block removal; the plugin page lists them as this bundle's overrides.\n#\n# So the row we own goes under `insert:`, while the two rows we merely point at\n# us — `web` and `web-search-deepseek`, both declared by\n# `@deepseek-ai/dsh-base` — are plain overrides. Declaring them under `insert:`\n# would append DUPLICATE rows with ids that are already taken, and would also\n# make this bundle permanently uninstallable (`bundle-in-use`): the originals\n# belong to `dsh-base` and stay mounted forever.\n#\n# Also remember: an override replaces the targeted row's WHOLE `config`, it does\n# not merge into it. That is why the `web` override below restates\n# `fetchProvider`.\n\n- insert:\n    # The provider row. Its `config` is the surface the settings form edits, so\n    # every field of the plugin's Config schema appears here with its default.\n    - id: custom-search\n      name: dsh-custom-search\n      config:\n        engine: searxng\n        fallback: ''\n        endpoint: ''\n        endpoints: ''\n        apiKeyEnv: ''\n        googleCx: ''\n        searchDepth: basic\n        maxResults: 8\n        timeoutMs: 20000\n        language: zh-CN\n        safeSearch: moderate\n\n# Point the seam at this provider.\n# `fetchProvider: http` must stay: this replaces the row's whole config, so\n# dropping it leaves web_fetch with no backend.\n- id: web\n  name: '@deepseek-ai/dsh-web'\n  config:\n    searchProvider: custom-search\n    fetchProvider: http\n\n# Switch the official backend off so exactly one search provider is usable.\n# Without this, clearing `searchProvider` above would resolve to\n# WEB_PROVIDER_AMBIGUOUS instead of falling back to this plugin.\n# Set `disabled: false` to keep DeepSeek native search mounted alongside.\n- id: web-search-deepseek\n  name: '@deepseek-ai/dsh-web-search-deepseek'\n  disabled: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "TAVILY_API_KEY",
+      "kind": "env",
+      "where": "dev/smoke.mjs:192"
+    },
+    {
+      "name": "TAVILY_API_KEY",
+      "kind": "env",
+      "where": "dev/smoke.mjs:260"
+    },
+    {
+      "name": "TAVILY_API_KEY",
+      "kind": "env",
+      "where": "dev/smoke.mjs:270"
+    },
+    {
+      "name": "TAVILY_API_KEY",
+      "kind": "env",
+      "where": "dev/smoke.mjs:382"
+    },
+    {
+      "name": "TAVILY_API_KEY",
+      "kind": "env",
+      "where": "dev/smoke.mjs:389"
+    },
+    {
+      "name": "EXA_API_KEY",
+      "kind": "env",
+      "where": "engines.js:315"
+    },
+    {
+      "name": "BRAVE_API_KEY",
+      "kind": "env",
+      "where": "engines.js:346"
+    },
+    {
+      "name": "SERPER_API_KEY",
+      "kind": "env",
+      "where": "engines.js:383"
+    },
+    {
+      "name": "BING_API_KEY",
+      "kind": "env",
+      "where": "engines.js:417"
+    },
+    {
+      "name": "GOOGLE_API_KEY",
+      "kind": "env",
+      "where": "engines.js:444"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080。",
+      "where": "client.js:244"
+    },
+    {
+      "host": "gw.internal",
+      "url": "https://gw.internal/tavily",
+      "where": "client.js:245"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "client.js:319"
+    },
+    {
+      "host": "gw.internal",
+      "url": "https://gw.internal/tavily",
+      "where": "client.js:320"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "dev/smoke.mjs:30"
+    },
+    {
+      "host": "brave.example",
+      "url": "https://brave.example/1",
+      "where": "dev/smoke.mjs:60"
+    },
+    {
+      "host": "brave.example",
+      "url": "https://brave.example/2",
+      "where": "dev/smoke.mjs:61"
+    },
+    {
+      "host": "tavily.example",
+      "url": "https://tavily.example/a",
+      "where": "dev/smoke.mjs:73"
+    },
+    {
+      "host": "tavily.example",
+      "url": "https://tavily.example/a",
+      "where": "dev/smoke.mjs:74"
+    },
+    {
+      "host": "searx.example",
+      "url": "https://searx.example/1",
+      "where": "dev/smoke.mjs:84"
+    },
+    {
+      "host": "searx.example",
+      "url": "https://searx.example/2",
+      "where": "dev/smoke.mjs:85"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "dev/smoke.mjs:92"
+    },
+    {
+      "host": "searx.example",
+      "url": "https://searx.example/1",
+      "where": "dev/smoke.mjs:218"
+    },
+    {
+      "host": "tavily.example",
+      "url": "https://tavily.example/a",
+      "where": "dev/smoke.mjs:245"
+    },
+    {
+      "host": "tavily.example",
+      "url": "https://tavily.example/a",
+      "where": "dev/smoke.mjs:267"
+    },
+    {
+      "host": "brave.example",
+      "url": "https://brave.example/1",
+      "where": "dev/smoke.mjs:323"
+    },
+    {
+      "host": "searx.example",
+      "url": "https://searx.example/1",
+      "where": "dev/smoke.mjs:355"
+    },
+    {
+      "host": "api.example.test",
+      "url": "https://api.example.test/res/v1/web/search",
+      "where": "dev/validate.mjs:678"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/a",
+      "where": "dev/validate.mjs:688"
+    },
+    {
+      "host": "${raw",
+      "url": "http://${raw",
+      "where": "engines.js:113"
+    },
+    {
+      "host": "host",
+      "url": "https://host/path`",
+      "where": "engines.js:132"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "engines.js:258"
+    },
+    {
+      "host": "api.tavily.com",
+      "url": "https://api.tavily.com",
+      "where": "engines.js:284"
+    },
+    {
+      "host": "api.exa.ai",
+      "url": "https://api.exa.ai",
+      "where": "engines.js:317"
+    },
+    {
+      "host": "api.search.brave.com",
+      "url": "https://api.search.brave.com",
+      "where": "engines.js:349"
+    },
+    {
+      "host": "google.serper.dev",
+      "url": "https://google.serper.dev",
+      "where": "engines.js:386"
+    },
+    {
+      "host": "api.bing.microsoft.com",
+      "url": "https://api.bing.microsoft.com",
+      "where": "engines.js:420"
+    },
+    {
+      "host": "www.googleapis.com",
+      "url": "https://www.googleapis.com",
+      "where": "engines.js:447"
+    },
+    {
+      "host": "gw.internal",
+      "url": "https://gw.internal",
+      "where": "index.js:105"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Anixuil/dsh-custom-search.git",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Anixuil/dsh-custom-search#readme",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Anixuil/dsh-custom-search/issues",
+      "where": "package.json:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 18,
+    "pushed_at": "2026-10-16T12:12:21Z",
+    "created_at": "2026-10-16T03:45:42Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "engines.js",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-custom-search",
+      "text": "> A DeepSeek Harness plugin that replaces the built-in DeepSeek web search with a\n> search engine you choose — SearXNG, Tavily, Exa, Brave, Serper, Bing, or Google\n> CSE. The model-facing `web_search` tool keeps its name and schema, so prompts,\n> agent presets, and tool lists are unchanged.\n\n用你自己的搜索源替换 DSH 内置的「仅官方 DeepSeek」搜索。`web_search` 工具名与参数保持不变，\n换的只是背后的检索通道——所以模型的提示词、工具表、Agent 预设都不用动。"
+    },
+    {
+      "section": "dsh-custom-search",
+      "text": "> **第三方社区插件。** 本项目与 DeepSeek 官方无隶属关系，也不属于官方插件市场。\n> 下文「官方搜索」「官方提供方」一律指 DSH 自带的 `@deepseek-ai/dsh-web-search-deepseek`。\n\n---"
+    },
+    {
+      "section": "它替换的到底是什么",
+      "text": "DSH 把「联网搜索」拆成了三层，本插件只接管最底下那层：\n\n| 层 | 包 | 职责 | 本插件是否改动 |\n|---|---|---|---|\n| 工具层 | `@deepseek-ai/dsh-tool-web` | 向模型暴露 `web_search` / `web_fetch` | 不改 |\n| 服务层 | `@deepseek-ai/dsh-web`（`ctx.web`） | 选后端、取消、错误码、`maxResults` 截断 | 只改一个配置值 |\n| 提供方层 | `@deepseek-ai/dsh-web-search-deepseek` | 真正发请求、返回结果 | **替换掉** |\n\n服务层通过 `registerSearchProvider()` 收集提供方，并按**配置里 pin 的 id** 选一个执行。\n官方提供方注册的 id 是 `deepseek-official`，本插件注册 `custom-search`——\n所以「换搜索引擎」在 DSH 里就是改一个字符串，不需要替换任何官方文件。"
+    },
+    {
+      "section": "它替换的到底是什么",
+      "text": "这也意味着：官方搜索的**一个查询要花一整轮模型调用**（DeepSeek 没有独立的检索接口），\n而接上 SearXNG / Tavily 这类真正的检索 API 后，搜索不再消耗会话模型的 token。"
+    },
+    {
+      "section": "安装",
+      "text": "**桌面端面板**（桌面端只有这一条路）\n\n侧栏「插件」→「+ 添加插件」→ 填 `github:Anixuil/dsh-custom-search` → **安装** → **立即启用** → 重启 Harness。\n\n<p align=\"center\">\n  <img src=\"docs/install-from-github.png\" width=\"400\" alt=\"在桌面端「+ 添加插件」里填入 github:Anixuil/dsh-custom-search，被识别为「Git 仓库」来源\">\n  <img src=\"docs/installed.png\" width=\"400\" alt=\"安装完成：pnpm add github:Anixuil/dsh-custom-search 成功，点「立即启用」\">\n</p>\n\n左：面板把 `github:Anixuil/dsh-custom-search` 识别为「Git 仓库」来源，底层走 `pnpm add` 拉取。\n右：安装完成，落点是 profile 目录 `~/.dsh/profiles/desktop`，点「立即启用」。"
+    },
+    {
+      "section": "安装",
+      "text": "> 面板那一栏填的是**安装源**（npm 包名 / GitHub 源 / 本地路径），不是插件名。\n> 直接填 `dsh-custom-search` 会提示「未找到相关插件」——这个名字在 npm 上还没发布。\n\n装完**重启 Harness** 才生效（bundle 类插件不会热加载）。桌面端用「重启 Harness」或退出重开。\n\n**改成从本地目录装**（自己改代码时用这个）\n\n同一栏填本仓库的绝对路径，例如 `D:\\code\\self\\all\\dsh-custom-search`。\npnpm 把它记成 `link:` 而不是复制，所以此后改 `index.js` / `client.js`\n**只要重启 Harness 就生效**，不必卸载重装。改了代码要反复看效果时用这个，稳定了再换回 `github:`。\n\n**命令行安装**（需要单独装 CLI，桌面端不自带）\n\n```bash\ndsh plugin --profile desktop add github:Anixuil/dsh-custom-search#main\n```"
+    },
+    {
+      "section": "安装",
+      "text": "> DeepSeek Harness Desktop 的应用包没有声明 `bin`，也没有随附 `dsh` 可执行文件；\n> `dsh plugin` 来自单独安装的 CLI。只有桌面端的话，用上面面板那一栏，效果相同。\n\n> `desktop` 是桌面端的 profile 名（数据目录 `~/.dsh/profiles/desktop`）。\n> 用 CLI 或其他 profile 时换成实际名称，例如\n> `dsh plugin --profile web add github:Anixuil/dsh-custom-search#main`。\n\n> 本插件没有构建步骤，`github:` 源可以直装。若 pnpm 仍拦下构建脚本，\n> 在 `$DSH_HOME/profiles/desktop/pnpm-workspace.yaml` 的 `allowBuilds` 里放行 `dsh-custom-search`。"
+    },
+    {
+      "section": "升级：必须卸载再装",
+      "text": "插件管理器**不提供升级**——不列注册表版本，也没有更新按钮。而且 `pnpm-lock.yaml` 会把\ngit 源解析出的 commit **钉死**（`resolution: {commit, type: git}`），所以后台也不会自己挪。\n\n面板里：**卸载**（要确认）→ 「+ 添加插件」填同一个 `github:` 地址 → 安装 → 立即启用 → 重启。\n\n命令行同理：\n\n```bash\ndsh plugin --profile desktop remove dsh-custom-search\ndsh plugin --profile desktop add github:Anixuil/dsh-custom-search#main\n```\n\n> `github:` 源拉的是默认分支的当前提交，所以重装即拿到最新代码。\n> 要省掉反复重装，就按上面说的换成**本地目录**安装——之后只需重启。"
+    },
+    {
+      "section": "升级：必须卸载再装",
+      "text": "> **从 ≤0.1.0 升上来的注意**：旧版的 patch 写法会让面板卸载永久失败（报\n> `bundle-in-use`），卸载那一步走不通。照「卸载」一节末尾的手工步骤摘掉旧版，再装 0.2.0。"
+    },
+    {
+      "section": "兼容性",
+      "text": "provider 契约（`ctx.web.registerSearchProvider` 与返回结构）是照着\n**`@deepseek-ai/dsh-*` 0.2.0-rc.2**（DeepSeek Harness Desktop 0.2.0-rc.2）的源码实现的，\n并对该版本做过离线契约验证。\n\n> DSH 仍在 developer preview：`apply(ctx)` 规范稳定，但 `ctx.web` 这类服务在预览版之间\n> 仍可能调整。升级 Harness 后若搜索报 `WEB_PROVIDER_*` 错误，先对照\n> `@deepseek-ai/dsh-web` 的 `registerSearchProvider` 签名和 `WebRuntime.Config` 字段。"
+    },
+    {
+      "section": "依赖：为什么 `peerDependencies` 是必需的",
+      "text": "宿主半侧会 `import` 五个 Harness 自己的包（`schemastery`——`Config` 需要它；\n`dsh-credentials` / `dsh-launch-environment`——解析 key；`dsh-web`——错误码；\n`dsh-typert-protocol`——连通性探针）。这些包**一个都不在插件的 `node_modules` 里、也不该在**：\n\n- 重复安装一份 `@deepseek-ai/cordis` / Typert，会让 `instanceof` 判定的对象身份对不上，\n  探针服务在宿主眼里就不是它认识的那个 Service；\n- 从 npm 拉这些内部包也拉不到与当前运行时同版本的副本。"
+    },
+    {
+      "section": "依赖：为什么 `peerDependencies` 是必需的",
+      "text": "DSH 的解法是 `dsh-app-boot` 给 profile 装的一层**模块解析拦截**（`profile-resolution-bootstrap.js`）：\n来自 profile 或 linked 目录的模块，其 `@deepseek-ai/*` 导入会被路由到**当前安装的那一份**。\n但它**只对 `package.json` 的 `peerDependencies` 里声明过的名字生效**——linked 安装（\n`link:D:\\...`）走 `routeLinked`，逐个祖先目录读 `package.json` 的 `peerDependencies` 才决定拦截。\n没声明就是**解析不到**，而失败方式极其安静：插件照常加载、搜索照常能用，\n只有那个 import 背后的功能凭空消失。"
+    },
+    {
+      "section": "依赖：为什么 `peerDependencies` 是必需的",
+      "text": "> 这正是 0.3.x 的真实故障：`@deepseek-ai/dsh-typert-protocol` 没声明，`installProbe`\n> 的 `await import()` 抛 `ERR_MODULE_NOT_FOUND`，探针静默退出，界面只显示\n> 「宿主没有提供探针」——看起来像\"部署不支持\"，实际是**清单少了一行**。\n> `dev/validate.mjs` 现在会拿源码里的 `@deepseek-ai/*` 导入和 `peerDependencies` 对账，\n> 两边任一侧多一条少一条都直接失败。\n\n范围写成 `*` 是刻意的：`dsh-app-boot` 会拿 `@deepseek-ai/dsh-*` 的 peer 去比运行版本，\n填具体范围等于每次 Harness 升级都要用户去开一次 exact-version 豁免。\n`@deepseek-ai/schemastery` 不在该检查范围内，但一并写 `*` 保持一致。"
+    },
+    {
+      "section": "依赖：为什么 `peerDependencies` 是必需的",
+      "text": "**这份清单是重启即生效，不用重装。** `readPeerNames()` 是每次解析时现读磁盘上的\n`package.json`（`readFileSync`，无缓存），而\"这是 linked 目录\"这个事实来自 profile 的\n`link:` 依赖，本来就在——所以本地目录安装改完 `package.json` 重启一次即可。\n只有 `github:` 源安装才需要卸载重装（它拉的是仓库快照，本地改什么都不影响它）。\n\n声明和导入对上了还不够：**声明的那一份得真的在安装包里**，否则路由过去同样\n`ERR_MODULE_NOT_FOUND`。这个只有当前安装包能回答，所以有 `dev/peer-closure.py`\n——它把安装包的依赖闭包从 `app.asar` 里按宿主的走法重算一遍（0.2.0-rc.2 上是 513 个包），\n再逐个核对本插件的 peer："
+    },
+    {
+      "section": "依赖：为什么 `peerDependencies` 是必需的",
+      "text": "```bash\npython dev/peer-closure.py          # 全部 5 个 peer 都能被当前安装包供给 ✓\npython dev/peer-closure.py --all    # 顺带列出作用域里所有 @deepseek-ai/*\n```\n\n（`node_modules/` 里那份 `@deepseek-ai/{cosmokit,schemastery}` 只是**离线跑 `dev/` 测试**用的，\n`.gitignore` 忽略、`files` 白名单排除。声明了 peer 之后，运行时会优先走上面的拦截、取安装包\n那一份，所以不会出现\"插件自己带了一份旧 schemastery\"这种漂移。）"
+    },
+    {
+      "section": "配置",
+      "text": "**在插件页改**（推荐）。侧栏「插件」，三个入口，进去是同一张表单：\n\n- **点开 `dsh-custom-search` 组合包** —— 配置表单就在包详情页里。这是最稳的一个入口，\n  因为它和这一行在同一个页面上。\n- **「官方」区块里的「自定义搜索引擎」卡片** —— 点开是一个独立配置页。\n- 或者点开组合包 → 组件行 `custom-search` 右侧的**配置**按钮，进行详情页。\n\n表单里 12 个字段全在，引擎还能用一排胶囊一键切换。点**保存**即写入 profile 的 patch 层并由\nLoader 应用，不用重启。\n\n> **装完要重启一次 Harness**，卡片才会出现。浏览器半侧是前端启动时加载的模块：\n> 安装是在前端启动之后才落地的，热重载不会把它补进来。"
+    },
+    {
+      "section": "配置",
+      "text": "**API Key 不进设置文件**：它经凭证服务写入，引用名默认取该引擎约定的环境变量名\n（Brave 是 `BRAVE_API_KEY`），落点是 `~/.dsh/.credentials.yaml` 的 `refs:` 段——和模型 provider 的\n`VOLCENGINE_API_KEY` 并排。填一次就持久保存，profile patch 里只留引用名，**key 不会进版本库**。"
+    },
+    {
+      "section": "测一下配好没有",
+      "text": "表单最下面有个**测试连接**按钮，点一下就知道\"我配的到底能不能用\"。它分两层：\n\n1. **本地检查**（不联网，立即出结果）：引擎 id 是否有效、这个引擎要不要 key、key **到底配上了没有**\n   （问凭证服务，不是看输入框）、`endpoint` 是否是合法的 http(s) 地址、兜底链里有没有拼错的引擎、\n   数值有没有越界。这些正是真实请求只会回一个含糊厂商错误的地方。\n2. **真实请求**：用**已保存的配置**走一遍 agent 实际使用的 provider，真跑一次搜索。**会消耗 1 次搜索配额。**\n\n结果按 `✓ / ✗ / !` 逐条列出，真实请求那一段是**明细**，不是一句\"成功/失败\"：\n\n```\n✓ Brave Search 返回 3 条结果，用时 312 ms。\n   密钥来源：凭据服务（BRAVE_API_KEY）\n   GET https://api.search.brave.com/res/v1/web/search\n   HTTP 200 · 298 ms\n\n明细里的每一项都对应一个只有它才能回答的问题："
+    },
+    {
+      "section": "测一下配好没有",
+      "text": "| 明细 | 它能回答的问题 |\n|---|---|\n| 方法与端点（**已去掉查询串**） | 我真的在打这个厂商、这个路径吗？自建 SearXNG 打的是不是我的实例？ |\n| `HTTP 200 / 401 / 403 / 429 / 5xx` | key 无效（401/403）、触发限流（429）、还是厂商挂了（5xx）？ |\n| 往返耗时 | 是超时设置太紧，还是网络真的慢？ |\n| 密钥来源 | **配置里的字面密钥 / 凭据服务 / 启动环境 / 进程环境变量 / 哪里都没找到**——\"没配 key\"和\"配了但这次没解析到\"是两个完全不同的故障，修法也不同 |\n| 每一跳各一条 | 兜底链生效时，主引擎那一跳为什么被跳过（返回 0 条，还是报错） |\n\n兜底链里每个被尝试过的引擎都会留一条记录，所以\"回退成功了\"不会掩盖\"主引擎其实是坏的\"。\n\n表单里有未保存的改动时会另行提示——本地检查看的是你的输入，真实请求用的是已保存的配置。"
+    },
+    {
+      "section": "测一下配好没有",
+      "text": "> **按钮下面那行说\"只剩本地检查\"时，它会点名原因。** 页面能看见自己的四种失败，所以四种各说各的：\n> `$mount` 不存在（这个 Harness 构建不对）、挂载被 Gateway 拒绝（把 **Gateway 的错误原文**带出来）、\n> 挂载成功但读不到命名空间（列出 `ctx.remote` 上实际有什么）、挂载了但没有这个方法。\n> 这句含糊话以前是**一句包打天下**，而且把责任推给宿主——宿主恰恰是页面看不见的那一方。\n> 宿主侧的原因另有去处：宿主进程控制台会打 `[dsh-custom-search] 连接探针未安装：…` 并点名缺哪个包。\n>\n> 这是有意的降级：探针**永远不影响搜索本身**，最坏情况是少一个按钮。"
+    },
+    {
+      "section": "没有界面时：直接改 profile 的 patch 层",
+      "text": "`$DSH_HOME/profiles/desktop/cordis.patch.yml` 在所有 bundle 层之后应用，优先级高于插件自带的默认值：\n\n```yaml\n- id: custom-search\n  name: dsh-custom-search\n  config:\n    engine: brave\n\n- **只写要改的字段**。没写的字段回落到 `Config` schema 的默认值（每个字段都有默认值）。\n- 手改后**重启 Harness**。\n- 同一个 id 已存在于 profile patch 时改那一条，不要重复添加。"
+    },
+    {
+      "section": "没有界面时：直接改 profile 的 patch 层",
+      "text": "> **为什么配置页要插件自带？** DSH 的插件页只渲染**插件自己注册了配置页**的插件——\n> 官方那四个配置页（shell 执行器、agent loop、子智能体、DeepSeek 搜索提供方）\n> **各来自一个伴生包**，设置里的「插件」分区只是**只读**清单。\n>\n> 本插件把这一半放在 `client.js`，三个入口全注册：\n>\n> | 槽位 | 寻址字段 | 渲染成 |\n> |---|---|---|\n> | `plugins.bundle.config` | `key` = 包名（keyed 槽） | 包详情页里的配置表单 |\n> | `plugins.item` | `id`（list 槽） | 插件页上一张能直接点开的卡片，带独立页面 |\n> | `plugins.row.config` | `key` = `<包名>#<行 id>`（keyed 槽） | 行详情里的配置表单 |\n>\n> **三个都得注册，少一个就少一个入口。** 插件页对每个槽都是\"没注册就整块不渲染\"，\n> 而不是报错：包详情页的配置区由 `ledger.bundles.has(包名)` 控制，为假时整个 section\n> 直接从树里拿掉。0.3.1 之前只注册了后两个，所以从组合包点进去看到的是一个白板。\n>\n> 三者都只在宿主**在服务** `custom-search` 这个设置命名空间时才挂载\n> （`configForms.whileServed`），所以没装/没启用的部署上看不到任何痕迹。\n> 没有它们，这一行就只有启停开关——这正是本插件 0.1.0 的状态。"
+    },
+    {
+      "section": "字段",
+      "text": "| 字段 | 默认 | 说明 |\n|---|---|---|\n| `engine` | `searxng` | 主搜索引擎，可选 `searxng` / `tavily` / `exa` / `brave` / `serper` / `bing` / `google` |\n| `fallback` | 空 | 逗号分隔的备用引擎，按顺序兜底（主引擎报错或返回空结果时启用） |\n| `endpoint` | 空 | 主引擎的接口基址。留空则用该引擎的官方地址；自建 SearXNG 填 `http://127.0.0.1:8080` |\n| `endpoints` | 空 | 按引擎分别指定基址的 JSON，例如 `{\"tavily\":\"https://gw.internal/tavily\"}`，优先级高于 `endpoint` |\n| `apiKey` | 空 | API key 字面量。标记为 secret，不会回显、不进模型上下文 |\n| `apiKeyEnv` | 空 | 凭证引用名。留空则用该引擎约定的环境变量（见下表） |\n| `googleCx` | 空 | 仅 Google CSE 需要：Programmable Search 的搜索引擎 ID |\n| `searchDepth` | `basic` | 仅 Tavily：`basic` / `advanced`（advanced 消耗更多额度） |\n| `maxResults` | `8` | 单次搜索最多返回多少条来源，上限 20 |\n| `timeoutMs` | `20000` | 单次搜索超时（毫秒） |\n| `language` | `zh-CN` | 语言/地区提示，各引擎会映射成自己的参数。**Brave 例外**：它的 `search_lang` 只认 50 个固定标签（中文须写 `zh-hans` / `zh-hant`，日语是 `jp`、挪威语是 `nb`），本插件会自动换算；换算不出来的语言会**省略该参数并在连接报告里说明**，而不是发出去等 422 |\n| `safeSearch` | `moderate` | `off` / `moderate` / `strict`，引擎不支持时忽略 |"
+    },
+    {
+      "section": "各引擎怎么准备",
+      "text": "| 引擎 | 是否要 key | 约定的环境变量 | 备注 |\n|---|---|---|---|\n| `searxng` | 否 | — | 自建或公共实例，**必须在实例的 `settings.yml` 里开启 `json` 输出格式**，否则接口返回 403 |\n| `tavily` | 是 | `TAVILY_API_KEY` | 为 AI 检索设计，按次计费 |\n| `exa` | 是 | `EXA_API_KEY` | 语义检索，可直接拿到正文片段 |\n| `brave` | 是 | `BRAVE_API_KEY` | 独立索引，免费额度较宽裕 |\n| `serper` | 是 | `SERPER_API_KEY` | Google 结果的低延迟代理 |\n| `bing` | 是 | `BING_API_KEY` | Azure 认知服务 Web Search |\n| `google` | 是 | `GOOGLE_API_KEY` | 还需填 `googleCx` |"
+    },
+    {
+      "section": "各引擎怎么准备",
+      "text": "**key 的解析顺序**：`apiKey` 字面量 → 凭证服务（设置页写入的） → 启动环境 → 进程环境变量。\n\n> `apiKey` / `apiKeyEnv` 只作用于**当前选中的主引擎**。`fallback` 里的引擎是别的厂商，\n> 各自从自己的环境变量或凭证服务取 key——例如 `engine: searxng` + `fallback: tavily`\n> 只需要额外准备 `TAVILY_API_KEY`。\n>\n> 反过来说：**`apiKeyEnv` 留空才是常态**。留空时引用名跟着主引擎走，\n> 换引擎会自动跟着换；一旦显式填了引用名，它就**压过**引擎约定名（`engine: tavily` +\n> `apiKeyEnv: BRAVE_API_KEY` 就会拿着 Brave 的引用名去解 Tavily 的 key）。所以不要在配置里\n> 硬写引擎专属的引用名，除非你确实要把 key 存在别的名字下。"
+    },
+    {
+      "section": "常见组合",
+      "text": "**全本地、不花一分钱**（推荐先跑通这个）\n\n```yaml\nengine: searxng\nendpoint: http://127.0.0.1:8080\n```\n\n**要更稳，主引擎挂了自动兜底**\n\n```yaml\nengine: searxng\nendpoint: http://127.0.0.1:8080\nfallback: tavily\n```"
+    },
+    {
+      "section": "安装后的实际改动",
+      "text": "`cordis.patch.yml` 里有**两类**条目，区别很关键：\n\n```yaml\n- insert:                          # ① 新行：本组合包「拥有」的行\n    - id: custom-search\n      name: dsh-custom-search\n      config: { ... }"
+    },
+    {
+      "section": "② 覆盖行：改的是别的组合包已经声明的行（dsh-base 声明了它们）",
+      "text": "- id: web\n  name: '@deepseek-ai/dsh-web'\n  config:\n    searchProvider: custom-search\n    fetchProvider: http            # 必须保留：patch 是整行替换，不是深合并\n\n- id: web-search-deepseek\n  name: '@deepseek-ai/dsh-web-search-deepseek'\n  disabled: true\n```\n\n**为什么这两行不能放进 `insert:`。** `insert:` 的语义是「插入新行」——\nloader 以**空**列表为基准套用所有层，所以 `insert:` 里的行会被直接追加进树。\n而 `web` / `web-search-deepseek` 这两行由 `@deepseek-ai/dsh-base` 声明，id 已经被占用；\n再 `insert:` 一次只会多出**同名副本**，不会覆盖原来那行。"
+    },
+    {
+      "section": "② 覆盖行：改的是别的组合包已经声明的行（dsh-base 声明了它们）",
+      "text": "更隐蔽的后果在卸载：插件管理器把「`insert:` 里的行」记为本组合包的组件\n（`bundleRows`），只要其中任何一行还挂着，就拒绝卸载并报\n`bundle-in-use`（「其他配置仍在使用这个组合包的组件，请先停用它们」）。\n`web` 那行的**正本**属于 `dsh-base`，永远不会下线——于是本组合包会**永远卸不掉**。\n写成顶层覆盖就没有这个问题：覆盖行不被算作本组合包的组件，卸载时随层一起失效。\n\n两个容易踩的点：\n\n1. **patch 是整行替换**。`web` 那一行必须把 `fetchProvider` 一起写回去，\n   否则 `web_fetch` 会失去后端。\n2. **关掉官方提供方是为了避免歧义**。服务层在没 pin id 时会要求「恰好一个可用提供方」；\n   两个都在就会报 `WEB_PROVIDER_AMBIGUOUS`。想让官方搜索和本插件并存，\n   把 `disabled: true` 改成 `false`，并确保 `searchProvider` 始终有值。"
+    },
+    {
+      "section": "回到官方搜索",
+      "text": "**最省事**：在插件页把 `dsh-custom-search` 这个**组合包**整个关掉。它的 patch 层随之失效，\n那两条覆盖一起消失——`web` 的 `searchProvider` 回落、`web-search-deepseek` 不再被 `disabled`，\n官方搜索自动回来。\n\n**想保留插件、只临时切回官方搜索**：在 profile 的 `cordis.patch.yml` 里加两条覆盖：\n\n```yaml\n- id: web\n  name: '@deepseek-ai/dsh-web'\n  config:\n    searchProvider: deepseek-official"
+    },
+    {
+      "section": "卸载",
+      "text": "面板里点组合包卡片上的**卸载**（要确认）。用 CLI 的话：\n\n```bash\ndsh plugin --profile desktop remove dsh-custom-search\n```\n\n两条路都会连组合包一起摘掉，它携带的两条覆盖随之消失，**不需要**手工清理。\n\n要清理的是**你自己**写进 profile patch 的那些条目（见上面的「配置」）——组合包没了以后\n`id: custom-search` 寻址不到任何一行，会被静默跳过；留在文件里只是垃圾。"
+    },
+    {
+      "section": "如果面板报「其他配置仍在使用这个组合包的组件」",
+      "text": "这条报错对应宿主的 `bundle-in-use`：管理器认为该组合包还有行挂在运行时里。\n**0.2.0 之前的版本一定会撞上它**——那时 `web` / `web-search-deepseek` 被写在 `insert:` 里，\n而它们的正本属于 `dsh-base`，永远不会下线，卸载检查因此永远过不去（见「安装后的实际改动」）。\n0.2.0 起改成顶层覆盖，面板卸载正常。\n\n**已经被卡住的旧版：不用拆 profile，换掉那一份文件就够。** 卸载检查读的是\n**已安装副本**里的 `cordis.patch.yml`，把它换成 0.2.0 的，判据立刻从 3 行降到 1 行：\n\n```bash\ncd ~/.dsh/profiles/desktop/node_modules/dsh-custom-search\ncp \"D:\\code\\self\\all\\dsh-custom-search\\cordis.patch.yml\" ."
+    },
+    {
+      "section": "然后回面板点卸载 —— 它会自己跑 pnpm remove 并整理 package.json / lockfile",
+      "text": "```\n\n想先确认再动手，用 `dev/bundle-rows.mjs` 对着这份文件跑一次：它照宿主的语义算出\n「贡献行」，凡不是本包的行都会被标出来 —— 那正是 `bundle-in-use` 的判据。\nbash"
+    },
+    {
+      "section": "4) 删目录，并删掉 dsh.profile.bundles 里的 dsh-custom-search",
+      "text": "rm -rf ~/.dsh/profiles/desktop/node_modules/dsh-custom-search"
+    },
+    {
+      "section": "5) 重启 Harness —— 官方搜索自动回来",
+      "text": "```"
+    },
+    {
+      "section": "安全说明",
+      "text": "- 插件以 Harness 进程的权限运行，安装前请自行审阅源码——这是所有 DSH 插件的通用前提。\n- 携带 API key 的请求使用 `redirect: 'error'`，重定向会在发出前被拒绝，\n  避免凭证被转发到未核实的主机。免 key 的 SearXNG 允许跟随重定向（常见的 http→https）。\n- 返回的 URL 只接受绝对 `http(s)` 地址，其他一律丢弃，不会出现在给模型的结果里。\n- `apiKey` 标记为 secret：设置页不回显，也不会进入模型上下文。\n- 搜索结果是外部不可信内容，工具层会照常标注为 untrusted。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **「测试连接」的探测层可能缺席**。本地检查（字段合法性、凭证状态，不联网）永远可用；\n  「真实请求」要经 Remote 调用到宿主，靠 Typert 的源模式发现，宿主没挂载那套包时只剩本地检查。\n  两条路都**不影响搜索本身**——最坏情况是少一个按钮。面板会说明是哪一种缺席（见上文\n  「测一下配好没有」），清单层面的原因见「依赖：为什么 `peerDependencies` 是必需的」。\n- 探针走的是 Typert 的**源模式兜底**（手写 descriptor + 原型标记），因为本包没有构建步骤、\n  产不出 `dsh-typert-generator` 的那两份文件。这是 DSH 的内部机制，大版本升级后可能要跟着调；\n  调不动时的表现是面板点名说明，而不是搜索坏掉。\n- 明细里的端点是**去掉查询串**的 `scheme://host/path`：Google CSE 把 `key=` 拼在 URL 上，\n  时限报错也会把整条 URL 写进消息，所以报告生成前统一脱敏（`engines.js` 的\n  `publicEndpoint` / `redactUrls`，`smoke.mjs` 有对应断言）。\n- **换引擎不会迁移密钥**。`apiKeyEnv` 留空时引用名跟着主引擎走（`brave` → `BRAVE_API_KEY`），\n  所以从 Brave 换到 Tavily 要在表单里另填一个 key；旧的那个仍留在凭证服务里。\n- `engine` 在 schema 里是 `union`，表单上是文本框 + 一排胶囊。填了 union 之外的值**保存会失败**，\n  表单会保留草稿让你改（`SettingsForm` 的既定行为）。\n- 仍可以把密钥明文写进 profile patch 的 `apiKey` 字段（只在本机），但推荐走表单/凭证服务。\n- `ctx.web` 的搜索请求只有 `query` 和 `maxResults` 两个参数，所以**没有**时间范围、域名过滤、\n  站点限定这类 provider 级控制（这是服务层的既定边界，不是本插件的取舍）。\n- `search()` 是每次查询一次请求。`fallback` 里多个引擎串行尝试，最坏情况耗时是各超时之和。\n- `available()` 必须是同步、离线的——服务层在选中 `custom-search` 时就是这么调它的——所以它只能\n  回答「有没有声明一个凭证**引用**」，回答不了「引用背后有没有值」：那个答案只有异步的凭证服务有。\n  **声明了引用就算可用**，判的是「有没有解析器」而不是「解析器当前有没有值」；官方 DeepSeek\n  搜索提供方用的也是这个判据（它检查自己的 resolver 闭包是否存在）。代价是缺 k"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\ndsh-custom-search/\n├── index.js          宿主半侧：Config schema、provider 注册、凭证解析、兜底链、连通性探针\n├── client.js         浏览器半侧：插件页的配置表单（三个入口）、「测试连接」按钮与缺席诊断\n├── engines.js        引擎适配表：每个引擎的 build（怎么发请求）+ parse（怎么读响应）+ 脱敏"
+    },
+    {
+      "section": "开发",
+      "text": "**装成本地目录**，之后改代码只需重启 Harness，不必反复卸载重装：\n面板「+ 添加插件」填本仓库的绝对路径，或\n\n```bash\ndsh plugin --profile desktop add D:\\code\\self\\all\\dsh-custom-search\n```\n\n本地目录是 `link:` 而不是复制，所以 `index.js`（宿主半侧）改完重启生效，\n`client.js`（浏览器半侧）改完重启后刷新页面即可。改稳定了再换回 `github:` 地址。\n\n新增一个搜索引擎 = 在 `engines.js` 的 `ENGINES` 里加一个条目，声明 `build` 和 `parse`，\n再到 `index.js` 的 `Config.engine` union 里加上这个 id，\n最后在 `client.js` 的 `ENGINES` 里补一行（浏览器半侧够不到宿主半侧的源码，这张表是刻意重复的，\n`validate.mjs` 会盯着两边不许漂移）。"
+    },
+    {
+      "section": "验证",
+      "text": "`dev/` 下的套件**直接 import 上级目录的真实代码**，没有副本需要同步：\n\n```bash\ncd dev\nnode smoke.mjs      # 起本地 mock server，用 stub ctx.web 驱动真实插件模块（含探针报告与脱敏）\nnode validate.mjs   # 清单、patch 方言、两端声明一致性，以及浏览器半侧的契约与渲染\nnode bundle-rows.mjs <某份 cordis.patch.yml>   # 复现宿主的卸载判据，定位「卸不掉」\n\n`degraded-probe.mjs` 不用手动跑——`smoke.mjs` 会用子进程拉它起来（必须另起进程，\n因为 resolve hook 是按进程注册的）。"
+    },
+    {
+      "section": "验证",
+      "text": "`validate.mjs` 里那条 Brave 语言断言值得单说：`language` 是本插件唯一一个**发给外部服务、\n却被对方用封闭枚举校验**的参数，而 Brave 对不在枚举里的值直接回 422 —— 整个搜索失败，\n不只是丢一个提示。默认值 `zh-CN` 恰好是最容易踩雷的形状（Brave 没有裸 `zh`）。\n所以断言的不是「每个映射对不对」这一件事，而是更硬的不变量：**`braveSearchLang()` 的返回值\n要么是 `undefined`，要么必须是枚举成员**，用 40 个越界探针（含 `id-ID`、`xx-YY`、`ja`、\n`no`、`pt`、空串、`null`、对象）去撞。想验证这条护栏真的会咬，就把 `braveSearchLang`\n改回 `language.split('-')[0]` —— 两个套件都会当场失败。"
+    },
+    {
+      "section": "验证",
+      "text": "`validate.mjs` 里另一条宿主机侧的不变量是**可用判据**。服务层选中 `custom-search` 时会同步调\n一次 `available()`（`dsh-web` 的 `resolveProvider` 里就是 `if (!provider.available())`），\n而那一问只能回答「有没有声明一个凭证引用」——凭证服务是异步的，且到那时已经没有第二个提供方\n可退。原实现在这条判据上多加了一句：引擎约定的引用名还必须在 `process.env` 里有值。于是\n**把 key 存在凭证服务里**这个最常见、也正是本插件设置页自己写出来的部署判成了不可用：\n`configured web provider \"custom-search\" is registered but unavailable`，请求一行都没发出去。\n所以断言两条不变量：每个需 key 引擎都必须声明约定的引用名（枚举 `ENGINES` 逐个查，将来加引擎\n自动纳入），以及 `available()` 的实现里**不得出现 `process.env`**（只看代码——注释里讨论这个坑\n不算）。参照系是官方的 `dsh-web-search-deepseek`：它的 `available()` 检查的是自己的 resolver\n闭包存不存在，而不是去解出值。想看这条护栏会不会咬，就把 `available()` 改回要求\n`process.env` 有值 —— 两个套件都会当场失败（validate 报「不得以进程环境为前提」，\nsmoke 报「未配置任何东西时也应自认可用」）。"
+    },
+    {
+      "section": "验证",
+      "text": "`validate.mjs` 里浏览器半侧那段最值得一提：它**真的把 `client.js` 跑了两遍**——先在 `vm` 里\n用 stub 的 `require` 物化工厂，拿一份假 `ctx` 调 `apply(ctx)`，检查它到底注册了什么；再拿一份\n假 `React`（会真建元素树、真展开函数组件）**把配置页组件渲染一遍**。\n\n第一遍断言注册的形状：三个槽位各自的寻址字段（`plugins.bundle.config` 用包名、\n`plugins.item` 用 `id`、`plugins.row.config` 用 `<包名>#<行 id>`）、卡片 id 不与官方占用的\n四个撞车、三个入口共用同一份表单、页面组件不自带 React hook、注入的 `hooks.<key>` 与组件\n读取的 `props.use<Key>()` 拼写一致。**这些全都只会静默失败**——写错一个字符，插件行就只剩\n启停开关，界面上没有任何报错。"
+    },
+    {
+      "section": "验证",
+      "text": "第二遍渲染才是抓真 bug 的那一遍：**组件抛错时槽运行时会把它从那一格退役，渲染成空白，\n不留任何信息**。所以\"能不能渲染\"必须真的渲染才知道。0.3.1 修的那个 bug（`connectionPanel`\n的签名漏了 `state`，函数体里 `state?.writable` 于是成了未声明标识符——可选链只护 `null`，\n不护未声明变量）正是靠这一遍抓出来的。渲染这遍还覆盖了三条分支：带探针、不带探针、\n以及探针已出报告（检查行 + 来源列表 + **逐次尝试明细**）。\n\n最后那条分支的断言值一提：`validate.mjs` 从 `client.js` 里**读出真实的中文模板**当渲染时的\n`t`，再把渲染结果与模板对起来。用恒等函数当 `t` 的话占位符根本不会被填充，明细渲染成\n`key: {ref}` 这种半成品也照样\"渲染成功\"——那样的断言等于没写。同时它先把函数组件展开一遍\n拿到文本（`textOf`），再渲染一遍（`stageReport` 可重复调用），所以同一份报告会被走两次，\n次数多算一次就会当场露馅。"
+    },
+    {
+      "section": "验证",
+      "text": "**探针缺席的理由也照同一套断言。** 那四种成因各有各的句子，脚本逐个渲染、逐个比对模板，\n再断言**四句话互不相同**——所以\"用一句含糊话糊过去\"是过不了的。它还把\n`describeProbeAbsence` 会报的成因与 `ABSENCE_KEY_OF` 的句子**双向对账**：报了没句子的成因而\n渲染出裸键、或写了句子却没人用，两种都当场失败。"
+    },
+    {
+      "section": "验证",
+      "text": "**探针那几项是同类问题的另一面。** 测试按钮要经 Remote 调用才能碰到宿主，而这个包没有构建步骤，\n`@deepseek-ai/dsh-typert-generator` 本该产出的那两份声明只能手写；**写错命名空间不会报错**，\n只会让面板安静地退回\"只有本地检查\"。所以校验脚本把两半对起来看：命名空间与包名、descriptor 的\n`id` / `service` / `namespace` / `method`、参数与结果的 codec 是否满足下面那三套校验器、宿主方法的参数名\n与 descriptor 的 `wire`（源模式是从函数源码文本里解析参数名的，\n所以不能有默认值、解构或 rest），以及原型标记键是否与 Gateway 读取的那个常量逐字相同。\n\n**探针的 codec 值得单独说，因为它让我猜错过两轮。** `$mount` 看起来是一道闸门，其实它后面还站着\n两道，三套校验器对「一个 strict codec 该长什么样」的要求并不一致："
+    },
+    {
+      "section": "验证",
+      "text": "| 校验器 | 要求 |\n|---|---|\n| Gateway `requireStrictInputs` | 只看 `codec.mode !== 'strict'` |\n| Typert registry `validateCodec` | 另要求 `typeSymbol` 非空、`create` 是函数 |\n| Typert loader `requireStrictCodec` | 同上，且 `decode` / `encode` 若写了必须是函数 |\n\n只写裸 `{ mode: 'strict' }` 能过第一道、卡在第二道，而它报出来的是\n`Cannot read properties of undefined (reading 'length')` —— `validateNonempty` 去读\n`typeSymbol.length`，**一个字都不提是哪个字段**，所以看起来像个内部错误。`validate.mjs` 的\n`assertStrictCodec` 就是把这套要求就地转录成断言，下次 DSH 收紧规则能在离线套件里当场发现，\n而不是又靠用户截图。"
+    },
+    {
+      "section": "验证",
+      "text": "顺带说明 `create()` 产出的 schema 是**原样放行**：宿主给 SRC 来源的参数合成的是\n`codec.mode === 'src-json'`，而 `decode` 只在 `strict` 分支才取用 codec —— 这条路上工厂根本不会被\n调用，它只是为了让三道校验器都满意。\n`smoke.mjs` 补的是另一半，而且**两条路都跑真代码**：进程内 `register()` 一个 resolve hook\n（`dev/stubs/hooks.mjs`），只把它一个 specifier 顶替掉，于是 `installProbe` 真的挂载起来，\n探针出报告那一串（HTTP 状态、脱敏端点、往返耗时、每跳成败、密钥来源与引用名）才有东西可断言；\n另一半\"压根没有 Typert 包\"的降级场景交给子进程 `degraded-probe.mjs`，它不带这个 hook，\n所以 `import()` 失败得和真实部署一样。断言的是：`apply` 照常注册 provider 并返回 disposer，\n`console.warn` 恰好报一次且原因里点名缺失的包——**探针缺席不牵连搜索**。"
+    },
+    {
+      "section": "验证",
+      "text": "顶替品做成 `node:module` 的 hook 而不是往 `node_modules/` 里塞个假包，是因为后者会真的遮蔽\n真包（哪天本机装上了 Typert，测试会继续跑在假货上却毫无提示）。hook 只重定向一个 specifier，\n`@deepseek-ai/schemastery` 走的还是真包。\n\n行归属那几项同理：脚本会照 `applyEntryPatches` 的语义把各层合成一遍，断言\n`insert:` 里只有本包自己的行、合成后 `web` / `web-search-deepseek` 各只有一份。\n把覆盖行误写进 `insert:` 时，运行期只表现为「卸载按钮报错」，这里会当场失败。\n`bundle-rows.mjs` 是这条断言的**现场版**：同一套语义，但可以指向任意一份 patch ——\n包括 profile 里那份已安装的副本，所以线上被卡住时也能直接查，不必先复现安装。"
+    },
+    {
+      "section": "验证",
+      "text": "这些脚本需要 `js-yaml`、`@deepseek-ai/schemastery`、`@deepseek-ai/cosmokit`\n（已放在本目录的 `node_modules/`，被 `.gitignore` 忽略）。\n`@deepseek-ai/*` 那几个是 DSH 自带的 vendor 包，可从本机安装里抽：\n\n```bash\npython dev/asar.py list \"node_modules/@deepseek-ai/schemastery\"\npython dev/asar.py extract \"node_modules/@deepseek-ai/schemastery\" node_modules\n```\n\n> `asar.py` 默认指向 `%LOCALAPPDATA%\\Programs\\DeepSeek Harness\\resources\\app.asar`；\n> 换机器时改脚本顶部的 `ASAR` 常量即可。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

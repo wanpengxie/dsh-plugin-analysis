@@ -1,0 +1,776 @@
+{
+  "repo": "AllenCoderBug/dsh-web-search-zerokey",
+  "commit": "dc6587ec1246914afd8feb7b3f7edb39d75b5dee",
+  "extracted_at": "2026-11-11T07:27:45.274308+00:00",
+  "tree": {
+    "files": 39,
+    "bytes": 254999,
+    "lines_by_language": {
+      "HTML": 2,
+      "JSON": 67,
+      "JavaScript": 5344,
+      "Markdown": 1035,
+      "Other": 74,
+      "YAML": 106
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      ".npmignore",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "ROLLBACK.md",
+      "UPGRADE-PLAN.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/adapt.js",
+      "lib/enrich.js",
+      "lib/merge.js",
+      "lib/parse/bing.js",
+      "lib/provider.js",
+      "lib/request-policy.js",
+      "lib/route.js",
+      "lib/sources/arxiv.js",
+      "lib/sources/bing.js",
+      "lib/sources/csdn.js",
+      "lib/sources/github.js",
+      "lib/sources/hackernews.js",
+      "lib/sources/juejin.js",
+      "lib/sources/npm.js",
+      "lib/sources/registry.js",
+      "lib/text.js",
+      "lib/tls-ca.js",
+      "package.json",
+      "scripts/lint.mjs",
+      "scripts/verify.mjs",
+      "test/capabilities.test.mjs",
+      "test/entry-and-parse.test.mjs",
+      "test/fixtures/bing-real.html",
+      "test/pin-guard.test.mjs",
+      "test/provider.test.mjs",
+      "test/routing.test.mjs",
+      "test/sources-mocked.test.mjs",
+      "test/tls-ca.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-web-search-zerokey",
+    "version": "1.1.0",
+    "description": "零 key 联网搜索：不填任何 API key、不启任何本地服务、不消耗模型积分。多源聚合（Bing / Hacker News / GitHub / arXiv / npm / 掘金 / CSDN），中英文自动路由。",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./lib/*": "./lib/*",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "lib/**/*.js",
+      "scripts/verify.mjs",
+      "scripts/lint.mjs",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE",
+      "CHANGELOG.md"
+    ],
+    "keywords": [
+      "deepseek",
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "cordis",
+      "web-search",
+      "search",
+      "zero-key",
+      "no-api-key",
+      "keyless",
+      "mcp",
+      "bing"
+    ],
+    "author": {
+      "name": "husongzhen",
+      "email": "husongzhen@noreply.gitcode.com"
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/AllenCoderBug/dsh-web-search-zerokey.git"
+    },
+    "homepage": "https://github.com/AllenCoderBug/dsh-web-search-zerokey#readme",
+    "bugs": {
+      "url": "https://github.com/AllenCoderBug/dsh-web-search-zerokey/issues"
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "scripts": {
+      "test": "node --test \"test/*.test.mjs\"",
+      "test:coverage": "node --test --experimental-test-coverage \"test/*.test.mjs\"",
+      "lint": "node scripts/lint.mjs",
+      "verify": "node scripts/verify.mjs"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.2",
+      "@deepseek-ai/dsh-web": ">=0.1.2-rc.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-web-search-zerokey — bundle patch 层\n#\n# 本文件把本插件插入 Cordis 组合，并把 seam 的 searchProvider 指到它。\n#\n# ── 为什么这里可以直接写 `- id: web` ──────────────────────────────────\n# 层序（见 profile 的 cordis.yml 官方注释）：\n#     bundle patch  →  用户的 cordis.patch.yml  →  --patch overlay\n# 本文件属**最前**层，用户配置在后、会覆盖它。\n# ⇒ 带上这个 pin 既让「装完即用」成立，又不剥夺用户改主意的权利。\n#\n# ── 这个 pin 不只是「选个 provider」──────────────────────────────────\n# 官方搜索（deepseek-official）**每次搜索 = 一次完整模型 turn**，\n# 直接扣积分。而它默认在 base bundle 里且 available() 恒报可用。\n# 不显式指定的风险：seam 在「多个可用」时报 WEB_PROVIDER_AMBIGUOUS，\n# 或 fallback 到那个烧积分的后端。\n#\n# 想换回官方搜索：在你自己的 cordis.patch.yml 里覆写 `web` 行即可。\n- insert:\n    - id: web-search-zerokey\n      name: 'dsh-web-search-zerokey'\n\n# ⚠️ patch 是**整块替换** config，不是合并（官方文档原文：\n#    \"a later patch can replace that row's complete config\"）。\n# 故这里必须**完整重述** base 里的另一项 fetchProvider —— 漏了它抓取就坏。\n- id: web\n  config:\n    searchProvider: zerokey\n    fetchProvider: http\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/adapt.js:40"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/adapt.js:40"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/tls-ca.js:19"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify.mjs:28"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "info.arxiv.org",
+      "url": "https://info.arxiv.org/help/api/tou.html",
+      "where": "lib/provider.js:51"
+    },
+    {
+      "host": "export.arxiv.org",
+      "url": "http://export.arxiv.org",
+      "where": "lib/sources/arxiv.js:7"
+    },
+    {
+      "host": "export.arxiv.org",
+      "url": "https://export.arxiv.org/api/query",
+      "where": "lib/sources/arxiv.js:57"
+    },
+    {
+      "host": "cn.bing.com",
+      "url": "https://cn.bing.com/search",
+      "where": "lib/sources/bing.js:33"
+    },
+    {
+      "host": "so.csdn.net",
+      "url": "https://so.csdn.net/api/v3/search",
+      "where": "lib/sources/csdn.js:15"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com/search/repositories",
+      "where": "lib/sources/github.js:33"
+    },
+    {
+      "host": "hn.algolia.com",
+      "url": "https://hn.algolia.com/api/v1/search",
+      "where": "lib/sources/hackernews.js:20"
+    },
+    {
+      "host": "news.ycombinator.com",
+      "url": "https://news.ycombinator.com/item?id=${hit.objectID",
+      "where": "lib/sources/hackernews.js:37"
+    },
+    {
+      "host": "juejin.cn",
+      "url": "https://juejin.cn/post/",
+      "where": "lib/sources/juejin.js:10"
+    },
+    {
+      "host": "api.juejin.cn",
+      "url": "https://api.juejin.cn/search_api/v1/search",
+      "where": "lib/sources/juejin.js:18"
+    },
+    {
+      "host": "juejin.cn",
+      "url": "https://juejin.cn/post/${info.article_id",
+      "where": "lib/sources/juejin.js:27"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/-/v1/search",
+      "where": "lib/sources/npm.js:16"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/${pkg.name",
+      "where": "lib/sources/npm.js:36"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AllenCoderBug/dsh-web-search-zerokey.git",
+      "where": "package.json:43"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AllenCoderBug/dsh-web-search-zerokey#readme",
+      "where": "package.json:45"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/AllenCoderBug/dsh-web-search-zerokey/issues",
+      "where": "package.json:47"
+    },
+    {
+      "host": "juejin.cn",
+      "url": "https://juejin.cn/post/123",
+      "where": "test/capabilities.test.mjs:274"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/capabilities.test.mjs:286"
+    },
+    {
+      "host": "b",
+      "url": "https://b",
+      "where": "test/capabilities.test.mjs:288"
+    },
+    {
+      "host": "arxiv.org",
+      "url": "http://arxiv.org/abs/2401.00001v1",
+      "where": "test/capabilities.test.mjs:298"
+    },
+    {
+      "host": "arxiv.org",
+      "url": "http://arxiv.org/abs/2401.00001v1",
+      "where": "test/capabilities.test.mjs:308"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/capabilities.test.mjs:373"
+    },
+    {
+      "host": "b",
+      "url": "https://b",
+      "where": "test/capabilities.test.mjs:374"
+    },
+    {
+      "host": "c",
+      "url": "https://c",
+      "where": "test/capabilities.test.mjs:375"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/capabilities.test.mjs:386"
+    },
+    {
+      "host": "b",
+      "url": "https://b",
+      "where": "test/capabilities.test.mjs:386"
+    },
+    {
+      "host": "spa",
+      "url": "https://spa",
+      "where": "test/capabilities.test.mjs:395"
+    },
+    {
+      "host": "bad",
+      "url": "https://bad",
+      "where": "test/capabilities.test.mjs:407"
+    },
+    {
+      "host": "good",
+      "url": "https://good",
+      "where": "test/capabilities.test.mjs:408"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/capabilities.test.mjs:423"
+    },
+    {
+      "host": "${p",
+      "url": "https://${p",
+      "where": "test/capabilities.test.mjs:708"
+    },
+    {
+      "host": "same",
+      "url": "https://same",
+      "where": "test/capabilities.test.mjs:727"
+    },
+    {
+      "host": "same",
+      "url": "https://same",
+      "where": "test/capabilities.test.mjs:728"
+    },
+    {
+      "host": "same",
+      "url": "https://same",
+      "where": "test/capabilities.test.mjs:729"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/1",
+      "where": "test/entry-and-parse.test.mjs:38"
+    },
+    {
+      "host": "b.com",
+      "url": "https://b.com/2",
+      "where": "test/entry-and-parse.test.mjs:39"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com/1",
+      "where": "test/entry-and-parse.test.mjs:44"
+    },
+    {
+      "host": "head.com",
+      "url": "https://head.com",
+      "where": "test/entry-and-parse.test.mjs:52"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:53"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:57"
+    },
+    {
+      "host": "ok.com",
+      "url": "https://ok.com",
+      "where": "test/entry-and-parse.test.mjs:64"
+    },
+    {
+      "host": "good.com",
+      "url": "https://good.com",
+      "where": "test/entry-and-parse.test.mjs:65"
+    },
+    {
+      "host": "good.com",
+      "url": "https://good.com",
+      "where": "test/entry-and-parse.test.mjs:69"
+    },
+    {
+      "host": "dup.com",
+      "url": "https://dup.com",
+      "where": "test/entry-and-parse.test.mjs:74"
+    },
+    {
+      "host": "dup.com",
+      "url": "https://dup.com",
+      "where": "test/entry-and-parse.test.mjs:75"
+    },
+    {
+      "host": "s${i",
+      "url": "https://s${i",
+      "where": "test/entry-and-parse.test.mjs:83"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:88"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:94"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:101"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:111"
+    },
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "test/entry-and-parse.test.mjs:145"
+    },
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "test/entry-and-parse.test.mjs:152"
+    },
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "test/entry-and-parse.test.mjs:157"
+    },
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "test/entry-and-parse.test.mjs:162"
+    },
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "test/entry-and-parse.test.mjs:169"
+    },
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "test/entry-and-parse.test.mjs:173"
+    },
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "test/entry-and-parse.test.mjs:174"
+    },
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "test/entry-and-parse.test.mjs:182"
+    },
+    {
+      "host": "b",
+      "url": "https://b/1",
+      "where": "test/entry-and-parse.test.mjs:248"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:284"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:290"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/entry-and-parse.test.mjs:299"
+    },
+    {
+      "host": "${prefix",
+      "url": "https://${prefix",
+      "where": "test/provider.test.mjs:36"
+    },
+    {
+      "host": "b",
+      "url": "https://b/1",
+      "where": "test/provider.test.mjs:201"
+    },
+    {
+      "host": "hn",
+      "url": "https://hn/1",
+      "where": "test/provider.test.mjs:205"
+    },
+    {
+      "host": "b",
+      "url": "https://b/1",
+      "where": "test/provider.test.mjs:354"
+    },
+    {
+      "host": "b",
+      "url": "https://b/${Math.random(",
+      "where": "test/provider.test.mjs:374"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/routing.test.mjs:59"
+    },
+    {
+      "host": "b",
+      "url": "https://b",
+      "where": "test/routing.test.mjs:60"
+    },
+    {
+      "host": "c",
+      "url": "https://c",
+      "where": "test/routing.test.mjs:61"
+    },
+    {
+      "host": "hn",
+      "url": "https://hn",
+      "where": "test/routing.test.mjs:63"
+    },
+    {
+      "host": "dup",
+      "url": "https://dup",
+      "where": "test/routing.test.mjs:76"
+    },
+    {
+      "host": "dup",
+      "url": "https://dup",
+      "where": "test/routing.test.mjs:77"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/routing.test.mjs:86"
+    },
+    {
+      "host": "b",
+      "url": "https://b",
+      "where": "test/routing.test.mjs:87"
+    },
+    {
+      "host": "c",
+      "url": "https://c",
+      "where": "test/routing.test.mjs:88"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/routing.test.mjs:100"
+    },
+    {
+      "host": "p${i",
+      "url": "https://p${i",
+      "where": "test/routing.test.mjs:136"
+    },
+    {
+      "host": "e${i",
+      "url": "https://e${i",
+      "where": "test/routing.test.mjs:140"
+    },
+    {
+      "host": "deepseek.com",
+      "url": "https://deepseek.com",
+      "where": "test/sources-mocked.test.mjs:41"
+    },
+    {
+      "host": "deepseek.com",
+      "url": "https://deepseek.com",
+      "where": "test/sources-mocked.test.mjs:54"
+    },
+    {
+      "host": "news.ycombinator.com",
+      "url": "https://news.ycombinator.com/item?id=42",
+      "where": "test/sources-mocked.test.mjs:70"
+    },
+    {
+      "host": "a.com",
+      "url": "https://a.com",
+      "where": "test/sources-mocked.test.mjs:78"
+    },
+    {
+      "host": "good.com",
+      "url": "https://good.com",
+      "where": "test/sources-mocked.test.mjs:80"
+    },
+    {
+      "host": "good.com",
+      "url": "https://good.com",
+      "where": "test/sources-mocked.test.mjs:86"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo",
+      "where": "test/sources-mocked.test.mjs:108"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo",
+      "where": "test/sources-mocked.test.mjs:120"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a/b",
+      "where": "test/sources-mocked.test.mjs:147"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/expressjs/express",
+      "where": "test/sources-mocked.test.mjs:170"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/expressjs/express",
+      "where": "test/sources-mocked.test.mjs:179"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/norepo",
+      "where": "test/sources-mocked.test.mjs:180"
+    },
+    {
+      "host": "juejin.cn",
+      "url": "https://juejin.cn/post/7685188623412133898",
+      "where": "test/sources-mocked.test.mjs:219"
+    },
+    {
+      "host": "a",
+      "url": "https://a",
+      "where": "test/sources-mocked.test.mjs:241"
+    },
+    {
+      "host": "b",
+      "url": "https://b",
+      "where": "test/sources-mocked.test.mjs:247"
+    },
+    {
+      "host": "ok",
+      "url": "https://ok",
+      "where": "test/sources-mocked.test.mjs:259"
+    },
+    {
+      "host": "export.arxiv.org",
+      "url": "http://export.arxiv.org",
+      "where": "test/sources-mocked.test.mjs:283"
+    },
+    {
+      "host": "arxiv.org",
+      "url": "http://arxiv.org/abs/2401.1",
+      "where": "test/sources-mocked.test.mjs:289"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/noise/a",
+      "where": "test/sources-mocked.test.mjs:321"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/noise/b",
+      "where": "test/sources-mocked.test.mjs:322"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/noise/c",
+      "where": "test/sources-mocked.test.mjs:323"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/good/repo",
+      "where": "test/sources-mocked.test.mjs:326"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/edge/99",
+      "where": "test/sources-mocked.test.mjs:344"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/edge/100",
+      "where": "test/sources-mocked.test.mjs:345"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 8,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 46,
+    "pushed_at": "2026-09-30T07:59:26Z",
+    "created_at": "2026-09-30T06:16:08Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/adapt.js",
+    "lib/enrich.js",
+    "lib/merge.js",
+    "lib/parse/bing.js",
+    "lib/provider.js",
+    "lib/request-policy.js",
+    "lib/route.js",
+    "lib/sources/arxiv.js",
+    "lib/sources/bing.js",
+    "lib/sources/csdn.js",
+    "lib/sources/github.js",
+    "lib/sources/hackernews.js",
+    "lib/sources/juejin.js",
+    "lib/sources/npm.js",
+    "lib/sources/registry.js",
+    "lib/text.js",
+    "lib/tls-ca.js",
+    "package.json",
+    "scripts/lint.mjs",
+    "scripts/verify.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-web-search-zerokey",
+      "text": "**给 DeepSeek Harness（DSH）的零 key 联网搜索。**\n\n不填任何 API key · 不启任何本地服务 · 不消耗模型积分。\n\n---"
+    },
+    {
+      "section": "它解决什么问题",
+      "text": "给 AI 装上「联网搜索」，通常要先过一道坎：\n\n| 常见方案 | 你要付出的代价 |\n|---|---|\n| DSH 官方搜索 | **每次搜索 = 一次完整模型 turn**，直接扣积分 |\n| Google / Bing 官方 API | 要申请 key（Bing 的还**已于 2025-08-11 退役**） |\n| SearXNG | 要自己跑一个 Docker 实例并长期维护 |\n| Tavily / Brave 等 | 要 key，免费额度会耗尽 |\n\n**这个插件不需要任何 key，装完就能搜。**\n\n因为它走的是「抓公开网页 + 调公开接口」——公开信息本来就不需要授权。\n\n---"
+    },
+    {
+      "section": "DSH 桌面版（推荐 —— 装完即用）",
+      "text": "侧栏点 **插件** → 搜索框输入 `zerokey` → **安装**。\n\n装完 `Cmd+Q` 完全退出 DSH 再重开即可，**不需要任何额外配置**。"
+    },
+    {
+      "section": "命令行 / Web 版",
+      "text": "从 npm 装：\n\n```bash\ndsh plugin --profile web add dsh-web-search-zerokey\n```\n\n从 GitHub 装（npm 尚未发布新版本时）：\n\n```bash\ndsh plugin --profile web add github:AllenCoderBug/dsh-web-search-zerokey\n```"
+    },
+    {
+      "section": "桌面版手工装（GUI 市场不可用时）",
+      "text": "**三步，缺一不可**（只改声明不装包 = 插件加载失败）。\n\n**1. 改 `~/.dsh/profiles/desktop/package.json`**\n\n```jsonc\n{\n  \"dependencies\": {\n    \"dsh-web-search-zerokey\": \"^1.0.4\"   // 用最新版本号\n  },\n\n**2. 装包**（在 profile 目录执行）\n\n```bash\ncd ~/.dsh/profiles/desktop\npnpm install\n```\n\n> 桌面版自带 pnpm，但它不在你的 `PATH` 里。\n> 若提示 `pnpm: command not found`，用 App 内置的那个：\n> ```bash\n> node \"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/pnpm/bin/pnpm.cjs\" install\n> ```\n\n**3. `Cmd+Q` 完全退出 DSH 再重开**"
+    },
+    {
+      "section": "桌面版手工装（GUI 市场不可用时）",
+      "text": "> ⚠️ 桌面版的 profile 叫 `desktop`，但**不能用 `dsh plugin` 装**，会报：\n> `error: profile \"desktop\" is managed exclusively by the Electron application`\n> 这是 `@deepseek-ai/dsh` 的 `lib/bin.js` 里的硬性限制。\n\n---"
+    },
+    {
+      "section": "验证是否生效",
+      "text": "重启后跑一次自检：\n\n```bash\nnode ~/.dsh/profiles/desktop/node_modules/dsh-web-search-zerokey/scripts/verify.mjs\n```\n\n它会逐项确认：安装完整性 / pin 护栏 / **进程是否真的加载了新代码** / 功能冒烟。\n全部通过会打印 `插件已生效 ✅`。\n\n> ⚠️ **关窗口 ≠ 退出进程**。macOS 上必须 `Cmd+Q`。\n\n---"
+    },
+    {
+      "section": "关于 provider 绑定",
+      "text": "**装完即用，因为插件自带绑定** —— 它会把自己的 patch 层写进组合，\n把 `web` 的搜索 provider 指向自己。\n\n层序是「插件的 patch → 你自己的 `cordis.patch.yml`」，**你的配置在后、会覆盖它**，\n所以随时可以改。\n\n**这一步为什么关键**：DSH 官方的搜索 provider 每次搜索消耗\n**一次完整模型 turn**，直接扣积分；而它默认就在列表里。\n不显式指定就可能 fallback 到它。\n\n**想换回官方搜索**，在你自己的 `cordis.patch.yml` 里覆写：\n\n```yaml\n- id: web\n  config:\n    searchProvider: deepseek-official\n```\n\n> 本仓库有 `test/pin-guard.test.mjs` 锁死默认值，防止误改导致意外扣费。\n\n---"
+    },
+    {
+      "section": "它会搜出什么",
+      "text": "7 个数据源并行，结果自动去重合并：\n\n| 源 | 类型 | 特点 |\n|---|---|---|\n| Bing | 抓页 | 主源，覆盖最广 |\n| Hacker News | 公开 API | 真人技术讨论，**带热度与评论数** |\n| GitHub | 公开 API | 仓库检索 |\n| arXiv | 公开 API | 论文 |\n| npm | 公开 API | 包元数据 |\n| 掘金 / CSDN | 公开 API | 中文技术 |\n\n**中英文自动路由**：中文技术查询走掘金/CSDN，生活类查询只走 Bing（不混入英文源）。\n\n实际效果（查 `mcp server typescript`）：\n\n```\nBing 6 条 + Hacker News 2 条 + GitHub 2 条\n```\n\n带**热度信号**的条目长这样——这是普通搜索结果页给不出的："
+    },
+    {
+      "section": "它会搜出什么",
+      "text": "```\nShow HN: Kreuzberg – Modern async Python library...   Hacker News · 197 分 · 75 评论 · 2025-02-15\nLeonHartley/Coerce-rs                                 ★752 · Rust · 更新 6 天前\n```\n\n---"
+    },
+    {
+      "section": "配置项（都可选）",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `multiSource` | `true` | 关掉则只走 Bing |\n| `includeContent` | `false` | 抓正文片段（实测延迟 +466%，谨慎开） |\n| `maxSnippetChars` | `500` | 单条摘要上限 |\n| `cacheTtlMs` | `300000` | 缓存 TTL（5 分钟） |\n| `timeoutMs` | `12000` | 总超时 |\n\n---"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **`bing` 源是抓页**，该路径位于其 `robots.txt` 的 `Disallow` 列表内。\n  其余 6 个源是公开 API，无此问题。使用者请自行确认所在司法辖区的合规性。\n- **arXiv 需严守 3 秒/次**（官方 ToU 硬性要求），插件已强制，请勿调低。\n- GitHub 匿名限流 10 次/小时，撞限时会自动冷却该源。\n\n---"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\ngit clone https://github.com/AllenCoderBug/dsh-web-search-zerokey.git\ncd dsh-web-search-zerokey\nnpm test          # 162 个用例\n```\n\n设计与实现细节见 [CONTRIBUTING.md](./CONTRIBUTING.md) 与\n[UPGRADE-PLAN.md](./UPGRADE-PLAN.md)（含每条决策的依据分级）。"
+    },
+    {
+      "section": "致谢",
+      "text": "Provider 接口形态参考了 [`dsh-web-search-searxng`](https://github.com/chinng-inta/dsh-web-search-searxng)\n（MIT，by chinng_inta）。实现（HTML 抓取解析、多源聚合、路由、自适应、TLS CA 注入）为独立开发。"
+    },
+    {
+      "section": "许可",
+      "text": "[MIT](./LICENSE)"
+    }
+  ],
+  "skipped": []
+}
