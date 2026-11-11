@@ -30,7 +30,7 @@ def walk_evidence(x):
  elif isinstance(x,list):
   for v in x:yield from walk_evidence(v)
 
-def validate(repo):
+def validate(repo,tier=None):
  slug=repo.replace("/","__");src=ROOT/"work"/slug;errors=[]
  paths={"facts":ROOT/"results"/"facts"/(slug+".json"),"card":ROOT/"results"/"cards"/(slug+".json"),"units":ROOT/"results"/"units"/(slug+".jsonl")}
  if not all(p.exists() for p in paths.values()):
@@ -65,7 +65,10 @@ def validate(repo):
  if primary=="other" and not card.get("topics",{}).get("proposed"):errors.append("other topic needs proposed")
  display=(facts.get("manifest",{}).get("displayName") or facts.get("manifest",{}).get("name") or repo.split("/")[-1]).lower()
  intents=[u for u in units if u.get("type")=="intent"]
- if not 8<=len(intents)<=12:errors.append(f"A-tier intent count {len(intents)} not 8..12")
+ tier=tier or card.get("tier")
+ mode=card.get("analysis_mode")
+ intent_range=(8,12) if tier=="A" else ((6,8) if tier=="B" else ((2,3) if mode=="lite" else (6,6)))
+ if not intent_range[0]<=len(intents)<=intent_range[1]:errors.append(f"{tier}-tier {mode or ''} intent count {len(intents)} not {intent_range[0]}..{intent_range[1]}")
  for u in intents:
   if display and display in u["text"].lower():errors.append(f"intent contains plugin name: {u['unit_id']}")
  for i,a in enumerate(intents):
@@ -83,6 +86,11 @@ def validate(repo):
   n=len(u["text"])
   if not 40<=n<=120:errors.append(f"{u['type']} length {n}: {u['unit_id']}")
  if len(groups.get("caveat",[]))>3:errors.append("more than 3 caveats")
+ if tier=="C":
+  if mode not in {"lite","promote"}:errors.append("C-tier card requires analysis_mode lite or promote")
+  feature_range=(1,2) if mode=="lite" else (2,3)
+  if not feature_range[0]<=len(groups.get("feature",[]))<=feature_range[1]:
+   errors.append(f"C-tier {mode} feature count {len(groups.get('feature',[]))} not {feature_range[0]}..{feature_range[1]}")
  score=sum(card.get("quality",{}).get(k,{}).get("score",0) for k in ("completeness","code","docs","maintenance","tests"))
  expected="S" if score>=22 and card["quality"]["completeness"]["score"]==5 and card["quality"]["code"]["score"]==5 else ("A" if score>=17 else ("B" if score>=12 else ("C" if score>=7 else "D")))
  if card.get("quality",{}).get("grade")!=expected:errors.append(f"quality grade mismatch: score {score} expects {expected}")
@@ -90,11 +98,11 @@ def validate(repo):
 
 def main():
  ap=argparse.ArgumentParser();ap.add_argument("--list",default=str(ROOT/"lists"/"calibration-top30.csv"));ap.add_argument("--repo",action="append");a=ap.parse_args()
- with open(a.list,newline="",encoding="utf-8-sig") as f:repos=[r["repo"] for r in csv.DictReader(f)]
- if a.repo:repos=[r for r in repos if r in set(a.repo)]
+ with open(a.list,newline="",encoding="utf-8-sig") as f:rows=list(csv.DictReader(f))
+ if a.repo:rows=[r for r in rows if r["repo"] in set(a.repo)]
  fail=0
- for repo in repos:
-  errors=validate(repo)
+ for row in rows:
+  repo=row["repo"];errors=validate(repo,row.get("tier"))
   print(json.dumps({"repo":repo,"ok":not errors,"errors":errors},ensure_ascii=False))
   fail+=bool(errors)
  return bool(fail)

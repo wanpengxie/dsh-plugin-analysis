@@ -6,7 +6,8 @@ import argparse, csv, datetime as dt, json, os, pathlib, sqlite3, subprocess, sy
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DB = ROOT / "work" / "supervisor.sqlite3"
 SNAPSHOT = ROOT / "results" / "supervision" / "status.json"
-LIST = ROOT / "lists" / "high-priority.csv"
+LISTS = {"A": ROOT/"lists"/"high-priority.csv", "B": ROOT/"lists"/"high-priority.csv",
+         "C": ROOT/"lists"/"zero-star.csv"}
 VALIDATOR = ROOT / "scripts" / "validate_results.py"
 CLAIMS_PAUSED = ROOT / ".supervision" / "pause-claims"
 
@@ -28,8 +29,13 @@ def connect():
     return db
 
 def rows(tier):
-    with LIST.open(newline="", encoding="utf-8-sig") as f:
+    source = LISTS.get(tier, LISTS["A"])
+    with source.open(newline="", encoding="utf-8-sig") as f:
         return [r for r in csv.DictReader(f) if not tier or r["tier"] == tier]
+
+def list_for_repo(repo):
+    db = connect(); row = db.execute("SELECT tier FROM tasks WHERE repo=?", (repo,)).fetchone()
+    return LISTS.get(row["tier"] if row else "A", LISTS["A"])
 
 def valid(repo):
     slug = repo.replace("/", "__")
@@ -38,7 +44,7 @@ def valid(repo):
                 ROOT/"results"/"units"/(slug+".jsonl")]
     if not all(p.is_file() for p in required):
         return False
-    p = subprocess.run([sys.executable, str(VALIDATOR), "--list", str(LIST), "--repo", repo],
+    p = subprocess.run([sys.executable, str(VALIDATOR), "--list", str(list_for_repo(repo)), "--repo", repo],
                        cwd=ROOT, text=True, capture_output=True)
     return p.returncode == 0
 
@@ -191,7 +197,8 @@ def audit():
             errors.append(f"done task source cleaned before validated checkpoint: {repo}")
     known = {x["repo"] for x in db.execute("SELECT repo FROM tasks")}
     loaded_tiers = {x["tier"] for x in db.execute("SELECT DISTINCT tier FROM tasks")}
-    expected = {x["repo"] for x in rows(None) if x["tier"] in loaded_tiers}
+    expected = set()
+    for tier in loaded_tiers: expected.update(x["repo"] for x in rows(tier))
     missing = sorted(expected-known)
     if missing:
         errors.append(f"{len(missing)} list rows absent from ledger")
@@ -223,8 +230,8 @@ def snapshot(db=None):
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("sync"); p.add_argument("--tier", choices=["A","B"], default="A")
-    p = sub.add_parser("claim"); p.add_argument("--worker", required=True); p.add_argument("--tier", choices=["A","B"], default="A")
+    p = sub.add_parser("sync"); p.add_argument("--tier", choices=["A","B","C"], default="A")
+    p = sub.add_parser("claim"); p.add_argument("--worker", required=True); p.add_argument("--tier", choices=["A","B","C"], default="A")
     p = sub.add_parser("owned"); p.add_argument("--worker", required=True)
     p = sub.add_parser("finish"); p.add_argument("--repo", required=True); p.add_argument("--worker", required=True)
     p = sub.add_parser("reject"); p.add_argument("--repo", required=True); p.add_argument("--worker", required=True); p.add_argument("--error", required=True); p.add_argument("--no-retry", action="store_true")

@@ -161,4 +161,7 @@ luna 的产出：
 ## 6. TODO：C 层（0 star，后续处理）
 
 - 范围：`lists/zero-star.csv`，排重前 12,660 个。
-- 等 A+B 做完、检索冒烟测试暴露的问题都改完以后再开始。
+- A+B 完成后采用 C-lite 漏斗：静态 facts 后由 `scripts/c_route.py` 路由。
+- `promote`：7 项实现/维护信号至少命中 6 项，深读入口、注册面和核心模块，生成 6 条 intent、2–3 条 feature。
+- `lite`：只读入口、bundle 与注册代码，生成 2–3 条 intent、1–2 条 feature；declared/readme 仍由脚本抽取。
+- C 路由结果写入 `results/c-routing/`，随 checkpoint 提交，源码在验证与 checkpoint 后删除。

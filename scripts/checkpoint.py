@@ -5,7 +5,8 @@ import fcntl, json, pathlib, sqlite3, subprocess, sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 DB=ROOT/"work"/"supervisor.sqlite3"
 LOCK=ROOT/"work"/"checkpoint.lock"
-KINDS=("facts","cards","generated","units")
+KINDS=("facts","cards","c-routing","generated","units")
+JSON_KINDS={"facts","cards","c-routing"}
 def run(*args,check=True,input=None):
  return subprocess.run(args,cwd=ROOT,text=True,capture_output=True,check=check,input=input)
 LOCK.parent.mkdir(parents=True,exist_ok=True)
@@ -21,7 +22,7 @@ paths=[]
 for repo in repos:
  slug=repo.replace("/","__")
  for kind in KINDS:
-  suffix=".json" if kind in ("facts","cards") else ".jsonl"
+  suffix=".json" if kind in JSON_KINDS else ".jsonl"
   p=ROOT/"results"/kind/(slug+suffix)
   if p.is_file(): paths.append(str(p.relative_to(ROOT)))
 for rel in ("results/progress.jsonl","results/supervision/status.json","scripts/checkpoint.py","scripts/supervisor.py"):
@@ -50,7 +51,7 @@ check=run("git","diff","--cached","--check",check=False)
 if check.returncode:
  print(check.stdout+check.stderr,file=sys.stderr); raise SystemExit(check.returncode)
 count=run("git","diff","--cached","--name-only").stdout.splitlines()
-run("git","commit","-m",f"Checkpoint {len(repos)} validated A-tier analyses")
+run("git","commit","-m",f"Checkpoint {len(repos)} validated DSH analyses")
 run("git","push","origin","main")
 run("git","fetch","origin","main")
 head=run("git","rev-parse","HEAD").stdout.strip(); remote=run("git","rev-parse","origin/main").stdout.strip()
