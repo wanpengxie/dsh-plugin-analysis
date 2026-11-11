@@ -1,0 +1,894 @@
+{
+  "repo": "AcerGL/dsh-pixiv-scroll",
+  "commit": "0cfb81bfc57907c71c31afcf61cadf2a6508c23e",
+  "extracted_at": "2026-11-11T07:12:45.107873+00:00",
+  "tree": {
+    "files": 43,
+    "bytes": 501909,
+    "lines_by_language": {
+      "JSON": 89,
+      "JavaScript": 10420,
+      "Markdown": 548,
+      "Other": 116,
+      "Python": 96,
+      "YAML": 23
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "lib/auth.mjs",
+      "lib/bookmarks.mjs",
+      "lib/config.mjs",
+      "lib/deliver.mjs",
+      "lib/explore.mjs",
+      "lib/feedback.mjs",
+      "lib/profile.mjs",
+      "lib/proxyfind.mjs",
+      "lib/pxclient.mjs",
+      "lib/route.mjs",
+      "lib/save.mjs",
+      "lib/seen.mjs",
+      "lib/shrink.mjs",
+      "lib/shrink.py",
+      "lib/taste.mjs",
+      "lib/toolset.mjs",
+      "lib/transport.mjs",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "prompts/duty.md",
+      "selfcheck-auth.mjs",
+      "selfcheck-bookmarks.mjs",
+      "selfcheck-client.mjs",
+      "selfcheck-docs.mjs",
+      "selfcheck-explore.mjs",
+      "selfcheck-external.mjs",
+      "selfcheck-feedback.mjs",
+      "selfcheck-host.mjs",
+      "selfcheck-io.mjs",
+      "selfcheck-proxy.mjs",
+      "selfcheck-shell.mjs",
+      "selfcheck-taste.mjs",
+      "selfcheck-tools.mjs",
+      "selfcheck.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-pixiv-aesthetic",
+    "version": "0.1.0",
+    "description": "DSH 插件：按你的口味刷 Pixiv —— 搜、筛、看图精选，存到本地或发给你。网络在直连/代理/外部源之间自动选路。",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "pixiv",
+      "illustration",
+      "duty"
+    ],
+    "license": "MIT",
+    "type": "module",
+    "main": "index.js",
+    "//build": "本插件零运行时依赖、无编译步骤（纯 Node 内置模块）。但 git 直装时 DSH 会执行 `pnpm install` + `pnpm run build` 准备 checkout，所以这里给出一个显式的空 build（外加自检），免得因为「没有 build 脚本」被判定为准备失败。",
+    "scripts": {
+      "build": "node -e \"process.exit(0)\"",
+      "selfcheck": "node selfcheck.mjs",
+      "selfcheck:all": "node selfcheck.mjs && node selfcheck-taste.mjs && node selfcheck-auth.mjs && node selfcheck-external.mjs && node selfcheck-tools.mjs && node selfcheck-io.mjs && node selfcheck-host.mjs && node selfcheck-client.mjs && node selfcheck-docs...."
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "lib",
+      "prompts",
+      "locale",
+      "icon.svg",
+      "README.md",
+      "LICENSE",
+      "selfcheck.mjs",
+      "selfcheck-io.mjs",
+      "selfcheck-tools.mjs",
+      "selfcheck-host.mjs",
+      "selfcheck-auth.mjs",
+      "selfcheck-client.mjs",
+      "selfcheck-docs.mjs",
+      "selfcheck-external.mjs",
+      "selfcheck-shell.mjs",
+      "selfcheck-proxy.mjs",
+      "selfcheck-taste.mjs",
+      "selfcheck-feedback.mjs",
+      "selfcheck-explore.mjs",
+      "selfcheck-bookmarks.mjs"
+    ],
+    "engines": {
+      "dsh": ">=0.2.0-rc.2",
+      "node": ">=22"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-settings-plugins"
+        ]
+      },
+      "compatibility": {
+        "dshReleases": {
+          "0.2.0-rc.2": "compatible",
+          "0.2.1-rc.3": "compatible"
+        },
+        "note": "纯 host + web client 插件，零运行时依赖（只用 Node 内置模块）。"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# ============================================================================\n# dsh-pixiv-aesthetic —— DSH bundle patch（插件**自带**的挂载声明）\n# ============================================================================\n# 这就是\"标准 DSH 插件\"的样子：包自己声明要往 profile 的配置树里插什么。\n# 装上之后，profile 只要在 dsh.profile.bundles 里列出本包名即生效，\n# 不用再手改 profile 自己的 cordis.patch.yml：\n#\n#   dsh plugin --profile desktop add dsh-pixiv-aesthetic\n#   （本地开发：dsh plugin --profile desktop add link:<你的插件目录>）\n#\n# ⚠️ 装完**必须重启一次 DSH** —— bundle 层要重启才组装。\n#\n# ⚠️ 关于 config：这里的值只是**兜底默认**。真值是插件家目录里的\n#    $DSH_HOME/pixiv-scroll/config.json（设置页可改）。\n#    原因（刷B站那边实测过）：profile 里 entry 的 config 段不进插件 user 层，\n#    宿主那边始终是 schema 默认值。所以改这里对运行期无效 —— 要改去设置页。\n# ============================================================================\n\n- insert:\n    - id: pixiv-scroll\n      name: dsh-pixiv-aesthetic\n      config:\n        enabled: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:208"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:223"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:303"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "selfcheck-host.mjs:22"
+    },
+    {
+      "name": "PIXIV_PROXY",
+      "kind": "env",
+      "where": "selfcheck.mjs:14"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "client.js:245"
+    },
+    {
+      "host": "你的反代.example.com",
+      "url": "https://你的反代.example.com",
+      "where": "client.js:245"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080（留空",
+      "where": "client.js:249"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897（Clash",
+      "where": "client.js:255"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897（留空直连）",
+      "where": "client.js:258"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "index.js:497"
+    },
+    {
+      "host": "oauth.secure.pixiv.net",
+      "url": "https://oauth.secure.pixiv.net/auth/token",
+      "where": "lib/auth.mjs:21"
+    },
+    {
+      "host": "app-api.pixiv.net",
+      "url": "https://app-api.pixiv.net",
+      "where": "lib/auth.mjs:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "lib/config.mjs:17"
+    },
+    {
+      "host": "${noslash",
+      "url": "http://${noSlash",
+      "where": "lib/config.mjs:116"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ranking.php?mode=daily&content=illust&format=json",
+      "where": "lib/proxyfind.mjs:54"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "lib/proxyfind.mjs:120"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/**，否则",
+      "where": "lib/pxclient.mjs:8"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ajax/search/artworks/",
+      "where": "lib/pxclient.mjs:146"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ranking.php?",
+      "where": "lib/pxclient.mjs:157"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ajax/illust/${id",
+      "where": "lib/pxclient.mjs:173"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/artworks/${id",
+      "where": "lib/pxclient.mjs:211"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ajax/illust/${id",
+      "where": "lib/pxclient.mjs:218"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ajax/user/${id",
+      "where": "lib/pxclient.mjs:256"
+    },
+    {
+      "host": "${host",
+      "url": "https://${host",
+      "where": "lib/pxclient.mjs:364"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/${m[1",
+      "where": "lib/pxclient.mjs:387"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/artworks/${x.id",
+      "where": "lib/pxclient.mjs:424"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/artworks/${d.id",
+      "where": "lib/pxclient.mjs:450"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/artworks/${c.illust_id",
+      "where": "lib/pxclient.mjs:488"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ranking.php?mode=daily&content=illust&format=json",
+      "where": "lib/route.mjs:28"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080`",
+      "where": "lib/route.mjs:36"
+    },
+    {
+      "host": "他的反代.com`），插件保持官方路径不变，只换",
+      "url": "https://他的反代.com`），插件保持官方路径不变，只换",
+      "where": "lib/route.mjs:37"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ranking.php?mode=daily",
+      "where": "lib/route.mjs:40"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/ranking.php?mode=daily",
+      "where": "lib/route.mjs:41"
+    },
+    {
+      "host": "x",
+      "url": "http://x/api/pixiv`），就保留那段前缀",
+      "where": "lib/route.mjs:44"
+    },
+    {
+      "host": "${b",
+      "url": "http://${b",
+      "where": "lib/route.mjs:57"
+    },
+    {
+      "host": "${this.mirrorhost",
+      "url": "https://${this.mirrorHost",
+      "where": "lib/route.mjs:292"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/artworks/${item.id",
+      "where": "lib/save.mjs:184"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/",
+      "where": "lib/transport.mjs:33"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "selfcheck-auth.mjs:78"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "selfcheck-auth.mjs:95"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/c/250x250_80_a2/img-master/img/2026/11/05/00/00/00/333_p0_square1200.jpg",
+      "where": "selfcheck-external.mjs:44"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "selfcheck-external.mjs:58"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ranking.php?mode=daily&content=illust&format=json",
+      "where": "selfcheck-external.mjs:67"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/img-master/img/2026/11/05/00/00/00/333_p0.jpg",
+      "where": "selfcheck-external.mjs:95"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "selfcheck-external.mjs:124"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "selfcheck-host.mjs:105"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/x/y.jpg",
+      "where": "selfcheck-io.mjs:40"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/artworks/999",
+      "where": "selfcheck-io.mjs:77"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9999",
+      "where": "selfcheck-proxy.mjs:47"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9999",
+      "where": "selfcheck-proxy.mjs:51"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "selfcheck-proxy.mjs:71"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "selfcheck-proxy.mjs:75"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "selfcheck-proxy.mjs:79"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "selfcheck-proxy.mjs:87"
+    },
+    {
+      "host": "）",
+      "url": "http://）",
+      "where": "selfcheck-shell.mjs:147"
+    },
+    {
+      "host": "pixiv.re",
+      "url": "https://pixiv.re/",
+      "where": "selfcheck-tools.mjs:29"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "selfcheck-tools.mjs:33"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/",
+      "where": "selfcheck-tools.mjs:34"
+    },
+    {
+      "host": "a.b",
+      "url": "http://a.b///",
+      "where": "selfcheck-tools.mjs:35"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com",
+      "where": "selfcheck-tools.mjs:36"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/api/pixiv",
+      "where": "selfcheck-tools.mjs:37"
+    },
+    {
+      "host": "a.b",
+      "url": "http://a.b",
+      "where": "selfcheck-tools.mjs:39"
+    },
+    {
+      "host": "host",
+      "url": "http://host:1",
+      "where": "selfcheck-tools.mjs:48"
+    },
+    {
+      "host": "host",
+      "url": "http://host:1",
+      "where": "selfcheck-tools.mjs:58"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "selfcheck.mjs:14"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/c/250x250_80_a2/img-master/img/2026/11/04/14/38/39/151670647_p0_square1200.jpg",
+      "where": "selfcheck.mjs:34"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/img-master/img/2026/11/04/14/38/39/151670647_p0.jpg",
+      "where": "selfcheck.mjs:35"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/c/540x540_70/img-master/img/2026/01/02/03/04/05/123456789_p2_master1200.jpg",
+      "where": "selfcheck.mjs:37"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/img-master/img/2026/01/02/03/04/05/123456789_p2.jpg",
+      "where": "selfcheck.mjs:38"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a.jpg",
+      "where": "selfcheck.mjs:39"
+    },
+    {
+      "host": "i.pximg.net",
+      "url": "https://i.pximg.net/c/128x128/img-master/img/x/y/z_p0_bogus.avif",
+      "where": "selfcheck.mjs:40"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "selfcheck.mjs:103"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "selfcheck.mjs:105"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "selfcheck.mjs:106"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "selfcheck.mjs:122"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "selfcheck.mjs:123"
+    },
+    {
+      "host": "10.255.255.1",
+      "url": "https://10.255.255.1/x",
+      "where": "selfcheck.mjs:134"
+    },
+    {
+      "host": "10.255.255.1",
+      "url": "https://10.255.255.1/x",
+      "where": "selfcheck.mjs:147"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "selfcheck.mjs:148"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "selfcheck.mjs:148"
+    },
+    {
+      "host": "evil.example",
+      "url": "https://evil.example/x.jpg",
+      "where": "selfcheck.mjs:162"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ranking.php?mode=daily&content=illust&format=json",
+      "where": "selfcheck.mjs:168"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "selfcheck.mjs:170"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/ranking.php?mode=daily&content=illust&format=json",
+      "where": "selfcheck.mjs:171"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/",
+      "where": "selfcheck.mjs:173"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/ranking.php?mode=daily&content=illust&format=json",
+      "where": "selfcheck.mjs:174"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/ranking.php?mode=daily&content=illust&format=json",
+      "where": "selfcheck.mjs:177"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/api/pixiv",
+      "where": "selfcheck.mjs:179"
+    },
+    {
+      "host": "x.com",
+      "url": "https://x.com/api/pixiv/ranking.php?mode=daily&content=illust&format=json",
+      "where": "selfcheck.mjs:180"
+    },
+    {
+      "host": "my.proxy.dev",
+      "url": "https://my.proxy.dev",
+      "where": "selfcheck.mjs:182"
+    },
+    {
+      "host": "my.proxy.dev",
+      "url": "https://my.proxy.dev/ranking.php?mode=daily&content=illust&format=json",
+      "where": "selfcheck.mjs:183"
+    },
+    {
+      "host": "a.b",
+      "url": "http://a.b",
+      "where": "selfcheck.mjs:188"
+    },
+    {
+      "host": "a.b",
+      "url": "http://a.b",
+      "where": "selfcheck.mjs:189"
+    },
+    {
+      "host": "www.pixiv.net",
+      "url": "https://www.pixiv.net/ajax/illust/123",
+      "where": "selfcheck.mjs:192"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080",
+      "where": "selfcheck.mjs:192"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/ajax/illust/123",
+      "where": "selfcheck.mjs:193"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "selfcheck.mjs:198"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "selfcheck.mjs:199"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "selfcheck.mjs:210"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "pixiv_send",
+      "where": "selfcheck-tools.mjs:95"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_save",
+      "where": "selfcheck-tools.mjs:97"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_status",
+      "where": "selfcheck-tools.mjs:114"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_status",
+      "where": "selfcheck-tools.mjs:159"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_pick",
+      "where": "selfcheck-tools.mjs:166"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_works",
+      "where": "selfcheck-tools.mjs:167"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_save",
+      "where": "selfcheck-tools.mjs:168"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_send",
+      "where": "selfcheck-tools.mjs:169"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_send",
+      "where": "selfcheck-tools.mjs:170"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_save",
+      "where": "selfcheck-tools.mjs:176"
+    },
+    {
+      "kind": "tool",
+      "name": "pixiv_save",
+      "where": "selfcheck-tools.mjs:182"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-11-06T09:34:44Z",
+    "created_at": "2026-11-05T15:11:03Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "lib/auth.mjs",
+    "lib/bookmarks.mjs",
+    "lib/config.mjs",
+    "lib/deliver.mjs",
+    "lib/explore.mjs",
+    "lib/feedback.mjs",
+    "lib/profile.mjs",
+    "lib/proxyfind.mjs",
+    "lib/pxclient.mjs",
+    "lib/route.mjs",
+    "lib/save.mjs",
+    "lib/seen.mjs",
+    "lib/shrink.mjs",
+    "lib/taste.mjs",
+    "lib/toolset.mjs",
+    "lib/transport.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-pixiv-aesthetic",
+      "text": "> DSH 插件：按你的口味刷 Pixiv —— 搜、筛、**看图精选**，存到本地或发给你。\n\n**⚠️ 前提：你的机器得能上 pixiv。** 插件不内置代理、不代你绕过网络限制 ——\n详见 [装之前必须知道的一件事](#装之前必须知道的一件事这个插件不能帮你翻墙)。\n\n设置页和插件面板里显示的名字是 **`Pixiv 美学漫游`**；包名仍是 `dsh-pixiv-aesthetic`。\n两者不一样是**故意的**（显示名是另外指定的写法，包名跟站点名对齐更好认）。\n\n和「刷B站」是同一套路子的姊妹插件。区别在于 Pixiv 是**图片**，所以多了一层\n「真的把图看一眼再挑」。\n\n**零配置就能用**（在你能上 pixiv 的前提下），不需要登录。\n想更贴合口味可以选开登录（拿关注流和个性化推荐）。\n\n---"
+    },
+    {
+      "section": "它做什么",
+      "text": "- 按关键词 / 排行榜找候选，按标签权重、画质、新鲜度打分排序\n- **元数据先粗筛**（分级、页数、分辨率、排除标签、判重），再**读图精选**\n- 存成 `<根>/<画师>/<标题>_<ID>/001.jpg …` + `metadata.json`（含 sha256、来源、判定理由）\n- 发给你（走投递通道；没配通道就只落盘，**默认永远能用**）\n- 可选定时刷（谷时自跑）\n- 可选登录（多拿关注流 + 个性化推荐）\n\n---"
+    },
+    {
+      "section": "硬前提：你的机器得**能上 pixiv**",
+      "text": "插件不内置代理、不内置节点、不代你绕过任何网络限制。它做的事是\n「**你已经能上 pixiv 了，我帮你把刷这件事做得更聪明**」。\n\n**能不能上 pixiv 是你自己的事**，插件只负责在你能上的前提下把活干好。\n\n如果你上不了 pixiv，**这个插件对你没用** —— 这不是我们没做好，是下面这条链子断在第一步：\n\n| 环节 | 需要什么 | 上不了 pixiv 时 |\n|---|---|---|\n| **发现**图片（搜索 / 排行 / 推荐） | pixiv 的**元数据接口** | ❌ 只有官方有，镜像站**一个都没有** |\n| **取**图片字节 | `i.pximg.net` | ⚠️ 镜像站能代替 |\n| 但「取哪一张」 | 得先知道作品 ID | ❌ **而知道 ID 本身就意味着你已经能发现它了** |\n\n**所以「爬不了墙也能刷」这件事做不到。** 镜像站（`pixiv.re` 这类）的定位是\n「已知 ID 时帮你取图」，它**假设你已经能上官方站**——它替代的是图片域名，\n不是元数据接口。**发现图片这一步绕不过去。**"
+    },
+    {
+      "section": "硬前提：你的机器得**能上 pixiv**",
+      "text": "> 实测（2026-11-05）：`pixiv.re` 的 16 条路径穷举结果 —— 只有 `/<作品ID>.jpg`\n> 返回图片，其余（`/ajax/*`、`/ranking.php`、`/api/*`、`/search/*`、`/<id>.json`）\n> **全部 404**。同批探测的 `pixiv.nl` / `pixiv.cat` / `pixiviz.xyz` / `pixiv.moe` /\n> `pixivel.moe` / `pixivic` **没有一家提供搜索或排行**。"
+    },
+    {
+      "section": "那插件还能做什么",
+      "text": "一旦你能上 pixiv（不管是自己挂了代理、还是本来就在墙外），插件会在**四条路**里自己挑：\n\n| 路 | 什么时候用 |\n|---|---|\n| **外部源** | 你填了 `externalApi` —— **优先级最高**，见下 |\n| **直连** | 你的机器本来就能通（比如挂了 TUN 模式的代理） |\n| **代理** | 你填了 `proxyUrl`（如 `http://127.0.0.1:7897` 这类本地代理） |\n| **镜像** | 前三都拿不到**元数据**时，用 `pixiv.re` 取**图**（只有图） |\n\n判定方式是**实际探测**（并行试外部源/直连/代理，看谁真能拿到数据），不是按 IP 猜。\n实测数据：同一台机器十分钟内 TUN 时通时不通、裸直连整体超时、走代理 3/3 通\n—— 所以「通不通」是探测出来的，不是写死的。\n\n---"
+    },
+    {
+      "section": "「外部源」——接你自己能上 pixiv 的东西",
+      "text": "**这是给\"上不去 pixiv\"准备的唯一出口。**\n\n如果你的机器上已经有**任何能访问 pixiv 的东西** —— 自建反代、自己的服务器、\n某个能上 pixiv 的客户端 —— 把它的地址填进 `externalApi`，插件就走它。"
+    },
+    {
+      "section": "怎么填",
+      "text": "设置页 → 网络 → **外部源**，填一个地址：\n\n```\nhttp://127.0.0.1:8080              # 本机跑的\nhttps://你的反代.example.com        # 自己的反代\nhttps://你的服务器.com/api/pixiv    # 带子路径也行\n```\n\n**约定：那个地址要兼容 pixiv 官方接口形态。** 插件保持官方路径不变，只换 origin：\n\n```\nhttps://www.pixiv.net/ranking.php?mode=daily\n      ↓  换成你的地址\nhttps://你的反代.example.com/ranking.php?mode=daily\n```\n\n也就是说，只要你的反代**把 pixiv 的路径原样转发**，插件就能用它 ——\n搜索走 `/ajax/search/artworks/*`、排行走 `/ranking.php`、详情走 `/ajax/illust/*`。"
+    },
+    {
+      "section": "插件不做什么",
+      "text": "**插件不内置代理、不做任何绕过网络限制的事。** 那个能力得**你自己提供**：\n\n- 插件只负责「按官方路径去调一个 HTTP 地址」\n- 那个地址背后是什么（反代 / 服务器 / 客户端），插件不关心也不实现\n\n**为什么不做**：那类技术（内置节点、伪造/加密 SNI）的唯一用途就是绕过网络封锁，\n把它放进一个要开源的插件里不合适 —— 承担责任的是使用者，不是写代码的。\n\n> 参考：`PixEz` 的「免代理直连」用的是硬编码 pixiv 真实 IP + DoH\n> （`lib/er/hoster.dart`）或 ECH 加密 SNI（`lib/network/network_mode.dart`）。\n> 那是**它的**实现、**用户自己的**选择；插件只是留个口子，谁来接都行。"
+    },
+    {
+      "section": "优先级",
+      "text": "**外部源 > 直连 > 代理。** 你填了外部源就是明确说了走它 ——\n插件不会自作主张绕开它去直连（那等于无视你的配置）。\n\n插件会在设置页和工具返回里**如实告诉你现在处在哪一档**，不会让你对着\"搜到 0 条\"猜：\n\n```\n官方直连 ✓ · 镜像 ✓          ← 全功能\n官方经代理 ✓ · 镜像 ✗        ← 全功能\n官方 ✗ · 镜像 ✓\n  → 只能按作品 ID 取图，不能搜索/排行（镜像没有元数据接口）"
+    },
+    {
+      "section": "2. DSH 的聊天框不支持助手发图",
+      "text": "这不是插件的限制，是宿主的：官方 `dsh-attachment` 只做**用户 → 模型**的单向传递，\nassistant 侧的图片输出目前只是 forward-compatibility，生产适配器只声明 text-only。\n\n所以「发给你」只能走**投递通道**：\n\n| 通道 | 说明 |\n|---|---|\n| `local` | **默认，永远可用**。存到 `saveRoot`，并报告绝对路径 |\n| `qq` | 可选。需要你自己装 QQ 机器人（见下） |\n\n> 设计上刻意做成**通道接口**：QQ 只是其中一个适配器。\n> 别人没装 QQ 机器人也能用，默认那条「存到本地」不依赖任何外部配置。"
+    },
+    {
+      "section": "3. QQ 通道的两条限制",
+      "text": "- 插件**不带任何凭证**，`appId` / `appSecret` 全靠你自己配\n- **QQ 机器人默认没有主动消息权限**：不带宽内 `msg_id` 直接发会被拒（HTTP 400 / code `40034105`）。\n  只能在收到消息后约 **5 分钟**内的「被动窗口」里回。\n  窗口过了插件就**只落盘**，并如实说明原因 —— 不会假装发出去了。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "```bash"
+    },
+    {
+      "section": "① 从 npm（推荐 —— 这样在 DSH 的插件列表里能直接搜到）",
+      "text": "dsh plugin --profile <你的profile> add dsh-pixiv-aesthetic"
+    },
+    {
+      "section": "② 从 GitHub（没发 npm 或想用主分支时）",
+      "text": "dsh plugin --profile <你的profile> add github:AcerGL/dsh-pixiv-aesthetic"
+    },
+    {
+      "section": "③ 本地目录开发（改代码即时生效）",
+      "text": "dsh plugin --profile <你的profile> add link:<插件目录>\n```\n\n> ⚠️ **只有 registry（npm）装的包会出现在 DSH 的「可安装插件」列表里** ——\n> 那份列表是查注册表得到的。走 ② / ③ 的话**得手输上面那条 spec**，搜不到。\n\n装完**必须重启一次 DSH**（bundle 层要重启才组装，客户端 bundle 也只在启动时读）。\n\n`dsh plugin` 会自动做三件事，**不用手改 profile 的配置文件**：\n\n1. 用 pnpm 把包装进 `$DSH_HOME/profiles/<profile>`\n2. 因为本包声明了 `dsh.bundle`，把它加进 profile 的 `dsh.profile.bundles`\n3. 启动时应用包内自带的 `cordis.patch.yml`"
+    },
+    {
+      "section": "版本兼容",
+      "text": "本包在 `package.json` 里声明了：\n\n```json\n\"engines\": { \"dsh\": \">=0.2.0-rc.2\", \"node\": \">=22\" }\n```\n\n`engines.dsh` 是 DSH 的**准入闸门**：DSH 启动导入插件前会拿它跟运行时版本比对，\n不满足就不加载（并列入 `skippedBundles`）。判定用的是\n`semver.satisfies(v, range, { includePrerelease: true })`，所以预发布版\n（如 `0.2.1-rc.3`）也能正常落在范围内。\n\n真被拒了的话，DSH 会打印精确的豁免命令：\n\n```bash\ndsh plugin --profile <profile> allow-version <pkg@ver> --dsh-version <runtime> --accept-risk\n```\n\n（豁免存在 profile 的 `compatibility.json`，插件或 DSH 一升级就失效 —— 要重新授权。）"
+    },
+    {
+      "section": "桌面版注意",
+      "text": "桌面版（Electron）里 `dsh` **不在 PATH** 上。要手动跑命令的话用：\n\n```\n<安装目录>\\resources\\runtime\\cli\\bin\\dsh.cmd\n```\n\n这个包装内部已经设好 `ELECTRON_RUN_AS_NODE` 并带上 `--expose-internals`。\n\n定时刷也需要它 —— 在设置页把 `dshBin` 指到这个路径。\n\n---"
+    },
+    {
+      "section": "设置页",
+      "text": "装好后进 **设置 → Pixiv 美学漫游**。里面分几组：\n\n| 组 | 有什么 |\n|---|---|\n| **总开关** | 一键停用（定时轮也停） |\n| **网络** | 代理地址、图片镜像，和一个 **「测一下」** 按钮 |\n| **找什么** | 关键词（回车加入，点 ✕ 移除）、排行榜池塘 |\n| **口味** | 排除标签、必须标签、收藏下限、时间窗 |\n| **分级** | 收 R-18（**默认关**）、过滤 AI 生成 |\n| **登录（可选）** | 开关、刷哪些池子、贴 token、查看状态、退出 |\n| **存放** | 保存根目录、目录模板 |\n| **额度** | 每天最多存 / 每轮最多挑 / 单件最多几页 |\n| **发到哪** | 存到本地 / 发到 QQ |\n| **定时** | 间隔分钟数、谷时开关（中午 / 晚上） |\n| **状态** | 家目录、配置文件路径、全面自检 |\n\n**「测一下」** 会告诉你当前的实际情况，比如："
+    },
+    {
+      "section": "设置页",
+      "text": "```\n网络：官方经代理 ✓ · 镜像 ✗\n登录：未使用登录（游客模式）\n额度：今天已存 3/6，还能 3\n通道：存到本地 ✓  发到 QQ ✗（没窗口）\n\n配置**真值**在 `$DSH_HOME/pixiv-scroll/config.json`，改动即时生效（不用重启）。\n\n> ⚠️ 为什么不写 profile：profile 里 entry 的 `config` 段**不进插件 user 层**，\n> 宿主那边始终是 schema 默认值。所以改 profile 对运行期无效，改设置页才有效。\n\n---"
+    },
+    {
+      "section": "登录（可选，默认关）",
+      "text": "**不登录也能用**（游客模式：排行榜 + 搜索）。登录后能多拿两样：\n\n- **关注流** —— 你关注的人的新作\n- **个性化推荐** —— 这个才是\"更符合喜好\"的正主"
+    },
+    {
+      "section": "为什么走 App API 而不是网页登录",
+      "text": "实测（2026-11-04）用网页 cookie 请求这些接口**全是 404**：\n\n```\n我的关注流 / 我的收藏 / 推荐 / 为你推荐 / 我的资料\n```\n\n所以登录走 **`app-api.pixiv.net` + Bearer token**，需要你提供一个 `refresh_token`。"
+    },
+    {
+      "section": "三条安全线",
+      "text": "| 项 | 做法 |\n|---|---|\n| 权限 | **只申请 `readonly`** —— 从权限上就不可能点赞/收藏/关注/评论 |\n| 存放 | token 只写 `credential.json`，**不进配置、不进日志、不回显** |\n| 轮换 | pixiv 每次刷新**换发新 token**（旧的立即失效）→ 刷新后立刻落盘 + 文件锁 |\n\n代码里有两道闸门挡着凭证：HTTP 接口层删一次，`saveConfig` 里 `SECRET_KEYS` 再删一次。\n自检里还有一条断言专门验「client.js 没往 localStorage 写东西」。"
+    },
+    {
+      "section": "怎么拿 refresh_token",
+      "text": "插件**不做**账号密码登录 —— 那要起浏览器过 reCAPTCHA，在国内网络下成功率不高，\n而且会让你的密码经过插件。请自行获取 `refresh_token` 后贴进设置页。\n\n> ⚠️ 如果你在**别的地方**也用了同一个 token，两边会互相踢掉（因为轮换）。\n> 踢掉了就重新贴一个。"
+    },
+    {
+      "section": "登录坏了会怎样",
+      "text": "**不影响刷图。** 登录是可选的，它出问题只是少两个池子。\n自检里有一条断言专门验这个：打桩让关注流和推荐**双双失败**，`pixiv_search`\n仍然正常出结果，只是如实报告\"这两个池子为什么没成\"。\n\n---"
+    },
+    {
+      "section": "给 Agent 用的工具",
+      "text": "| 工具 | 干什么 |\n|---|---|\n| `pixiv_status` | 网络走哪条路、登录态、口味画像、今天存了几件、额度剩多少、通道哪些可用 |\n| `pixiv_taste` | 看 / 调**口味画像**（自动学出来的偏好）。默认关；开关它、改权重、清空重学都在这儿 |\n| `pixiv_feedback` | 记审美反馈：不喜欢这张 / 不要这个画师 / 不要这种风格。**三类扣的东西不同**，不会一刀切 |\n| `pixiv_explore` | 智能漫游：按画像推荐 / 有控制地探索新画师 / 从某张往外走 / 把情绪转成搜索计划。理由可解释，**没读图就说没读图** |\n| `pixiv_search` | 找候选（含打分与为什么；画像开着时会按口味反搜） |\n| `pixiv_pick` | 下缩略图到本地，好让模型 `read_image` 真的看一眼再挑 |\n| `pixiv_works` | 取原图（只下载，不占额度） |\n| `pixiv_save` | 正式收进图库（**唯一占额度的操作**，过分级/判重/额度闸门） |\n| `pixiv_send` | 投递出去（落盘 / QQ） |"
+    },
+    {
+      "section": "给 Agent 用的工具",
+      "text": "推荐的用法顺序：\n\n```\npixiv_status → pixiv_search → pixiv_pick（读图精选）→ pixiv_save → pixiv_send\n```\n\n> `pixiv_pick` 需要有视觉能力的模型。纯文本模型读不了图，那就跳过这一步，\n> 直接按 `pixiv_search` 的打分选，并在报告里说明这轮没读图。\n\n---"
+    },
+    {
+      "section": "定时刷",
+      "text": "设置页把 `intervalMin` 设成大于 0（单位分钟）就会定时跑。\n\n谷时规则：工作日 **9–12 / 14–18** 是高峰，其余（含周末）都算谷时，\n由 `peakValley` / `noon` / `night` 三个开关控制。\n\n一轮具体做什么写在 **`prompts/duty.md`** 里 —— 那份**用户可以改**，\n升级插件不会覆盖你改过的内容（新版会落到 `duty.md.new`）。\n\n---"
+    },
+    {
+      "section": "它怎么工作",
+      "text": "```\npixiv_search ──► taste.mjs（分级过滤 + 打分排序）\n     │             ↑ 登录时额外并入 关注流 / 个性化推荐\n     ▼\npixiv_pick ────► 模型 read_image 看一眼，挑出真正好的"
+    },
+    {
+      "section": "它怎么工作",
+      "text": "| 文件 | 职责 |\n|---|---|\n| `index.js` | 宿主入口：装配工具、定时器、设置页接口（双通道注册） |\n| `client.js` | 设置页 UI（非 ESM，自注册到 `settings.section`） |\n| `lib/transport.mjs` | 传输：直连 / 代理两模式，自拆 chunked、自跟 301、硬超时 |\n| `lib/route.mjs` | 三级探测：按**实际连通性**选路，不按 IP 猜 |\n| `lib/pxclient.mjs` | pixiv 读取（搜索 / 排行 / 详情 / 页 / 取图 / 关注流 / 推荐） |\n| `lib/auth.mjs` | 可选登录：token 刷新轮换、文件锁、凭证存放 |\n| `lib/taste.mjs` | 口味漏斗：分级过滤 + 打分排序（纯函数，好测） |\n| `lib/save.mjs` | 命名清洗、原子落盘、metadata |\n| `lib/seen.mjs` | JSONL 台账：判重与额度的唯一真相源 |\n| `lib/deliver.mjs` | 投递通道接口（local / qq） |\n| `lib/config.mjs` | 配置归一化 + 双层读写 + 凭证闸门 |\n| `lib/toolset.mjs` | 工具契约与策略闸门 |\n| `lib/shrink.mjs` | 缩图调度（shell 出去调 Python） |\n| `lib/shrink.py` | 图片缩放本体（Python + Pillow） |\n| `prompts/duty.md` | 一轮章程（用户可改） |"
+    },
+    {
+      "section": "为什么传输层是手搓的",
+      "text": "运行时里**没有 `undici` 也没有 `sharp`**（都只在 `app.asar` 里，`require` 和 `fs` 都进不去）。\n所以：\n\n- 传输层自己 CONNECT 隧道 + 自己 TLS 握手 + 自己拆 chunked\n- 缩图 shell 出去走 Python/Pillow\n\n顺手绕开的坑（都写了注释，别改回去）：\n\n- `socket.setTimeout()` 只在 socket **空闲**时触发 —— 连接卡在建连阶段时永不触发，\n  会**永久挂死**。必须有独立硬超时。\n- TLS 握手期间就要 `track()` socket，否则每次失败漏 2 个连接。\n- `_inflight` 存了已 reject 的 promise 会变成 unhandled rejection，**默认直接杀进程**。\n\n---"
+    },
+    {
+      "section": "自检",
+      "text": "```bash\nnode selfcheck.mjs           # 网络层 / 口味 / 传输（离线）\nnode selfcheck.mjs --net     # 上面 + 真的打一次 pixiv\nnode selfcheck-io.mjs        # 落盘 / 台账 / 投递\nnode selfcheck-tools.mjs     # 配置分层 / 工具 / 闸门 / 登录隔离\n\n全过才算好（当前 422 条断言）。其中两条对开源特别要紧：\n\n- `selfcheck-shell.mjs` 的**零凭证泄漏**检查\n- `selfcheck-docs.mjs` 会核对 README 里每个可验证的承诺 —— **文档写了代码没做，比不写还糟**\n\n---"
+    },
+    {
+      "section": "已知限制（如实写，不粉饰）",
+      "text": "- 🔴 **上不了 pixiv 就用不了**。插件不翻墙、不内置节点、不代你绕过限制。\n  「发现图片」需要官方元数据接口，而**全世界的镜像站都不提供这个** ——\n  这不是没做完，是这条路不存在。详见开头那节。\n- **镜像只能按 ID 取图**。`pixiv.re` 实测 16 条路径，只有 `/<作品ID>.jpg` 通，\n  `/ajax/*`、`/ranking.php`、`/api/*`、`/search/*` 全 404。所以镜像对\n  「先搜索再刷」这件事帮不上忙 —— 它只替代图片域名，不替代元数据接口。\n- **R-18 过滤是尽力而为**。默认只做**元数据层**过滤（标签 + 内容标记），\n  不逐张读图复查。排行榜原始数据里本来就混着露骨封面的作品\n  （实测 `daily` 前 50 条里有 5 条带性内容标记），所以会有漏网。\n- **QQ 发图受被动窗口限制**。见上文。\n- **登录需要自己搞 `refresh_token`**。插件不代你登录，也不碰你的密码。\n- **定时刷需要一个 `dshBin` 路径**。桌面版 `dsh` 不在 PATH，要在设置里指过去。\n- **代理不在时会连不上**。本机代理软件（Clash 之类）没在跑就通不了，\n  插件会报人话而不是静默失败。\n- **探测结果受本机网络环境影响**。同一台机器可能十分钟内三种结果\n  （TUN 通 / 直连超时 / 代理通）—— 插件按「实际能不能拿到数据」选路，\n  而不是按 IP 段猜。"
+    },
+    {
+      "section": "已知限制（如实写，不粉饰）",
+      "text": "---"
+    },
+    {
+      "section": "依赖与致谢",
+      "text": "- **零运行时依赖**（纯 Node 内置模块）。\n- [Pillow](https://python-pillow.org/) —— 图片缩放（发 QQ 前压缩）\n- `pixiv.re` —— 图片镜像兜底（**仅图片，无元数据**）\n- 架构参考 [dsh-bili-scroll](https://github.com/c1overzz/dsh-bili-scroll)（MIT）"
+    },
+    {
+      "section": "安全问题",
+      "text": "这个插件会处理 \nefresh_token（只在本地 credential.json，不进配置/日志/prompt）。\n如果你发现**凭证可能泄漏**、或者任何绕过那条红线的路径，\n请开 issue 或用 GitHub 的私密漏洞报告（Security → Report a vulnerability）。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT。**下载内容的版权归原作者（画师）所有**，本插件面向个人收藏设计，\n请勿二次分发或商用。\n\n插件只通过公开接口**读取**作品，不进行点赞、收藏、关注、评论等任何写操作。"
+    }
+  ],
+  "skipped": []
+}

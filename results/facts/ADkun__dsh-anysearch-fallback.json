@@ -1,0 +1,592 @@
+{
+  "repo": "ADkun/dsh-anysearch-fallback",
+  "commit": "d8dba9218185d6bdaa3aa6cd33c6ccd5517c7571",
+  "extracted_at": "2026-11-11T07:04:33.729797+00:00",
+  "tree": {
+    "files": 18,
+    "bytes": 125059,
+    "lines_by_language": {
+      "JSON": 43,
+      "JavaScript": 2342,
+      "Markdown": 137,
+      "Other": 25,
+      "YAML": 22
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.mjs",
+      "lib/direct-fetch.mjs",
+      "lib/fallback-provider.mjs",
+      "lib/html-text.mjs",
+      "lib/not-available.mjs",
+      "lib/ssrf-guard.mjs",
+      "package.json",
+      "test/direct-fetch.test.mjs",
+      "test/fallback-provider.test.mjs",
+      "test/helpers.mjs",
+      "test/html-text.test.mjs",
+      "test/integration.test.mjs",
+      "test/shape.mjs",
+      "test/ssrf-guard.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-anysearch-fallback",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "让 web_fetch 在上游 AnySearch 抽取失败（HTTP 422）时自动降级为受约束的浏览器 UA 直抓；零运行时依赖，只读 ctx.web.fetchProviders，不改任何 DSH 私有字段",
+    "license": "MIT",
+    "main": "./index.mjs",
+    "exports": {
+      ".": "./index.mjs",
+      "./lib/direct-fetch.mjs": "./lib/direct-fetch.mjs",
+      "./lib/ssrf-guard.mjs": "./lib/ssrf-guard.mjs",
+      "./lib/html-text.mjs": "./lib/html-text.mjs",
+      "./lib/fallback-provider.mjs": "./lib/fallback-provider.mjs",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.mjs",
+      "lib/",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "engines": {
+      "node": ">=22"
+    },
+    "scripts": {
+      "test": "node --test test"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "cordis",
+      "web-fetch",
+      "fallback",
+      "anysearch"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-anysearch-fallback 的 bundle 层。\n#\n# 两段，形状照抄官方 anysearch 插件的 patch：\n#   1. `- id: web` 覆盖 web 服务的 provider 选择。\n#      ⚠ 关键：patch 算法对 `config` 是**整体替换、不做深合并**\n#      （cordis-plugin-include/lib/index.js:99-102 逐键 `target[key] = value`）。\n#      所以这里必须把 searchProvider 一起原样写上——只写 fetchProvider 会把\n#      搜索侧的 provider 配置从 web 服务上抹掉。值取自官方 bundle 的同一份配置，\n#      没有任何行为变化。\n#   2. `- insert` 注册本插件（顶层＝global 层）。行 `id` 必须等于 index.mjs 的\n#      `export const name`。\n- id: web\n  config:\n    searchProvider: anysearch\n    fetchProvider: anysearch-fallback\n\n- insert:\n    - id: dsh-anysearch-fallback\n      name: dsh-anysearch-fallback\n      config:\n        upstreamProviderId: anysearch\n        timeoutMs: 15000"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "lib/direct-fetch.mjs",
+    "lib/ssrf-guard.mjs",
+    "lib/html-text.mjs",
+    "lib/fallback-provider.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_ANYSEARCH_FALLBACK_TEST_URL",
+      "kind": "env",
+      "where": "test/integration.test.mjs:26"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "2130706433",
+      "url": "http://2130706433/`",
+      "where": "lib/ssrf-guard.mjs:6"
+    },
+    {
+      "host": "0x7f.1",
+      "url": "http://0x7f.1/`",
+      "where": "lib/ssrf-guard.mjs:6"
+    },
+    {
+      "host": "0177.0.0.1",
+      "url": "http://0177.0.0.1/`",
+      "where": "lib/ssrf-guard.mjs:7"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/page",
+      "where": "test/direct-fetch.test.mjs:94"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/page",
+      "where": "test/direct-fetch.test.mjs:97"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/robots.txt",
+      "where": "test/direct-fetch.test.mjs:110"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/direct-fetch.test.mjs:120"
+    },
+    {
+      "host": "example.com",
+      "url": "http://user:pw@example.com/",
+      "where": "test/direct-fetch.test.mjs:181"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/?email=a@b.com",
+      "where": "test/direct-fetch.test.mjs:197"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/big",
+      "where": "test/direct-fetch.test.mjs:204"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "test/direct-fetch.test.mjs:220"
+    },
+    {
+      "host": "169.254.169.254",
+      "url": "http://169.254.169.254/latest/meta-data/",
+      "where": "test/direct-fetch.test.mjs:228"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "test/direct-fetch.test.mjs:231"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "test/direct-fetch.test.mjs:238"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/missing",
+      "where": "test/direct-fetch.test.mjs:243"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/slow",
+      "where": "test/direct-fetch.test.mjs:253"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/slow",
+      "where": "test/direct-fetch.test.mjs:267"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/direct-fetch.test.mjs:285"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/huge",
+      "where": "test/direct-fetch.test.mjs:304"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/blocked",
+      "where": "test/direct-fetch.test.mjs:323"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/blocked-empty",
+      "where": "test/direct-fetch.test.mjs:334"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/other",
+      "where": "test/direct-fetch.test.mjs:344"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/reason",
+      "where": "test/direct-fetch.test.mjs:351"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/blank",
+      "where": "test/direct-fetch.test.mjs:358"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/direct-fetch.test.mjs:367"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/direct-fetch.test.mjs:382"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/direct-fetch.test.mjs:400"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:47"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:50"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:60"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:66"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:68"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:72"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:86"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:96"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:111"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:134"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:150"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:170"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:185"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:187"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/page",
+      "where": "test/fallback-provider.test.mjs:234"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/page",
+      "where": "test/fallback-provider.test.mjs:254"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/fallback-provider.test.mjs:261"
+    },
+    {
+      "host": "httpbin.org",
+      "url": "https://httpbin.org/html",
+      "where": "test/integration.test.mjs:26"
+    },
+    {
+      "host": "anysearch.example.invalid",
+      "url": "https://anysearch.example.invalid",
+      "where": "test/integration.test.mjs:109"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/integration.test.mjs:116"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/integration.test.mjs:119"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/integration.test.mjs:133"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/shape.mjs:9"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/1234",
+      "where": "test/ssrf-guard.test.mjs:29"
+    },
+    {
+      "host": "example.com",
+      "url": "https://user:pass@example.com/",
+      "where": "test/ssrf-guard.test.mjs:31"
+    },
+    {
+      "host": "example.com",
+      "url": "http://user:pw@example.com/",
+      "where": "test/ssrf-guard.test.mjs:32"
+    },
+    {
+      "host": "example.com",
+      "url": "http://user@example.com/",
+      "where": "test/ssrf-guard.test.mjs:33"
+    },
+    {
+      "host": "example.com",
+      "url": "https://user:pw@example.com/path?a=1",
+      "where": "test/ssrf-guard.test.mjs:34"
+    },
+    {
+      "host": "localhost",
+      "url": "https://localhost/",
+      "where": "test/ssrf-guard.test.mjs:35"
+    },
+    {
+      "host": "localhost",
+      "url": "https://LOCALHOST/",
+      "where": "test/ssrf-guard.test.mjs:36"
+    },
+    {
+      "host": "foo.localhost",
+      "url": "http://foo.localhost/",
+      "where": "test/ssrf-guard.test.mjs:37"
+    },
+    {
+      "host": "printer.local",
+      "url": "http://printer.local/",
+      "where": "test/ssrf-guard.test.mjs:38"
+    },
+    {
+      "host": "vault.internal",
+      "url": "http://vault.internal/",
+      "where": "test/ssrf-guard.test.mjs:39"
+    },
+    {
+      "host": "host.docker.internal",
+      "url": "http://host.docker.internal/",
+      "where": "test/ssrf-guard.test.mjs:40"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1/",
+      "where": "test/ssrf-guard.test.mjs:41"
+    },
+    {
+      "host": "127.1",
+      "url": "http://127.1/",
+      "where": "test/ssrf-guard.test.mjs:42"
+    },
+    {
+      "host": "2130706433",
+      "url": "http://2130706433/",
+      "where": "test/ssrf-guard.test.mjs:43"
+    },
+    {
+      "host": "0x7f.0.0.1",
+      "url": "http://0x7f.0.0.1/",
+      "where": "test/ssrf-guard.test.mjs:44"
+    },
+    {
+      "host": "0.0.0.0",
+      "url": "http://0.0.0.0/",
+      "where": "test/ssrf-guard.test.mjs:48"
+    },
+    {
+      "host": "10.0.0.1",
+      "url": "http://10.0.0.1/",
+      "where": "test/ssrf-guard.test.mjs:49"
+    },
+    {
+      "host": "172.16.0.1",
+      "url": "http://172.16.0.1/",
+      "where": "test/ssrf-guard.test.mjs:50"
+    },
+    {
+      "host": "172.31.255.254",
+      "url": "http://172.31.255.254/",
+      "where": "test/ssrf-guard.test.mjs:51"
+    },
+    {
+      "host": "192.168.1.1",
+      "url": "http://192.168.1.1/",
+      "where": "test/ssrf-guard.test.mjs:52"
+    },
+    {
+      "host": "169.254.169.254",
+      "url": "http://169.254.169.254/",
+      "where": "test/ssrf-guard.test.mjs:53"
+    },
+    {
+      "host": "100.64.0.1",
+      "url": "http://100.64.0.1/",
+      "where": "test/ssrf-guard.test.mjs:54"
+    },
+    {
+      "host": "224.0.0.1",
+      "url": "http://224.0.0.1/",
+      "where": "test/ssrf-guard.test.mjs:58"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/ssrf-guard.test.mjs:63"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com:8443/path?a=1#frag",
+      "where": "test/ssrf-guard.test.mjs:64"
+    },
+    {
+      "host": "example.com",
+      "url": "http://example.com/plain-http",
+      "where": "test/ssrf-guard.test.mjs:65"
+    },
+    {
+      "host": "1.1.1.1",
+      "url": "https://1.1.1.1/",
+      "where": "test/ssrf-guard.test.mjs:66"
+    },
+    {
+      "host": "xn--bcher-kva.example",
+      "url": "https://xn--bcher-kva.example/",
+      "where": "test/ssrf-guard.test.mjs:68"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/${",
+      "where": "test/ssrf-guard.test.mjs:94"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 7,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-10-15T01:57:59Z",
+    "created_at": "2026-10-14T16:03:17Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.mjs",
+    "lib/direct-fetch.mjs",
+    "lib/fallback-provider.mjs",
+    "lib/html-text.mjs",
+    "lib/ssrf-guard.mjs",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-anysearch-fallback",
+      "text": "**给 DSH 的 `web_fetch` 加一条降级兜底：AnySearch 抽不出内容（HTTP 422）时，自动改用浏览器 UA 直抓。**\n*Gives DSH's `web_fetch` a fallback: when AnySearch cannot extract a page (HTTP 422), fetch it directly with a browser-like user agent instead of failing the whole call.*\n\n[中文](#中文) · [English](#english)\n\n---"
+    },
+    {
+      "section": "它解决什么问题",
+      "text": "DSH 的 `web_fetch` 走 AnySearch 的 `/v1/extract`。有些页面（`openai.com`、知乎问题页、不存在的路径……）上游会返回 **HTTP 422 `extract_failed`**，于是整次 `web_fetch` 直接报错。本插件在那个位置接一手：先照旧走 AnySearch，**上游一失败就直抓原文兜底**（唯一例外是\"取消\"），并在正文首行写明上游失败的真实原因。"
+    },
+    {
+      "section": "工作机制",
+      "text": "```\nctx.web 注册的 provider 链：\n  anysearch-fallback (provider id: anysearch-fallback)   ← web_fetch 选中它\n        │\n        ├─ 代理到官方 AnySearch provider 的 extract\n\n- 本插件**不修改**官方 `@anysearch/anysearch-dsh` 的任何文件，也不改 DSH 私有字段；它以自己的 id `anysearch-fallback` 注册 provider，内部再按 id 调官方 `anysearch` provider。\n- 官方插件升级/重装对本插件**无影响**（若官方改了 provider id，需要同步改 `index.mjs` 里的 `UPSTREAM_PROVIDER_ID`）。\n- 兜底失败时，抛出的错误里同时带上「上游原始错误」与「直抓失败原因」+ 一句可行动提示，两侧信息都不吞。"
+    },
+    {
+      "section": "关键行为",
+      "text": "| 项目 | 取值 |\n| --- | --- |\n| provider id | `anysearch-fallback`（由本插件的 `- id: web` 覆盖把 `fetchProvider` 指到它；上游仍是官方 `anysearch`） |\n| 触发降级 | **任何上游错误**：422 / 401（凭据）/ 402（额度）/ 403 / 429（限流）/ 5xx / 超时 / 网络错误 / 非 JSON 响应，无一例外 |\n| 不降级（唯一例外） | **取消 / abort**：调用方的 `signal` 已中止，或错误链上有 `name: AbortError`、`code: ABORT_ERR / WEB_ABORTED / extract_canceled`、消息含 `abort`/`cancel` → 原样抛，不直抓 |\n| 协议白名单 | 仅 `http:` / `https:`（`file:` / `data:` / `ftp:` / `blob:` 等拒绝） |\n| 内网拒绝 | `localhost` / `*.localhost` / `*.local` / `.internal`；IPv4 `0.0.0.0`、`127/8`、`10/8`、`172.16/12`、`192.168/16`、`169.254/16`、`100.64/10`；IPv6 `::1`、`fc00::/7`、`fe80::/10`；IPv4-mapped IPv6（`::ffff:127.0.0.1`） |\n| 字节上限 | 5 MB，流式读取（`response.body`），超限立即 `cancel()` |\n| 字符上限 | 与 DSH 工具侧一致（`DEFAULT_FETCH_MAX_OUTPUT_CHARS`），超出裁剪并置 `truncated: true` |\n| 超时 | 自带 15s，串联上游 `signal`，任一触发即中止并说明来源 |\n| 请求头 | 固定桌面 Chrome UA + `accept` + `accept-language`；**不带** Authorization / Cookie / Referer |\n| 重定向 | `redirect: 'manual'`，最多 3 跳，**每一跳都重做协议与内网校验** |\n| 磁盘缓存 | 无 |"
+    },
+    {
+      "section": "降级标记（永远在返回正文的第一行）",
+      "text": "标记会写明**上游失败的真实原因**（状态 + 截断到 240 字符的摘要）和**直抓实际拿到的状态**；正文为空时说清\"没有正文\"，免得\"只有一行标记\"被读成\"这页面是空的\"。"
+    },
+    {
+      "section": "降级标记（永远在返回正文的第一行）",
+      "text": "| 情形 | 第一行 |\n| --- | --- |\n| 上游 422，直抓 2xx 有正文 | `[anysearch-fallback] 上游抽取失败（HTTP 422）：AnySearch extract failed: … (HTTP 422, auth credential)；直抓成功（HTTP 200），以下为未经 AnySearch 清洗的直抓原文。` |\n| 上游 429，直抓 2xx 有正文 | `[anysearch-fallback] 上游错误（HTTP 429 rate limit）：AnySearch extract failed: \"too many requests\"；直抓成功（HTTP 200），以下为未经 AnySearch 清洗的直抓原文。` |\n| 直抓非 2xx，有正文 | `[anysearch-fallback] 上游错误（HTTP 429 rate limit）：…；直抓返回 HTTP 403（站点可能拒绝匿名访问），以下为站点返回的原始内容，未经 AnySearch 清洗。` |\n| 直抓非 2xx，正文为空 | `[anysearch-fallback] 上游错误（HTTP 429 rate limit）：…；直抓返回 HTTP 403 且站点未返回任何正文内容（该页可能需要登录或被反爬拦截，建议换来源）。` |\n| 直抓 2xx，正文为空 | `[anysearch-fallback] 上游错误（HTTP 500）：…；直抓成功（HTTP 200）但站点未返回任何正文内容（可能是空页或正文由脚本渲染，建议换来源）。` |"
+    },
+    {
+      "section": "降级标记（永远在返回正文的第一行）",
+      "text": "- 状态取上游错误里真实的 `httpStatus`；命中\"抽取失败\"那三种精确形状（`httpStatus === 422` / `errorCode` 字段值 `extract_failed` / 那句 `Unable to extract content from the URL.`）时措辞为**上游抽取失败**，否则为**上游错误**（并在拿得到时附上 `rate limit` / `auth credential` 这类标签）。\n- 摘要**压平空白并截断**到 240 字符（`MAX_MARKER_UPSTREAM_CHARS`），标记行因此永远是一眼能读完的一行，不是日志。\n- 每次降级还会记一条 `warn` 日志（含上游原因与直抓结果）。"
+    },
+    {
+      "section": "安装",
+      "text": "作为本地插件挂进某个 DSH profile：\n\n```bash"
+    },
+    {
+      "section": "5) 重启 DSH —— 新开一个对话不够，profile 的配置树是启动时组合的",
+      "text": "```\n\n本插件的 `cordis.patch.yml` 会 `insert` 自己的 bundle（id `dsh-anysearch-fallback`），并把 web 服务的 `fetchProvider` 覆盖为 `anysearch-fallback`（`searchProvider` 必须一起原样写上——patch 对 `config` 是整体替换、不深合并）。具体层内覆盖请按你的 profile 现状调整。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnpm test            # 离线单测：63 通过 / 1 跳过（联网用例默认跳过）\n```\n\n`test/integration.test.mjs` 是**联网实测**用例（真实 422 → 真实直抓）：它需要 `@anysearch/anysearch-dsh` 及其 peer 包可被解析。仓库内默认跳过；在本机已装好的环境里可按该文件头部的注释搭一个临时 staging 目录（`node_modules` 里为 `@deepseek-ai/*` 建 junction）后运行。"
+    },
+    {
+      "section": "已知边界 / 未做",
+      "text": "- **DNS rebinding 只防一半**：除字面 IP / 主机名判定外，会在 DNS 解析后再核一遍解析到的 IP（任一解析结果非公网即拒）；但**没有地址钉扎** —— 校验用的解析结果与真正建连之间有时间差（TOCTOU），极端的 rebinding 仍可能穿过。\n  *(对比：`dsh-web` 自带的 `dsh-web-fetch-http` 用 `ipaddr.js` + undici pinned agent 做了完整钉扎；本插件刻意零依赖，故未复刻。)*\n- **带 userinfo 的 URL 会被拒绝**：`http://user:pw@example.com/`（只给用户名也算）一律以 `WEB_BLOCKED_URL` 拒掉，错误消息里点名 userinfo；**不做静默剥离** —— 用户显式给了带凭证的 URL 就明确报错，比悄悄改写更可预测。\n- **保守拒绝**：`168.63/16`、`198.18/15`、`192.0.0/24` 等非公网段被判为内网并拒绝，宁可误拒。\n- **提取质量**：朴素 HTML 降噪（去 script/style、取标题、解实体、折叠空白），质量低于 AnySearch 的正文清洗；结果顶部有降级标记，便于人工/模型识别。\n- **系统性问题现在也会降级（这是宽兜底的代价）**：上游 401（凭据失效）、402（额度耗尽）、429（限流）这类问题**不再整次报错**，而是静默降级为直抓结果 —— 直抓往往仍能成功，于是\"接口已经不可用了，但抓取照常返回\"。要判断集成是否正常，看**正文首行的标记**（里面写明上游错误，例如 `上游错误（HTTP 429 rate limit）：…`）与日志里的 `warn` 行。\n- **不做重试**：无论上游还是直抓都不重试。\n- **不改超时预算**：`web_fetch` 工具预算 30 s 由 DSH 工具层硬编码，本插件不碰；兜底直抓自带 15 s，若上游已耗尽大部分预算，兜底可能来不及完成。\n- **非 2xx 不假装成功**：直抓拿到 4xx/5xx 时按真实状态码返回（并保留正文）。\n- **反爬限制**：目标站可能对匿名直抓返回 403 或直接给反爬页（例：`openai.com` 返回 403 且正文为空；知乎问题页返回 403 + 一句反爬文案）。此时降级正文可能为空或根本不是真正文 —— 标记行会把这种情况说清楚（含\"站点未返回任何正文内容\"），但拿不到内容就是拿不到，建议换来源。\n- **改完必须重启 DSH**：已启动的 DSH 进程加载的是启动时的代码；升级或改动本插件（包括只改了降级标记文案）后，**必须重启 DSH**（新开一个对话不够）新代码才生效。"
+    },
+    {
+      "section": "License",
+      "text": "MIT\n\n---"
+    },
+    {
+      "section": "English",
+      "text": "**Problem.** `web_fetch` goes through AnySearch `/v1/extract`; for some pages the upstream answers **HTTP 422 `extract_failed`** and the whole fetch call fails. This plugin registers its own `anysearch-fallback` fetch provider, points the web service at it, delegates to the official `anysearch` provider first, and degrades to a guarded direct fetch on **any** upstream failure — the only exception is cancellation.\n\n**Guarantees.**"
+    },
+    {
+      "section": "English",
+      "text": "- Success path unchanged, field for field.\n- Cancellation (`signal` aborted, `AbortError`, `ABORT_ERR` / `WEB_ABORTED` / `extract_canceled`, abort/cancel wording) is never degraded: the original error surfaces untouched and no new request is sent.\n- Any other upstream failure (401/402/403/429/timeouts/network) degrades, and the reason is written into the first line of the returned body plus a `warn` log line — never silently swallowed.\n- Only `http:`/`https:`; localhost, private, link-local, CGNAT and IPv4-mapped IPv6 targets are refused.\n- A URL carrying userinfo (`user:pw@host`) is refused as `WEB_BLOCKED_URL` and named as such — never silently stripped.\n- Hard 5 MB byte cap read as a stream (`response.body`), never `response.text()`; character cap matches DSH's tool layer.\n- 15 s own timeout chained to the upstream abort signal.\n- Fixed desktop Chrome UA plus `accept`/`accept-language`; no Authorization, Cookie, Referer; no TLS bypass; no disk cache.\n- Manual redirects, at most 3 hops, re-validated at every hop.\n- Fallback output carries a visible marker line naming both real statuses, so a degraded result is never mistaken for cleaned text and an empty body is never mistaken fo"
+    },
+    {
+      "section": "English",
+      "text": "**Not done.** No address pinning after resolution (one re-check, then a separate connect — TOCTOU remains), no retry, no timeout-budget change, naive HTML reduction (lower quality than AnySearch extraction). Anti-bot sites may answer 403 with an empty body or a challenge page: the marker says so, but there is no content to return — change the source instead."
+    },
+    {
+      "section": "English",
+      "text": "**Cost of the broad fallback.** Systemic upstream problems (401 credentials, 402 quota, 429 rate limit) now degrade instead of failing the call, so a broken integration can still return pages. Watch the marker line (it names the upstream error) and the `warn` log line.\n\n**Restart required.** A running DSH process keeps the code it booted with; restart DSH after changing this plugin (a new chat is not enough)."
+    },
+    {
+      "section": "English",
+      "text": "**Test.** `npm test` — 63 passed / 1 skipped offline. The network integration test is skipped unless the installed official bundle and its peer packages are resolvable.\n\n**License.** MIT"
+    }
+  ],
+  "skipped": []
+}

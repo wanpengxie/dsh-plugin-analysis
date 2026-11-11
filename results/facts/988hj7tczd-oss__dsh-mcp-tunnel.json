@@ -1,0 +1,380 @@
+{
+  "repo": "988hj7tczd-oss/dsh-mcp-tunnel",
+  "commit": "ecd7d8e555423123960009f9f8ab878246f0132f",
+  "extracted_at": "2026-11-11T06:59:38.201739+00:00",
+  "tree": {
+    "files": 18,
+    "bytes": 134514,
+    "lines_by_language": {
+      "JSON": 125,
+      "Markdown": 367,
+      "Other": 122,
+      "TypeScript": 1855,
+      "YAML": 336
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "PERMISSIONS.md",
+      "README.md",
+      "cordis.yml",
+      "docs/store-evidence.md",
+      "package.json",
+      "pnpm-lock.yaml",
+      "src/certs.ts",
+      "src/index.ts",
+      "src/mcp-client-config.ts",
+      "src/tunnel-stack.ts",
+      "templates/docker-compose.yml.hbs",
+      "templates/proxy-config.env.hbs",
+      "tests/tunnel.e2e.ts",
+      "tests/tunnel.smoke.ts",
+      "tsconfig.build.json",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-mcp-tunnel",
+    "version": "0.1.0",
+    "description": "DSH plugin: expose a local MCP server to remote agents through an outbound-only tunnel stack (mcp-proxy + cloudflared Quick Tunnel), and register the public URL into dsh-mcp-client streamable-http config.",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./src/*": "./src/*",
+      "./lib/*": "./lib/*",
+      "./templates/*": "./templates/*",
+      "./cordis.yml": "./cordis.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "src",
+      "templates",
+      "tests",
+      "cordis.yml",
+      "README.md",
+      "LICENSE",
+      "docs/store-evidence.md"
+    ],
+    "engines": {
+      "node": ">=23.6.0"
+    },
+    "scripts": {
+      "test": "node --test tests/tunnel.smoke.ts tests/tunnel.e2e.ts",
+      "test:smoke": "node --test tests/tunnel.smoke.ts",
+      "test:e2e": "DSH_MCP_TUNNEL_E2E=1 node --test tests/tunnel.e2e.ts",
+      "typecheck": "tsc --noEmit",
+      "build": "tsc -p tsconfig.build.json",
+      "prepublishOnly": "npm run build"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.yml"
+      },
+      "compatibility": {
+        "node": ">=23.6.0",
+        "dsh": ">=0.1.0"
+      },
+      "permissions": {
+        "summary": "把本机 MCP server 经出站-only 隧道栈暴露给远程 agent：mcp-proxy + cloudflared Quick Tunnel 的 Docker Compose 栈；公开 URL 注册进 dsh-mcp-client streamable-http 配置。用户可选择不建真实隧道。",
+        "commands": [
+          "docker compose up -d --build (compose project, non-shell spawn)",
+          "docker ps",
+          "docker logs --tail <n>",
+          "docker compose down",
+          "<dockerBinary> --version (preflight)"
+        ],
+        "writePaths": [
+          "<deployRoot>/<name>/** (compose/.env/state.json/证书)"
+        ],
+        "externalServices": [
+          "Cloudflare Quick Tunnel 出站端点（默认仅在用户触发 create 时建立）"
+        ],
+        "failureBoundaries": [
+          "preflight 8s 超时",
+          "OUT_OF_BOUNDS 根约束",
+          "state.json 记录下线+lastError"
+        ],
+        "lifecycleEvidence": [
+          "smoke 18 assertions + certs/state 测试",
+          "真实隧道默认不建（LIVE 才建）"
+        ]
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-jobs": "^0.1.0-rc.8",
+      "@deepseek-ai/dsh-tools": "^0.1.1-rc.2"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-agent": "0.1.1-rc.2",
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-jobs": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-tools": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-timeout": "0.1.1-rc.2",
+      "@types/node": "^26.0.0",
+      "typescript": "^5.5.0"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/988hj7tczd-oss/dsh-mcp-tunnel.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.yml",
+      "text": "# dsh-mcp-tunnel — Cordis 装配（composition）。\n#\n# 用法一（源码直载，scratch-plugin 风格）：把本插件作为一行插入任意 dsh profile，\n#   例如在 profile 的 cordis.patch.yml 中追加本文件内容；\n#   或通过 loader 直接加载本文件（行内 name 指向 ./src/index.ts）。\n# 用法二（bundle patch）：本文件同时是 package.json `dsh.bundle.patch` 声明的\n#   patch 层，安装后由 profile 合成器按包路径解析行内引用。\n#\n# 行内 name 相对本文件目录解析；以 bundle 方式安装时（node_modules 内的\n#   dsh-mcp-tunnel），可把 name 换成\n#   'dsh-mcp-tunnel/src/index.ts'（经 package.json exports 解析），\n#   详见 README「安装」一节。\n\n- insert:\n    - id: dsh-mcp-tunnel\n      name: './src/index.ts'\n      config:\n        # 隧道栈的默认部署根目录（每个隧道一个子目录：<deployRoot>/<name>）。\n        # `~` 会在运行时按 HOME 展开。\n        deployRoot: '~/.dsh/mcp-tunnels'\n        # 默认隧道提供方：cloudflare-quick（免账号，开箱即用）。\n        defaultProvider: 'cloudflare-quick'\n        # 容器运行时：docker | podman。\n        dockerBinary: 'docker'"
+    }
+  ],
+  "entries": [
+    "cordis.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_MCP_TUNNEL_E2E",
+      "kind": "env",
+      "where": "tests/tunnel.e2e.ts:41"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/988hj7tczd-oss/dsh-mcp-tunnel.git",
+      "where": "package.json:94"
+    },
+    {
+      "host": "docs.docker.com",
+      "url": "https://docs.docker.com/engine/install/）`",
+      "where": "src/index.ts:130"
+    },
+    {
+      "host": "hello-mcp",
+      "url": "http://hello-mcp:8000/sse",
+      "where": "src/index.ts:321"
+    },
+    {
+      "host": "hello-mcp",
+      "url": "http://hello-mcp:8000/sse",
+      "where": "tests/tunnel.e2e.ts:79"
+    },
+    {
+      "host": "hello-mcp",
+      "url": "http://hello-mcp:8000/sse",
+      "where": "tests/tunnel.smoke.ts:67"
+    },
+    {
+      "host": "hello-mcp",
+      "url": "http://hello-mcp:8000/sse",
+      "where": "tests/tunnel.smoke.ts:89"
+    },
+    {
+      "host": "10.0.0.5",
+      "url": "https://10.0.0.5:8443/mcp",
+      "where": "tests/tunnel.smoke.ts:101"
+    },
+    {
+      "host": "10.0.0.5",
+      "url": "https://10.0.0.5:8443/mcp",
+      "where": "tests/tunnel.smoke.ts:110"
+    },
+    {
+      "host": "x",
+      "url": "http://x/sse",
+      "where": "tests/tunnel.smoke.ts:117"
+    },
+    {
+      "host": "x",
+      "url": "http://x/sse",
+      "where": "tests/tunnel.smoke.ts:124"
+    },
+    {
+      "host": "hello-mcp",
+      "url": "http://hello-mcp:8000/sse",
+      "where": "tests/tunnel.smoke.ts:141"
+    },
+    {
+      "host": "tunnel-abc123.trycloudflare.com",
+      "url": "https://tunnel-abc123.trycloudflare.com",
+      "where": "tests/tunnel.smoke.ts:164"
+    },
+    {
+      "host": "tunnel-abc123.trycloudflare.com",
+      "url": "https://tunnel-abc123.trycloudflare.com",
+      "where": "tests/tunnel.smoke.ts:167"
+    },
+    {
+      "host": "x.trycloudflare.com",
+      "url": "https://x.trycloudflare.com/sse",
+      "where": "tests/tunnel.smoke.ts:181"
+    },
+    {
+      "host": "x",
+      "url": "https://x/sse",
+      "where": "tests/tunnel.smoke.ts:187"
+    },
+    {
+      "host": "x.trycloudflare.com",
+      "url": "https://x.trycloudflare.com/sse",
+      "where": "tests/tunnel.smoke.ts:198"
+    },
+    {
+      "host": "x.trycloudflare.com",
+      "url": "https://x.trycloudflare.com/sse",
+      "where": "tests/tunnel.smoke.ts:203"
+    },
+    {
+      "host": "x.trycloudflare.com",
+      "url": "https://x.trycloudflare.com/sse",
+      "where": "tests/tunnel.smoke.ts:209"
+    },
+    {
+      "host": "x.trycloudflare.com",
+      "url": "https://x.trycloudflare.com/sse",
+      "where": "tests/tunnel.smoke.ts:215"
+    },
+    {
+      "host": "live.trycloudflare.com",
+      "url": "https://live.trycloudflare.com",
+      "where": "tests/tunnel.smoke.ts:266"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-agent": "0.1.1-rc.2",
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-jobs": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-tools": "0.1.1-rc.2",
+      "@deepseek-ai/dsh-timeout": "0.1.1-rc.2",
+      "@types/node": "^26.0.0",
+      "typescript": "^5.5.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 4,
+    "pushed_at": "2026-08-24T14:53:28Z",
+    "created_at": "2026-08-24T08:23:50Z"
+  },
+  "runtime_files": [
+    "cordis.yml",
+    "package.json",
+    "src/certs.ts",
+    "src/index.ts",
+    "src/mcp-client-config.ts",
+    "src/tunnel-stack.ts",
+    "tests/tunnel.e2e.ts",
+    "tests/tunnel.smoke.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-mcp-tunnel",
+      "text": "> [!IMPORTANT]\n> **依赖前置：相邻 `dsh-src` 检出（`link:` 依赖）**\n> 本项目在开发形态下使用 `link:` 依赖指向相邻的 DeepSeek Harness 源码检出（`dsh-src`），\n> 与当前仓库保持同一父目录布局（`<parent>/dsh-src`）。克隆本仓库后：\n> 1. 先把官方 `deepseek-ai/deepseek-harness` 检出到与本仓库同级的 `dsh-src/` 目录，并执行其 `pnpm install && pnpm run build`；\n> 2. 再按下方「安装」一节执行本仓库的 `pnpm install --offline && pnpm build` 与测试。\n> 发布到 npm 的版本会尽量把 `link:` 依赖替换为 registry 真实版本；无法替换的内部包保持 `link:`，见各包 README 说明。"
+    },
+    {
+      "section": "dsh-mcp-tunnel",
+      "text": "把本机 MCP Server 安全暴露给远程 Agent 的 DSH 隧道插件：一键为本机目录中的 MCP server\n拉起隧道栈（**mcp-proxy + cloudflared** 的 Docker Compose 栈），并把最终公开 URL 注册到\n`@deepseek-ai/dsh-mcp-client` 的 streamable-http 配置里（**待确认片段**，安全护栏 1）。\n\n> 设计取向（对齐上游 anthropics/claude-plugins-official#mcp-tunnels，仅参考行为、不抄源码）：\n> 隧道 = **传输层**；鉴权/授权应明确标注为「由暴露方自行加」。默认提供方\n> cloudflare-quick（免账号、开箱即用），与上游 security model 的立场一致：\n> **免费快速隧道仅限测试，生产流量必须自行加鉴权层**。\n\n---"
+    },
+    {
+      "section": "一、架构与安全模型",
+      "text": "```\n远程 Agent (dsh-mcp-client, streamable-http)\n        │  HTTPS + Authorization: Bearer <token>\n        ▼\nhttps://<random>.trycloudflare.com        ← Cloudflare 边缘（TLS 由 Cloudflare 提供）\n\n关键属性："
+    },
+    {
+      "section": "一、架构与安全模型",
+      "text": "- **出站-only**：cloudflared 只主动连到 Cloudflare 边缘；公网无入站端口，\n  宿主机唯一端口绑定是 `127.0.0.1:43180` 的回环调试端口（验收标准 1）。\n- **本地 TLS 终结（命名隧道模式）**：`certs/` 下的自签 CA + 服务端证书由隧道属主掌控，\n  与上游「证书用户掌控」做法一致；Quick Tunnel 模式公网侧 TLS 由 Cloudflare 提供，\n  证书仍生成并挂载供复用/自检。\n- **鉴权边界（重要）**：mcp-proxy 校验 `Authorization: Bearer <token>`（令牌在部署目录\n  `.env` 中，0600）。Quick Tunnel 的随机域名不是安全边界 —— **生产流量必须由暴露方\n  自行加鉴权层/网关**，本插件只保证「隧道=传输层」。"
+    },
+    {
+      "section": "二、交付物",
+      "text": "```\ndsh-mcp-tunnel/\n├── cordis.yml              # Cordis 装配（一行插件 + config 默认值；兼作 dsh.bundle.patch）\n├── package.json            # dsh-mcp-tunnel，声明 dsh.bundle（MIT）\n├── src/index.ts            # 装配 + 3 工具（create/status/stop）+ ctx.jobs 后台流程"
+    },
+    {
+      "section": "三、安装",
+      "text": "本地开发（scratch-plugin 风格，直接加载 TS 源码）：\n\n```yaml"
+    },
+    {
+      "section": "你的 profile 的 cordis.patch.yml 追加：",
+      "text": "- insert:\n    - id: dsh-mcp-tunnel\n      name: '/绝对路径/dsh-mcp-tunnel/src/index.ts'\n      config: {}\n```\n\n作为 profile bundle 安装（`dsh.bundle.patch: ./cordis.yml` 已声明）：\n\n```bash\ncd <你的 DSH profile>\npnpm add ./dsh-mcp-tunnel"
+    },
+    {
+      "section": "name: 'dsh-mcp-tunnel/src/index.ts'",
+      "text": "```\n\n> 依赖对齐（npm 上已发布的真实版本）：peerDependencies 声明 `@deepseek-ai/cordis ^4.0.1`、\n> `@deepseek-ai/dsh-tools ^0.1.1-rc.2`、`@deepseek-ai/dsh-jobs ^0.1.0-rc.8`；dependencies 为\n> `@deepseek-ai/schemastery ^3.18.1`（运行时仅真正 import schemastery；其余为类型级/服务级\n> 依赖）。peer 关系保留：目标运行时是 DSH 宿主，由宿主提供 cordis / dsh-tools / dsh-jobs 服务。"
+    },
+    {
+      "section": "`mcp_tunnel_create`",
+      "text": "| 参数 | 类型 | 必填 | 说明 |\n| --- | --- | --- | --- |\n| `name` | string | ✓ | 隧道名 = compose 项目名 = mcp-client `serverName`（`^[A-Za-z0-9_-]{1,32}$`） |\n| `serverDir` | string | | MCP server 目录：优先读 `.mcp.json`（首个含 `url` 的条目作上游；`command` 型 stdio server 需先转成 HTTP 端点，见「限制」） |\n| `upstreamUrl` | string | | 直接指定上游 MCP 端点（http/https），优先级高于 `.mcp.json` |\n| `provider` | string | | `cloudflare-quick`（默认，免账号）/ `anthropic`（命名隧道，需自备 Cloudflare 账号与 DNS） |\n| `deployDir` | string | | 覆盖部署目录（默认 `<deployRoot>/<name>`，`deployRoot` 默认 `~/.dsh/mcp-tunnels`） |\n| `useHelloMcp` | boolean | | 无上游可用时内置 hello-mcp 示例 server（`echo`/`uptime`）；默认自动 |\n| `token` | string | | 自定义访问令牌；缺省自动生成 32 字节随机令牌写入 `.env`(0600) |\n| `hostProxyPort` | integer | | 宿主回环调试端口（默认 43180） |"
+    },
+    {
+      "section": "`mcp_tunnel_create`",
+      "text": "行为：生成栈文件 + 证书（CA 存在即**复用**，验收标准 3）→ 写 `.env`(0600，秘密不进 compose)\n→ 前置检查 docker（缺失给清晰提示，验收标准 5）→ 后台起容器（`ctx.jobs`，缺 jobs 时前台）\n→ 轮询 cloudflared 日志出 **Quick Tunnel URL** → 写 `state.json` → 生成 **待确认片段**\n`<deployDir>/mcp-client.pending.yml`。有 jobs 时返回 `{kind:'background', jobId}`，用\n`job_output` 收尾；无 jobs 时前台返回完整结果。"
+    },
+    {
+      "section": "`mcp_tunnel_status`",
+      "text": "| 参数 | 类型 | 说明 |\n| --- | --- | --- |\n| `name` | string | 隧道名；缺省列出全部隧道 |\n\n输出：每隧道的部署目录、`state.json`、栈文件存在性、`docker compose ps` 结果、\ncloudflared 最近日志尾部（**≤50 行**）、待确认片段（serverName/url）。"
+    },
+    {
+      "section": "`mcp_tunnel_stop`",
+      "text": "| 参数 | 类型 | 默认 | 说明 |\n| --- | --- | --- | --- |\n| `name` | string（必填） | | 隧道名 |\n| `keepCerts` | boolean | true | `false` 时删除 `certs/` |\n\n行为：`docker compose down` 停栈并下线 URL（验收标准 4）→ 移除待确认片段 →\n写入 `state.json` 失效标注（`url` 下线 + `lastError`，status 可见）→ **保留证书目录**\n供下次 create 复用（验收标准 3/4）。"
+    },
+    {
+      "section": "五、mcp-client 配置片段（安全护栏 1）",
+      "text": "`create` **绝不自动改写任何 profile 配置**，只在部署目录写出待确认片段\n（`mcp-client.pending.yml`），由你在显式确认后手动粘贴：\n\n```yaml\n- insert:\n    - id: mcp-<serverName>\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n\n- 字段名与 `@deepseek-ai/dsh-mcp-client` 的 `StreamableHttpConfig` 完全一致；\n- 远程工具名 = `mcp__<serverName>__<rawName>`；\n- `mcp_tunnel_stop` 会删除该片段文件（验收标准 4）。若你已粘贴进 profile，\n  记得同步删除那一行，否则请把 URL 标注为失效；\n- 「由 apply 注入」路径（显式确认后自动写 profile 的 cordis.patch.yml）留作后续版本。"
+    },
+    {
+      "section": "六、安全护栏清单",
+      "text": "1. **仅显式确认后写 mcp-client 配置**：插件只产出待确认片段文件，绝不自动改写 profile；\n2. **秘密不进 compose**：访问令牌只写入部署目录 `.env`（0600，docker compose 原生读取），\n   `docker-compose.yml` / `proxy-config.env` 只含 `${API_KEY:?…}` 引用与占位；\n   无用户 API key 时生成随机令牌并同步提供 `.env.example`；\n3. **公网无监听端口**：唯一宿主端口绑定是 `127.0.0.1` 回环；\n4. **README 明示**：免费快速隧道仅限测试，生产流量需要鉴权层（对齐上游 security model）。"
+    },
+    {
+      "section": "七、栈契约（本插件声明的 compose 规范）",
+      "text": "| 服务 | 镜像 | 角色 |\n| --- | --- | --- |\n| `mcp-proxy` | `ghcr.io/anthropics/mcp-proxy:latest` | 校验 `Authorization: Bearer`，转发到 `proxy-config.env` 的 `UPSTREAM_MCP_URL` |\n| `cloudflared` | `cloudflare/cloudflared:latest` | 出站-only 隧道；`network_mode: service:mcp-proxy` |\n| `hello-mcp`（可选） | 内嵌 Dockerfile 构建 | FastMCP 示例，SSE 端点 `/sse` |"
+    },
+    {
+      "section": "七、栈契约（本插件声明的 compose 规范）",
+      "text": "- 环境变量契约以 `proxy-config.env` / `docker-compose.yml` 为准（`UPSTREAM_MCP_URL`、\n  `MCP_PROXY_EXTERNAL_HOSTNAME`、`API_KEY` 引用等）；若你的 mcp-proxy 镜像版本使用\n  不同 env 名，请以镜像文档微调 compose —— 本插件把 compose 文件视为最终契约并已在\n  README 中显式声明。\n- 容器内依赖使用 `service_started`（cloudflared 对 mcp-proxy），不依赖镜像自带健康探针。"
+    },
+    {
+      "section": "八、验收标准对照",
+      "text": "1. ✅ 无外部账号（cloudflare-quick）拿到可达 HTTPS URL，且本机无公网监听端口\n   （回环-only 绑定 + 出站-only cloudflared；e2e 可实测）。\n2. ✅/⚠ 远程侧配到 dsh-mcp-client 后调用 echo —— 片段结构对齐 mcp-client 配置；\n   e2e 覆盖**隧道栈可用性与可达性**（公开 URL 可达 + SSE 接入面 + Authorization 被接受）；\n   MCP 协议握手（initialize → tools/call → echo 返回值断言）**未自动化**（见「限制」#3）。\n3. ✅ 证书目录复用：`certs.ts` 对既有 CA 只复用、不重新生成（冒烟测试断言）；私钥 0600。\n4. ✅ 停栈后 URL 下线、待确认片段移除；stop 保留 `state.json` 并写入失效标注\n   （`url` 下线 + `lastError`，status 可见）。\n5. ✅ docker 缺失给清晰前置提示而非崩溃（`checkRuntimeAvailable`）。"
+    },
+    {
+      "section": "九、限制与后续工作",
+      "text": "1. **stdio → HTTP 桥接未内置**：`.mcp.json` 的 `command` 型 server 需先用任意\n   stdio→HTTP 网关转成 streamable-http/SSE 端点再交给 `upstreamUrl`。后续版本可内置\n   host-side 桥接进程（spawn + job 生命周期管理）。\n2. **`anthropic`（命名隧道）模式需要自备 Cloudflare 账号**：compose 模板已预留\n   `--config`/凭据挂载注释位，但 URL 由你的 DNS 决定、不在日志轮询范围内。上游本\n   身是 research preview，本项目默认用免账号 Quick Tunnel 保证开箱即用。\n3. **完整 MCP 握手**（initialize → tools/call → echo 返回值断言）需要\n   `@modelcontextprotocol/sdk` 客户端；当前 e2e 验证到「公开 URL 可达 + SSE 接入面 +\n   Authorization 被接受」，把 sdk 放进 devDependencies 后即可补全验收标准 2 的端到端断言。\n4. **镜像 env 契约未在离线环境验证**：`ghcr.io/anthropics/mcp-proxy` 的具体 env/flag\n   以 README「栈契约」为准，遇到镜像版本差异时按镜像文档微调 compose。\n5. **token 轮换**：`create` 支持显式传 `token`，但轮换/吊销流程建议交给部署方自行管理\n   （改 `.env` 后重启容器）。\n6. **回环端口冲突**：`hostProxyPort` 被占用时 `compose up` 会报错，暂无自动避让；\n   可显式传 `hostProxyPort` 换端口。"
+    },
+    {
+      "section": "十、开发与测试",
+      "text": "```bash"
+    },
+    {
+      "section": "离线冒烟（无需 docker/网络；Node ≥ 23.6 原生跑 TS，22.x 需 --experimental-strip-types）",
+      "text": "npm test                # = node --test tests/\nnpm run test:smoke      # 仅离线冒烟"
+    },
+    {
+      "section": "真栈 e2e（需要 docker daemon + 公网，会访问 Cloudflare 边缘）",
+      "text": "DSH_MCP_TUNNEL_E2E=1 npm run test:e2e\n\nnpm run typecheck       # tsc --noEmit（需先 pnpm install）\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT（参考上游行为、未复制其 Proprietary 源码正文）。"
+    },
+    {
+      "section": "权限、失败边界与 DSH STORE 状态",
+      "text": "- [PERMISSIONS.md](./PERMISSIONS.md)：运行时读取面 / 命令面（固定 argv，非 shell）/ 写面 / 外部服务 / 失败边界 / 供应链 / 文件权限信号（无 chmod/chown、644、无 setuid/setgid）。\n- [docs/store-evidence.md](./docs/store-evidence.md)：一次性 Profile 安装 → 启动（工具注册清单）→ 卸载步骤、本地离线证据、待宿主补录真实运行记录说明，并逐项回应 DSH STORE 五类审查信号（仓库 canonical 匹配 / Node 声明 / 供应链 / 文件权限 / 命令权限）。\n- STORE 复检由 dsh-safe-plugin-manager 每 3 小时自动执行；本仓库已按清单契约声明（package.json 的 `repository` / `engines.node` / `dsh.compatibility` / `dsh.permissions`）。"
+    }
+  ],
+  "skipped": []
+}
