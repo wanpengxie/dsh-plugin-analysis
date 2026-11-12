@@ -1,0 +1,154 @@
+{
+  "repo": "DeeepMind/dsh-haloring-status",
+  "commit": "9039e25dbf41bb210cb0b9e345be27c63f69892e",
+  "extracted_at": "2026-11-11T09:28:47.140769+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 53774,
+    "lines_by_language": {
+      "JSON": 47,
+      "JavaScript": 399,
+      "Markdown": 168,
+      "Other": 679,
+      "YAML": 3
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-haloring-status",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "Writes live DSH agent status and turn progress to a lightweight status file for tray indicators, status bars and desktop widgets.",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "status",
+      "indicator",
+      "progress",
+      "host-only",
+      "tray"
+    ],
+    "license": "GPL-3.0",
+    "icon": "./icon.svg",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-haloring-status\n      name: dsh-haloring-status\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:78"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-29T10:31:12Z",
+    "created_at": "2026-10-29T06:48:19Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-haloring-status",
+      "text": "**DSH HaloRing 状态桥** — 把 DSH 的实时运行状态与回合进度写成一个轻量状态文件，供托盘指示灯、状态栏、桌面小组件等外部程序读取。\n\n只观察宿主公开的会话事件与 Agent 状态，**不读取聊天正文**，也不修改会话。\n\n- **Host-only**：没有页面、没有工具、没有客户端注入，不改变 DSH 原有界面\n- **零配置**：装上即用，无需 token、无需端口、无需认证\n- **跨进程友好**：输出是纯文本 `key=value`，任何语言都能解析\n\n最终结果落成一个文件。外部程序只需**读一个本地文本文件**：\n\n```text\n%USERPROFILE%\\.dsh\\dsh-status.txt\n```\n\n无需认证、无需重连、DSH 重启自动恢复。\n\n---"
+    },
+    {
+      "section": "输出格式",
+      "text": "| 字段 | 含义 |\n|---|---|\n| `state` | `idle` / `running` / `attention` / `degraded` / `error` / `completed` / `offline` |\n| `priority` | 数值优先级，越大越优先（`-1` 离线 ~ `5` 故障）|\n| `updated` | Unix **毫秒**时间戳。读取方据此判断心跳 |\n| `pid` | 宿主进程 ID，用于识别 DSH 是否重启 |\n| `detail` | 人类可读描述，可直接显示在 tooltip |\n| `progress` | `0..100` 整数，**非精确百分比**，仅作\"正在推进\"的提示 |\n| `attention` / `approvals` | 待处理审批数量 |\n| `turns` / `sessions` | 活动回合数 / 存活会话数 |\n| `completed` / `degraded` / `error` | 对应状态的布尔标志（`0`/`1`）|"
+    },
+    {
+      "section": "输出格式",
+      "text": "写入频率：**250ms ~ 1s**（状态变化时立即写，静止时 1 秒心跳）。\nDSH 退出后文件停止更新，读取方按心跳超时（建议 8 秒）判为离线。\n\n---"
+    },
+    {
+      "section": "状态判定",
+      "text": "多个状态可能同时成立，插件按**固定优先级**取一个输出，而不是\"最后事件优先\"：\n\n```text\n故障（error/blocked） > 降级（Provider 重试/上下文压缩）>\n等待授权/审批 > 运行中 > 回合完成 > 空闲\n```"
+    },
+    {
+      "section": "事件映射",
+      "text": "| 事件 | 输出状态 |\n|---|---|\n| `turn/start` | `running` |\n| `approval/asked`（未决定）| `attention` |\n| `approval/decided` | 清除等待，回到之前状态 |\n| `llm/retry` / `llm/retry-started` | `degraded` |\n| `assistant/attempt`（finish.reason = error）| `degraded` |\n| `compaction/start` | `degraded` |\n| `compaction/end` | 保持降级 1.5 秒后恢复 |\n| `turn/end`（reason = completed）| `completed`（保持 1.8 秒）|\n| `turn/end`（reason = error/blocked）| `error` |\n| `turn/end`（reason = max-tokens）| `degraded`（10 秒）|\n| `turn/end`（reason = aborted/interrupted）| 不算等待也不算错误 |\n| 无活动会话且宿主在线 | `idle` |"
+    },
+    {
+      "section": "事件映射",
+      "text": "---"
+    },
+    {
+      "section": "进度算法",
+      "text": "DSH 的 `step` 事件语义很清晰：**一次 `step` = 一次完整的「模型推理 → 产出工具调用 → 工具执行完毕」循环**。\n`step` 序号天然就是\"已经完成了几个思考-行动循环\"的精确计数。\n\n但**总步数未知**——第 3 步时不知道还要几步。所以这里刻意**不用线性分母**：\n\n```\nprogress = 25 + 70 × (1 - e^(-已完成step数 / 3.2))  [+8 若正在执行工具]\n上限 95，只有 turn/end 才到 100\n```\n\n用渐近曲线，长任务会持续缓慢爬升，而不是卡在某个数字不动。\n\n| 已完成 step | 进度 | 工具执行中 |\n|---|---|---|\n| 0 | **25%** | 33% |\n| 1 | 44% | 52% |\n| 2 | 58% | 66% |\n| 3 | 68% | 76% |\n| 4 | 75% | 83% |\n| 5 | 80% | 88% |\n| 10 | 92% | 95% |\n\n各状态下的进度取值："
+    },
+    {
+      "section": "进度算法",
+      "text": "| 状态 | progress |\n|---|---|\n| `running` | 25 → 95（按 step 推进）|\n| `attention` | 25（冻结，表示卡住但没失败）|\n| `degraded` | 50（冻结，表示有进展但不顺）|\n| `completed` | 100 |\n| `error` | 100 |\n| `idle` | 0 |\n\n起始值取 **25 而非 0**，让读取方一眼就能看出\"在工作\"，而不是分不清\"刚启动\"和\"没动静\"。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "```powershell\ndsh plugin --profile desktop add github:DeeepMind/dsh-haloring-status\n```\n或本地安装：\n\n```powershell\ndsh plugin --profile desktop add \"file:<路径>/dsh-haloring-status\"\n```\n\n安装后**重启 DSH 一次**以加载宿主插件。\n\n验证：\n\n```powershell\nGet-Content \"$env:USERPROFILE\\.dsh\\dsh-status.txt\"\n```\n\n应该看到内容且每秒更新。"
+    },
+    {
+      "section": "卸载",
+      "text": "```powershell\ndsh plugin --profile <profile> remove dsh-haloring-status\n```\n\n---"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **进度不精确**：总步数未知，只能给渐进提示，不承诺准确百分比\n- **单文件单状态**：多个会话同时运行时，取\"最高优先级 + 第一个活动会话\"的合成结果，不区分会话\n- **不响应审批**：本插件只观察，审批仍需你在 DSH 界面里处理\n- **Windows 优先**：路径处理用 `os.homedir()`，理论上跨平台，但仅在 Windows 11 上验证过\n\n---"
+    },
+    {
+      "section": "相关项目",
+      "text": "- **DshHaloRing** — Windows 11 托盘环形状态指示灯"
+    },
+    {
+      "section": "许可证",
+      "text": "GPL-3.0"
+    }
+  ],
+  "skipped": []
+}

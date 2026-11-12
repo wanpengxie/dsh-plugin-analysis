@@ -1,0 +1,188 @@
+{
+  "repo": "CECILIALOVE0616/dsh-auth-cookie-hygiene",
+  "commit": "f249b9c217d3e51da1f682d84d03ac9080e6d6b7",
+  "extracted_at": "2026-11-11T08:33:34.057900+00:00",
+  "tree": {
+    "files": 18,
+    "bytes": 92542,
+    "lines_by_language": {
+      "JSON": 50,
+      "JavaScript": 2436,
+      "Markdown": 151,
+      "Other": 27,
+      "YAML": 25
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "REPORT.md",
+      "cordis.patch.yml",
+      "lib/cookie.js",
+      "lib/hook.js",
+      "lib/index.js",
+      "lib/liveness.js",
+      "package.json",
+      "test/cold-start.test.js",
+      "test/cookie.test.js",
+      "test/helpers.js",
+      "test/hook.test.js",
+      "test/liveness.test.js",
+      "test/plugin.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-auth-cookie-hygiene",
+    "version": "0.1.1",
+    "description": "DSH 本地认证 Cookie 卫生插件：在本地 HTTP 响应中追加 Max-Age=0，让浏览器自动过期已停止 Host 的 dsh-auth-* Cookie。",
+    "type": "module",
+    "license": "MIT",
+    "author": "CECILIALOVE0616",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/CECILIALOVE0616/dsh-auth-cookie-hygiene.git"
+    },
+    "homepage": "https://github.com/CECILIALOVE0616/dsh-auth-cookie-hygiene#readme",
+    "bugs": {
+      "url": "https://github.com/CECILIALOVE0616/dsh-auth-cookie-hygiene/issues"
+    },
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "engines": {
+      "node": ">=22.13"
+    },
+    "scripts": {
+      "test": "node --test \"test/*.test.js\"",
+      "test:sandboxed": "node --test --test-isolation=none \"test/*.test.js\""
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "cookie",
+      "hygiene",
+      "loopback"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "REPORT.md",
+      "LICENSE",
+      "test"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-auth-cookie-hygiene —— DSH bundle patch\n# 把认证 Cookie 卫生插件插入 web/desktop profile 的配置树。\n- insert:\n    - id: dsh-auth-cookie-hygiene\n      name: dsh-auth-cookie-hygiene\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/CECILIALOVE0616/dsh-auth-cookie-hygiene.git",
+      "where": "package.json:10"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CECILIALOVE0616/dsh-auth-cookie-hygiene#readme",
+      "where": "package.json:12"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/CECILIALOVE0616/dsh-auth-cookie-hygiene/issues",
+      "where": "package.json:14"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-29T21:00:30Z",
+    "created_at": "2026-10-29T20:56:50Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/cookie.js",
+    "lib/hook.js",
+    "lib/index.js",
+    "lib/liveness.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-auth-cookie-hygiene",
+      "text": "> 给 DSH 本地认证 Cookie 做卫生的插件：在本地 HTTP 响应里追加过期 `Set-Cookie`，让浏览器自己删掉已经停止的 Host 留下的 `dsh-auth-*` Cookie。\n>\n> A DSH bundle plugin that expires stale loopback auth cookies, so a random-port desktop Host cannot pile them up until `Cookie` headers hit the HTTP 431 limit.\n\n不修改安装包，不读写浏览器 Cookies 数据库，不碰签名密钥，不关闭认证，不调大请求头上限。"
+    },
+    {
+      "section": "背景",
+      "text": "DSH Desktop 每次启动会监听一个随机的 `127.0.0.1` 端口，并为该 Host 下发一个与之对应的 `dsh-auth-*` Cookie。浏览器不按端口隔离 Cookie，所以每个新端口都会多留一个 Cookie，旧端口的却永远不过期。用过一段时间后 `Cookie` 请求头会不断变长，最终在 HTTP parser 阶段被拒绝（`431 Request Header Fields Too Large`），表现为本地页面认证失败。\n\n这个插件是**预防性缓解**，不是官方根治：\n\n- 已经大到被 parser 拒绝的请求根本没进到应用层，插件看不到，必须先离线清一次 Cookie。\n- 只有在判定旧端口确实没人监听时才清理，所以端口复原/进程切换的 TOCTOU 窗口无法彻底消除。\n- 依赖当前版本的 `webServer.server` 接入点与 v1 Cookie 格式，不承诺跨大版本兼容。"
+    },
+    {
+      "section": "清理与保留规则",
+      "text": "只处理字面量 `127.0.0.1:端口` 的本地 HTTP 请求，且 `Host` 端口必须与实际监听端口一致。只有同时满足以下条件的 Cookie 才会被下发过期头：\n\n1. 名字是 `dsh-auth-*`，格式自洽，且名字里的 authority 与其 SHA256 前缀相符（只做自洽性筛选，不代表验证真实签名）；\n2. 该 authority 的端口两次新鲜探测均为 `ECONNREFUSED`，且两次间隔不小于 `confirmGapMs`；\n3. 不是当前 Host，也不是任何正在监听的 Host。\n\n始终保留：当前 Host、其他在监听 Host、v2/API Cookie、非 `127.0.0.1` 或 HTTPS 形态的 Cookie、畸形/超长/判定不确定的 Cookie。探测超时或其他错误一律按「未知」处理并保留。"
+    },
+    {
+      "section": "清理与保留规则",
+      "text": "过期头只在已认证的首页响应（显式 `200`/`303`、非流式）上合并发送；`401`/`403`、隐式发送、`write`/`flushHeaders` 流式响应会立刻原样放行。原有的 `Set-Cookie`、状态码、`Location` 和响应体都不变。"
+    },
+    {
+      "section": "安装",
+      "text": "插件是一个标准的 DSH bundle 包，零运行时依赖（只用 Node 内置模块，需要 Node ≥ 22.13）。\n\n```bash\ngit clone https://github.com/CECILIALOVE0616/dsh-auth-cookie-hygiene.git\ncd dsh-auth-cookie-hygiene\nnpm pack            # 产出 dsh-auth-cookie-hygiene-<version>.tgz\n```\n\n然后在 DSH 的 profile 目录（与 `cordis.patch.yml` 同级）里：\n\n1. 安装依赖：`npm install <tgz 路径>`\n2. 把同名 bundle 加进 profile 配置的 `dsh.profile.bundles`\n3. 包内 `dsh.bundle.patch` 指向 `cordis.patch.yml`，由它把 backend 插件插进配置树："
+    },
+    {
+      "section": "安装",
+      "text": "```yaml\n- insert:\n    - id: dsh-auth-cookie-hygiene\n      name: dsh-auth-cookie-hygiene\n```\n\n4. 重启 DSH，先走一遍 welcome / account 流程确认登录正常。\n\n安装前备份 profile 并退出 DSH；不要在运行中的 profile 上并发改依赖。卸载时移除 bundle 与依赖再重启，`effect` 会释放挂钩。"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 默认 | 范围 | 说明 |\n| --- | --- | --- | --- |\n| `enabled` | `true` | — | 关掉后只挂载不清理 |\n| `maxPerResponse` | `8` | 1–32 | 单次响应最多下发多少个过期头 |\n| `maxExtraHeaderBytes` | `3072` | 256–16384 | 单次响应追加头的字节上限 |\n| `maxCandidatesPerRequest` | `64` | 1–256 | 单次请求最多解析多少个候选 Cookie |\n| `confirmTimeoutMs` | `700` | 100–5000 | 等待新鲜探测的总预算；到点放行 |\n| `probeTimeoutMs` | `250` | 20–5000 | 单次 TCP 探测超时 |\n| `confirmGapMs` | `120` | 0–60000 | 两次拒绝探测之间的最小间隔 |\n| `closedTtlMs` | `30000` | 100–600000 | 「已关闭」缓存时长 |\n| `openTtlMs` | `15000` | 100–600000 | 「在监听」缓存时长 |\n| `retryBackoffMs` | `2000` | 50–60000 | 探测失联后的重试退避 |\n| `maxPorts` | `256` | 1–4096 | 端口状态表上限 |\n| `maxRecent` | `512` | 16–4096 | 近期已处理 Cookie 记录上限 |\n| `recentTtlMs` | `300000` | 0–3600000 | 近期记录保留时长 |\n| `serverPollMs` | `50` | 10–5000 | 未接入时的轮询间隔 |\n| `serverIdlePollMs` | `2000` | 10–60000 | 已接入后的轮询间隔 |\n| `serverDeadlineMs` | `30000` | 0–300000 | 等待 WebServer 出现的最长时间，0 表示不限 |\n| `debug` | `false` | — | 输出接入与配置日志 |"
+    },
+    {
+      "section": "配置",
+      "text": "不建议放大限额或等待时间：真正的约束是浏览器端的请求头总大小，不是这里。"
+    },
+    {
+      "section": "开发与测试",
+      "text": "```bash\nnpm test               # node --test \"test/*.test.js\"\nnpm run test:sandboxed # 受限环境下关掉测试进程隔离（Node 24+ 支持）\n```\n\n共 50 项测试，覆盖冷请求、活跃 Host 保留、v2/畸形输入、原登录头合并、401 不变、流式响应、探测超时与卸载放行，以及「无预热、无人工等待，连续 12 次重建 Host 后浏览器 Cookie jar 依然只有当前与另一个活跃 Host」。用 Electron 内置 Node 24.21.0 与 Node 24.22.1 均通过。\n\n如果测试环境不允许 `node --test` 派生子进程（某些沙箱里会 `spawn EPERM`），改用 `npm run test:sandboxed`，它把 runner 的进程隔离关掉，在单个进程里跑同一个 glob。\n\n模块职责："
+    },
+    {
+      "section": "开发与测试",
+      "text": "| 文件 | 职责 |\n| --- | --- |\n| `lib/cookie.js` | Cookie 解析、authority/name 校验、过期头构造 |\n| `lib/liveness.js` | 仅 127.0.0.1 的 TCP 探测与两次拒绝确认 |\n| `lib/hook.js` | 请求/响应门控，只在认证首页响应上合并过期头 |\n| `lib/index.js` | Cordis 生命周期、`webServer.server` 接入、配置归一化 |"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 不修复已经触发的 431，只做预防。堆积较多时先退出 DSH 离线清理一次。\n- 插件不读取 credentials 里的签名密钥，因此无法验证 Cookie 真实性，只做格式自洽 + 端口关闭筛选。\n- 端口在探测与删除之间重新启用时可能误过期一个刚启用的实例，需要重新打开登录链接。\n- 单次响应默认最多 8 条过期头，意味着首屏可能清不完大量历史 Cookie，多刷新几次即可。\n- 真实桌面 profile 的 Electron welcome/account 全流程、Chromium 持久 Cookie 库的长期表现、DSH 升级后的兼容性，均未做完整验收。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

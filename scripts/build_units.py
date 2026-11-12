@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Merge model-generated units with deterministic declared and README units."""
 import argparse,json,pathlib,re
+from lifecycle import repository_health_text
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 
 def lang(text):
@@ -15,6 +16,9 @@ def extracted_units(facts):
  repo=facts["repo"];slug=repo.replace("/","__");commit=facts["commit"]
  display=facts.get("manifest",{}).get("displayName") or facts.get("manifest",{}).get("name") or repo.split("/")[-1]
  out=[];used=set()
+ health=facts.get("repository_health")
+ if health:
+  out.append({"unit_id":f"{slug}#lifecycle-status","repo":repo,"commit":commit,"type":"lifecycle","lang":"zh","text":f"{display} 的维护与更新元数据：{repository_health_text(health)}。","source":"extracted"})
  for i,item in enumerate(facts["declared"],1):
   base=f"declared-{ident(item['kind']+'-'+item['name'])}";uid=f"{slug}#{base}"
   if uid in used:uid=f"{uid}-{i}"
@@ -35,7 +39,16 @@ def main():
  if a.repo:paths=[p for p in paths if json.loads(p.read_text())["repo"] in set(a.repo)]
  for fp in paths:
   facts=json.loads(fp.read_text());slug=facts["repo"].replace("/","__");units=[]
-  gp=gendir/(slug+".jsonl")
+  card_path=ROOT/"results"/"cards"/(slug+".json")
+  if facts.get("repository_health") and card_path.exists():
+   card=json.loads(card_path.read_text())
+   if card.get("repository_health") != facts["repository_health"]:
+    card["repository_health"]=facts["repository_health"]
+    card_path.write_text(json.dumps(card,ensure_ascii=False,indent=2)+"\n")
+  gp=ROOT/"results"/"model-units"/(slug+".jsonl")
+  if not gp.exists(): gp=gendir/(slug+".jsonl")
+  if not gp.exists(): gp=ROOT/"results"/"model-units"/(slug+".jsonl")
+  if not gp.exists(): gp=outdir/(slug+".jsonl")
   if gp.exists():
    for no,line in enumerate(gp.read_text().splitlines(),1):
     if line.strip():units.append(json.loads(line))

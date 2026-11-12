@@ -43,6 +43,8 @@ def validate(repo,tier=None):
  except Exception as e:errors.append("facts schema: "+str(e).splitlines()[0])
  try:jsonschema.Draft202012Validator(SCHEMAS["card"],format_checker=jsonschema.FormatChecker()).validate(card)
  except Exception as e:errors.append("card schema: "+str(e).splitlines()[0])
+ if facts.get("repository_health") is not None and card.get("repository_health") != facts["repository_health"]:
+  errors.append("card repository_health differs from deterministic facts.repository_health")
  units=[]
  for no,line in enumerate(paths["units"].read_text().splitlines(),1):
   try:u=json.loads(line);jsonschema.Draft202012Validator(SCHEMAS["unit"]).validate(u);units.append(u)
@@ -63,7 +65,9 @@ def validate(repo,tier=None):
  for topic in [primary]+secondary:
   if topic not in TAX:errors.append(f"unknown topic: {topic}")
  if primary=="other" and not card.get("topics",{}).get("proposed"):errors.append("other topic needs proposed")
- display=(facts.get("manifest",{}).get("displayName") or facts.get("manifest",{}).get("name") or repo.split("/")[-1]).lower()
+ display_name=facts.get("manifest",{}).get("displayName") or facts.get("manifest",{}).get("name") or repo.split("/")[-1]
+ if isinstance(display_name,dict):display_name=display_name.get("zh") or display_name.get("en") or ""
+ display=display_name.lower() if isinstance(display_name,str) else ""
  intents=[u for u in units if u.get("type")=="intent"]
  tier=tier or card.get("tier")
  mode=card.get("analysis_mode")

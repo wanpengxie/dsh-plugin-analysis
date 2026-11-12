@@ -37,6 +37,7 @@ def main():
    "bundle_paths":[x["path"] for x in f.get("bundle",[])],
    "entries":f["entries"],"config":first_by(f["config"],lambda x:(x["name"],x["kind"])),"endpoints":first_by(f["endpoints"],lambda x:x["host"]),
    "declared":first_by(f["declared"],lambda x:(x["kind"],x["name"])),"deps":f["deps"],"quality_raw":f["quality_raw"],
+   "repository_health":f.get("repository_health"),
    "readme_sections":[x["section"] for x in f["readme"]],"skipped":f["skipped"]}
   target=out/(p.stem+".json");target.write_text(json.dumps(compact,ensure_ascii=False,indent=2)+"\n")
   print(f["repo"],target.stat().st_size)

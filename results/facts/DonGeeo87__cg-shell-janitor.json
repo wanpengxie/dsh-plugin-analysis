@@ -1,0 +1,198 @@
+{
+  "repo": "DonGeeo87/cg-shell-janitor",
+  "commit": "6e736129e56911aa9109eb2bd37f574060d92edf",
+  "extracted_at": "2026-11-11T09:35:56.585671+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 22027,
+    "lines_by_language": {
+      "JSON": 62,
+      "JavaScript": 290,
+      "Markdown": 126,
+      "Other": 35,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "assets/icon-180.png",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/es.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "cg-shell-janitor",
+    "version": "1.0.0",
+    "description": "Closes DeepSeek Harness runner processes that stay alive after their shell command finished, reclaiming about 140 MB each. Windows only.",
+    "type": "module",
+    "license": "MIT",
+    "author": "Giorgio Interdonato (DonGeeo87)",
+    "homepage": "https://github.com/DonGeeo87/cg-shell-janitor#readme",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/DonGeeo87/cg-shell-janitor.git"
+    },
+    "bugs": {
+      "url": "https://github.com/DonGeeo87/cg-shell-janitor/issues"
+    },
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "windows",
+      "process",
+      "memory",
+      "cleanup"
+    ],
+    "os": [
+      "win32"
+    ],
+    "engines": {
+      "node": ">=18"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: cg-shell-janitor\n      name: 'cg-shell-janitor'\n      config:\n        enabled: true\n        dryRun: false\n        intervalSeconds: 180\n        idleMinutes: 5\n        reapOnStartup: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/DonGeeo87/cg-shell-janitor#readme",
+      "where": "package.json:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DonGeeo87/cg-shell-janitor.git",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DonGeeo87/cg-shell-janitor/issues",
+      "where": "package.json:14"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-11-04T16:18:38Z",
+    "created_at": "2026-11-04T16:17:48Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "cg-shell-janitor",
+      "text": "A DeepSeek Harness plugin for **Windows** that closes the runner processes DSH leaves behind\nafter a shell command finished. Each one holds about 140 MB of RAM.\n\n- [Español](#español)"
+    },
+    {
+      "section": "The problem",
+      "text": "On Windows every `dsh` shell call starts a private runner process:\n\n```\n\"DeepSeek Harness.exe\" \"...\\dsh-subprocess-local\\lib\\runner.js\" -- ...\\bash.exe -c \"<your command>\"\n```"
+    },
+    {
+      "section": "The problem",
+      "text": "That runner owns the Win32 Job of the command. When the command ends the runner is supposed to\nexit on its own — its own `poll()` closes the empty Job and calls `finish(0)`. In practice it\noften stays alive: measured on DSH Desktop 0.2.x, eight of them had accumulated in a single\nworking session, 1127 MB, the oldest one four and a half hours old and completely idle."
+    },
+    {
+      "section": "The problem",
+      "text": "Neither `@deepseek-ai/dsh-subprocess-local` nor `dsh-ops` exposes a shell lifetime setting, so\nthere is nothing to configure. This plugin is the workaround."
+    },
+    {
+      "section": "What it does",
+      "text": "Every `intervalSeconds` it looks for DSH runner processes and closes the ones that are\nprovably doing nothing. Closing a runner releases its Win32 Job, which is the semantics DSH\nalready uses for its own children.\n\nIt only acts when **all** of these hold:"
+    },
+    {
+      "section": "What it does",
+      "text": "1. The runner's parent is still the DSH host process.\n2. The runner has no living child — its `bash.exe` already exited.\n3. None of the children it was ever seen with is still alive, so it is not babysitting a\n   background process. The tree is re-learned on every sample, so a command that left a server\n   running behind `&` keeps its runner protected.\n4. It is older than `idleMinutes`.\n5. There are no unattributable daemon-like orphans around. If there are, the plugin enters a\n   conservative mode and closes nothing that cycle."
+    },
+    {
+      "section": "What it does",
+      "text": "The first sample after startup only observes, so the plugin learns the tree before deciding\nanything. Nothing is deleted, and no process is touched other than the leaked runner itself."
+    },
+    {
+      "section": "Measured effect",
+      "text": "Same machine, same session, right after the first real cycle:\n\n| Metric | Before | After |\n|---|---|---|\n| Live runners | 8 (1127 MB) | 2 (288 MB, both with a live shell) |\n| Free RAM | 3.37 GB | 5.78 GB |\n| Total processes | 298 | 240 |\n\nIt closed three leaked runners and left the two that were running commands alone."
+    },
+    {
+      "section": "Configuration",
+      "text": "In `cordis.patch.yml`:\n\n| Key | Default | Meaning |\n|---|---|---|\n| `enabled` | `true` | turn the cycle off without uninstalling |\n| `dryRun` | `false` | only log what it would close |\n| `intervalSeconds` | `180` | how often it samples (30–3600) |\n| `idleMinutes` | `5` | minimum age before closing (1–1440) |\n| `reapOnStartup` | `true` | first sample 20 s after startup |"
+    },
+    {
+      "section": "Configuration",
+      "text": "A cycle costs about 2 seconds of one core every three minutes: it runs one `Get-CimInstance`\nquery through PowerShell. Raise `intervalSeconds` if that matters to you.\n\nLog: `~/.dsh/shell-janitor.log`, rotated at 256 KB."
+    },
+    {
+      "section": "Install",
+      "text": "From the dsh-market catalog (one click), or from a local checkout:\n\n```sh\ndsh plugin --profile <your-profile> add <path-to-this-directory>\n```\n\nThen restart the harness."
+    },
+    {
+      "section": "Remove",
+      "text": "```sh\ndsh plugin --profile <your-profile> remove cg-shell-janitor\n```"
+    },
+    {
+      "section": "Scope and limitations",
+      "text": "- **Windows only.** The leak is in the Win32 Job-owning runner. On other platforms the plugin\n  logs one line and does nothing.\n- It is a heuristic, not a fix. The real fix belongs upstream: the runner should exit by\n  itself.\n- A runner created *before* the plugin loaded whose shell already exited has no children on\n  record. It is still closed once it passes `idleMinutes`, because condition 5 only guards\n  against orphans the plugin cannot attribute at all.\n- If you deliberately keep a daemon alive from a shell command and the plugin never observed\n  that command, the daemon is protected only by the conservative mode, not by an exact match."
+    },
+    {
+      "section": "License",
+      "text": "MIT.\n\n---"
+    },
+    {
+      "section": "Español",
+      "text": "Plugin para **DeepSeek Harness en Windows** que cierra los procesos runner que DSH deja vivos\ndespués de que su comando terminó. Cada uno ocupa unos 140 MB.\n\nEn Windows cada llamada a `dsh` crea un proceso runner que es dueño del Job de Win32 del\ncomando. Cuando el comando termina debería salir solo, pero muchas veces queda vivo: medido en\nDSH Desktop 0.2.x, en una sola sesión de trabajo se acumularon ocho, 1127 MB, el más viejo con\ncuatro horas y media de antigüedad y sin hacer nada."
+    },
+    {
+      "section": "Español",
+      "text": "Ni `@deepseek-ai/dsh-subprocess-local` ni `dsh-ops` exponen un ajuste de vida del shell, así\nque no hay nada que configurar. Este plugin es el parche."
+    },
+    {
+      "section": "Español",
+      "text": "Cada `intervalSeconds` busca runners y cierra los que no están haciendo nada. Solo actúa si el\nrunner no tiene hijo vivo, no supervisa ningún proceso que se le haya conocido, es más viejo\nque `idleMinutes` y no hay huérfanos de tipo demonio que no sepa atribuir (si los hay, entra en\nmodo conservador y no cierra nada). La primera muestra después de arrancar solo observa.\n\nLog en `~/.dsh/shell-janitor.log`. Configuración en `cordis.patch.yml`. Solo Windows.\nLicencia MIT."
+    }
+  ],
+  "skipped": []
+}

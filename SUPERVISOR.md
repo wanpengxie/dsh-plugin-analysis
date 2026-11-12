@@ -33,12 +33,18 @@ python3 scripts/supervisor.py status
 ## Per-task worker contract
 
 1. Work only on the exact claimed repository and commit.
+   For newly imported/incremental lists, first run
+   `scripts/enrich_repo_metadata.py --list INPUT.csv --output ENRICHED.csv` and use
+   the enriched list below. This deterministically records archive state, commit
+   cadence, and sampled Issue activity. Use `GITHUB_TOKEN` for normal batches.
+   Historical results are updated with `scripts/backfill_repository_health.py`;
+   it defaults to dry-run and always skips repositories still claimed by a worker.
 2. Download statically with `scripts/download.py --list lists/high-priority.csv --repo OWNER/REPO`.
 3. Extract facts with `scripts/extract_facts.py --list lists/high-priority.csv --repo OWNER/REPO`.
 4. Build context with `scripts/prepare_context.py --list lists/high-priority.csv --repo OWNER/REPO`.
 5. Read actual source under `work/OWNER__REPO`: every entry file, bundle file, registration implementation, and the core modules needed to justify features and quality. README/context/manifest alone are never sufficient.
 6. Record every source file actually read in `coverage.files_read`. If not all core source is read, set `read_all=false` and list concrete repository-relative unread paths in `coverage.skipped`.
 7. `quality.code` and `quality.completeness` must cite actual source files that also appear in `coverage.files_read`; README and package manifests cannot support these dimensions.
-8. Write the card and model-generated units without opening another repository's outputs. Then use `scripts/build_units.py` for deterministic units.
+8. Write the card and model-generated units without opening another repository's outputs. Then use `scripts/build_units.py` for deterministic units. It copies `repository_health` from facts to the card and creates the lifecycle search unit; workers must not author or alter this metadata.
 9. Validate with `scripts/validate_results.py --list lists/high-priority.csv --repo OWNER/REPO`.
 10. Report success only with validator output. Do not commit or push; the supervisor does that.

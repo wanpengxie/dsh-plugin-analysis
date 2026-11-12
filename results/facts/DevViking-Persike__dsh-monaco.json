@@ -1,0 +1,152 @@
+{
+  "repo": "DevViking-Persike/dsh-monaco",
+  "commit": "cd488c71f179abd7714e1ba08561b0a93c14fca9",
+  "extracted_at": "2026-11-11T09:32:00.571686+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 10778,
+    "lines_by_language": {
+      "JSON": 23,
+      "JavaScript": 125,
+      "Markdown": 78,
+      "Other": 25,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "NOTICE.md",
+      "README.md",
+      "cordis.patch.yml",
+      "dsh/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-monaco",
+    "version": "0.1.0",
+    "description": "DeepSeek Harness plugin: serves the Monaco editor distribution over a host HTTP route, so an editor plugin needs no CDN and no extra bundler outputs",
+    "license": "MIT",
+    "main": "dsh/index.js",
+    "exports": {
+      ".": "./dsh/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "dsh/**",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE",
+      "NOTICE.md"
+    ],
+    "dependencies": {
+      "monaco-editor": "0.56.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "monaco",
+      "editor"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/DevViking-Persike/dsh-monaco.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle layer: mount the Monaco asset route.\n#\n# Serving is stateless and costs nothing until a page requests a file, so the\n# row carries no opt-in. `route` changes where the distribution is mounted.\n- insert:\n    - id: dsh-monaco\n      name: 'dsh-monaco'\n"
+    }
+  ],
+  "entries": [
+    "dsh/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "route",
+      "kind": "setting",
+      "default": "/monaco",
+      "where": "dsh/index.js:64"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/DevViking-Persike/dsh-monaco.git",
+      "where": "package.json:21"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "monaco-editor": "0.56.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-22T10:37:59Z",
+    "created_at": "2026-08-22T10:37:56Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "dsh/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-monaco",
+      "text": "Serves the [Monaco Editor](https://github.com/microsoft/monaco-editor) distribution to the browser over a host HTTP route, for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugins that need a real code editor in the page."
+    },
+    {
+      "section": "Why a route instead of a bundle",
+      "text": "The harness browser plugin channel delivers exactly one file per plugin (`/plugins/<id>/client.js`), and the dynamic bundler emits no extra chunks or assets. Monaco is a multi-file distribution — a loader, per-language modules, and a stylesheet — so it cannot arrive that way."
+    },
+    {
+      "section": "Why a route instead of a bundle",
+      "text": "This plugin mounts those files under a route of its own, reading them from the installed `monaco-editor` package. The editor therefore stays local: no CDN at runtime, and no third-party origin inside a tool that reads the operator's source tree."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add github:DevViking-Persike/dsh-monaco\n```\n\nRestart `dsh`. The distribution is then available under `/monaco`."
+    },
+    {
+      "section": "Use it from a client plugin",
+      "text": "Monaco publishes itself through its own AMD loader:\n\n```js\nawait loadScript('/monaco/loader.js')\nwindow.require.config({ paths: { vs: '/monaco' } })\nwindow.require(['vs/editor/editor.main'], () => {\n  window.monaco.editor.create(host, { value: '', language: 'typescript' })"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `route` | `/monaco` | Absolute URL prefix, no trailing slash. |\n\n```yaml\n- id: dsh-monaco\n  name: 'dsh-monaco'\n  config:\n    route: /vendor/monaco"
+    },
+    {
+      "section": "Model Experience",
+      "text": "None. This plugin serves static bytes to the browser and registers no tool, prompt section, or session event, so nothing it does reaches a model request or consumes context."
+    },
+    {
+      "section": "Safety",
+      "text": "- Every request path is resolved against the distribution root and then proved to be inside it. `resolve` collapses `..` first, so an escape is caught by the containment test rather than by pattern-matching request text — including percent-encoded attempts, which reach the server intact.\n- A read failure under the root answers `404`, the same as an unknown path, so the browser cannot learn which files exist from a distinguishable error.\n- Only `GET` and `HEAD` are served; anything else answers `405`.\n- An extension absent from the content-type table is served as `application/octet-stream` rather than guessed, so a wrong type never makes the browser execute something as script."
+    },
+    {
+      "section": "Known Limitations and Deferred Work",
+      "text": "- The route serves the whole distribution, including language modules a given page never loads. Serving a subset would need to know each consumer's languages up front, which the route cannot see.\n- Responses carry a one-week immutable `cache-control`. That is safe because the distribution is version-pinned by the installed package, but a Monaco upgrade needs a cache-busting route change or a hard reload to take effect in an open tab.\n- Files are read per request with no in-process cache; the OS page cache absorbs this, and holding a 24 MB distribution in heap to avoid it has no current consumer.\n- Monaco's web workers are not configured here. A consumer that wants them must serve its own worker entry and set `MonacoEnvironment`; without one Monaco runs its language services on the main thread."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](LICENSE). [NOTICE.md](NOTICE.md) carries attribution for Monaco Editor (© Microsoft, MIT) and the DeepSeek Harness project whose plugin conventions this follows."
+    }
+  ],
+  "skipped": []
+}

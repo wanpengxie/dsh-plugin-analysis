@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse,csv,datetime as dt,json,pathlib,re
 from collections import Counter
 from urllib.parse import urlparse
+from lifecycle import derive_repository_health
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 MAX_TEXT=2*1024*1024
@@ -171,13 +172,15 @@ def extract(row, output_dir=None):
   p=root/name
   if p.exists() and (t:=read_text(p)):readme.extend(split_readme(t))
  test_files=sum(bool(re.search(r"(?:^|/)(?:test|tests|__tests__)(?:/|$)|(?:\.test|\.spec)\.[^.]+$",p.relative_to(root).as_posix(),re.I)) for p in ps)
- facts={"repo":repo,"commit":commit,"extracted_at":dt.datetime.now(dt.timezone.utc).isoformat(),
+ extracted_at=dt.datetime.now(dt.timezone.utc).isoformat()
+ facts={"repo":repo,"commit":commit,"extracted_at":extracted_at,
   "tree":{"files":sum(p.name!=".analysis-source.json" for p in ps),"bytes":total,"lines_by_language":dict(sorted(langs.items())),"outline":outline},
   "manifest":clean,"bundle":bundle,"entries":list(dict.fromkeys(entries)),
   "config":uniq(config,lambda x:(x["name"],x["where"])),"endpoints":uniq(endpoints,lambda x:(x["host"],x["where"])),
   "declared":uniq(declared,lambda x:(x["kind"],x["name"],x["where"])),
   "deps":{"dependencies":manifest.get("dependencies",{}) if isinstance(manifest.get("dependencies"),dict) else {},"devDependencies":manifest.get("devDependencies",{}) if isinstance(manifest.get("devDependencies"),dict) else {}},
   "quality_raw":{"test_files":test_files,"has_ci":any(p.relative_to(root).as_posix().startswith(".github/workflows/") for p in ps),"has_lint":any(p.name.lower() in {"eslint.config.js","eslint.config.mjs",".eslintrc",".eslintrc.json","ruff.toml",".flake8","biome.json"} for p in ps),"typed":any(p.suffix.lower() in {".ts",".tsx"} or p.name in {"py.typed","mypy.ini"} for p in ps),"commits":int(row.get("commits") or 0),"pushed_at":row.get("pushed_at") or "","created_at":row.get("created_at") or ""},
+  "repository_health":derive_repository_health(row,root,extracted_at),
   "runtime_files":sorted(p.relative_to(root).as_posix() for p in runtime),"readme":readme,"skipped":[x["path"] for x in meta.get("skipped",[])]}
  facts=redact_secrets(facts)
  out=pathlib.Path(output_dir) if output_dir else ROOT/"results"/"facts"

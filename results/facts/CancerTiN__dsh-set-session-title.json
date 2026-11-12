@@ -1,0 +1,160 @@
+{
+  "repo": "CancerTiN/dsh-set-session-title",
+  "commit": "38f5d7293ac423f93580a74b2a83561980c182d1",
+  "extracted_at": "2026-11-11T08:42:43.911525+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 19255,
+    "lines_by_language": {
+      "JSON": 20,
+      "JavaScript": 113,
+      "Markdown": 212,
+      "Other": 23,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-set-session-title",
+    "version": "0.1.1",
+    "description": "Model-facing tool that renames the calling session through the harness session-title service.",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "license": "MIT",
+    "comment": "No dependencies on purpose: an in-box @deepseek-ai/* dependency installs a second copy into the profile and splits module identity for symbol-keyed runtime surfaces, which breaks every tool call in that profile. See lib/index.js.",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Inserts the model-facing `set_session_title` tool into whatever composition\n# mounts this bundle. The row takes no configuration: the tool reads the\n# deployment's own title limits from the session-title service it calls, and\n# that service row (`session-title`, composed by dsh-base) stays authoritative.\n- insert:\n    - id: set-session-title\n      name: dsh-set-session-title\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-09-29T14:53:36Z",
+    "created_at": "2026-09-29T14:45:10Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-set-session-title",
+      "text": "A model-facing `set_session_title` tool for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) — the agent can rename its own session.\n\n[中文说明](README.zh.md)"
+    },
+    {
+      "section": "Why this exists",
+      "text": "DSH owns session titles properly: they are log-only `session/title` events (zero tokens) served by `@deepseek-ai/dsh-session-title`, written either by a deterministic first-prompt fallback or by an optional LLM provider."
+    },
+    {
+      "section": "Why this exists",
+      "text": "What is missing is a way for the agent to *fix* one. Automatic titling can produce a content-free result — observed on a real session: the provider overwrote a usable fallback with the bare phrase `会话标题` (\"session title\"), i.e. the instruction's own vocabulary echoed back ([discussion #8289](https://github.com/deepseek-ai/deepseek-harness/discussions/8289)). The rename capability itself exists (`SessionTitleService.rename(session, title)`, the GUI rename dialog, the host's own delivery path uses it), but 0.2.0-rc.2 exposes it to **no** model-facing surface:"
+    },
+    {
+      "section": "Why this exists",
+      "text": "- no tool;\n- no `session` CLI subcommand (`plugin` and `duplicate` only);\n- `/api` guarded by an authority-bound signed cookie whose launch token is a per-process `randomBytes()` value that is never persisted, so a local process cannot legitimately obtain it.\n\nThis plugin adds exactly that one existing service call as a tool. It does not touch authentication, storage, or the session log directly — the capability is granted by composing the row."
+    },
+    {
+      "section": "Behaviour",
+      "text": "| | |\n|---|---|\n| Write | appends a `session/title` event with `source: { kind: \"user\" }` |\n| Pinning | a user-sourced title is authoritative: in-flight automatic generation is superseded and later prompts schedule none (an explicit `refresh` is the deliberate unpin) |\n| Scope | the calling agent's own session (`exec.agent.session`) |\n| Normalization | trimmed, terminal control sequences removed, capped at the deployment's `maxTitleBytes` (dsh-base ships `80`); input that normalizes to empty is rejected |\n| Cost | changes no message in the conversation and adds no tokens |"
+    },
+    {
+      "section": "Install",
+      "text": "```sh"
+    },
+    {
+      "section": "recommended: git spec pinned to a release tag (reproducible, and immune to the tarball caveat below)",
+      "text": "dsh plugin --profile <name> add github:CancerTiN/dsh-set-session-title#v0.1.1"
+    },
+    {
+      "section": "a tarball URL works too — read the caveat below before picking one",
+      "text": "dsh plugin --profile <name> add https://github.com/CancerTiN/dsh-set-session-title/archive/refs/tags/v0.1.1.tar.gz\n```\n\nThe manifest declares `dsh.bundle.patch`, so `add` appends `dsh-set-session-title` to the profile's `dsh.profile.bundles` and its patch inserts the tool row into the composed tree."
+    },
+    {
+      "section": "a tarball URL works too — read the caveat below before picking one",
+      "text": "> **Tarball-URL caveat.** Under the pnpm bundled with the desktop app (11.7.0), a GitHub tarball URL installs once and then fails on every later resolve that reuses the same pnpm store — `ERR_PNPM_MISSING_TARBALL_INTEGRITY`, where deleting the lockfile and `--force` both change nothing. Reproduced and reported upstream as [discussion #8294](https://github.com/deepseek-ai/deepseek-harness/discussions/8294). A git spec is unaffected because it resolves to a commit-addressed `gitHosted` entry, which pnpm does not subject to the integrity requirement; a tarball URL is still fine when the store has not seen it (or on a newer pnpm)."
+    },
+    {
+      "section": "a tarball URL works too — read the caveat below before picking one",
+      "text": "On 0.2.0-rc.2 the desktop app picked the tool up **without a restart** (the client-side tool schema updated mid-session and the call succeeded immediately). Other builds may need the profile restarted."
+    },
+    {
+      "section": "Requirements",
+      "text": "Both injected services ship with `dsh-base`, so the default `web` / `desktop` / `headless` compositions satisfy them:\n\n| service | role |\n|---|---|\n| `tools` | tool registry |\n| `sessionTitle` | `@deepseek-ai/dsh-session-title` (row id `session-title`) |\n\nA composition missing either one fails loud at load instead of registering a tool that cannot work."
+    },
+    {
+      "section": "Usage",
+      "text": "Ask the agent, or call it from a skill. Argument:\n\n```json\n{\"title\": \"安装终端插件并核验连通性\"}\n```\n\nResult:\n\n```json\n{\"title\": \"安装终端插件并核验连通性\", \"eventSeq\": 1307}\n```\n\nRead back either way (both should show the new title):\n\n```sh"
+    },
+    {
+      "section": "the projection cache the GUI reads; seq matches the returned eventSeq",
+      "text": "python3 -c \"import json;print(json.load(open('$DSH_HOME/storages/session_projcache/sessions/$DSH_SESSION_ID.json'))['record']['rows']['title'])\""
+    },
+    {
+      "section": "the durable log; the last session/title event's source.kind should be \"user\"",
+      "text": "zstd -dc \"$DSH_HOME\"/sessions/*/\"$DSH_SESSION_ID\"/session.v4.jsonl.zstd | grep session/title | tail -1\n```"
+    },
+    {
+      "section": "Why this package has zero dependencies",
+      "text": "Declaring an in-box package (for example `@deepseek-ai/dsh-tools`, the documented home of `defineTool`) as a dependency makes pnpm materialize a second copy inside the profile. Module identity then splits for a module-local `Symbol` that keys a runtime surface of the tool registry, so `ctx.tools[TOOL_RUNTIME_SCHEDULER]` reads back `undefined` inside `dsh-agent-loop` and **every tool call in that profile fails** — `bash`, `read`, and this plugin's tool alike — with a bare `Cannot read properties of undefined (reading 'prepare')`. Reproduced and isolated on 0.2.0-rc.2; written up in [discussion #8287](https://github.com/deepseek-ai/deepseek-harness/discussions/8287)."
+    },
+    {
+      "section": "Why this package has zero dependencies",
+      "text": "So `lib/index.js` imports nothing and the tool definition is hand-written JSON Schema. `ctx.tools.register()` requires only `output: { schema, render }` plus a schema inside the supported subset (`type` / `properties` / `required` / `additionalProperties` / `items` / `enum` / `const` and the `description` annotation) — which is what `defineTool` compiles a declaration into. The trade-off: `register()` does not wrap `execute` with schema validation, so the single argument is checked by hand."
+    },
+    {
+      "section": "Verified on",
+      "text": "`@deepseek-ai/dsh-desktop-runtime` 0.2.0-rc.2, macOS, session format v4 — both a `headless` profile and the desktop app's live session:\n\n```json\n{\"type\":\"tool/call\",\"seq\":1306,\"data\":{\"name\":\"set_session_title\",\"arguments\":\"{\\\"title\\\":\\\"安装终端插件并核验连通性\\\"}\"}}\n{\"type\":\"session/title\",\"seq\":1307,\"data\":{\"title\":\"安装终端插件并核验连通性\",\"messageSeqs\":[],\"source\":{\"kind\":\"user\"}}}\n```\n\n`messageSeqs: []` is the signature of `rename()`: the title is explicit, not derived from a prompt."
+    },
+    {
+      "section": "Limitations",
+      "text": "- Only the **calling** session can be renamed; there is no cross-session rename and no target-id argument.\n- A non-agent caller (plain host-side execution) is rejected.\n- A deployment that does not compose `session-title` fails loudly at load — deliberate, so the tool can never appear without the capability behind it."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```sh\ndsh plugin --profile <name> remove dsh-set-session-title\n```\n\nTitles already written stay in the session log: a title is a log fact, not plugin state."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

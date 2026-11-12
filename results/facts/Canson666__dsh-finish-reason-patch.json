@@ -1,0 +1,136 @@
+{
+  "repo": "Canson666/dsh-finish-reason-patch",
+  "commit": "c544c90c64b969e5ebdcad2e23d0e792e6542578",
+  "extracted_at": "2026-11-11T08:43:53.524179+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 13555,
+    "lines_by_language": {
+      "JSON": 35,
+      "JavaScript": 167,
+      "Markdown": 79,
+      "Other": 25,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "plugin.mjs",
+      "selftest.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-finish-reason-patch",
+    "version": "1.1.0",
+    "description": "Tolerate OpenAI-compatible model streams that end without a terminal finish_reason so DSH turns complete instead of aborting.",
+    "keywords": [
+      "dsh",
+      "plugin",
+      "llm",
+      "finish_reason",
+      "openai-compatible"
+    ],
+    "author": "dsh-finish-reason-patch contributors",
+    "type": "module",
+    "main": "./plugin.mjs",
+    "exports": {
+      ".": "./plugin.mjs",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "plugin.mjs",
+      "cordis.patch.yml",
+      "README.md",
+      "selftest.mjs"
+    ],
+    "engines": {
+      "node": ">=20.0.0"
+    },
+    "dsh": {
+      "runtime": "host",
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-finish-reason-patch bundle patch layer: declares the plugin's own loader\n# entry, inserted into the profile tree at boot.\n- insert:\n    - id: finish-reason-patch\n      name: dsh-finish-reason-patch"
+    }
+  ],
+  "entries": [
+    "plugin.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-08-20T16:07:31Z",
+    "created_at": "2026-08-20T15:45:29Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "plugin.mjs",
+    "selftest.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-finish-reason-patch",
+      "text": "DSH plugin: stop agent turns from being aborted when an OpenAI-compatible\nprovider (GPT-family models, gateways, proxies) ends a streaming response with\nfull output but **without a terminal `finish_reason`**."
+    },
+    {
+      "section": "The bug it fixes",
+      "text": "DSH routes OpenAI-compatible providers through `@earendil-works/pi-ai`. When\nthe wire stream ends without ever seeing `choices[].finish_reason`, pi-ai\nraises `Stream ended without finish_reason` (`openai-completions.js:438`). By\nthat point every content block is already closed and delivered — the response\nis complete, only the terminal marker is missing. pi-ai surfaces that as an\n`error` event, the `dsh-llm-pi-ai` adapter maps it to a terminal\n`finish {kind:'error', code:'TRANSPORT'}` chunk, and the agent loop\n(`dsh-agent-loop`) throws — aborting a perfectly good model turn. Other agents\n(e.g. Codex) tolerate the same wire behavior by treating end-of-stream as the\nend of the response."
+    },
+    {
+      "section": "The fix",
+      "text": "The plugin hooks the `llm/stream` waterfall — every model call (agent turns,\nsession-title requests, prepared calls, subagents) flows through it via\n`LlmRuntime.streamWithRegistration`. When the terminal finish is exactly that\nerror, it is rewritten to a normal `stop` finish (or `tool-calls` if tool-call\ndeltas were delivered), so the turn completes instead of aborting. This holds\nwhether or not content was delivered: some OpenAI-compatible gateways stream\nonly usage — or nothing — before ending without a `finish_reason` (reporting\n`outputTokens: 0`), and they are accepted as complete empty responses instead\nof retry-looping (Codex-style tolerance). All other error finishes (transport\nresets, rate limits, HTTP errors, ...) pass through untouched, so the existing\nretry policy still applies to genuinely broken responses."
+    },
+    {
+      "section": "The fix",
+      "text": "When it fires you'll see:\n`[finish-reason-patch] provider finished without finish_reason -> mapped to \"stop\"`"
+    },
+    {
+      "section": "Installation",
+      "text": "The plugin is a plain Cordis host plugin (exports `name` / `apply`, no external\ndependencies beyond the `ctx` Cordis passes in)."
+    },
+    {
+      "section": "1. As a persistent profile bundle (recommended, survives restarts)",
+      "text": "1. Place the package where your DSH profile can resolve it, e.g. a junction or\n   symlink inside `<profile root>/node_modules/dsh-finish-reason-patch`\n   pointing at this folder (same pattern as other local DSH plugins).\n2. In the profile root `package.json`, add the package to\n   `dsh.profile.bundles` and to `dependencies` (e.g.\n   `\"dsh-finish-reason-patch\": \"link:<absolute path to this folder>\"`).\n3. Restart DSH — bundle patches compose at boot. The package's own\n   `cordis.patch.yml` inserts the plugin row automatically."
+    },
+    {
+      "section": "2. As a dynamic Cordis plugin (current process only)",
+      "text": "Define/run the plugin host body (`plugin.mjs`) through the Cordis dynamic\nplugin tools. It stays active until the process exits; re-run after a restart.\nEffects are identical and idempotent if both routes are active."
+    },
+    {
+      "section": "Verifying",
+      "text": "- Logic self-test (no network): `node selftest.mjs` — all 5 cases pass.\n- Live: run a normal conversation with a GPT-class model. Turns that used to\n  abort now complete, and the log line above appears."
+    },
+    {
+      "section": "Removal",
+      "text": "Remove the bundle entry + dependency from the profile `package.json`, delete\nthe `node_modules` junction, restart DSH. No changes are made to any shipped\nDSH file."
+    },
+    {
+      "section": "Files",
+      "text": "- `plugin.mjs` — the plugin (`llm/stream` waterfall hook + rewrite logic)\n- `cordis.patch.yml` — bundle patch layer (the profile-tree insert row)\n- `package.json` — npm metadata (`dsh.runtime: host`, `dsh.bundle.patch`)\n- `selftest.mjs` — local logic self-test\n- `LICENSE` — MIT"
+    }
+  ],
+  "skipped": []
+}

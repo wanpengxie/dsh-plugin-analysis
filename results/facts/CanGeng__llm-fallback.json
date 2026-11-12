@@ -1,0 +1,118 @@
+{
+  "repo": "CanGeng/llm-fallback",
+  "commit": "65d044f9a9cbc695af673a957a1c4668c9d292a4",
+  "extracted_at": "2026-11-11T08:41:24.104796+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 34665,
+    "lines_by_language": {
+      "JSON": 24,
+      "JavaScript": 588,
+      "Markdown": 121,
+      "Other": 3,
+      "YAML": 31
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "llm-fallback",
+    "version": "0.1.0",
+    "description": "Multi-level provider fallback for same-named models in the DeepSeek Harness",
+    "type": "module",
+    "main": "index.js",
+    "scripts": {
+      "test": "node --test"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# llm-fallback profile layer: insert one row that mounts the fallback plugin.\n# The first provider of each pool is the primary; later ones are fallbacks,\n# tried in order. An explicit provider that is a pool member starts there and\n# fails over forward from it.\n- insert:\n    - id: llm-fallback\n      name: 'llm-fallback'\n      config:\n        alwaysPolicy: reject     # reject = refuse to load on `always`; degrade = cap it and warn\n        alwaysMaxRetries: 2      # when degrade, max same-provider retries before failing over\n        pools:\n          - model: deepseek-v4-pro\n            providers:\n              - deepseek-official\n              - ark-coding\n              - ark-agent\n          - model: deepseek-v4-flash\n            providers:\n              - deepseek-official\n              - ark-coding\n              - ark-agent\n          # deepseek-official does not serve the GLM models, so they start at\n          # ark-coding and fall back to ark-agent only.\n          - model: glm-5.3\n            providers:\n              - ark-coding\n              - ark-agent\n          - model: glm-5.2\n            providers:\n              - ark-coding\n              - ark-agent\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-08-16T06:06:48Z",
+    "created_at": "2026-08-15T17:53:50Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "llm-fallback",
+      "text": "English | [中文](README.zh.md)\n\nMulti-level provider fallback for same-named models in the DeepSeek Harness.\n\nA pool maps one model id to an ordered provider list. The first provider is the\nprimary; each later one is a fallback. The plugin keeps every step on the\nprimary (stable request prefix → KV cache reuse) and only fails over when the\ncurrent level is exhausted."
+    },
+    {
+      "section": "Behavior",
+      "text": "- `agent/request` picks the pool level for each step. A new step starts at the\n  primary (level 0) **unless the explicitly requested provider is itself a pool\n  member** — then it starts there and fails over forward. A recovered primary is\n  therefore reused immediately on the next step. It also probes each candidate\n  with `resolveCallConfig` and skips (recording) any that would fail before\n  streaming — a missing route (`NO_ADAPTER`), an unknown model, or an\n  unsupported reasoning effort.\n- `agent/request-error` records each level's failure, then advances the level by\n  returning `{ kind: 'retry' }`. When every level is exhausted it throws one\n  aggregated error listing each level's failure (`provider: code — message`)."
+    },
+    {
+      "section": "Behavior",
+      "text": "Same-provider retries happen first (via `dsh-llm-retry`, which sits outside this\nplugin), so transient errors like `RATE_LIMIT` never trigger a failover and never\nbreak the prefix. Only terminal errors (`QUOTA`, `AUTH`, …) or an exhausted\nretry budget fail over."
+    },
+    {
+      "section": "`retryPolicy.mode: always` is incompatible",
+      "text": "`always` retries one provider forever and cannot be stopped from a listener, so\nit conflicts with a terminating fallback chain:"
+    },
+    {
+      "section": "`retryPolicy.mode: always` is incompatible",
+      "text": "- `alwaysPolicy: reject` (default) — refuse the provider, naming it and the\n  model. Providers registered at load time are rejected when the plugin loads;\n  routes activated later through settings (dormant routes) are rejected the\n  first time a pool request would use them.\n- `alwaysPolicy: degrade` — warn and cap that provider at `alwaysMaxRetries`\n  same-provider retries before failing over."
+    },
+    {
+      "section": "`retryPolicy.mode: always` is incompatible",
+      "text": "In both modes, an `always` provider may never be the **last** level of a pool\n(that can never terminate) — it is always rejected."
+    },
+    {
+      "section": "Configuration",
+      "text": "See `cordis.patch.yml`. The `pools` list maps a model id to its ordered\nprovider chain. The config is validated when the plugin loads: an unknown\n`alwaysPolicy`, a pool without a non-empty `model`, or a pool whose `providers`\nis not an array throws immediately instead of failing silently later.\n\n```yaml\nconfig:\n  alwaysPolicy: reject\n  alwaysMaxRetries: 2\n  pools:"
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode --test   # or: npm test\n```"
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add link:/path/to/llm-fallback\ndsh web   # restart to load the new bundle layer\n```"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,440 @@
+{
+  "repo": "Choi-Peng/dsh-tenancy",
+  "commit": "bd0c16a3cffdd3a4798345346f0aae031cd543f6",
+  "extracted_at": "2026-11-11T09:03:20.990752+00:00",
+  "tree": {
+    "files": 36,
+    "bytes": 37481149,
+    "lines_by_language": {
+      "JSON": 71,
+      "JavaScript": 6114,
+      "Markdown": 2342,
+      "Other": 373,
+      "Python": 208,
+      "Shell": 771,
+      "YAML": 1230
+    },
+    "outline": [
+      ".dsh-repair/analyze.mjs",
+      ".gitignore",
+      "CHANGELOG.md",
+      "README.md",
+      "authelia.tgz",
+      "caddy.tgz",
+      "cordis.patch.yml",
+      "docs/architecture.md",
+      "docs/patch-system.md",
+      "examples/Caddyfile",
+      "examples/authelia/configuration.yml",
+      "examples/authelia/users.yml",
+      "examples/nginx/dsh.example.com.conf",
+      "examples/systemd/authelia.service",
+      "examples/systemd/caddy-dsh.service",
+      "handbooks/deployment.md",
+      "handbooks/operations.md",
+      "handbooks/upgrade.md",
+      "install.sh",
+      "lib/audit.js",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/register.js",
+      "lib/sites.js",
+      "lib/sysuser.js",
+      "lib/util.js",
+      "package.json",
+      "patches/dsh-client-connection-0.1.1-rc.2.patch",
+      "pnpm-lock.yaml",
+      "scripts/apply-patches.sh",
+      "scripts/selftest.mjs",
+      "scripts/ws-probe.mjs",
+      "skills/publish-web-app.md",
+      "tools/README.md",
+      "tools/authelia_register_link_patch.py",
+      "tools/check-privileged-sync.py"
+    ]
+  },
+  "manifest": {
+    "name": "@choi-p/dsh-tenancy",
+    "version": "0.1.0-alpha.2",
+    "description": "DSH single-instance multi-tenancy: proxy-identity extraction, session-level owner/access ACL over a sidecar store, shadow exact-routes gating session RPCs, and an event-frame filter hook for the client-connection patch.",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "tenancy",
+      "multi-tenant",
+      "session",
+      "acl"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "skills",
+      "cordis.patch.yml",
+      "install.sh",
+      "examples",
+      "patches",
+      "scripts",
+      "docs",
+      "handbooks",
+      "CHANGELOG.md",
+      "README.md"
+    ],
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/schemastery": "^3.18.1-rc.1",
+      "@deepseek-ai/dsh-atomic-write": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-host-apiproxy": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-settings": "^0.1.1-rc.2"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": false
+      },
+      "@deepseek-ai/schemastery": {
+        "optional": false
+      },
+      "@deepseek-ai/dsh-atomic-write": {
+        "optional": false
+      },
+      "@deepseek-ai/dsh-host-apiproxy": {
+        "optional": false
+      }
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime"
+        ],
+        "immediately": false
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# @choi-p/dsh-tenancy — bundle patch layer\n# Mounted as the LAST profile bundle so its shadow routes register after core\n# services exist (registration order is irrelevant to matching: exact beats\n# prefix in dsh-host-webserver, but keep layering readable anyway).\n#\n# NOTE: set sharedSecret to the same value Caddy injects via\n#   header_up X-Dsh-Tenancy-Key \"{env.DSH_TENANCY_SECRET}\"\n# (see /etc/caddy/dsh.env). Empty string disables the secret check.\n- insert:\n    - id: tenancy\n      name: '@choi-p/dsh-tenancy'\n      config:\n        identityHeader: remote-user\n        groupsHeader: remote-groups\n        sharedSecret: ''                # 部署时必须与 /etc/caddy/dsh.env 的 DSH_TENANCY_SECRET 同值\n                                        # (本机已在 profile cordis.patch.yml 覆盖为实际密钥)\n                                        # ⚠ 非空后未带 X-Dsh-Tenancy-Key 的请求一律 401（不再回落 local）\n        trustedHosts: []                # 公网域名必填，如 ['dsh.example.com']：影子路由自己的\n                                        # browser-trust 围栏用它判定 Host 是否可信（loopback 永远可信）；\n                                        # 缺省时 /register 与域名直入的 /tenancy/* 会被 403（启动时打 WARN）\n        adminGroups:\n          - dsh-admins\n        localPrincipal: local\n        localIsAdmin: true\n        defaultAccess: private          # private | team-read | team-rw\n        hideEmptyWorkspaces: true\n        hardenRespond: true             # P3:影子接管 /api/respond 做 rpcId→会话归属校验\n        auditPath: ''                   # 空 → $DSH_HOME/tenancy/audit.log\n        dbPath: ''                      # 空 → $DSH_HOME/tenancy/acl.json\n        memberWorkspaceRoot: '~/dsh'    # P4:非管理员成员的工作空间围栏根(支持 ~/ 展开);\n                                        # 目录浏览/建目录/建工作区/显式会话 cwd 全部围在此目录内。\n                                        # 置空则这些方法对成员回落 admin-only(旧行为)\n        registerEnabled: true           # P4:邀请码注册(/register 公开页 + /tenancy/invites*)\n        registerGroup: dsh-team         # 注册用户加入的组(绝不写 admin 组)\n        autheliaUsersPath: /etc/authelia/users.yml   # Authelia file 后端用户库(须可写)\n        autheliaBin: /opt/authelia/authelia          # 生成 argon2id 哈希的 CLI\n        invitesPath: ''                 # 空 → $DSH_HOME/tenancy/invites.json\n                                        # ⚠ 多实例共享 $DSH_HOME 时必须逐实例唯一(同 dbPath 红线)\n        # ── P12:系统用户自动开通(注册 1:1 建号)──\n        # 新成员注册成功即创建同名 Linux 账号:useradd -M -s nologin,无密码(shadow 固有\n        # 锁定)、不进任何管理组 ⇒ 不可登录服务器;其唯一文件权限是个人工作区\n        # memberWorkspaceRoot/<user>(默认 /root/dsh/<user>):递归 chown + 目录 0700。\n        # 依赖 dsh 以 root 运行且有 useradd/getent;存量成员可经 POST /tenancy/sysuser 补建。\n        # 注意:/root 常为 0750,系统用户无法穿越抵达 —— 按需 chmod o+x /root(仅穿越、\n        # 不可列目录)或 setfacl -m u:<user>:x /root,插件只告警不擅改。\n        systemUserEnabled: true         # 总开关(schema 默认 false;需 root)\n        systemUserShell: /usr/sbin/nologin   # 不存在时回落 /sbin/nologin → /bin/false\n        systemUserChown: true           # 个人工作区递归 chown 给系统用户(目录 0700)\n        # ── P11:公开站点(pub.example.com/<user>/<projectName>)──\n        # 独立端口匿名静态发布:nginx/Caddy 把公开域名转发到 publicSitesPort,\n        # URL 的 <user>/<projectName> 映射到 memberWorkspaceRoot/<user>/<projectName>/<publicBuildDir>\n        # 的构建产物(无鉴权、只读;路径逐段校验 + realpath 双重围栏,详见 lib/sites.js)。\n        publicSitesEnabled: true        # 总开关(schema 默认 true;自测等裸配置调用方须显式置 true 才启动)\n        publicSitesHost: '127.0.0.1'    # 仅回环:公开域名由代理转发到此端口(勿绑 0.0.0.0)\n        publicSitesPort: 3089           # 公开站点端口(主站 3088 之外独立)\n        publicSitesHosts: []            # Host 白名单,生产建议 ['pub.example.com'](空=任意 Host)\n        publicBuildDir: dist            # 项目内构建输出子目录名\n        publicSpaFallback: true         # 无扩展名未命中回落 index.html(SPA 路由)\n        publicCacheControl: 'public, max-age=300'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:286"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/index.js:286"
+    },
+    {
+      "name": "AUTHELIA_BIN",
+      "kind": "env",
+      "where": "scripts/selftest.mjs:147"
+    },
+    {
+      "name": "AUTHELIA_BIN",
+      "kind": "env",
+      "where": "scripts/selftest.mjs:192"
+    },
+    {
+      "name": "AUTHELIA_BIN",
+      "kind": "env",
+      "where": "scripts/selftest.mjs:313"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "dsh.example.com",
+      "url": "https://dsh.example.com/auth",
+      "where": "examples/authelia/configuration.yml:22"
+    },
+    {
+      "host": "dsh.example.com",
+      "url": "https://dsh.example.com/",
+      "where": "examples/authelia/configuration.yml:23"
+    },
+    {
+      "host": "dsh.example.com",
+      "url": "https://dsh.example.com/auth/",
+      "where": "examples/authelia/configuration.yml:44"
+    },
+    {
+      "host": "ghproxy.net",
+      "url": "https://ghproxy.net/",
+      "where": "install.sh:24"
+    },
+    {
+      "host": "ghproxy.net",
+      "url": "https://ghproxy.net/",
+      "where": "install.sh:48"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/authelia/authelia/releases/download/v${AUTHELIA_VER",
+      "where": "install.sh:149"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VER",
+      "where": "install.sh:207"
+    },
+    {
+      "host": "${domain",
+      "url": "https://${DOMAIN",
+      "where": "install.sh:325"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9091/auth/api/health",
+      "where": "install.sh:371"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9443/api/host.describe",
+      "where": "install.sh:441"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9091/auth/api/health",
+      "where": "install.sh:570"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9443/api/host.describe",
+      "where": "install.sh:591"
+    },
+    {
+      "host": "${domain",
+      "url": "https://${DOMAIN",
+      "where": "install.sh:645"
+    },
+    {
+      "host": "tenancy.internal${req.url",
+      "url": "http://tenancy.internal${req.url",
+      "where": "lib/index.js:994"
+    },
+    {
+      "host": "tenancy.internal",
+      "url": "http://tenancy.internal",
+      "where": "lib/index.js:1305"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "lib/index.js:1709"
+    },
+    {
+      "host": "${config.publicsiteshost",
+      "url": "http://${config.publicSitesHost",
+      "where": "lib/index.js:1812"
+    },
+    {
+      "host": "tenancy.internal",
+      "url": "http://tenancy.internal",
+      "where": "lib/register.js:631"
+    },
+    {
+      "host": "sites.local",
+      "url": "http://sites.local",
+      "where": "lib/sites.js:247"
+    },
+    {
+      "host": "${host",
+      "url": "http://${host",
+      "where": "lib/util.js:120"
+    },
+    {
+      "host": "dsh.example.com",
+      "url": "https://dsh.example.com",
+      "where": "scripts/selftest.mjs:243"
+    },
+    {
+      "host": "dsh.example.com",
+      "url": "https://dsh.example.com:8443",
+      "where": "scripts/selftest.mjs:244"
+    },
+    {
+      "host": "evil.test",
+      "url": "https://evil.test",
+      "where": "scripts/selftest.mjs:245"
+    },
+    {
+      "host": "attacker.example",
+      "url": "http://attacker.example",
+      "where": "scripts/selftest.mjs:246"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:3088",
+      "where": "scripts/selftest.mjs:412"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:3088",
+      "where": "scripts/selftest.mjs:551"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:3088",
+      "where": "scripts/selftest.mjs:675"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${sites.port",
+      "where": "scripts/selftest.mjs:757"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${sites2.port",
+      "where": "scripts/selftest.mjs:817"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "scripts/selftest.mjs:911"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:3088",
+      "where": "scripts/selftest.mjs:1108"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9091/auth/static/js/portal.FirstFactorForm",
+      "where": "tools/authelia_register_link_patch.py:22"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 36,
+    "pushed_at": "2026-09-18T21:29:33Z",
+    "created_at": "2026-08-27T03:50:44Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/audit.js",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/register.js",
+    "lib/sites.js",
+    "lib/sysuser.js",
+    "lib/util.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "@choi-p/dsh-tenancy",
+      "text": "> [!NOTE]\n> 本文档由 AI 生成,可能存在错误或遗漏,使用前请 review 并实测。\n\nDSH 单实例多租户插件 —— 配套 **Caddy + Authelia** 认证前端使用。\n\n所有用户共享全局模型 `API_KEY` 与插件运行环境，适用于成员间信任度较高的内部团队、\n小型工作组或亲友共享场景，不适用于需要严格资源隔离的环境。\n\n本 README 同时是整套认证前端的**部署手册**。\n\n```\n浏览器 ── TLS ──▶ nginx :443\n                    │  dsh.example.com ──▶ Caddy 127.0.0.1:9443(HTTP)\n                    │  /auth/* ─────────▶ Authelia 127.0.0.1:9091(门户)\n                    ▼\n\n---"
+    },
+    {
+      "section": "快速部署",
+      "text": "```bash\nsudo bash install.sh --domain dsh.example.com"
+    },
+    {
+      "section": "可选: --admin-user <name>  --admin-password <pass>  --github-proxy https://ghproxy.net/",
+      "text": "```\n\n脚本自动完成全部步骤：下载二进制、生成密钥、创建管理员账号并保存凭据至 \n`/root/dsh-p0-credentials/admin.txt`。"
+    },
+    {
+      "section": "前置条件",
+      "text": "| 项 | 要求 |\n|---|---|\n| 已有 | nginx 占 443 且有可用证书的站点 |\n| 端口空闲 | `127.0.0.1:9091`(Authelia)、`127.0.0.1:9443`(Caddy)，均只绑回环 |\n| DNS/证书 | 不需要新增，复用现有域名与证书 |\n\n> 版本参考：Authelia v4.39.20、Caddy v2.11.4。\n\n---"
+    },
+    {
+      "section": "手动部署要点",
+      "text": "1. **安装二进制** — Authelia → `/opt/authelia/`，Caddy → `/usr/local/bin/`，\n    创建各自服务账号\n2. **部署 Authelia** — 复制 [`configuration.yml`](examples/authelia/configuration.yml) \n    和 [`users.yml`](examples/authelia/users.yml) 到 `/etc/authelia/`，\n    填入随机密钥和口令哈希\n3. **部署 Caddy** — 复制 [`Caddyfile`](examples/Caddyfile) 到 `/etc/caddy/`，\n    生成共享密钥 `DSH_TENANCY_SECRET`\n4. **接入 nginx** — 参照 [`dsh.example.com.conf`](examples/nginx/dsh.example.com.conf) \n    修改 vhost"
+    },
+    {
+      "section": "Authelia 关键点 (v4.39)",
+      "text": "- 访问控制规则**顺序敏感**：admins 放行 → 同路径显式 deny → team 放行其余。\n  缺少 deny 规则会导致非管理员穿透\n\n---"
+    },
+    {
+      "section": "插件功能",
+      "text": "1. **身份提取** — 读 Caddy 注入的 `Remote-User` / `Remote-Groups`；\n    SSH 隧道直连按本地管理员处理\n2. **会话 ACL** — 影子路由接管会话类 RPC，按 `owner/access` 判定可见性；\n    `session.list/search/workspace.list` 响应自动过滤\n3. **事件流隔离** — WebSocket 下行逐帧过滤，未授权会话**零帧**泄漏\n4. **管理面** — `/tenancy/*` 提供 whoami / sessions / claim / acl / invites 接口\n5. **Client UI** — 会话头「共享」按钮 + owner 徽章 + 设置页多租户卡片（含登出）\n6. **工作空间围栏** — 非管理员的目录浏览、新建工作区、新建会话全部限制在 `~/dsh`（可配）内；\n    浏览越界静默钳制到根，写入越界 403\n7. **邀请码注册** — 管理员生成一次性邀请码，新成员通过 `/register` 自助注册\n8. **审计日志** — `$DSH_HOME/tenancy/audit.log`（JSONL，5MB 轮转）记录门控拒绝、\n    ACL 变更等\n9. **公开站点（P11）** — 独立端口匿名静态发布：把公开域名（如 `pub.example.com`）\n    经 nginx/Caddy 转发到 `127.0.0.1:3089`，则\n    `pub.example.com/<user>/<projectName>` 直接公开个人工作区里构建好的项目\n    （`~/dsh/<user>/<projectName>/dist`，构建输出目录名可配）。无鉴权、只读，\n    只服务构建产物，不暴露源码/隐藏文件；详见 [docs/architecture.md](docs/architecture.md) 与\n    [handbooks/operations.md](handbooks/operations.md)\n10. **发布指引 skill** — 插件启动时经 `ctx.skills` 注册 `publish-web-app` skill\n    （`skills/publish-web-app.md`）：DSH agent 编写/构建 Web 应用时自动遵循\n    「产物放 `<项目>/dist/`、资源相对引用」的约定，含最简单免构建单\n    `index.html` 的写法；该文件也可直接拷入 `~/.dsh/skills/` 使用\n11. **系统用户开通（P12）** — 新成员注册成功即创建**同名 Linux 系统用户**：\n    `nologin` she"
+    },
+    {
+      "section": "插件功能",
+      "text": "---"
+    },
+    {
+      "section": "⚠️ 多实例共享 $DSH_HOME 的红线",
+      "text": "同时跑多个 dsh 实例时，**每个启用 tenancy 的 profile 必须配置独立的 `dbPath` / \n`auditPath` / `invitesPath`**，否则后写者会清掉前者的 ACL/邀请码记录。\n拿不准就只在生产 profile 启用 tenancy。\n\n---"
+    },
+    {
+      "section": "插件安装与配置",
+      "text": "```bash"
+    },
+    {
+      "section": "安装",
+      "text": "dsh plugin --profile web add github:choi-peng/dsh-tenancy"
+    },
+    {
+      "section": "应用全部补丁（dsh 升级后重跑）",
+      "text": "bash scripts/apply-patches.sh && pm2 restart dsh-web\n```\n\n> `sharedSecret` 必须与 `/etc/caddy/dsh.env` 的 `DSH_TENANCY_SECRET` 一致。配好后，\n> 未携带 `X-Dsh-Tenancy-Key` 的请求会被直接 401（不再回落为 local 管理员）；\n> 留空则任何能直连 `127.0.0.1:3088` 的进程都是 admin，**不得用于生产**。\n> 核对：`dsh --profile web --dump-config | less`\n\n---"
+    },
+    {
+      "section": "日常运维",
+      "text": "```bash"
+    },
+    {
+      "section": "生成密码哈希",
+      "text": "/opt/authelia/authelia crypto hash generate argon2 --password '新成员密码'"
+    },
+    {
+      "section": "加成员：编辑 /etc/authelia/users.yml 追加用户（password: \"$argon2id$...\"；groups: dsh-team；管理员额外加 dsh-admins）",
+      "text": "systemctl restart authelia\n```\n\n- 用户库改动后若无变化则需重启 Authelia\n- 初始凭据由 `install.sh` 生成至 `/root/dsh-p0-credentials/`（chmod 700），\n  登录后尽快改密"
+    },
+    {
+      "section": "系统用户(P12)",
+      "text": "注册成功时自动 `useradd -M -s /usr/sbin/nologin` 建同名账号(无密码、不进管理组\n⇒ 不可登录),并把 `~/dsh/<user>` 递归 chown 给它、目录 0700。相关操作:\n\n```bash"
+    },
+    {
+      "section": "查看某成员的系统账号(home 应为 /root/dsh/<user>,shell 应为 nologin)",
+      "text": "getent passwd alice"
+    },
+    {
+      "section": "为存量成员(功能启用前注册)补建账号与目录归属(SSH 隧道直连 3088 即 local admin)",
+      "text": "curl -s -X POST http://127.0.0.1:3088/tenancy/sysuser \\\n  -H 'content-type: application/json' -d '{\"username\":\"alice\"}'\n```\n\n- 该账号**唯一**的文件权限是其个人工作区;后续由 root(dsh)在区内新建的文件\n  不会自动跟随归属,可重放上面的补建端点(幂等,全树重新 chown)\n- `/root` 常为 0750,系统用户无法穿越抵达个人目录——插件会在日志提示一次;\n  确需真实可访问时自行决策:`chmod o+x /root`(仅允许穿越、不可列目录)\n  或 `setfacl -m u:<user>:x /root`。插件**不会**擅改 /root 权限\n\n---"
+    },
+    {
+      "section": "故障排查",
+      "text": "| 症状 | 原因与解法 |\n|---|---|\n| forward_auth 全 400，Authelia 报 `insecure scheme` | Caddyfile 加 `servers { trusted_proxies static private_ranges }`，让 nginx 的 `X-Forwarded-Proto` 生效 |\n| `wrong argument count ... after '-Remote-Name'` | `header_up -X` 一行只能删一个字段，多字段拆成多行 |\n| Authelia 报 `missing host value` | forward_auth `uri` 忘了子路径前缀：应为 `/auth/api/authz/forward-auth` |\n| 非管理员也能调 settings.* | 缺少显式 deny 规则；检查规则顺序 |\n| 新用户登录失败 `does not exist` | `systemctl restart authelia` |\n| 成员建工作区报 `path outside workspace root` | 目标目录不在围栏根内，预期行为 |\n| `/register` 打不开(302 跳门户) | Caddyfile 未放行 `/register` 公开路由 |\n| 登录页没有「邀请码注册」按钮 | nginx `/auth/` location 未加 sub_filter |\n| 注册报 `server-error` | 检查 dsh 进程对 `autheliaUsersPath` 可写、`autheliaBin` 存在可执行 |\n| 注册成功但没有系统账号 | `systemUserEnabled` 未开/进程非 root/找不到 nologin shell → 看启动 WARN;存量成员经 `POST /tenancy/sysuser` 补建 |\n| 审计出现 `sysuser.conflict` | 同名既有系统账号 home/shell 与约定不符,插件不接管不动文件;人工裁决 |\n| 审计出现 `sysuser.chown-partial` | 个人目录部分条目 chown 失败(见审计 detail);重放 `POST /tenancy/sysuser` |\n| GitHub 下载超时 | 用镜像前缀 `https://ghproxy.net/` |\n| 选模型/新建会话报 `agent-presets: refusing to compose an unscoped context; the scope key is what joins an agent to its preset`(`resume failed for session ..."
+    },
+    {
+      "section": "故障排查",
+      "text": "---"
+    },
+    {
+      "section": "示例文件",
+      "text": "| 文件 | 说明 |\n|---|---|\n| [`examples/Caddyfile`](examples/Caddyfile) | 含 @adminapi 特权路径重写 |\n| [`examples/authelia/configuration.yml`](examples/authelia/configuration.yml) | 密钥已脱敏 |\n| [`examples/authelia/users.yml`](examples/authelia/users.yml) | 用户库模板 |\n| [`examples/nginx/dsh.example.com.conf`](examples/nginx/dsh.example.com.conf) | nginx vhost |\n| [`examples/systemd/`](examples/systemd/) | Authelia / Caddy systemd 单元 |"
+    }
+  ],
+  "skipped": []
+}

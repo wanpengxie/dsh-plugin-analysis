@@ -1,0 +1,327 @@
+{
+  "repo": "DX12xyz/dsh-power",
+  "commit": "9407447aa5ed3e15814e04f509278f7f394e68c7",
+  "extracted_at": "2026-11-11T09:22:02.902678+00:00",
+  "tree": {
+    "files": 22,
+    "bytes": 675600,
+    "lines_by_language": {
+      "JSON": 59,
+      "JavaScript": 11435,
+      "Markdown": 2229,
+      "Other": 21,
+      "YAML": 140
+    },
+    "outline": [
+      "HISTVER.md",
+      "HISTVER_legacy.md",
+      "LICENSE",
+      "README.md",
+      "TECHDOC.md",
+      "THIRD_PARTY_NOTICES.md",
+      "client.js",
+      "cordis.patch.yml",
+      "force-reaper.mjs",
+      "host/ai.js",
+      "host/constants.js",
+      "host/human.js",
+      "host/resumable.js",
+      "host/session-writer.js",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "quit-desktop.mjs",
+      "relauncher-desktop.mjs",
+      "relauncher.mjs",
+      "scripts/restart-cli.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-power",
+    "version": "1.8.2",
+    "private": true,
+    "license": "MIT",
+    "description": "DSH 电源（原 dsh-restart-bundle）：在侧边栏一键重启或关闭 DSH，并附带 AI 重启工具、设置页、启动对账与独立恢复 CLI。重启可以等待所有 AI 完成当前回合、点名催促并在等待时间用尽后继续，或立即中断正在运行的 AI；关闭只退出、不重启。设置页的点名等待时间写入运行设置 settings.json 而不再编辑 profile 补丁，保存不会重新激活插件行。关闭时可选同时关闭已安装的逃生舱插件（服务名 escapePod）：只有在对话框里显式勾选才会在 DSH 退出前关闭它，未安装时该选项不显示。详见 README.md 与 TECHDOC.md。",
+    "type": "module",
+    "scripts": {
+      "test": "node test/session-writer.test.mjs && node test/resumable.test.mjs && node test/checkpoint-holds.test.mjs && node test/force-safeguard.test.mjs"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "host/*.js",
+      "client.js",
+      "relauncher.mjs",
+      "relauncher-desktop.mjs",
+      "quit-desktop.mjs",
+      "force-reaper.mjs",
+      "scripts/*.mjs",
+      "THIRD_PARTY_NOTICES.md",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "README.md",
+      "TECHDOC.md",
+      "HISTVER.md",
+      "HISTVER_legacy.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-sidebar",
+          "@deepseek-ai/dsh-client-ui-layout"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Host half of the DSH power plugin (@local/dsh-power, v1.8.2): one\n# package, one component — the restart/shutdown component described in the three\n# modules below. The escape pod that used to live in this package is now the\n# separate `@local/dsh-escape-pod` plugin; this row only links to its optional\n# `escapePod` service when a human asks for it at shutdown time.\n#   1. restart interface — scheduling, mode merge/upgrade, platform-aware\n#      relaunch, mode-aware boot delivery, and the browser-facing\n#      `/api/dsh-restart/*` routes;\n#   2. AI restart — five tools and the `restart-dsh` skill:\n#        restart_dsh_blocking_wait_safe    wait for every other running AI, then restart;\n#        restart_dsh_roll_call_caution\n#                                     broadcast to running AIs outside safe state and\n#                                     wait until every active AI enters safe state\n#                                     (bounded by rollCallWaitMs; see config below);\n#        restart_dsh_force_dangerous  approval first, then check/consume the\n#                                     safeguard, then interrupt every running AI\n#                                     outside safe state immediately and restart\n#                                     unstoppably: a detached reaper force-terminates\n#                                     the Host (taskkill /F if needed) without waiting\n#                                     for graceful teardown; desktop ends the Electron\n#                                     shell and reopens the app;\n#        restart_dsh_force_safeguard  arm the force tool for exactly the next tool\n#                                     call (any other tool re-locks it);\n#        restart_dsh_status           read-only status: phase, running AIs, pending\n#                                     restart/shutdown, last restart result.\n#      Safe state: an AI that used all-wait or roll-call, or that initiated the\n#      force restart that actually ran, belongs to safe state; only AIs interrupted\n#      by a force restart (without having entered safe state beforehand) do not.\n#      Permissions: all-wait and roll-call are frictionless for workspace-write and\n#      above; while a roll-call restart is pending they are temporarily frictionless\n#      for EVERY permission preset. Force restart and safeguard are frictionless\n#      only in full access (one approval otherwise). The force tool always requests\n#      approval first, then checks and consumes the safeguard; without a safeguard\n#      it never restarts and returns the \"arm the safeguard first\" guidance.\n#   3. human entry — web AND Desktop share the same sidebar DOM: the client half\n#      appends a「DSH电源」icon button into the footer's `div[class*=\"_settingsArea\"]`\n#      (with a `sidebar.footer.action` fallback). Its menu has only 重启 / 关闭;\n#      each opens a dialog with a mode dropdown (等待 default / 中断 / 强制)\n#      and an optional human reason that is carried into the post-restart notice.\n#      等待 is cancellable, 中断 needs a second confirmation, and 强制 requires\n#      holding the confirm button for 5 seconds with an accelerating flash.\n#      The 5-second hold only accepts the primary button and is cancelled by\n#      window blur, a hidden page, and pointer cancellation.\n#      Shutdown uses the same three modes but never relaunches: safe waits for\n#      running AIs to finish (bounded by shutdownMaxWaitMs), coordinated broadcasts\n#      a stop request and waits for every active AI to stop, dangerous interrupts\n#      immediately and is unstoppable (detached reaper + forced Host termination).\n#      When the escape pod plugin is installed, every shutdown dialog offers\n#      「同时关闭正在运行的逃生舱」(unchecked by default): the client asks\n#      `GET /api/dsh-restart/pod` first and only shows the checkbox when that\n#      service exists, then sends `closeEscapePod:true` so DSH closes the pod\n#      right before it exits. Restarts never touch the pod.\n#      Human force restart/shutdown do not need the AI safeguard\n#      tool; the 5-second hold is the human confirmation.\n# The Client half is discovered from the package manifest's `dsh.client`\n# section, so a single row is enough.\n#\n# Boot reconciliation and the out-of-process entry (hotfix.5): on startup the\n# Host reconciles what the previous force attempt left behind (reaper spec,\n# marker, relaunch lock) into `lastForceOutcome`; an `error` or `no-marker`\n# outcome raises `hold`, which suspends automatic restart behaviour until an\n# explicit force request or `scripts/restart-cli.mjs unhold` clears it. The Host\n# also writes a single human-readable `status.json` snapshot (bootId, pid,\n# phase, pending, forceDryRun, hold, lastForceOutcome, paths) into the state\n# dir. `scripts/restart-cli.mjs` is an independent zero-dependency Node ESM CLI\n# (status / relaunch / clear-stale / unhold) that works even when the Host is\n# dead. That structure is inspired by hxh230802/dsh-tray-restart (MIT, see\n# THIRD_PARTY_NOTICES.md); no source code was copied.\n#\n# The platform is detected automatically: when the Host runs under\n# `@deepseek-ai/dsh-desktop-host` the restart relaunches the Desktop app;\n# otherwise it relaunches the Host process (web). Desktop shutdown additionally\n# spends `quit-desktop.mjs` before this Host exits: the Electron shell only lets\n# the parent command the Host (no Host→shell quit IPC), so exiting the Host alone\n# would leave the window open with a fatal \"backend stopped\" dialog; the helper\n# terminates the shell first so the window closes with the backend.\n#\n# Optional config fields (all optional, see index.js normalizeConfig):\n#   graceMs                 quiet period required before the restart fires (default 750)\n#   pollMs                  restart-condition poll interval (default 150)\n#   bootDeliveryDelayMs     delay after boot before AI notifications are delivered (default 1800)\n#   flushTimeoutMs          session flush budget before a normal restart exits (default 3000)\n#   dangerousFlushTimeoutMs session flush budget before a force restart exits (default 1500)\n#   forceKillAfterMs        how long the detached force reaper waits for a graceful\n#                           exit before force-killing the Host with taskkill /F\n#                           (default 2500, clamped to 500..30000)\n#   forceDryRun             rehearse a force restart: write force-dry-run.json and\n#                           return \"not executed\" without creating a pending\n#                           request, arming the reaper or killing anything\n#                           (default false; troubleshooting switch)\n#   exitWatchdogMs          forced-exit watchdog after the graceful exit request (default 5000)\n#   shutdownMaxWaitMs       maximum wait for running AIs before a safe/coordinated\n#                           shutdown cancels them (default 300000; 0 = unlimited)\n#   shutdownGraceMs         grace period after that cancellation for the AIs to\n#                           settle before the normal flush/exit (default 3000)\n#   unlockTtlMs             validity window of one force-restart safeguard (default 300000)\n#   coordinatedResendMs     minimum gap between roll-call interjections to one AI (default 20000)\n#   coordinatedMaxResends   maximum roll-call interjections to one AI while it keeps running unsafely (default 5)\n#   rollCallWaitMs          how long a roll-call restart waits for every active AI to enter\n#                           safe state before continuing anyway (default 120000; 0 = wait\n#                           forever; clamped to 0..3600000). When the wait expires the restart\n#                           proceeds and the AIs still outside safe state are recorded as\n#                           timed out / interrupted.\n#   dangerousNotifyInterrupted  deliver notices to every interrupted AI after a force restart (default true)\n#   coordinatedNotifyTimedOut   deliver an interruption notice to the AIs whose roll-call\n#                           wait expired, so they learn they may have been interrupted\n#                           instead of only getting a generic resume report (default true)\n#   openBrowserOnRelaunch   web relaunch opens a new browser tab (default false: only the old tab recovers)\n#   desktopRelaunchTimeoutMs  desktop rollback timeout when the app does not restart (default 25000)\n#   testMode                expose self-test routes guarded by the Host/Origin and\n#                           browser-authentication fence (default false)\n#   home                    DSH home override; defaults to the launcher-provided profile context home\n#   launch                  { execPath, args, cwd } override for the web relaunch command\n#\n# hotfix.1 restores the `resumableToolCalls` Host service for OTHER plugins\n# (`ctx.get('resumableToolCalls')`), from the 1.7.4-hotfix.4/5 line: another\n# plugin holds one of its tool calls across the restart and answers it with the\n# real result on the next boot, so the platform never closes a surviving call\n# with its synthetic TOOL_OUTCOME_UNKNOWN. Holds are durable in\n# `$DSH_HOME/.dsh-restart/resumable-holds.json`, restored before any Session\n# resumes, and excluded from the restart checkpoint.\n#\n# The escape pod is a SEPARATE plugin (@local/dsh-escape-pod) that owns the\n# pod's command lifetimes and exposes the `escapePod` Host service. This package\n# never imports it: `GET /api/dsh-restart/pod` reports whether that service is\n# present (`{ ok, available }`), and a human shutdown may pass\n# `closeEscapePod:true` to close the pod right before DSH exits. Without the\n# escape pod plugin the route answers `available:false`, the shutdown dialog\n# omits the checkbox, and a save on the settings page never touches the pod.\n#\n# Tool-call timeout check: the restart tools declare no `timeoutMs`, so\n# `@deepseek-ai/dsh-tool-call-timeout-policy` never arms a deadline for their\n# held-open calls; such a call ends only when the restart fails or the turn is\n# cancelled.\n- insert:\n    - id: dsh-power\n      name: '@local/dsh-power'\n      config:\n        # roll-call wait before continuing anyway; 0 = wait forever\n        rollCallWaitMs: 120000\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:977"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:978"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/restart-cli.mjs:496"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/restart-cli.mjs:503"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "client.js:1020"
+    },
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "client.js:1026"
+    },
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "client.js:1031"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-11-03T20:14:24Z",
+    "created_at": "2026-11-03T13:19:11Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "force-reaper.mjs",
+    "host/ai.js",
+    "host/constants.js",
+    "host/human.js",
+    "host/resumable.js",
+    "host/session-writer.js",
+    "index.js",
+    "package.json",
+    "quit-desktop.mjs",
+    "relauncher-desktop.mjs",
+    "relauncher.mjs",
+    "scripts/restart-cli.mjs"
+  ],
+  "readme": [
+    {
+      "section": "DSH 电源（@local/dsh-power）",
+      "text": "> 把 DSH 的重启与关闭变成等待、中断、强制三档可控操作。\n\n[](https://github.com/deepseek-ai/deepseek-harness)\n[](./LICENSE)\n\n版本 1.8.2 · MIT · Web + Desktop（Windows）\n\n---"
+    },
+    {
+      "section": "目录",
+      "text": "- [为什么需要它](#为什么需要它) · [特性速览](#特性速览) · [安装](#安装) · [快速开始](#快速开始)\n- [使用要点](#使用要点)（确认交互 / 关闭 DSH 与逃生舱联动）\n- [工具 / 功能一览](#工具--功能一览)\n- [配置](#配置) · [常见问题](#常见问题) · [目录结构](#目录结构)\n- [已知限制](#已知限制) · [文档索引](#文档索引) · [许可](#许可)"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "**结论：改一次配置历来只有「杀进程 / 关终端重开」，还得手动掐好几路 AI 的时机；DSH 电源把它变成等待 / 中断 / 强制三档可控操作，重启前后各有如实报告。**\n\n在 DSH 里让一次改动生效，历来只有「杀进程 / 关终端再重开」一条路：后台任务与运行中的 AI 回合被粗暴打断，工具调用结果不可知；而 DSH 里往往同时运行着多个 AI，手动掐时机既不知道谁在收尾，也不知道谁已被打断。\n\nDSH 电源把它变成有语义、可协调、可恢复的操作：人类在侧边栏一点即可等待所有 AI 收尾后重启，或点名催促、强制中断；AI 也可通过 `restart_dsh_*` 工具发起同样的流程，模式按「强制 > 点名 > 阻塞等待」合并与升级；关闭 DSH 走同样的三档，并可选择同时关闭正在运行的逃生舱。重启前写有界、脱敏检查点，重启后向受影响会话如实报告未决工具调用、后台任务与恢复状态；`resumableToolCalls` 服务让其他插件把一次工具调用挂起到下次启动再回填真实结果，避免平台写入 `TOOL_OUTCOME_UNKNOWN`。"
+    },
+    {
+      "section": "特性速览",
+      "text": "- **三档重启模式**：等待（阻塞等待）、中断（点名）、强制，按「强制 > 点名 > 阻塞等待」合并升级。\n- **三档关闭模式**：同样的等待 / 中断 / 强制，但只关闭、不再启动；等待有硬上限（默认 5 分钟），到点取消剩余 AI 并在宽限后退出。\n- **人类入口**：侧边栏底部「DSH电源」图标按钮（网页版与桌面版共用同一 DOM），菜单只有「重启 / 关闭」。\n- **点名（roll-call）**：向未就绪的运行中 AI 广播插话，要求其停止派生子代理/工具并进入就绪状态；默认最多等 120 秒，到点继续重启并如实记录仍未就绪的 AI。\n- **设置页「电源设置」**：插件详情页内调整点名等待时间，写入运行设置并立即生效，不触发插件热重载。\n- **关机联动**：安装逃生舱插件时，关闭对话框显示「同时关闭正在运行的逃生舱」（默认不勾选）；仅勾选时 DSH 退出前调用逃生舱 `shutdown()`，失败只写日志、绝不阻止关机。\n- **AI 工具与 skill**：五个 `restart_dsh_*` 工具 + `restart-dsh` skill；强制重启的完整审批与保险链路见下文「权限速览」；人类强制用 5 秒长按确认。\n- **跨重启检查点与恢复报告**：重启前写有界、脱敏检查点；重启后如实报告未决工具调用、后台任务与恢复状态。\n- **`resumableToolCalls` 服务**：让其他插件把一次工具调用挂起到下次启动再回填真实结果，避免平台写入 `TOOL_OUTCOME_UNKNOWN`。\n- **强制模式不可阻挡**：独立 detach 回收器在等待超时后强杀 Host（Windows `taskkill /F`，POSIX `SIGKILL`），按模式尝试重新拉起或结束；回收器无法启动时 Host 仍自毁，但自动拉起可能失败。\n- **可诊断**：`restart.log`、`status.json`、boot 对账 / hold、外部恢复 CLI `scripts/restart-cli.mjs`。"
+    },
+    {
+      "section": "安装",
+      "text": "要求：本机验证过的运行时为 DSH 0.2.1-rc.5（Web，Windows）；Web + Desktop（Windows）版本均可。\n\n仓库根目录就是插件包本身（`package.json`、`cordis.patch.yml`、`index.js` / `client.js` / `host/`、`locale/`、`icon.svg` 都在根目录），仓库不随附预打包的 `.tgz`。任选一种方式安装，下文以 Web profile（`web`）为例。"
+    },
+    {
+      "section": "方式一：插件页安装（推荐，人类入口）",
+      "text": "1. 打开 DSH 插件页 →「安装插件」；\n2. 安装源填仓库地址 `https://github.com/DX12xyz/dsh-power`，或 git 简写 `github:DX12xyz/dsh-power`；\n3. 等待安装完成，按提示**重启 DSH**（Host 半身生效；Client 半身刷新页面即可）。"
+    },
+    {
+      "section": "方式二：命令行从 git 源安装",
+      "text": "```powershell\ndsh plugin --profile web add github:DX12xyz/dsh-power\n```"
+    },
+    {
+      "section": "方式三：本地目录安装（改代码 / 离线可用）",
+      "text": "把仓库的 zip/tar 解压到本机，再把解压出来的仓库根目录装进 profile：\n\n```powershell\ndsh plugin --profile web add \"link:<仓库根目录绝对路径>\"\n```\n\n`link:` 装的是活目录：改完代码重启 DSH（Host 半身）或刷新页面（Client 半身）即可生效。"
+    },
+    {
+      "section": "方式四：离线打包 tgz",
+      "text": "在仓库根目录打包，再安装产出的 tgz：\n\n```powershell\ncd <仓库根目录>\nnpm pack"
+    },
+    {
+      "section": "产出 local-dsh-power-1.8.2.tgz",
+      "text": "dsh plugin --profile web add \"file:<仓库根目录>/local-dsh-power-1.8.2.tgz\"\n```"
+    },
+    {
+      "section": "卸载",
+      "text": "```powershell\ndsh plugin --profile web remove @local/dsh-power\n```\n\n卸载后 `$DSH_HOME/.dsh-restart/` 的残留见「关键注意事项」。"
+    },
+    {
+      "section": "关键注意事项",
+      "text": "- 安装后**重启 DSH**：Host 半身的改动必须重启才生效；Client 半身会热更新。\n- 卸载后 `$DSH_HOME/.dsh-restart/`（checkpoint、status.json、运行设置）会保留；确认不再需要时手动清理。\n\n> 安装后不要在 AI 回合运行期间手工编辑 `cordis.patch.yml`：当前 DSH 的 profile patch 热重载会 dispose 正在运行的 Agent/Session（表现为「会话不可用」、会话从列表消失）。改配置请用插件设置页（1.7.5-hotfix.7 起不会重载），或等回合结束后再改，或改完重启 DSH。"
+    },
+    {
+      "section": "装好判据",
+      "text": "安装后**重启 DSH**，两处各验一行：\n\n- **Client 半身**：侧边栏底部出现「DSH电源」按钮，菜单只有「重启 / 关闭」两项；\n- **Host 半身**：会话里调用 `restart_dsh_status`——只读、无副作用、无需审批，能返回当前阶段与运行中 AI 即为生效。"
+    },
+    {
+      "section": "版本与兼容性",
+      "text": "- 当前版本 **1.8.2**：强制重启遵循「先审批，再校验并消费保险」，审批被拒时保险保留；没有保险时返回「先上保险」的引导错误，不会重启。无 API、配置字段变更。\n- 不发布到 npm；通过 git 仓库、本地目录或自行 `npm pack` 的 tgz 安装。\n- 无 npm 运行时依赖；`client.js` 的 React 由 DSH 网页版客户端运行时注入。\n- 平台支持 **Web + Desktop（Windows）**；桌面版额外使用 `relauncher-desktop.mjs` 与 `quit-desktop.mjs` 处理 Electron 外壳。\n- 逃生舱是另一个独立包（`@local/dsh-escape-pod`），本包不依赖它、也不替它写 profile 行；关机联动为可选能力，见「关闭 DSH 与逃生舱联动」。"
+    },
+    {
+      "section": "人类最短路径",
+      "text": "```text\n1. 侧边栏底部点「DSH电源」按钮，菜单只有「重启 / 关闭」两项\n2. 选「重启」→ 模式下拉默认「等待」，可另选「中断 / 强制」，可填可选原因（出现在重启后的通知里）\n3. 确认 → 阻塞等待：所有其他运行中 AI 完成当前回合后自动重启\n4. 重启期间页面短暂断开连接，随后自动恢复；默认不打开新标签页（openBrowserOnRelaunch 可改）"
+    },
+    {
+      "section": "AI 最短路径",
+      "text": "```text\n1) restart_dsh_status              # 只读查询：阶段、运行中 AI（最多 50 条）、待执行重启/关闭、上次结果；无副作用、无需审批\n2) restart_dsh_blocking_wait_safe  # 等待所有其他运行中 AI 完成当前回合后重启；不中断任何 AI，最推荐\n```\n\n如需强制（AI 侧）：链路为 `restart_dsh_force_safeguard` 上保险 → `restart_dsh_force_dangerous` 执行；完整审批、保险与权限顺序见下文「权限速览」。"
+    },
+    {
+      "section": "确认交互",
+      "text": "- **等待**：确认框可取消；确认后阻塞等待重启。\n- **中断**：点「下一步」后再确认一次（二次确认），随后点名重启。\n- **强制**：红色警告；**确认按钮需长按 5 秒**，按住期间按钮闪烁加速并显示剩余秒数；中途松开、移出、窗口失焦、页面隐藏或按 Escape 即取消。满 5 秒自动提交。\n- 长按只接受鼠标主键；人类发起的强制重启/关闭由长按确认，**不需要 AI 侧强制保险**，也不受 AI 权限限制。\n- 按钮挂载：客户端插件把按钮追加到侧边栏 `div[class*=\"_settingsArea\"]`，并用 `sidebar.footer.action` 槽位备用——侧边栏 DOM 变化时也始终有入口；连接状态非 `connected` 时侧边栏按钮隐藏并关闭菜单。\n- 强制模式完成时显示红色警告 toast（含被中断数量与通知结果）。"
+    },
+    {
+      "section": "关闭 DSH 与逃生舱联动",
+      "text": "关闭对话框与重启一样三选一（默认「等待」），但**只关闭、不再启动**：**等待**＝等运行中 AI 完成当前回合后关闭（最长 `shutdownMaxWaitMs`，默认 5 分钟；`0` = 无限）；**中断**＝广播要求运行中 AI 停止、全部停止后关闭；**强制**＝立即中断运行中 AI 并关闭（可能丢失进度）。"
+    },
+    {
+      "section": "关闭 DSH 与逃生舱联动",
+      "text": "- 三种模式都会在模式下拉框下方显示「**同时关闭正在运行的逃生舱**」复选框，**红色样式**；仅安装了逃生舱插件（Host 服务 `escapePod` 存在）时显示，默认不勾选。\n- 勾选后关闭请求带 `closeEscapePod: true`；DSH 退出前调用 `await escapePod.shutdown('dsh-power shutdown')`，最多等 5 秒；结果只写日志，绝不阻止关机。\n- **重启流程不关闭逃生舱**：逃生舱里的命令随 DSH 重启继续运行。\n- 关闭完成页显示「本页面与后端服务连接已断开，DSH已退出」；勾选过逃生舱再显示一行「运行的逃生舱已关闭」。\n- 桌面版关闭时 Host 先启动 `quit-desktop.mjs` 终止 Electron 外壳再退出自身，正常路径下窗口随应用一起关闭，避免「DSH 后端错误」恢复弹窗（helper 启动失败只写日志）。"
+    },
+    {
+      "section": "工具 / 功能一览",
+      "text": "| 名称 | 一句话 | 详见 |\n|---|---|---|\n| `restart_dsh_blocking_wait_safe` | 阻塞等待：等所有其他运行中 AI 完成当前回合后重启 | [状态与持久化](./TECHDOC.md#3-状态与持久化) |\n| `restart_dsh_roll_call_caution` | 点名：广播插话给未就绪的运行中 AI，全部就绪后重启 | [状态与持久化](./TECHDOC.md#3-状态与持久化) |\n| `restart_dsh_force_dangerous` | 强制：先审批，再校验并消费保险，立即中断 AI 并重启 | [安全模型](./TECHDOC.md#4-安全模型) |\n| `restart_dsh_force_safeguard` | 强制保险：为下一次强制工具调用上保险，可被消费一次 | [安全模型](./TECHDOC.md#4-安全模型) |\n| `restart_dsh_status` | 只读状态查询，无副作用、无需审批 | [工具与 API 参考](./TECHDOC.md#2-工具与-api-参考) |\n| `restart-dsh`（skill） | 插件加载时注册；有重启诉求或同意以重启解决时按其规则选模式 | [架构](./TECHDOC.md#1-架构) |"
+    },
+    {
+      "section": "工具 / 功能一览",
+      "text": "| 人类界面 | AI 工具 | AI 名称 | 行为 |\n|---|---|---|---|\n| **等待** | `restart_dsh_blocking_wait_safe` | 阻塞等待 | 等所有其他运行中 AI 完成当前回合后重启；不中断任何 AI；**最推荐** |\n| **中断** | `restart_dsh_roll_call_caution` | 点名 | 广播要求未就绪 AI 停止并加入就绪状态；所有活跃 AI 就绪后重启，最多等 `rollCallWaitMs`（默认 120 秒，`0` = 永久等待） |\n| **强制** | `restart_dsh_force_dangerous` | 强制 | **先审批，通过后再校验并消费保险**；立即中断所有未就绪的运行中 AI 并重启，不等待完成；没有保险不会重启 |\n| —（人类长按即保险） | `restart_dsh_force_safeguard` | 强制保险 | 只对紧接着的下一次工具调用有效（`run_code` / `todo_execute` 传输层外层不重锁，嵌套调用仍逐个校验） |\n| — | `restart_dsh_status` | 只读状态 | 查看阶段、运行中 AI、待执行重启/关闭与上次结果；无副作用、无需审批 |"
+    },
+    {
+      "section": "工具 / 功能一览",
+      "text": "人类界面用「等待 / 中断 / 强制」三词；AI 工具与通知用「阻塞等待 / 点名 / 强制 / 强制保险」。\n\n三档的确认交互 / 超时行为 / 取消，速查如下（细节一并见上文「确认交互」与下文「权限速览」）：\n\n| 档位 | 确认交互 | 超时行为 | 能否取消 |\n|---|---|---|---|\n| **等待** | 确认框可取消；确认后阻塞等待重启 | —（等所有其他运行中 AI 完成当前回合后重启） | 确认框可取消 |\n| **中断** | 点「下一步」后再确认一次（二次确认），随后点名重启 | 最多等 `rollCallWaitMs`（默认 120 秒，`0` = 永久等待）；到点继续重启并如实记录仍未就绪的 AI | —（确认流程见上文「确认交互」） |\n| **强制** | 红色警告；确认按钮需长按 5 秒，按住期间按钮闪烁加速并显示剩余秒数 | 无（不等待 AI 完成，立即中断所有未就绪的运行中 AI 并重启） | 长按中途松开、移出、窗口失焦、页面隐藏或按 Escape 即取消；满 5 秒自动提交 |"
+    },
+    {
+      "section": "工具 / 功能一览",
+      "text": "> 五个 AI 工具**不声明 `timeoutMs`**，`@deepseek-ai/dsh-tool-call-timeout-policy` 因而不给挂起的重启调用设截止时间；挂起调用只在重启失败或回合取消时提前返回错误。"
+    },
+    {
+      "section": "权限速览",
+      "text": "- 等待/点名对 `workspace-write` 及以上免审批；点名待执行期间等待类工具对所有权限临时免审批。\n- 强制与强制保险只在完全访问（`danger-full-access` + `approval: never`）免审批，其他权限各需一次审批；顺序固定为审批 → 校验并消费保险 → 重启，无保险返回「先上保险」引导错误、不重启。保险只对紧接着的下一次工具调用有效；审批被拒时保险保留，可稍后重试。\n\n「人类入口 vs AI 工具 vs 免审批权限」对照（完整 3×4 矩阵见 [TECHDOC · 安全模型](./TECHDOC.md#4-安全模型)）："
+    },
+    {
+      "section": "权限速览",
+      "text": "| 入口 / 工具 | 免审批条件 | 权限不足时 |\n|---|---|---|\n| 侧边栏按钮（人类） | 不受 AI 权限限制：等待/中断走普通确认，强制由长按 5 秒确认，**不需要 AI 侧强制保险** | — |\n| `restart_dsh_blocking_wait_safe` / `restart_dsh_roll_call_caution` | `workspace-write` 及以上免审批 | 一次审批 |\n| `restart_dsh_force_safeguard` / `restart_dsh_force_dangerous` | 仅完全访问（`danger-full-access` + `approval: never`）免审批 | 一次审批（强制：审批通过后再校验并消费保险，无保险不重启） |\n| `restart_dsh_status` | 任何权限免审批（无副作用、不触发任何操作） | — |\n\n注：点名待执行期间存在临时免审批窗口——等待类工具（阻塞等待/点名）对所有权限临时免审批，重启完成、取消或升级为强制后恢复；强制保险/强制不受该窗口影响。"
+    },
+    {
+      "section": "权限速览",
+      "text": "- 完整矩阵见 [TECHDOC · 安全模型](./TECHDOC.md#4-安全模型)。"
+    },
+    {
+      "section": "检查点与恢复报告",
+      "text": "这不是进程冻结：不恢复进程、不接回工具或后台任务，只保存有界状态并在重启后如实报告。\n\n- 重启前在 `$DSH_HOME/.dsh-restart/checkpoint.json` 写有界、脱敏的检查点：live session、Agent 状态与预设、lastSeq、当前回合内未闭合的 `tool/call`（排除 `restart_dsh_*` 自身与 `resumableToolCalls` 接管的调用）、后台 job；参数只保存 `argsHash` + 脱敏预览。\n- 重启后投递恢复报告：请求者/被强制中断的 AI 追加到完成/中断通知；其他会话 live 时 `agent.inject`，否则在 `agent/created` 时投递一次。\n- 报告明确「未决工具调用结果未知、可能已中断」「后台任务无法接回、需重新执行或检查输出」，不会声称无损；由 `resumableToolCalls` 接管的调用单独写成「可恢复调用」。\n\n检查点是 `version: 1` schema，带 `CHECKPOINT_LIMITS` 硬上限："
+    },
+    {
+      "section": "检查点与恢复报告",
+      "text": "| 限制 | 值 |\n|---|---|\n| sessions（会话数） | 200 |\n| 每 session 未决调用 | 20 |\n| 未决调用总数 | 200 |\n| 每 session 后台 job | 10 |\n| preview（参数预览） | 400 字符（敏感键名打码） |\n\n超出上限会置 `totals.truncated=true`；检查点写失败不阻断重启。"
+    },
+    {
+      "section": "resumableToolCalls 服务",
+      "text": "Host 服务 `ctx.get('resumableToolCalls')`，供其他插件重启时挂起自己的工具调用：\n\n- `hold(callId, { tool, hint, deadlineMs })` 在重启检查点之前同步落盘到 `$DSH_HOME/.dsh-restart/resumable-holds.json`，返回 release 回调；`deadlineMs` 上限 24 小时。\n- 新进程 boot 先恢复 holds，立刻给未结算调用写如实的 provisional 结果（抢在 resume 写 `TOOL_OUTCOME_UNKNOWN` 之前）；`complete` / `fail` 在会话日志里只生效一次，回合已关闭时改用 `agent.steer` / `agent.followup` 以消息送达。\n- 本包停用/未安装时服务不存在，其他插件持有的调用退化为平台默认行为。"
+    },
+    {
+      "section": "强制模式与外部恢复 CLI",
+      "text": "- 强制重启/关闭完成必要工作（检查点、意图文件、有界 flush）后，启动独立 detach 的 `force-reaper.mjs` 回收器并自毁；回收器最多等 `forceKillAfterMs`（默认 2500ms）让 Host 优雅退出，超时用 `taskkill /F /PID`（POSIX `SIGKILL`）强杀（不带 `/T`，避免连带杀掉回收器自己），最多尝试 3 次、每次间隔 400ms 并确认死亡。\n- 强制重启：Host 死亡后网页版由回收器按原命令重新拉起，桌面版先结束 Electron 外壳再重开应用；强制关闭：Host 死亡即完成，桌面版同时结束外壳。\n- boot 对上次强制尝试的 spec / marker / lock 对账并写 `lastForceOutcome`；结果为 `error` / `no-marker` 时置 `hold`（`{ active, reason, at, requestId, detail }`）作为 fail-closed 标记，可在 `status.json` 与 CLI 看到，直到显式强制请求或 CLI `unhold` 清除。它不拦截等待 / 点名重启，也不阻止 CLI 的 `relaunch`。\n- 外部 CLI `scripts/restart-cli.mjs` 零依赖 Node ESM：`status` / `relaunch` / `clear-stale` / `unhold`，Host 已死也能诊断拉起。`forceDryRun` 打开时强制模式只写 `force-dry-run.json` 并返回「未执行」，不创建 pending、不武装回收器、不杀进程。"
+    },
+    {
+      "section": "强制模式与外部恢复 CLI",
+      "text": "四个子命令语义：\n\n| 子命令 | 作用 |\n|---|---|\n| `status` | 只读诊断：读取 `status.json` 快照（含 `hold`、`lastForceOutcome` 等）；Host 已死后也能读 |\n| `relaunch` | Host 死亡后的显式恢复：重新拉起 Host；属破坏性操作，不会被本包自动执行 |\n| `clear-stale` | 带 `--yes` 才执行的破坏性清理，同样只用于 Host 死亡后的显式恢复 |\n| `unhold` | 显式清除 boot 对账留下的 `hold` 标记（也可被显式强制请求清除） |"
+    },
+    {
+      "section": "配置",
+      "text": "常用字段（`cordis.patch.yml` 的 `dsh-power` 行 config，可选）：\n\n| 字段 | 默认 | 说明 |\n|---|---|---|\n| `rollCallWaitMs` | `120000` | 点名广播后最多等待的毫秒数；`0` = 永久等待 |\n| `shutdownMaxWaitMs` | `300000` | 等待/中断关闭等待运行中 AI 的上限（默认 5 分钟）；`0` = 无限 |\n| `openBrowserOnRelaunch` | `false` | 网页版 relaunch 是否新开浏览器标签页 |\n| `forceKillAfterMs` | `2500` | 强制回收器等待 Host 优雅退出的上限，超时强杀 |\n| `unlockTtlMs` | `300000` | 一次强制保险的有效期 |\n| `forceDryRun` | `false` | 演练开关：强制模式只写 `force-dry-run.json`，不创建 pending、不武装回收器、不杀进程 |"
+    },
+    {
+      "section": "配置",
+      "text": "完整字段表（含取值范围，共 21 个字段）见 [TECHDOC · 配置字段](./TECHDOC.md#5-配置字段)。"
+    },
+    {
+      "section": "设置页「电源设置」",
+      "text": "- 摘要行直接显示当前「点名等待：N 秒（0 = 永久等待）」，不打开设置也能看到；面板只有一个「点名等待时间」数字输入框（允许 `0` 或 `1..3600` 秒）与「保存」按钮，`0` = 永久等待。\n- 读取：`GET /api/dsh-restart/config` → `{ ok, rollCallWaitMs, writable, persisted }`；保存：`POST /api/dsh-restart/config` 只提交 `{ rollCallWaitMs }`（秒 × 1000），写入 `<DSH_HOME>/.dsh-restart/settings.json`，立即生效，**不修改 `cordis.patch.yml`、不触发插件热重载**。\n- 值非法返回 400（指明字段名），写入失败返回 500，不会半成功返回 `ok`。\n- mtime 优先级：运行设置 mtime 晚于 profile patch 时覆盖 patch 的 `rollCallWaitMs`；之后手工编辑 patch（mtime 更新）则 patch 重新生效，避免旧运行设置掩盖新的手工配置。\n- 该面板不改重启模式、权限或强制保险规则；静态写法等价于 profile patch 行里的 `rollCallWaitMs`。\n- 逃生舱的设置（冻结模式、冻结时长、再生次数等）已随拆分移到独立包，本页**不再有「逃生舱」区块**。"
+    },
+    {
+      "section": "常见问题",
+      "text": "- **重启会不会关闭逃生舱？** 不会。重启不调用逃生舱的 `shutdown()`，逃生舱命令随 DSH 重启继续运行；只有勾选「同时关闭正在运行的逃生舱」才关闭，失败只写日志、绝不阻止关机。\n- **强制重启为什么还要先上保险？** 强制先走审批，通过后再校验并消费保险，无保险不会重启；完整顺序与权限矩阵见「权限速览」。保险只对紧接着的下一次工具调用有效。\n- **点名会等到什么时候？** 默认最多 120 秒（`rollCallWaitMs`，`0` = 永久等待）；到点继续重启，仍未就绪的 AI 如实记为超时，不会声称其已完成。\n- **可以手工编辑 `cordis.patch.yml` 改配置吗？** 不要在 AI 回合运行期间改：profile patch 热重载会 dispose 正在运行的 Agent/Session（表现为「会话不可用」、会话从列表消失）。改配置请用插件设置页（1.7.5-hotfix.7 起不会重载），或等回合结束后再改，或改完重启 DSH。\n- **设置页与 `cordis.patch.yml` 里的 `rollCallWaitMs` 谁生效？** 按 mtime 优先级：运行设置文件的 mtime 晚于 profile patch 时覆盖 patch 值；之后手工编辑 patch（mtime 更新）则 patch 重新生效，避免旧运行设置掩盖新的手工配置。\n- **重启期间我的其他工具调用与后台任务怎么办？** 不会被接回：恢复报告明确「未决工具调用结果未知、可能已中断」「后台任务无法接回、需重新执行或检查输出」，不会声称无损；被 `resumableToolCalls` 接管的调用单独写成「可恢复调用」。\n- **安装后需要重启 DSH 吗？** 需要：Host 半身的改动必须重启才生效，Client 半身会热更新。"
+    },
+    {
+      "section": "目录结构",
+      "text": "| 文件 / 目录 | 作用 |\n|---|---|\n| `index.js` | Host 半身：三模式状态机（合并/升级/退化）、人类请求、点名广播与限时等待、检查点/意图、重启后通知、`/api/dsh-restart/*`、`resumableToolCalls` 服务 |\n| `host/ai.js` | 五个 AI 工具、权限与审批、强制保险状态机与全局 guard（先审批、后校验/消费保险）、`restart-dsh` skill 注册 |\n| `host/constants.js` | 工具名、模式名（AI 名/人类名）、就绪状态定义、skill 文本 |\n| `host/human.js` | 人类入口的 Host 侧（界面由 `client.js` 渲染） |\n| `host/resumable.js` | `resumableToolCalls` 注册表：hold / complete / fail / status、deadline、provisional 结算与 boot 恢复 |\n| `host/session-writer.js` | 把 held 调用的结果写进 Session 日志：live append 通道、persistence 写句柄、写锁竞争时等待 |\n| `client.js` | 网页版客户端：settingsArea「DSH电源」按钮 + 备用槽位、重启/关闭菜单、模式下拉、长按 5 秒、关机对话框逃生舱复选框、等待/失败/关闭页、插件详情页「电源设置」 |\n| `relauncher.mjs` / `relauncher-desktop.mjs` | 网页版 / 桌面版 relaunch helper；网页版通过 marker 文件与 Host 握手 |\n| `quit-desktop.mjs` | 桌面版关闭 helper：Host 退出前终止 Electron 外壳 |\n| `force-reaper.mjs` | 独立 detached 强制回收器：等待优雅退出超时后强杀 Host，再按模式重新拉起或结束 Electron 外壳 |\n| `scripts/restart-cli.mjs` | 外部诊断/恢复 CLI（零依赖 ESM）：`status` / `relaunch` / `clear-stale` / `unhold` |\n| `cordis.patch.yml` | 单行 `dsh-power` 行声明与配置说明 |\n| `locale/*.json` | 插件管理器标题/描述（zh/en） |\n| `test/*.test.mjs` | Node 单元测试（不进 tgz） |"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 检查点是有界、脱敏快照：不恢复进程、不接回后台任务；超上限时置 `totals.truncated=true`，恢复报告如实声明「结果未知」（见「检查点与恢复报告」）。\n- 强制回收器无法启动时，Host 仍会自毁，但自动拉起可能失败。\n- boot 对账失败的 `hold` 是 fail-closed 标记：不拦截等待 / 点名重启，也不阻止 CLI `relaunch`，需显式强制请求或 `restart-cli unhold` 清除（见「强制模式与外部恢复 CLI」）。\n- 五个 AI 工具不声明 `timeoutMs`：挂起的重启调用只在重启失败或回合取消时提前返回错误。"
+    },
+    {
+      "section": "文档索引",
+      "text": "| 文档 | 读者 | 内容 |\n|---|---|---|\n| [README.md](./README.md) | 所有人 | 定位、特性、安装、最小上手、使用要点与配置速览 |\n| [HISTVER.md](./HISTVER.md) | 维护者 | 正式公开（1.8.2）及之后的版本变更与兼容性说明 |\n| [HISTVER_legacy.md](./HISTVER_legacy.md) | 维护者 | 正式公开前的私有迭代记录（逐版本详情、早期版本表、版本号命名说明），仅供参考 |\n| [TECHDOC.md](./TECHDOC.md) | 开发者/运维 | 架构、重启/关闭状态机、点名与就绪状态、检查点、`resumableToolCalls`、force reaper、API 路由表、配置字段表、状态文件、安全与测试方法 |\n| [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) | 所有人 | 第三方归属（dsh-tray-restart，MIT）、MIT 许可原文与运行时依赖说明；摘要见上文「许可」 |"
+    },
+    {
+      "section": "许可",
+      "text": "本文件以 MIT 许可发布，版权归 DX12_XYZ 所有。完整条款见仓库根 [LICENSE](./LICENSE)。\n\nCopyright (c) 2026 DX12_XYZ\n\n设计与结构上借鉴了 [hxh230802/dsh-tray-restart](https://github.com/hxh230802/dsh-tray-restart)（MIT，Copyright (c) 2026 dsh-tray-restart contributors）——仅借鉴设计思想，未复制源代码。完整的 MIT 许可原文、归属声明与依赖说明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。\n\n<!-- fused-by: deepseek-v4.1-flash -->\n\n[](https://github.com/deepseek-ai/deepseek-harness)"
+    }
+  ],
+  "skipped": []
+}

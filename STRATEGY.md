@@ -131,6 +131,11 @@ luna 的产出：
 | D | 其余，包括空壳、模板、看上去跑不起来的 |
 
 - `maintenance` 和 `tests` 先依据事实表 `quality_raw` 的客观数据打分，luna 只做核对。
+- 新增的 `repository_health` 完全由脚本生成，Luna 不参与：生命周期占 40 分、
+  提交维护频次占 40 分、Issue 样本活跃度占 20 分。必须同时保留各分项和原始值，
+  推荐排序可以使用总分，但不得用总分替代 archived、最后推送和 Issue 样本等事实。
+  `score_confidence` 为 low/medium/high；缺少 GitHub 增强元数据时只能低置信度展示，
+  不得与高置信度健康分直接硬排序。archived/deprecated 是优先过滤条件，不由总分抵消。
 - `completeness` 和 `code` 要依据读过的源码来打，不能依据 README。
 - B 层读的代码比 A 层少，读不全的维度在理由里写明"按已读部分评"。
 

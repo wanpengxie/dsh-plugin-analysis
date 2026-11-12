@@ -1,0 +1,174 @@
+{
+  "repo": "ChinaBoy0618/dsh-web-auth",
+  "commit": "fa2a0638c32347c420ed745689cf44d17dc3e819",
+  "extracted_at": "2026-11-11T09:02:28.754192+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 22166,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 421,
+      "Markdown": 86,
+      "Other": 25,
+      "YAML": 27
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-web-auth",
+    "version": "0.1.0",
+    "description": "DSH Web 公网鉴权门：token 登录 + cookie 会话，反向代理到本机 DSH Web（含 WebSocket 透传）。零外部依赖，仅 node 内置模块。",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "auth",
+      "token",
+      "reverse-proxy"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=18"
+    },
+    "license": "MIT",
+    "repository": "https://github.com/ChinaBoy0618/dsh-web-auth",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# ============================================================================\n# dsh-web-auth 的 bundle patch —— 把公网鉴权门挂进 DSH Web 进程\n# ============================================================================\n#\n# 这是什么:\n#   DSH 启动时按 bundle 层栈叠加各插件的 patch。本文件声明 web-auth 插件行:\n#   一个只在 loopback 上监听的反向代理(默认 127.0.0.1:3081),\n#   把 frp 隧道流量校验 token 后代转到 DSH web(Host 头改写为 loopback,\n#   信任栅栏天然放行)。\n#\n# token 从哪来(按优先级):\n#   1. 下面 config.token 行配置\n#   2. 环境变量 DSH_WEB_AUTH_TOKEN\n#   3. 文件 $DSH_HOME/web-auth-token (默认 ~/.dsh/web-auth-token, 可配 tokenFile)\n#\n# 公网入口 = 让 frpc 指向 gatePort(3081), 而不是 DSH web 的 3080。\n#\n# ============================================================================\n\n- insert:\n    - id: web-auth\n      name: 'dsh-web-auth'\n      inject: [webServer]\n      config:\n        gateHost: '127.0.0.1'\n        gatePort: 3081\n        tokenFile: 'web-auth-token'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:67"
+    },
+    {
+      "name": "DSH_WEB_AUTH_TOKEN",
+      "kind": "env",
+      "where": "lib/index.js:72"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "${targetauthority",
+      "url": "http://${targetAuthority",
+      "where": "lib/index.js:226"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "lib/index.js:304"
+    },
+    {
+      "host": "${targetauthority",
+      "url": "http://${targetAuthority",
+      "where": "lib/index.js:362"
+    },
+    {
+      "host": "${cfg.gatehost",
+      "url": "http://${cfg.gateHost",
+      "where": "lib/index.js:413"
+    },
+    {
+      "host": "${cfg.targethost",
+      "url": "http://${cfg.targetHost",
+      "where": "lib/index.js:413"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ChinaBoy0618/dsh-web-auth",
+      "where": "package.json:31"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-09-10T03:18:16Z",
+    "created_at": "2026-09-10T03:17:31Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-web-auth",
+      "text": "DSH Web 的公网鉴权门:一个跑在 DSH web 进程里的 loopback 反向代理(gate),\n给经 frp/隧道暴露的 DSH Web 加 token 登录。"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "- `dsh web` 只绑 `127.0.0.1`,其 `/api` 的 Host 信任栅栏把非 loopback 来源一律 403\n  (防 DNS-rebinding / cross-origin),所以经 frp 隧道进来的请求全部被栅栏拦下。\n- DSH 本身没有面向公网访问者的登录/密码层。\n- 直接 `--trusted-host <公网>` 只是\"给公网 IP 开栅栏缝\",不等于认证。\n\n本插件把栅栏和认证合并成一个正确架构:\n\n```\n公网 → frp 隧道 → 127.0.0.1:3081 (gate, token 登录) → 127.0.0.1:3080 (DSH web, Host=loopback → 栅栏放行)\n```"
+    },
+    {
+      "section": "行为",
+      "text": "| 请求 | 结果 |\n|---|---|\n| 未登录浏览器 GET 页面 | 302 → `/__dsh-auth__/login` 登录页 |\n| 未登录 `/api`、静态资源、WebSocket upgrade | `401` |\n| 登录页 `POST /__dsh-auth__/login`(`token` 字段,JSON 或 urlencoded) | 成功:签 HttpOnly 会话 cookie(默认 12h,滑动续期),302 回原路径 |\n| `X-DSH-Auth: <token>` 头 | 免 cookie,供 curl / 脚本 |\n| `POST /__dsh-auth__/logout` | 清 cookie |\n| 同源 IP 连续失败 10 次 | 限速 10 分钟 |"
+    },
+    {
+      "section": "token 从哪来(优先级)",
+      "text": "1. 插件行配置 `config.token`\n2. 环境变量 `DSH_WEB_AUTH_TOKEN`\n3. 文件 `$DSH_HOME/web-auth-token`(默认 `~/.dsh/web-auth-token`,可用 `tokenFile` 覆盖)\n\n找不到 token 时 gate **不启动**(fail closed,公网入口不可用),DSH 本体不受影响。"
+    },
+    {
+      "section": "行配置(全部可选)",
+      "text": "| key | 默认 | 说明 |\n|---|---|---|\n| `gateHost` | `127.0.0.1` | gate 绑定地址 |\n| `gatePort` | `3081` | gate 监听端口(frpc 应指向这里) |\n| `targetHost` | `127.0.0.1` | DSH web 地址 |\n| `targetPort` | `3080` | DSH web 端口兜底值(运行时优先取 `webServer.port`) |\n| `token` | — | 直接内联 token |\n| `tokenFile` | `web-auth-token` | token 文件名(相对 `$DSH_HOME`)或绝对路径 |\n| `sessionTtlMinutes` | `720` | 会话 cookie 有效期(分钟,滑动续期) |\n| `maxFails` | `10` | 同 IP 连续失败多少次触发限速 |\n| `failWindowMs` | `600000` | 限速窗口(毫秒) |"
+    },
+    {
+      "section": "方式一:从 git 仓库安装(推荐分享)",
+      "text": "```bash"
+    },
+    {
+      "section": "把本仓库地址装进指定 profile(命令透传给 pnpm,git 地址 / npm 包名 / 本地路径都认)",
+      "text": "dsh plugin --profile web add <git 仓库地址>\n```\n\n然后在 profile 的 `package.json` 里把 `dsh-web-auth` 追加进 `dsh.profile.bundles`:\n\n```json\n\"dsh\": {\n  \"profile\": {\n    \"bundles\": [\n      \"@deepseek-ai/dsh-base\",\n      \"@deepseek-ai/dsh-web-app\",\n      \"dsh-web-auth\"\n    ]\n  }\n}\n```"
+    },
+    {
+      "section": "方式二:本地路径 / npm 包",
+      "text": "1. 把包放进 profile 的 `node_modules`(`file:` 依赖 + `pnpm install`,或 `npm publish` 后按 npm 包名装)。\n2. 同上,在 profile 的 `package.json` 里 `dsh.profile.bundles` 追加 `dsh-web-auth`。"
+    },
+    {
+      "section": "两种方式共同的后续步骤",
+      "text": "3. 生成 token:`openssl rand -hex 32 > ~/.dsh/web-auth-token`。\n4. frpc 把 `dsh-web` 的 `localPort` 指向 gatePort(3081)。\n5. 重启 `dsh web`。\n\n零外部依赖(只用 node 内置模块)。"
+    }
+  ],
+  "skipped": []
+}
