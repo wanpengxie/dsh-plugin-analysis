@@ -39,6 +39,8 @@ def validate(repo,tier=None):
   facts=json.loads(paths["facts"].read_text());card=json.loads(paths["card"].read_text())
  except Exception as e:
   return [f"JSON parse: {type(e).__name__}: {e}"]
+ if facts.get("repo")!=repo:errors.append(f"facts repo mismatch: {facts.get('repo')!r} != {repo!r}")
+ if card.get("repo")!=repo:errors.append(f"card repo mismatch: {card.get('repo')!r} != {repo!r}")
  try:jsonschema.Draft202012Validator(SCHEMAS["facts"],format_checker=jsonschema.FormatChecker()).validate(facts)
  except Exception as e:errors.append("facts schema: "+str(e).splitlines()[0])
  try:jsonschema.Draft202012Validator(SCHEMAS["card"],format_checker=jsonschema.FormatChecker()).validate(card)
@@ -47,7 +49,9 @@ def validate(repo,tier=None):
   errors.append("card repository_health differs from deterministic facts.repository_health")
  units=[]
  for no,line in enumerate(paths["units"].read_text().splitlines(),1):
-  try:u=json.loads(line);jsonschema.Draft202012Validator(SCHEMAS["unit"]).validate(u);units.append(u)
+  try:
+   u=json.loads(line);jsonschema.Draft202012Validator(SCHEMAS["unit"]).validate(u);units.append(u)
+   if u.get("repo")!=repo:errors.append(f"unit line {no} repo mismatch: {u.get('repo')!r} != {repo!r}")
   except Exception as e:errors.append(f"unit line {no}: {str(e).splitlines()[0]}")
  for where in list(walk_evidence(card))+[e for u in units for e in u.get("evidence",[])]:
   ok,msg=evidence_ok(src,where)
