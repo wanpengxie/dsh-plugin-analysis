@@ -1,0 +1,158 @@
+{
+  "repo": "todashuta/dsh-affinity-mcp",
+  "commit": "28bbba5c0ed4cfe5bf1614a246eaa8104e1bf42c",
+  "extracted_at": "2026-11-12T06:06:44.447409+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 25636,
+    "lines_by_language": {
+      "JSON": 43,
+      "JavaScript": 478,
+      "Markdown": 108,
+      "Other": 32,
+      "YAML": 22
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "bridge.mjs",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/en.json",
+      "locale/ja.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-affinity-mcp",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Bridge the Affinity by Canva MCP server into DSH as a stdio MCP connection",
+    "license": "MIT",
+    "exports": {
+      "./bridge.mjs": "./bridge.mjs",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "bridge.mjs",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=22",
+      "dsh": ">=0.2.1-0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Affinity by Canva の内蔵 MCP サーバーを、stdio の MCP 接続として DSH に挿す。\n#\n# bridge.mjs は Affinity が落ちていても常駐し、ツール呼び出しのたびに上流\n# （[::1]:6767/sse）へつなぎ直す。DSH の mcp-client は起動時に接続できないと\n# ツールを登録せず、切断後も再接続を諦めるため、この常駐プロセスを挟まないと\n# Affinity を後から起動しても DSH を再起動するまでツールが戻らない。\n#\n# args のパスは、このパッチを評価したときに createRequire(baseUrl) で自分の\n# パッケージを解決して求める。bundle はプロファイルの node_modules にリンク\n# されるので、絶対パスを書き込まずに同梱の bridge.mjs を指せる。\n- insert:\n    - id: affinity-mcp\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: affinity\n        transport: stdio\n        command: !!js process.execPath\n        args:\n          - !!js process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('dsh-affinity-mcp/bridge.mjs')\n        # bridge.mjs 側の AFFINITY_MCP_TIMEOUT_MS と同じ 120 秒に揃える。\n        # 片方だけ短いと、切れた呼び出しのタイマーが bridge 側に残り続ける。\n        toolCallTimeoutMs: 120000\n"
+    }
+  ],
+  "entries": [
+    "bridge.mjs",
+    "package.json",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "AFFINITY_MCP_URL",
+      "kind": "env",
+      "where": "bridge.mjs:46"
+    },
+    {
+      "name": "AFFINITY_MCP_TIMEOUT_MS",
+      "kind": "env",
+      "where": "bridge.mjs:48"
+    },
+    {
+      "name": "AFFINITY_MCP_CONNECT_MS",
+      "kind": "env",
+      "where": "bridge.mjs:49"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-31T12:42:24Z",
+    "created_at": "2026-10-31T12:36:35Z"
+  },
+  "runtime_files": [
+    "bridge.mjs",
+    "cordis.patch.yml",
+    "icon.svg",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-affinity-mcp",
+      "text": "Affinity by Canva の内蔵 MCP サーバーを DSH につなぐ bundle です。インストールすると\n`mcp__affinity__*` というツールが追加され、エージェントからスクリプトの実行や、\nページの画像取得ができるようになります。"
+    },
+    {
+      "section": "構成",
+      "text": "Host と Client のプラグインコードは含みません。`cordis.patch.yml` で\n`@deepseek-ai/dsh-mcp-client` の行を 1 つ追加するだけの、設定のみの bundle です。\n\n```\ndsh-affinity-mcp/\n├── package.json       # dsh.bundle.patch を宣言\n├── cordis.patch.yml   # MCP クライアントの行を insert\n├── bridge.mjs         # DSH と Affinity の間を中継する常駐プロセス\n\n実際に動作するのは同梱の `bridge.mjs` です。DSH と Affinity の間に常駐し、\nMCP のメッセージを中継します。"
+    },
+    {
+      "section": "ブリッジが必要な理由",
+      "text": "理由は 2 つあります。\n\n1 つは、Affinity の MCP が SSE 方式で通信するのに対し、DSH の MCP クライアントが\nその方式に対応していないことです。直接接続しようとすると、POST /sse が 405 で\n拒否されます。\n\nもう 1 つは、Affinity が常時起動ではないことです。DSH は起動時に接続できないと\nそのサーバーのツールを登録せず、切断後も 10 回で再接続を諦めます。そのため、\n先に Affinity を起動していないと、後から起動しても DSH を再起動するまでツールが\n表示されません。\n\n`bridge.mjs` は stdio のプロセスとして常駐し、上流への接続をツール呼び出しのたびに\n確立します。DSH から見るとサーバーは常に稼働しているため、ツールの登録は維持\nされたまま、Affinity の起動直後から利用できます。"
+    },
+    {
+      "section": "インストール",
+      "text": "DSH のプロファイルに bundle として追加します。\n\n```sh"
+    },
+    {
+      "section": "GitHub から",
+      "text": "dsh plugin --profile web add github:todashuta/dsh-affinity-mcp"
+    },
+    {
+      "section": "ローカルのディレクトリから",
+      "text": "dsh plugin --profile web add link:/path/to/dsh-affinity-mcp"
+    },
+    {
+      "section": "npm から（公開後）",
+      "text": "dsh plugin --profile web add dsh-affinity-mcp\n```\n\n`dsh` が PATH に無い環境では、CLI が入っている場所から実行してください。\n\nインストールするとプロファイルの `package.json` に依存が追加され、\n`dsh.profile.bundles` に載り、Plugins ページで有効・無効を切り替えられるように\nなります。HMR が有効なプロファイルではその場で反映され、そうでない場合は次回\n起動時に反映されます。"
+    },
+    {
+      "section": "アンインストール",
+      "text": "```sh\ndsh plugin --profile web remove dsh-affinity-mcp\n```\n\nまたは Plugins ページから削除します。"
+    },
+    {
+      "section": "更新",
+      "text": "- `bridge.mjs` を変更した場合は DSH を再起動してください。MCP の子プロセスは\n  起動時に一度だけ起動するため、ファイルの変更だけでは反映されません。bundle の\n  再インストールは不要です。\n- `cordis.patch.yml` や `package.json` を変更した場合は、インストールし直してから\n  DSH を再起動してください。"
+    },
+    {
+      "section": "設定",
+      "text": "パッチの `args` には `bridge.mjs` の絶対パスを記述していません。パッチの評価時に\n`createRequire(baseUrl)` で自身のパッケージを解決し、その中の `bridge.mjs` を\n参照しています。プロファイルの場所が変わっても、パスを書き直す必要はありません。\n\n`bridge.mjs` が参照する環境変数は次のとおりです。\n\n| 変数 | 既定値 | 説明 |\n|---|---|---|\n| `AFFINITY_MCP_URL` | `http://[::1]:6767` | 上流のベース URL |\n| `AFFINITY_MCP_TIMEOUT_MS` | `120000` | ツール 1 回のタイムアウト |\n| `AFFINITY_MCP_CONNECT_MS` | `10000` | 接続確立のタイムアウト |\n\n`toolCallTimeoutMs` は `AFFINITY_MCP_TIMEOUT_MS` と同じ 120 秒に設定しています。\n片方だけ短い場合、呼び出しを中断した後も bridge 側のタイマーが残ります。"
+    },
+    {
+      "section": "表示メタデータ",
+      "text": "Plugin Manager と Settings は、プラグインを有効化しなくても `locale/en.json` と\n`locale/ja.json` の `meta.title` / `meta.description`、および `icon.svg` を読みます。\n表示テキストを変更する場合は、2 つの言語を同時に更新してください。"
+    },
+    {
+      "section": "ライセンス",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

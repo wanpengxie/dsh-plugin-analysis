@@ -1,0 +1,602 @@
+{
+  "repo": "LiHeng99/dsh-starbridge-client",
+  "commit": "e2a0652320ec1cdc1a7037834e1883524de5014d",
+  "extracted_at": "2026-11-11T12:03:56.103102+00:00",
+  "tree": {
+    "files": 41,
+    "bytes": 512649,
+    "lines_by_language": {
+      "JSON": 1484,
+      "JavaScript": 1392,
+      "Markdown": 450,
+      "Other": 54,
+      "TypeScript": 9436,
+      "YAML": 289
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/workflows/verify.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "SECURITY.md",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "scripts/verify.mjs",
+      "src/augment.ts",
+      "src/auth.ts",
+      "src/client/ChatPanel.tsx",
+      "src/client/FeedbackBar.tsx",
+      "src/client/MarkdownView.tsx",
+      "src/client/SettingsPanel.tsx",
+      "src/client/api.ts",
+      "src/client/highlight.ts",
+      "src/client/index.tsx",
+      "src/client/login.ts",
+      "src/client/theme.ts",
+      "src/client/types.ts",
+      "src/config.ts",
+      "src/errors.ts",
+      "src/feedback-store.ts",
+      "src/gateway-access.ts",
+      "src/gateway-config.ts",
+      "src/gateway.ts",
+      "src/http.ts",
+      "src/index.ts",
+      "src/log.ts",
+      "src/service.ts",
+      "src/shared/markdown.ts",
+      "src/shared/protocol.ts",
+      "src/tools.ts",
+      "src/trace.ts",
+      "tsconfig.client.json",
+      "tsconfig.json",
+      "tsdown.config.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-starbridge-client",
+    "version": "0.1.0",
+    "description": "StarBridge (星桥) gateway client for DSH — one plugin for gateway access, sign-in, chat / feedback / knowledge-base tools, and Web UI panels.",
+    "license": "MIT",
+    "type": "module",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "starbridge",
+      "gateway",
+      "llm-gateway"
+    ],
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./client": {
+        "types": null,
+        "default": "./lib/client.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/**/*.js",
+      "lib/**/*.map",
+      "lib/types/**/*.d.ts",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "external": []
+      }
+    },
+    "scripts": {
+      "build": "npm run build:host && npm run build:client",
+      "build:host": "tsc -p tsconfig.json",
+      "build:client": "tsdown",
+      "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+      "verify": "node scripts/verify.mjs",
+      "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\""
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-tools": "^0.1.5-rc.2",
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "4.0.2",
+      "@deepseek-ai/dsh-tools": "0.1.5-rc.2",
+      "@deepseek-ai/schemastery": "^3.18.2",
+      "@types/node": "^22.15.3",
+      "@types/react": "~18.3.1",
+      "react": "^18.2.0",
+      "tsdown": "^0.15.0",
+      "typescript": "^5.9.3"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# StarBridge (星桥) bundle layer for a DSH profile.\n#\n# Composition facts this file depends on:\n#\n# - A bundle patch list is applied over the entry list built by the layers before\n#   it, in `dsh.profile.bundles` order. `dsh-base` contributes the `tools` row,\n#   so this plugin is mounted after the tool registry it requires.\n# - An `insert` WITHOUT `id` appends to the profile ROOT, which is what a\n#   self-contained application plugin wants: it owns its row, not a seat inside\n#   someone else's group. (`insert` WITH `id` would push into a group's `config`\n#   list.)\n# - `inject` on the row is the plugin's own dependency gate. `tools` is required\n#   (registering StarBridge tools is the point of the plugin); the web server is\n#   NOT listed, because the plugin resolves it optionally at runtime so the same\n#   row works in a headless profile with no browser surface at all.\n# - This one row is also the browser roster entry: `dsh-client-modules` scans\n#   every loader row for a package that declares `dsh.client`, so the Web profile\n#   picks up the client half from the same name with no second row.\n#\n# Values below are the shipped DEFAULTS, and they are deliberately inert: no\n# gateway address, no credential, no default-model override. Everything an\n# individual decides belongs to the settings page; everything a DEPLOYMENT\n# decides belongs in the profile's own `cordis.patch.yml`, which is applied\n# after every bundle layer. Nothing secret belongs in this file at all — inject\n# credentials through the environment instead\n# (`STARBRIDGE_GATEWAY_API_KEY`, `STARBRIDGE_OIDC_CLIENT_ID`,\n# `STARBRIDGE_OIDC_CLIENT_SECRET`, `STARBRIDGE_GATEWAY_URL`).\n\n- insert:\n    - id: starbridge\n      name: 'dsh-starbridge-client'\n      config:\n        gateway:\n          # Empty on purpose: this plugin ships to whoever installs it from the\n          # plugin market, so it names NO organisation's host. The address is a\n          # per-deployment fact and belongs to the user, who fills it in from\n          # DSH Settings → 星桥 StarBridge — which is also why the plugin must\n          # load while this is still empty.\n          #\n          # A deployment that wants a fleet-wide default sets it here in its own\n          # profile `cordis.patch.yml` (applied after every bundle layer), or\n          # exports STARBRIDGE_GATEWAY_URL.\n          gatewayUrl: ''\n          # Prefer STARBRIDGE_GATEWAY_API_KEY over writing a key here. This is\n          # also the reference the model route resolves through `apiKeyEnv`\n          # below: the settings page writes the user's access key or platform\n          # token under this exact name, so do not rename it in only one place.\n          apiKey: ''\n          timeoutMs: 30000\n          maxRetries: 2\n          retryBackoffMs: 500\n          # Provider route this plugin manages when the user turns model routing\n          # on. It must match the `starbridge` route declared for llm-pi-ai below.\n          modelProvider: starbridge\n\n        oidc:\n          # Empty issuer + client id runs the plugin without employee sign-in\n          # (a machine credential from gateway.apiKey is then required).\n          issuerUrl: ''\n          clientId: ''\n          clientSecret: ''\n          scopes: [openid, profile, email]\n          prompt: ''\n          refreshSkewMs: 60000\n\n        identity:\n          # Empty values fall back to STARBRIDGE_USER_ID / STARBRIDGE_DEPARTMENT,\n          # and then to the signed-in subject.\n          userId: ''\n          department: ''\n          scenario: chat\n\n        behavior:\n          useKnowledgeBase: false\n          knowledgeBaseScenario: kb\n          knowledgeBaseTopK: 5\n          # false keeps every like/dislike/correction on this machine only.\n          forwardFeedback: true\n\n        storage:\n          feedbackEventName: starbridge/feedback\n          feedbackMemoryLimit: 200\n          # Empty resolves to the DSH home; the refresh token is sealed there\n          # with AES-256-GCM under a 0600 key file.\n          directory: ''\n\n# ── 模型面（provider: starbridge）：让每一次模型调用都经过星桥中台 ──────────\n#\n# 上面那一行是「工具面」：只有模型主动调用 starbridge_* 工具时才经过中台。\n# 下面这一行是「模型面」：把 DSH 的模型调用本身接到中台的 OpenAI 兼容面\n# （/starbridge/gw/v1/*）。用户在设置页打开「模型路由」之后，对话、子代理、\n# 摘要、标题生成——每一次模型调用都必须先通过中台的认证、路由、配额与审计，\n# 不再存在绕过工具面的通道。\n#\n# 谁在运行时接管它：星桥插件本身。用户在「设置 → 星桥 StarBridge」里填地址、\n# 填访问密钥或用平台账号登录之后，插件会\n#   1. 把本路由的 baseURL 写进 `llm-pi-ai` 设置分节（按请求生效，无需重启）；\n#   2. 把凭据写进下面 apiKeyEnv 指名的那个引用；\n#   3. 把新会话的默认模型切到 starbridge / general。\n# 因此下面这些值只是**路由的声明**：地址、凭据、默认模型都由界面写入。\n# 一条重要边界：模型路由**默认是关的**（见文件末尾的说明），装完插件不会立刻\n# 接管你的模型调用。\n#\n# 为什么用 llm-pi-ai 的「手工声明网关路由」而不是自写一个 provider 适配器：\n# 这是 DSH 官方支持的扩展点（providers 字典）。自写适配器要长期跟进流式协议、\n# 重试策略、模型发现与设置界面的演进，而中台侧真正需要的只是「会说 OpenAI 协议」。\n#\n# ⚠️ 补丁语义：`- id: X` + `config:` 是**整块替换**该行的 config，不是深合并\n# （见 dsh-base 自己的 cordis.patch.yml 顶部说明）。shipped 的 dsh-base 里\n# `llm-pi-ai` 行本来没有 config——pi-ai 的路由按设计就住在用户的\n# `llm-pi-ai:` 设置分区里，由 Models 页面写——所以这里不会覆盖任何人的现有路由；\n# 而设置页接通星桥时用的是 `settings.update()`（**合并**语义），也不会动别的 provider。\n# 唯一会撞上的是：某个部署自己在某个补丁层里声明了 pi-ai 的 providers。\n# 那种情况下，按 DSH「同一行后者覆盖前者」的规则，你自己的补丁层要放在本包**之后**\n# （profile 自己的 cordis.patch.yml 永远在 bundle 层之后），并把 starbridge 一并写全。\n#\n# 身份：baseURL 只能声明地址；x-user-id 逐人不同，无法写死在一个要分发的组合包里。\n# 用平台账号登录时身份来自令牌；用访问密钥时可在设置页填身份标识，或在该 profile\n# 自己的 cordis.patch.yml（在 bundle 层之后应用）里加：\n#\n#     - id: llm-pi-ai\n#       config:\n#         providers:\n#           starbridge:\n#             headers: { x-user-id: your.login }\n#\n# 或者由服务端配置默认服务身份（环境变量 STARBRIDGE_GATEWAY_DEFAULT_USER）。\n- id: llm-pi-ai\n  config:\n    providers:\n      starbridge:\n        displayName: 星桥中台\n        api: openai-completions\n        # 故意不写 baseURL：装了插件但还没接星桥的人，默认模型必须照旧走他自己\n        # 原来的提供方，而不是被一个死地址接管。地址由插件在用户点「连接」时\n        # 写入 `llm-pi-ai` 设置分节（按请求生效，无需重启）。\n        # 注意：这里不能写空字符串——llm-pi-ai 会以 \"has an empty baseURL\"\n        # 拒绝整个配置。省略该键才是「尚未指向任何地方」。\n        #\n        # 需要全公司开箱即走中台的部署，在自己的 profile cordis.patch.yml 里补：\n        #     - id: llm-pi-ai\n        #       config:\n        #         providers:\n        #           starbridge:\n        #             baseURL: https://starbridge.example.com/starbridge/gw/v1\n        # 与 gateway.apiKey 同源：优先用环境变量，不要把密钥写进配置文件；\n        # 用户在设置页填写的密钥或平台令牌也写在这个引用下。\n        apiKeyEnv: STARBRIDGE_GATEWAY_API_KEY\n        # model 字段承载的是「场景」，不是上游模型名。上游由中台按场景 + 部门决定，\n        # 调用方无权指定，因此也就无法绕过路由规则与配额。\n        models:\n          - id: general\n            name: 通用对话\n            contextWindow: 262144\n          - id: code_review\n            name: 代码评审\n            contextWindow: 262144\n          - id: doc_qa\n            name: 文档问答\n            contextWindow: 262144\n          - id: summarize\n            name: 摘要总结\n            contextWindow: 262144\n        retryPolicy:\n          mode: normal\n          maxRetries: 2\n\n# 出厂**不**接管默认模型。\n#\n# 早先这里有一行 `- id: agent-default-model` 把新 agent 的默认模型钉在\n# starbridge/general 上。对「全公司强制走中台」的部署那是对的，但对一个从插件\n# 市场一键装上的公共插件不合适：装上即把每个人的默认模型换成一个尚未配置的\n# 地址，等于让 harness 立刻不可用。所以公共包默认交给用户现有的提供方，\n# 由设置页的「模型路由」开关在运行时改默认模型选择（它写的是\n# `agent-default-model` 的设置分节，本来就是实时真源）。\n#\n# 公司自己的部署想恢复「装上即走中台」，在自己的 profile cordis.patch.yml\n#（bundle 层之后应用）里加回这三行即可：\n#\n#     - id: agent-default-model\n#       config:\n#         provider: starbridge\n#         model: general\n"
+    }
+  ],
+  "entries": [
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify.mjs:38"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify.mjs:66"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify.mjs:989"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify.mjs:990"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/verify.mjs:1069"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/config.ts:358"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "src/config.ts:361"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "src/config.ts:361"
+    },
+    {
+      "name": "STARBRIDGE_REDIRECT_URI",
+      "kind": "env",
+      "where": "src/http.ts:254"
+    },
+    {
+      "name": "NODE_ENV",
+      "kind": "env",
+      "where": "tsdown.config.ts:60"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge/gw/v1",
+      "where": "cordis.patch.yml:145"
+    },
+    {
+      "host": "starbridge-gateway.example.com",
+      "url": "https://starbridge-gateway.example.com/v1",
+      "where": "scripts/verify.mjs:415"
+    },
+    {
+      "host": "starbridge-gateway.example.com",
+      "url": "https://starbridge-gateway.example.com/v1",
+      "where": "scripts/verify.mjs:421"
+    },
+    {
+      "host": "starbridge-gateway.example.com",
+      "url": "https://starbridge-gateway.example.com/v1/chat/completions",
+      "where": "scripts/verify.mjs:523"
+    },
+    {
+      "host": "sso.example.com",
+      "url": "https://sso.example.com/realms/staff",
+      "where": "scripts/verify.mjs:550"
+    },
+    {
+      "host": "sso.example.com",
+      "url": "https://sso.example.com/realms/staff",
+      "where": "scripts/verify.mjs:559"
+    },
+    {
+      "host": "sso.example.com",
+      "url": "https://sso.example.com/realms/staff/auth",
+      "where": "scripts/verify.mjs:560"
+    },
+    {
+      "host": "sso.example.com",
+      "url": "https://sso.example.com/realms/staff/token",
+      "where": "scripts/verify.mjs:561"
+    },
+    {
+      "host": "kb.example.com",
+      "url": "https://kb.example.com/1",
+      "where": "scripts/verify.mjs:705"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com",
+      "where": "scripts/verify.mjs:823"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/",
+      "where": "scripts/verify.mjs:824"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge",
+      "where": "scripts/verify.mjs:825"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/",
+      "where": "scripts/verify.mjs:826"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw",
+      "where": "scripts/verify.mjs:827"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw/",
+      "where": "scripts/verify.mjs:828"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw/v1",
+      "where": "scripts/verify.mjs:829"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw/v1/chat/completions",
+      "where": "scripts/verify.mjs:830"
+    },
+    {
+      "host": "10.0.0.5",
+      "url": "http://10.0.0.5:8888/starbridge/gw",
+      "where": "scripts/verify.mjs:831"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com",
+      "where": "scripts/verify.mjs:841"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw/v1",
+      "where": "scripts/verify.mjs:847"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge",
+      "where": "scripts/verify.mjs:852"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw",
+      "where": "scripts/verify.mjs:854"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw/v1",
+      "where": "scripts/verify.mjs:855"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw",
+      "where": "scripts/verify.mjs:870"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw/v1",
+      "where": "scripts/verify.mjs:885"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge",
+      "where": "scripts/verify.mjs:925"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge/gw",
+      "where": "scripts/verify.mjs:1003"
+    },
+    {
+      "host": "sb.example.com",
+      "url": "https://sb.example.com/starbridge",
+      "where": "scripts/verify.mjs:1039"
+    },
+    {
+      "host": "intranet.example.com",
+      "url": "https://intranet.example.com",
+      "where": "scripts/verify.mjs:1245"
+    },
+    {
+      "host": "intranet.example.com",
+      "url": "https://intranet.example.com",
+      "where": "scripts/verify.mjs:1264"
+    },
+    {
+      "host": "host",
+      "url": "https://host/starbridge/gw`",
+      "where": "src/client/SettingsPanel.tsx:24"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge/gw",
+      "where": "src/client/SettingsPanel.tsx:329"
+    },
+    {
+      "host": "sso.example.com",
+      "url": "https://sso.example.com/realms/staff`",
+      "where": "src/config.ts:48"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge",
+      "where": "src/config.ts:226"
+    },
+    {
+      "host": "sso.example.com",
+      "url": "https://sso.example.com/realms/staff",
+      "where": "src/config.ts:271"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge/gw",
+      "where": "src/gateway-access.ts:455"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge/gw",
+      "where": "src/gateway-access.ts:528"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/v1`",
+      "where": "src/gateway-config.ts:40"
+    },
+    {
+      "host": "host",
+      "url": "https://host/starbridge/gw`",
+      "where": "src/gateway-config.ts:105"
+    },
+    {
+      "host": "host",
+      "url": "https://host/starbridge/gw/v1`",
+      "where": "src/gateway-config.ts:107"
+    },
+    {
+      "host": "host`",
+      "url": "https://host`",
+      "where": "src/gateway-config.ts:118"
+    },
+    {
+      "host": "host",
+      "url": "https://host/starbridge`",
+      "where": "src/gateway-config.ts:119"
+    },
+    {
+      "host": "host",
+      "url": "https://host/starbridge/gw`",
+      "where": "src/gateway-config.ts:120"
+    },
+    {
+      "host": "host",
+      "url": "https://host/starbridge/gw/v1`",
+      "where": "src/gateway-config.ts:121"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge",
+      "where": "src/gateway.ts:180"
+    },
+    {
+      "host": "${req.headers.host",
+      "url": "http://${req.headers.host",
+      "where": "src/http.ts:473"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge/gw",
+      "where": "src/service.ts:396"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge/gw",
+      "where": "src/service.ts:427"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge/gw",
+      "where": "src/service.ts:551"
+    },
+    {
+      "host": "starbridge.example.com",
+      "url": "https://starbridge.example.com/starbridge/gw",
+      "where": "src/tools.ts:364"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/cordis": "4.0.2",
+      "@deepseek-ai/dsh-tools": "0.1.5-rc.2",
+      "@deepseek-ai/schemastery": "^3.18.2",
+      "@types/node": "^22.15.3",
+      "@types/react": "~18.3.1",
+      "react": "^18.2.0",
+      "tsdown": "^0.15.0",
+      "typescript": "^5.9.3"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 13,
+    "pushed_at": "2026-09-24T02:36:24Z",
+    "created_at": "2026-09-23T05:43:06Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "scripts/verify.mjs",
+    "src/augment.ts",
+    "src/auth.ts",
+    "src/config.ts",
+    "src/errors.ts",
+    "src/feedback-store.ts",
+    "src/gateway-access.ts",
+    "src/gateway-config.ts",
+    "src/gateway.ts",
+    "src/http.ts",
+    "src/index.ts",
+    "src/log.ts",
+    "src/service.ts",
+    "src/shared/protocol.ts",
+    "src/tools.ts",
+    "src/trace.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-starbridge-client — 星桥 StarBridge",
+      "text": "星桥（StarBridge）AI 中台的 DSH 客户端插件。在自己的 DSH profile 里装这一个包，\n就得到统一网关接入、**填写地址或用平台账号登录**、以及对话 / 反馈 / 知识库工具，\n外加 Web UI 里的对话面板与设置页；再打开\"模型路由\"，DSH 的每一次 AI 调用都经星桥网关。\n\n插件对所有人发布，因此**不含任何一家的地址或凭据**：装上是空配置，填一次地址即可。\n\n它是一个**组合包（bundle）**，同时提供 host 面与 client 面：\n\n| 面 | 入口 | 职责 |\n|---|---|---|\n| host | `lib/index.js` | `ctx.starBridge` 服务、四个工具、`/starbridge/api/*` HTTP 路由、接入配置与凭据管理、OIDC PKCE |\n| client | `lib/client.js` | `main` 对话面板、`settings.section` 设置页（接入配置 / 登录 / 模型路由）、反馈条 |"
+    },
+    {
+      "section": "dsh-starbridge-client — 星桥 StarBridge",
+      "text": "分工只有一条：**host 做脏活，client 做展示**。浏览器不持有 access token，也不直接访问网关——\n所有网络请求、认证、重试、流式解析都在 host 面完成。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\ndsh-starbridge-client/\n├── package.json            # dsh.bundle / dsh.client / exports\n├── cordis.patch.yml        # 向 host 组合插入插件行（组合包层），并声明模型面路由\n├── tsconfig.json           # host 编译（tsc → lib/*.js + lib/*.d.ts）"
+    },
+    {
+      "section": "构建",
+      "text": "```bash\nnpm install\nnpm run build          # = build:host + build:client\n\nnpm run build:host     # tsc -p tsconfig.json      → lib/*.js + lib/*.d.ts\n\n两个构建都必须先通过再安装：host 的 `tsc` 会真正产出 `lib/index.js`，\nclient 的 `tsdown` 会产出被 shell 当 classic script 加载的 `lib/client.js`。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash"
+    },
+    {
+      "section": "从插件市场「设置 → 插件市场」一键安装，或直接：",
+      "text": "dsh plugin --profile web add dsh-starbridge-client"
+    },
+    {
+      "section": "本地开发时从目录装（会在 profile 里建立 pnpm 链接）",
+      "text": "dsh plugin --profile web add ./dsh-starbridge-client"
+    },
+    {
+      "section": "确认组合结果（无需启动即可看到插件行）",
+      "text": "dsh --profile web --dump-config | grep -A 20 starbridge"
+    },
+    {
+      "section": "重启 profile",
+      "text": "dsh web\n```\n\n`dsh plugin add` 会把依赖装进 profile，并把声明了 `dsh.bundle` 的包追加进\n`dsh.profile.bundles`；该包的 `cordis.patch.yml` 因此成为组合层的一层。\n\n装完插件**还没有接上任何网关**——出厂配置里的地址是空的，这是刻意的（见「配置」一节）。\n打开 **设置 → 星桥 StarBridge** 填一次地址就通了；在那之前 `starbridge_*` 工具返回\n`[GATEWAY_NOT_CONFIGURED]` 并告诉你去哪里填，而不是让你去翻日志。"
+    },
+    {
+      "section": "接入：填地址 + 填密钥或登录（设置页）",
+      "text": "1. **填服务地址**：服务根、`/starbridge`、`/starbridge/gw`、`/starbridge/gw/v1`\n   四种粘贴形式都能识别并规范化；页面会显示归一化后的机器面与模型面地址。\n2. **二选一登录**：\n   - **访问密钥**：粘贴中台签发的 Access Key。写入 DSH 凭据库\n     （引用名 `STARBRIDGE_GATEWAY_API_KEY`，与模型路由的 `apiKeyEnv` 同名），不写配置文件。\n     这份凭据库里的副本就是它**唯一的持久副本**：DSH 重启后插件从同一个引用读回来，\n     所以重启不会丢密钥、也不会留下\"路由指向星桥但没有凭据\"的坏状态。\n   - **平台账号**：用星桥控制台账号密码登录，换一枚平台 JWT（后端\n     `POST /starbridge/gw/login`）。勾选\"在本机记住\"后，凭据以 AES-256-GCM 加密落盘\n     （`$DSH_HOME/starbridge-gateway-session.enc`，密钥同为 `0600` 的\n     `starbridge-gateway-session.key`），令牌到期前自动续期；随时可\"清除本机保存的星桥凭据\"。\n3. **模型路由开关**：打开后，插件把 `llm-pi-ai` 的 `starbridge` 路由 `baseURL` 指向\n   `<地址>/gw/v1`，把凭据写进该路由的 `apiKeyEnv`，并把新会话默认模型切到\n   `starbridge / general`。关掉即退回 DSH 当前默认提供方。"
+    },
+    {
+      "section": "接入：填地址 + 填密钥或登录（设置页）",
+      "text": "连接过程返回**逐步清单**（地址 → 可达 → 凭据 → 模型路由），每一步独立报告成败与修法，\n而不是笼统的\"失败\"。"
+    },
+    {
+      "section": "界面与主题：与 DSH 同一套令牌",
+      "text": "- 颜色走 `--dsw-alias-*`（`label-primary` / `label-tertiary` / `bg-layer-1..3` /\n  `border-l1..4` / `state-error-primary` / `button-primary-fill` …），用户气泡用\n  `--dsw-specific-bubble`（即 DSH 会话里用户消息的底色），字体走 `--dsw-font-*` 的长写属性。\n- 几何取 DSH 自己的字面值：输入框与按钮 8px 圆角、卡片 16px、气泡 22px、字段高 34px；\n  主按钮填充 `--dsw-alias-button-primary-fill`（明色下是墨色、暗色下是白色，不是蓝色）。\n- 设置页按 DSH 的插件设置页排版：760px 单列、18px 标题、每件事一张 0.5px 描边卡片、\n  字段之间用发丝线分隔。**面板标题与关闭按钮由 DSH 设置面板自己提供**，插件不再重复画一套。\n- `hover` / `focus-visible` / `::placeholder` / `:disabled` / 字段间发丝线这些内联样式写不出来的\n  状态，收在 `theme.ts` 里一张按 `data-plugin-css` 幂等注入的小样式表里（DSH 自己的 client 包\n  用的就是这个做法）；没有独立的 `.css` 文件，也没有额外的构建步骤。"
+    },
+    {
+      "section": "界面与主题：与 DSH 同一套令牌",
+      "text": "> 早期版本这里写的是 `--dsw-alias-text-base`、`--dsw-alias-bg-elevated` 这类**并不存在**的变量名，\n> 于是每个都静默退到硬编码的深色兜底值——插件会在 DSH 的浅色设置面板里画出一块深色卡片。\n> `npm run verify` 现在有一组 \"no invented token\" 检查盯着这件事。\n\n非机密配置存放在 `$DSH_HOME/starbridge-gateway.json`：\n\n```json\n{\n  \"baseUrl\": \"https://starbridge.example.com/starbridge\",\n  \"userId\": \"liheng\",\n  \"department\": \"engineering\","
+    },
+    {
+      "section": "配置",
+      "text": "所有部署参数都在 Config Schema 里，且都有可用默认值。改配置的两种方式：\n\n1. profile 自己的 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`（在 bundle 层之后应用，覆盖单行配置）；\n2. 环境变量注入密钥（推荐，密钥不落盘）：\n   `STARBRIDGE_GATEWAY_URL`、`STARBRIDGE_GATEWAY_API_KEY`、\n   `STARBRIDGE_OIDC_ISSUER_URL`、`STARBRIDGE_OIDC_CLIENT_ID`、\n   `STARBRIDGE_OIDC_CLIENT_SECRET`、`STARBRIDGE_USER_ID`、`STARBRIDGE_DEPARTMENT`。\n\n主要字段："
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认值 | 说明 |\n|---|---|---|\n| `gateway.gatewayUrl` | `''`（空） | 网关基址。**出厂为空是刻意的**：插件对所有人发布，不写死任何一家的地址；空地址不是加载错误，只是还没配置，工具会回 `[GATEWAY_NOT_CONFIGURED]`。被设置页填写的地址覆盖，也可用 `STARBRIDGE_GATEWAY_URL` 注入 |\n| `gateway.apiKey` | `''` | 机器凭据；优先用环境变量，也会被设置页填写的密钥覆盖 |\n| `gateway.timeoutMs` | `30000` | 单次请求超时 |\n| `gateway.maxRetries` | `2` | 仅对传输错误与 5xx 重试 |\n| `gateway.modelProvider` | `starbridge` | 模型路由开关管理的 provider 路由名（必须与组合声明一致） |\n| `oidc.issuerUrl` / `oidc.clientId` | `''` | 为空则不启用 SSO；SSO 仍然可用，与两种新登录方式并存 |\n| `identity.userId` / `department` / `scenario` | `''` / `''` / `chat` | 随每个请求上送的身份与场景；设置页填写的身份优先 |\n| `behavior.useKnowledgeBase` | `false` | 是否默认请求知识库增强 |\n| `behavior.forwardFeedback` | `true` | `false` 则反馈只留在本机 |\n| `storage.directory` | `''` | 加密会话保险库目录；空则用 DSH home |"
+    },
+    {
+      "section": "配置",
+      "text": "**OIDC 客户端**：网关侧需要注册一个 **Public client + Authorization Code + PKCE**，\n回调地址为 `http(s)://<dsh-host>/starbridge/api/login/complete`（可用\n`STARBRIDGE_REDIRECT_URI` 显式指定）。刷新令牌以 AES-256-GCM 加密存放于\n`<DSH home>/starbridge-session.enc`，密钥为同目录下 `0600` 的 `starbridge-session.key`；\nhost 重启后仍是登录态。"
+    },
+    {
+      "section": "工具",
+      "text": "| 工具 | 用途 |\n|---|---|\n| `starbridge_chat` | 发送对话，返回完整回复（内部走流式）。带 `scenario` / `use_knowledge_base` 参数 |\n| `starbridge_feedback` | 记录点赞 / 点踩 / 修正（含**期望答案** `expectation`）：本地必写，云端转发尽力而为 |\n| `starbridge_kb_query` | 查询公司知识库（网关支持时），返回带引用的片段 |\n| `starbridge_gateway` | 配置与查看接入：`status` 报告当前配置；`save` 保存地址与身份；`use_access_key` 保存用户粘贴的密钥；`login` 用平台账号登录；`route_models` 开关模型路由；`forget` 清除本机凭据 |"
+    },
+    {
+      "section": "工具",
+      "text": "**错误处理约定**：需要模型能绕开的失败（未登录、网关不可达、知识库未开）以\n`{ ok: false, error }` **返回**而不是抛出，因此不会打断整轮对话；错误文本自带\n`[CODE] 说明 + Hint`，模型可以直接转述给用户。"
+    },
+    {
+      "section": "模型面：让全部对话经过星桥中台",
+      "text": "上面那张表是**工具面**：只有模型主动调用 `starbridge_*` 工具时才经过中台。\n本组合包同时接入**模型面**——把 DSH 的模型调用本身接到中台的 OpenAI 兼容面，\n于是对话、子代理、摘要、标题生成**每一次模型调用**都先过中台。\n\n组合层（`cordis.patch.yml`）声明两件事：\n\n1. 给 `@deepseek-ai/dsh-llm-pi-ai` 声明一条手工网关路由 `starbridge`\n   （`api: openai-completions`）——注意**不写 `baseURL`**：地址是每个部署自己的事实；\n2. 该路由的 `apiKeyEnv: STARBRIDGE_GATEWAY_API_KEY`——设置页把密钥或平台令牌写在**同一个引用**下。"
+    },
+    {
+      "section": "模型面：让全部对话经过星桥中台",
+      "text": "运行时接管由插件完成（用户点开关即可）：把路由 `baseURL` 写进 `llm-pi-ai` 设置分节\n（该分节按请求读取，因此**无需重启**）、把凭据写进凭据引用、把默认模型切到目标路由。\n`model` 字段承载的是**场景**（general / code_review / doc_qa / summarize），不是具体上游模型：\n上游由中台按「场景 + 部门」的路由规则决定，调用方无权指定——否则就能绕过路由与配额。\n\n**模型路由默认是关的。** 装完插件、不点开关，你的默认模型仍然是你原来的提供方——\n一个公开发布的插件不该在装上的一瞬间接管所有人的模型调用。点开开关（或走完设置页的\n「连接」）之后才会切到 `starbridge / general`。\n\n要求「装上即走中台」的部署，在自己的 profile `cordis.patch.yml`\n（bundle 层之后应用）里补回这两段即可恢复出厂接管：\n\n```yaml\n- id: llm-pi-ai\n  config:\n    providers:\n      starbridge:"
+    },
+    {
+      "section": "身份：逐人归因",
+      "text": "用平台账号登录时，身份来自令牌自身（中台解析 claims 并重查用户），调用方无法伪造成别人——\n这是逐人配额与审计真正成立的方式，也不需要把 `x-user-id` 写进任何 profile 文件。\n若仍用访问密钥，可在设置页填身份标识，或在该 profile 自己的 `cordis.patch.yml`\n（在 bundle 层之后应用）里补 headers：\n\n```yaml\n- id: llm-pi-ai\n  config:\n    providers:\n      starbridge:\n\n或者由服务端配置兜底服务身份（环境变量 `STARBRIDGE_GATEWAY_DEFAULT_USER`）。"
+    },
+    {
+      "section": "⚠️ 默认模型的优先级",
+      "text": "`agent-default-model` 的**设置分节**是实时真源。桌面版首次运行会往 `settings.yaml`\n写入 `agent-default-model`，它会**覆盖**组合层里的值——这正是设置页的\n「模型路由」开关能生效的原因：它直接改这个设置分节，而不是要求用户手改文件。\n本插件出厂不写这个分节（见上），所以装完不会改变你当前的默认模型。\n\n路由一旦生效，中台不可达就等于没有模型可用——这是「所有对话经中台」的必然代价，\n也是强制走中台的部署想要的效果。设置页关掉开关即可退回 DSH 当前默认提供方。"
+    },
+    {
+      "section": "后端需要什么",
+      "text": "中台需要暴露 OpenAI 兼容面（`/starbridge/gw/v1/models` 与\n`/starbridge/gw/v1/chat/completions`），并接受 `Authorization: Bearer`\n（标准 OpenAI 客户端只发这一种，不认 `x-api-key`），以及提供账号登录端点\n`POST /starbridge/gw/login`（返回 `{code:0,data:{accessToken,expiresIn,username,…}}`）。\n契约见 `gin-vue-admin-licensed/aiDoc/frontend-backend/starbridge-openai-face.md`\n与 `starbridge-gateway-face.md`。"
+    },
+    {
+      "section": "HTTP 路由（浏览器面使用）",
+      "text": "| 方法 | 路径 | 说明 |\n|---|---|---|\n| GET | `/starbridge/api/status` | 生效配置 + 登录状态 + 模型路由状态 |\n| POST | `/starbridge/api/connectivity` | 连通性测试（可传候选 `gatewayUrl`） |\n| POST | `/starbridge/api/chat` | NDJSON 帧流：`delta` / `done` / `error` |\n| POST | `/starbridge/api/feedback` | 写入反馈 |\n| POST | `/starbridge/api/gateway/settings` | 保存地址与身份 |\n| POST | `/starbridge/api/gateway/access-key` | 用访问密钥接通（返回逐步清单） |\n| POST | `/starbridge/api/gateway/login` | 平台账号登录（返回逐步清单） |\n| POST | `/starbridge/api/gateway/model-route` | 开关模型路由 |\n| POST | `/starbridge/api/gateway/forget` | 清除本机保存的凭据 |\n| POST | `/starbridge/api/login` | 返回 OIDC 授权 URL |\n| GET/POST | `/starbridge/api/login/complete` | OIDC 回调 |\n| POST | `/starbridge/api/logout` | 退出 OIDC 登录 |"
+    },
+    {
+      "section": "验证",
+      "text": "```bash\nnpm run verify\n```\n\n离线（无网络、无凭据、无 DSH 进程）跑 228 项检查，覆盖：组合包结构与 patch 组合（用 DSH 真实的\n`applyEntryPatches` 算法）、Config 默认值、**未配置安装也能加载**（空地址不是加载错误）与非法配置的响亮拒绝、\n三条冒烟用例、网关协议细节\n（身份头 / trace / SSE 多种帧形 / 5xx 重试与 401 不重试）、全部 HTTP 路由\n（含接入配置、两种登录方式、模型路由开关、**重启后凭据回读**）、client bundle 的自注册外壳\n与 require 面、**设计令牌词汇表与状态样式表**（注入的样式表里插值必须已求值、不许再出现自造的\n`--dsw-*` 名字、hover / focus-visible / 发丝线状态必须在场）、Markdown 解析与代码高亮。\n\n验证会把 `DSH_HOME` 指向一个临时目录，因此**不会**读写你真实的 profile。\n\n三条冒烟用例："
+    },
+    {
+      "section": "验证",
+      "text": "- **A 正常对话** — `starbridge_chat` 流式返回并按序拼装，请求带 `x-user-id` / `x-department` /\n  `x-scenario` / `x-trace-id`；\n- **B 未登录报错** — 工具返回 `[AUTH_REQUIRED]` 与登录指引，不抛异常；反馈仍本地落库；\n- **C 反馈写入成功** — 本地 session 事件 + 云端转发 accepted，并发出 `starBridge/feedback` 事件。"
+    },
+    {
+      "section": "清理与生命周期",
+      "text": "工具的注册、HTTP 路由的注册、会话事件监听、服务与网关的拆除全部挂在插件 fiber 上：\n`ctx.tools.register` 与 `ctx.provide` 的返回值由 Cordis 托管，路由注册包在 `ctx.effect` 里，\n网关的在途请求由 `ctx.effect` 的清理函数统一 abort。因此 `dsh plugin remove` 或 profile\n重载后，不会残留路由、监听器或未结束的上游请求。"
+    },
+    {
+      "section": "安全",
+      "text": "- 不在浏览器持有 access token；不以明文写入任何凭据；\n- 访问密钥存进 DSH 凭据库（`$DSH_HOME/.credentials.yaml`），平台令牌 AES-256-GCM 加密落盘，\n  两者都不进 `starbridge-gateway.json`；\n- 设置页的密钥与密码输入是**只写**的：host 从不回传它们，页面也无从回显；\n- 平台账号登录失败时后端只回\"账号或密码不正确\"，不区分用户是否存在（避免账号枚举）；\n- 日志统一走脱敏 sink，`Bearer` / JWT / `*_token` / `api_key` 形状的文本一律替换；\n- 网关返回与用户输入都按不可信文本渲染，Markdown 渲染器**不解释原始 HTML**（无 `innerHTML`）；\n- 表单/流式的错误信封只暴露 code / message / hint，不回显上游响应体全文。"
+    }
+  ],
+  "skipped": []
+}

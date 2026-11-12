@@ -1,0 +1,297 @@
+{
+  "repo": "TianzeLuo/dsh-paper-reader",
+  "commit": "43a22c0556deb18cf7c14b933612624d02460747",
+  "extracted_at": "2026-11-11T15:18:29.596826+00:00",
+  "tree": {
+    "files": 36,
+    "bytes": 407273,
+    "lines_by_language": {
+      "JSON": 65,
+      "JavaScript": 6021,
+      "Markdown": 1817,
+      "Other": 92,
+      "YAML": 273
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/design.md",
+      "docs/development.md",
+      "docs/limitations.md",
+      "levels/brief.md",
+      "levels/deep.md",
+      "levels/standard.md",
+      "levels/verify.md",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/level-catalog.js",
+      "lib/level-store.js",
+      "lib/levels.js",
+      "lib/pdf.js",
+      "lib/preset-gate.js",
+      "lib/roles.js",
+      "lib/tools.js",
+      "package.json",
+      "pnpm-lock.yaml",
+      "presets/paper.patch.yml",
+      "skills/paper-qa/SKILL.md",
+      "skills/paper-report/SKILL.md",
+      "skills/paper-verify/SKILL.md",
+      "test/client.test.mjs",
+      "test/helpers/schema.mjs",
+      "test/helpers/synthetic-paper.mjs",
+      "test/levels.test.mjs",
+      "test/pdf.test.mjs",
+      "test/preset.test.mjs",
+      "test/provider.test.mjs",
+      "test/tools.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-paper-reader",
+    "version": "0.1.0",
+    "private": true,
+    "description": "DSH plugin: 论文解读模式 — 精读单篇论文生成解读报告，并基于同一份解析产物回答论文相关问题。以 agent preset 隔离，仅在选中该模式时生效。",
+    "type": "module",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/s11phere/dsh-paper-reader.git"
+    },
+    "homepage": "https://github.com/s11phere/dsh-paper-reader#readme",
+    "bugs": {
+      "url": "https://github.com/s11phere/dsh-paper-reader/issues"
+    },
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "engines": {
+      "node": ">=22.5"
+    },
+    "files": [
+      "lib",
+      "skills",
+      "levels",
+      "presets",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "scripts": {
+      "test": "node --test"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "paper",
+      "paper-reading",
+      "literature",
+      "agent-preset",
+      "reading-depth"
+    ],
+    "dependencies": {
+      "mupdf": "^1.28.1",
+      "yaml": "^2.8.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": [
+          "./cordis.patch.yml",
+          "./presets/paper.patch.yml"
+        ]
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-paper-reader bundle patch —— **控制面**（profile 根层）。\n#\n# 这一行只做两件事：\n#\n#   1. 让 `package.json` 的 `dsh.client` 声明生效。`dsh-client-modules` 组装\n#      boot graph 时只遍历 `ctx.loader.entries()`（根层 bundle 行），**preset 的\n#      子树不在其中**（`PresetTree` 会把自己从 owner entry 的 `subtree` 上摘掉），\n#      所以档位控件只有走到这里才会被送进页面。\n#   2. 注册 `/api/dsh-paper-reader/level` 端点，供控件读写当前会话的档位。\n#\n# 它**不注册任何模型可见的东西**：技能目录、五个工具与档位提示词段全部属于\n# «代理面»，挂在 `presets/paper.patch.yml` 的 `paper-reader-agent` 行上，\n# 由 DSH 的 scope 层天然隔离到 «论文解读» 模式。\n#\n# 两行都在本包自己的 patch 文件里声明，不要手写，也不要删掉其中任何一行：\n# 少了这一行没有 UI，少了 preset 那一行则论文模式没有技能和工具。\n#\n# `insert:` 行随包发布，`dsh plugin --profile web add <本包>` 会自动把它追加进该\n# profile 的 `dsh.profile.bundles`；**不要**再手写同 id 的 `- insert:`（重复会报\n# duplicate loader entry id）。装完重启 `dsh web`。\n\n- insert:\n    - id: paper-reader\n      name: 'dsh-paper-reader'\n      config:\n        # 必填。两个挂载点靠它区分：'control' = 这里，'agent' = preset 内。\n        role: control\n      # 缓存根默认 $DSH_HOME/paper-reader/（档位存储 levels.json 也在那里）。\n      # 要换位置就在下面补 cacheRoot；改完要重启 dsh web。\n      #   cacheRoot: /path/to/paper-cache\n"
+    },
+    {
+      "path": "presets/paper.patch.yml",
+      "text": "# dsh-paper-reader: 「论文解读」agent preset。\n#\n# 这个 preset 负责**模式的身份**（persona + 这份 standing composition），并且是\n# 本插件**模型可见面**的挂载点：`paper-reader-agent` 那一行注册技能目录、五个\n# 工具与档位提示词段。挂在这里的隔离是 DSH 的 scope 层天然给的——agent 的 scope\n# key 以本 preset 的 standing key 为父，别的模式的 agent 不在那条 scope 链上，\n# 看不到其中任何一件。所以本文件里**没有**任何模式判断代码。\n#\n# 同一个包在 profile 根层还有一行（`cordis.patch.yml`，`role: control`），只干\n# 两件非模型可见的事：让浏览器半部的档位控件被 `dsh-client-modules` 组装进页面\n# （它只遍历根层 bundle 行，preset 子树不在其中），以及注册档位端点。\n# 两行都在本包自己的 patch 里声明。完整取舍见\n# `docs/design.md#档位控件为什么挂在-profile-根层`。\n#\n# 工具集基线逐条对齐官方 `preset-standard`（order 1），只做一处改动：\n# `persona.prefix` 换成本模式的风格与严谨性规范。这样在本模式下工作与用户已经\n# 习惯的 standard 模式没有行为差异。\n#\n# 注意：persona 的 prefix/suffix 是模板，`{{…}}` 会严格按已注册的提示词变量\n# 解析，未注册的变量会导致提示词组装失败。因此 prefix 正文里不得出现 `{{`。\n\n- insert:\n    - id: preset-paper\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: paper\n        name: 论文解读\n        description: 精读单篇论文并生成解读报告；基于同一份解析产物回答论文相关问题\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              suffix: Your working directory is {{cwd}}.\n              prefix: |\n                你是论文解读助手，负责把一篇具体的论文讲清楚，并回答关于这篇论文的提问。\n\n                ## 术语与缩写\n                - 关键术语首次出现时写「中文名（English term）」，紧跟一句白话解释，之后才可单独使用。\n                - 缩写在正文首次出现时必须展开；同一概念全文只用一个名字，不要混用中文译名、英文原词和缩写三种叫法。\n                - **每个评价指标都要解释它在算什么**：FID、PSNR、LPIPS、IS、KID、FVD 这类指标首现时，用一两句说清它比较什么、大致怎么算、往哪个方向变算好、有无下界。只给名字加数字（「FID 降低 19%」）不算解释。同一指标的不同口径（gFID / rFID / iFID）要分开说，不能当成一个东西混用。\n                - 不要用陌生术语解释陌生术语，也不要循环定义。\n                - 符号（变量、算子、指标）首次出现要说明含义与取值范围。\n\n                ## 公式\n                - 一律写成 LaTeX：行内 `$...$`；独立成行时 `$$` 各自独占一行，块前后留空行。不要用代码块贴公式。\n                - 公式内用 LaTeX 命令而非 Unicode（`\\alpha` 不写 `α`，`\\times` 不写 `×`）；正文里的变量名也放进 `$...$`。\n                - `paper_read` 给的是纯文本，上下标会丢（`d_model^{-0.5}` 抽成 `d_model−0.5`，像减法）。引用前先 `paper_figure` + `read_image` 核对原页；看不清就写清语义并注明未能确认，**不要猜着补 `^{}`**。\n\n                ## 句子与语气\n                - 一句一个意思；把施动者放在动作前面。\n                - 不用「值得注意的是」「综上所述」「在当今……背景下」这类空转的句子。\n                - 不堆三段式排比，不连用破折号，不加情绪化的收尾。\n                - 术语只在内容需要时出现，不为了显得专业而堆砌。\n\n                ## 严谨性\n                - 始终区分四层并显式标注：作者的主张、论文中的直接证据、你的推断、外部背景知识；凡属推断，写明这是推断。\n                - 论文没有说的不要补；数字、指标、超参数一律照抄，不改写、不四舍五入。\n                - 证据不足时直接说「论文未验证这一点」，不要含糊带过。\n                - 涉及论文具体内容时标出锚点：页用 [p.7]，章节用 [p.7 §3.2]。\n\n                ## 工具\n                - 五个工具一条链：`paper_import` 导入（先看它返回的论文地图，再决定读哪几页）→ `paper_search` 定位 → `paper_read` 按页读 → `paper_figures` 自动裁图 / `paper_figure` 手动裁图，后两者都要用 `read_image` 打开看。参数与返回值以各自的 description 为准。\n                - 不要自己用 `bash` + Python 抽 PDF 文本：那样得到的页码锚点不稳定，报告与后续问答会对不上同一份解析结果。导入失败时先说明原因，再谈退路。\n\n                ## 图表\n                - 不能读图时只能转述图注原文，并明确标注「未查看图像，仅转述图注」。\n                - 能读图时，先说明看这张图要回答什么，再写观察，最后写由观察得到的推断及它的边界。\n          # 本插件的**代理面**（`role: agent`）：技能目录、五个工具、档位提示词段。\n          # 挂在这里，隔离由 scope 层天然保证——别的模式的 agent 不在本 preset 的\n          # scope 链上，看不到其中任何一件，不需要任何运行期判断。\n          #\n          - id: paper-reader-agent\n            name: 'dsh-paper-reader'\n            config:\n              # 必填，不要删：它区分本包的两个挂载点。\n              role: agent\n              # 缓存根默认 $DSH_HOME/paper-reader/（档位存储 levels.json 也在那里）。\n              # 要换位置就在这一层加一行；改完要重启 dsh web（preset 属启动期组装）。\n              # cacheRoot: /path/to/paper-cache\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n                  backgroundMode: continuable\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml",
+    "presets/paper.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/level-store.js:39"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/pdf.js:51"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/pdf.test.mjs:457"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/pdf.test.mjs:459"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/pdf.test.mjs:462"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/pdf.test.mjs:463"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/s11phere/dsh-paper-reader.git",
+      "where": "package.json:10"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/s11phere/dsh-paper-reader#readme",
+      "where": "package.json:12"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/s11phere/dsh-paper-reader/issues",
+      "where": "package.json:14"
+    },
+    {
+      "host": "doi.org",
+      "url": "https://doi.org/10.48550/arX",
+      "where": "test/pdf.test.mjs:658"
+    },
+    {
+      "host": "x${url",
+      "url": "http://x${url",
+      "where": "test/provider.test.mjs:318"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "mupdf": "^1.28.1",
+      "yaml": "^2.8.1"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 8,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-02T03:30:34Z",
+    "created_at": "2026-09-29T15:49:58Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/level-catalog.js",
+    "lib/level-store.js",
+    "lib/levels.js",
+    "lib/pdf.js",
+    "lib/preset-gate.js",
+    "lib/roles.js",
+    "lib/tools.js",
+    "package.json",
+    "presets/paper.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "dsh-paper-reader",
+      "text": "DSH 插件：**论文解读模式**。精读一篇具体论文并生成解读报告，同时基于同一份解析产物回答关于这篇论文的问题。"
+    },
+    {
+      "section": "这个插件解决什么",
+      "text": "三件事，都放在一个只在需要时出现的模式里：\n\n1. **解读报告** —— 给定一篇论文，产出结构固定、证据可追溯的中文报告。解读深度分 **速览 / 解读 / 深读**\n   三档，由**输入框旁的档位控件**选定（不是让模型自己猜）；图表自动裁好，嵌在第一次提到它的位置；\n   报告头写清原文路径与 `docId`，读者把报告交给自己的 agent 提问时能直接定位同一份解析产物。\n2. **论文问答** —— 针对同一篇论文提问，答案带页/章节锚点，并分清作者主张与推断；默认一次检索\n   就带约两段上下文，多数问题不必再读整页。\n3. **输出风格** —— 术语首现给中英对照加白话解释、缩写首现展开、同一概念只用一个名字、指标首现\n   说清「它在算什么」、公式写成 LaTeX、不写空转句。"
+    },
+    {
+      "section": "档位控件",
+      "text": "进入「论文解读」模式的会话后，输入框工具行左侧会出现一个三档段控件：\n\n| 档位 | 篇幅（参考，不设上限） | 读到什么程度 | 交付文件名 |\n|---|---|---|---|\n| 速览 | 通常 800–1500 字 | 主智能体自己顺序读 3–5 页（摘要、引言、方法开头、主结果），不起并行编排 | `<简称>-速览.md` |\n| 解读（默认） | 通常 3000–6000 字 | 并行分节读正文，附录只读与主张相关处 | `<简称>-解读报告.md` |\n| 深读 | 参考 8000 字以上 | 并行读全文 + 附录的超参 / 梯度 / 算力 / 数据配比 | `<简称>-深读报告.md` |\n\n篇幅只用来校准基调，不是硬指标：该讲清楚的（指标在算什么、公式的符号、证据边界）不因为怕超字数而省，\n内容紧凑时也不硬凑；写长了先检查是不是把更深档位的内容写了进来。"
+    },
+    {
+      "section": "档位控件",
+      "text": "档位是**每个会话独立**的（同一工作目录里可以一个会话写速览、另一个写深读）。模型只看到自己这一档的\n流程：技能正文按档位装配，系统提示里也只有当前档位那一段——没有另外两档的冗余。控件只在论文解读\n模式出现，其他模式的会话里既不显示控件、也看不到这些技能。\n\n档位不是模型判断的：模型只被要求照当前档写。用户的措辞看起来像另一档时，模型按当前档交付并在导读\n里说明可以换档，不会自行改档。"
+    },
+    {
+      "section": "为什么是 agent preset，而不是全局 skill",
+      "text": "DSH 的 skill 目录只在上下文里放「名字 + 描述」，正文按需加载——但目录行、persona、工具仍然是每个\nsession 都要背的成本。本插件把这部分整个放进一个 agent preset：在 Web 的新任务模式选择器里选\n「论文解读」才生效，其他模式（standard / ptc / …）的会话里看不到这些 skill、persona 和工具。\n\n这不是约定，是 DSH 的原生隔离：`ctx.skills.registerProvider` 的注册落到调用上下文的 scope 层。\n取舍与实测细节见 [设计与取舍](docs/design.md)。"
+    },
+    {
+      "section": "为什么是 agent preset，而不是全局 skill",
+      "text": "> 一处例外，值得明说：**档位控件**必须由 profile 根层的 bundle 提供——DSH 组装浏览器插件图时只扫描\n> 根层 bundle 行，preset 的子行拿不到 UI（代码层面无解）。所以本包被**挂两次**：根层那一行\n> （`role: control`）只负责让控件进页面并注册档位端点，preset 里那一行（`role: agent`）注册技能、\n> 五个工具与档位提示词段。模型可见面仍然全部落在 preset 的 scope 上，隔离是 DSH 原生的——包括\n> 工具在内，别的模式一件都看不到。两行都由本包自己的 patch 提供，不需要手工改配置；取舍与实测\n> 见 [设计与取舍](docs/design.md#档位控件为什么挂在profile-根层)。"
+    },
+    {
+      "section": "安装",
+      "text": "本包**自带运行时依赖**（`mupdf`、`yaml`），且 `node_modules/` 不入库，所以在装进 profile 之前必须先在\n本包目录里装一次依赖：\n\n```sh\ncd <本包目录>\npnpm install\n\ndsh plugin --profile web add <本包目录>\n\n装完重启 `dsh web`：preset 与根层 bundle 都属启动期组装。本包同时出现在两处——\n`cordis.patch.yml` 插根层 bundle 行（`role: control`，让控件进页面），`presets/paper.patch.yml`\n插 preset 行（`role: agent`，提供模式身份与模型可见面）。`dsh plugin add` 会自动带上这两层，\n不需要手工改 profile 配置，也不要删掉其中任何一行：少了根层那行没有控件，少了 preset 那行则论文\n模式没有技能和工具。"
+    },
+    {
+      "section": "安装",
+      "text": "> 别用 scp 风格的 URL 让 pnpm 去装（`git@github.com:...`）——pnpm 会把它误解析成「包名 `git` +\n> 版本」，插件不会生效。本插件目前只验证过本地路径安装；远端安装的写法与注意事项见\n> [开发文档](docs/development.md#安装本地路径)。\n\nWindows 与 Linux 都能用：preset 里 bash / pwsh 两行按平台互相 `disabled`，与官方 `preset-standard`\n的写法一致。"
+    },
+    {
+      "section": "五个工具",
+      "text": "| 工具 | 做什么 | 关键参数 |\n|---|---|---|\n| `paper_import` | 把 PDF 导入本地缓存，返回 `docId` 与**论文地图**（章节树 + 图表清单） | `source`（绝对路径） |\n| `paper_search` | 检索词句，返回命中片段与 `[p.7 §3.2]` 锚点 | `docId` `query` `limit`(默认 6，≤30) `context`(默认 `window`) |\n| `paper_read` | 按页读正文，超出字符预算就如实报告截断 | `docId` `pages`(如 `3,7,9-11`) `maxChars`(默认 24000) |\n| `paper_figure` | 渲染整页，或按 `bbox` 只裁一块区域 | `docId` `pages`(单次≤8 页) `dpi`(默认 120) `bbox` `outputDir` |\n| `paper_figures` | 按图注自动裁出全部图与表，一张一个 PNG | `docId` `pages` `dpi`(默认 200) `max`(默认 24) `outputDir` |"
+    },
+    {
+      "section": "五个工具",
+      "text": "`paper_search` 的 `context` 有三档：`snippet`（命中处前后各 70 字，最省）、`block`（命中所在块）、\n`window`（默认，命中块连同前后各最多两块，约 700 字符）。默认档就是照着「一次检索够回答、\n不必再读整页」选的。\n\n设计上值得说明的四点："
+    },
+    {
+      "section": "五个工具",
+      "text": "- **一次导入，多处复用。** 报告与问答共用同一份解析产物，所以锚点在同一篇论文里始终一致。\n  `docId` 是 PDF 字节的 sha256 前 12 位，同一份文件换路径导入仍然命中同一份缓存。\n- **检索优先于通读。** `paper_search` 先按短语匹配，一个都不中才退化成「所有词都出现」的宽松匹配，\n  并在结果里标明是哪种模式——避免模型把宽松命中当成精确依据。\n- **锚点是算出来的。** 每个文本块带 bbox 与「是否标题」判定，命中项因此能给出 `[p.7 §3.2]` 这种\n  可核查的位置。判定同时看文本形态与排版特征（加粗，或字号大于**全篇**正文基准字号），宁可漏判\n  让锚点变粗，也不误判让锚点指错章节。算法与失败模式见\n  [设计与取舍](docs/design.md#锚点位置是算出来的不是猜的)。\n- **图是按图注找出来的。** `paper_figures` 走一遍页面的 display list 收集矢量图元与位图的 bbox，\n  按「图注所在栏 + 正确一侧」认领，再用墨迹分布收紧。因此裁出来的是图本身，不是整页截图；\n  并排的两张图各自成图。**裁切框不与图注文字相交**：渲染前按图注块的 bbox 再削一遍，图注原文\n  单独返回，报告把它写在图片下方。启发式会失败，失败项如实列出并可用 `bbox` 手动裁，取舍见\n  [设计与取舍](docs/design.md#图形区域是按图注找出来的)。"
+    },
+    {
+      "section": "数据放在哪",
+      "text": "缓存默认落在 `$DSH_HOME/paper-reader/`：\n\n```\npaper-reader/\n├── levels.json        档位：{ \"version\": 1, \"levels\": { \"<sessionId>\": \"brief|standard|deep\" } }\n└── <docId>/\n    ├── meta.json        页数、源路径、导入时间、PDF 内嵌标题/作者（常常没有）\n\n`meta.json` **最后写**，所以它存在就意味着这次导入完整；中断的导入不会留下「看起来能用」的半份\n缓存。缓存根可以在**代理面**那一行（`presets/paper.patch.yml` 的 `paper-reader-agent`）加\n`config.cacheRoot` 覆盖；档位文件也在同一个根下，控制面那一行必须给同一个值（控制面默认值与\n代理面一致，所以只在两边都改时才需要动）："
+    },
+    {
+      "section": "数据放在哪",
+      "text": "```yaml\n- id: paper-reader-agent\n  name: 'dsh-paper-reader'\n  config:\n    role: agent\n\n它里面的 `format` 是缓存格式版本：抽取逻辑改进后旧缓存里的页码与块结构就不再可信，版本对不上会\n**重新解析并覆盖**。因此**改了抽取逻辑必须抬 `CACHE_FORMAT`**，见\n[维护纪律](docs/design.md#维护纪律改了抽取逻辑就必须抬-cache_format)。\n\n档位写的是**文件**而不是会话事件：DSH 的持久化读到未知事件类型会拒绝整条会话日志，而仓库外插件\n无法给事件打 `ignorable` 标记。取舍与替代做法见\n[设计与取舍](docs/design.md#档位是用户选的不是模型猜的)。"
+    },
+    {
+      "section": "技能",
+      "text": "`skills/<name>/SKILL.md` 三个技能包，随模式一起生效：\n\n| 技能 | 什么时候用 | 按档位装配 |\n|---|---|---|\n| `paper-report` | 要求解读、精读、写阅读报告 | 是（工作流与各节重心来自 `levels/<档位>.md`） |\n| `paper-qa` | 针对某一篇论文提问 | 否（问答与档位无关） |\n| `paper-verify` | 成稿自审（报告或较长答案交付前） | 是（第 10 项按档位核对，来自 `levels/verify.md`） |\n\n技能名**刻意保持稳定**（不按档位拆成三个技能）：`/paper-report` 这类手势与「用户自己的同名技能覆盖\n本插件版本」都依赖名字稳定，而技能目录的每一行都是每个会话的固定成本。代价是目录行看不出档位差异，\n所以系统提示里的档位段会明说「以 `paper-report` 正文为准」。\n\n技能名的来源、frontmatter 约定与「改正文不需要重载」的机制见\n[开发文档](docs/development.md#技能包格式)。"
+    },
+    {
+      "section": "验证",
+      "text": "```sh\nnode --test          # 132 条：provider / preset / client 契约 + levels 装配 + pdf 行为 + tools 行为\n```\n\n不改任何 profile、验证 bundle 与 preset 组装的方法见\n[开发文档](docs/development.md#验证-bundle-与-preset-组装)。"
+    },
+    {
+      "section": "已知限制",
+      "text": "首次导入会把每页解析两遍（实测 17 页约 127ms、31 页约 247ms，之后命中缓存）；图形区域检测是启发式\n的，会漏也会多框（唯一硬保证是裁切框不含图注文字），自动裁不出来的项会如实列出；公式的上下标在\n纯文本抽取里会丢，本包不做公式 OCR，改为要求写成 LaTeX 并回原页核对；章节锚点的粒度取决于论文模板。\n逐条说明与实测记录见 [已知限制](docs/limitations.md)。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT，见 [LICENSE](LICENSE)。仓库：<https://github.com/s11phere/dsh-paper-reader>（私有）。"
+    }
+  ],
+  "skipped": []
+}

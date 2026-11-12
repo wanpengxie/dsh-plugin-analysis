@@ -1,0 +1,162 @@
+{
+  "repo": "YuGaN525/DSH-work-on-time",
+  "commit": "f7f51e0bf3aa8266124dadffd3ec66f42c85ac63",
+  "extracted_at": "2026-11-11T16:30:34.811210+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 85840,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 1799,
+      "Markdown": 145,
+      "Other": 73,
+      "YAML": 27
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/mock-test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-work-on-time",
+    "version": "1.0.0",
+    "private": true,
+    "description": "DSH work on time：北京时间工作日 9–12 / 14–18 只收需求、只出任务清单；其余时间（含周末与法定节假日）自动唤醒会话执行先前排队的任务。",
+    "type": "module",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node test/mock-test.mjs"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "scheduler",
+      "off-peak"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: work-on-time\n      name: dsh-work-on-time\n      config:\n        timeZone: Asia/Shanghai\n        peakWindows:\n          - days: [1, 2, 3, 4, 5]\n            start: '09:00'\n            end: '12:00'\n          - days: [1, 2, 3, 4, 5]\n            start: '14:00'\n            end: '18:00'\n        extraHolidays: []\n        excludeHolidays: []\n        extraWorkdays: []\n        tickSeconds: 45\n        peakGuard: true\n        blockedToolsDuringPeak:\n          - pwsh\n          - write\n          - edit\n          - subagent\n          - subagent_fork\n          - workflow\n        dispatchOnlyWhenIdle: true\n        maxDispatchesPerTick: 3\n        autoCompleteIdleSeconds: 90\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:339"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/mock-test.mjs:18"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-23T15:52:28Z",
+    "created_at": "2026-10-23T15:52:18Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "DSH work on time（dsh-work-on-time）",
+      "text": "一个给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）用的宿主插件：\n**峰时只收需求、只排任务；谷时自动把排好的任务跑起来。**\n\n灵感来自 DeepSeek 的错峰优惠：把“写代码”这类重活挪到便宜的时段，而把“想清楚要做什么”留在工作时间。"
+    },
+    {
+      "section": "峰时 / 谷时怎么算",
+      "text": "默认按北京时间（`Asia/Shanghai`）：\n\n| 时段 | 判定 |\n| --- | --- |\n| 周一至周五 09:00–12:00 | 峰时 |\n| 周一至周五 14:00–18:00 | 峰时 |\n| 周末、法定节假日全天 | 谷时 |\n| 工作日其余时间 | 谷时 |\n\n- 区间是**左闭右开**：09:00 整算峰时，12:00 整算谷时。\n- 支持跨零点窗口（如 `22:00–02:00`）与全天窗口（`start === end`）。\n- 调休上班日、额外放假/剔除日期都可以自己配。"
+    },
+    {
+      "section": "它做了什么",
+      "text": "1. **峰时**：插件向模型注入一段系统提示，并拦截执行类工具（`pwsh`/`write`/`edit`/`subagent`/`workflow` 等，可配置）。\n   模型只能把需求拆成任务清单，调用 `pv_enqueue` 入队，然后告诉你“已入队，谷时执行”。\n2. **谷时**：插件心跳（默认 45 秒）发现当前是谷时，就把所有 `queued` 批次按会话分组，\n   向对应会话投递一条 `【谷时任务启动 · dsh-work-on-time】` 消息（内含批次 id、需求、编号任务清单、执行要求），\n   模型随后按清单逐条执行；每批结束调用 `pv_complete` 记录结果。\n3. 会话当时没开也没关系：批次一直留在队列里，等会话恢复后的第一个谷时再投递。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ngit clone https://github.com/YuGaN525/DSH-work-on-time.git\n```\n\n然后在 DSH 里安装（插件目录的绝对路径）：\n\n```text\nplugin_manager → action: install_bundle\n                 target: <绝对路径>/DSH-work-on-time\n```\n\n安装后插件会自动启用，`pv_*` 工具立即可用。改完 `index.js` 后需要重载：\n\n```text\nplugin_manager → action: set_plugin\n                 target: include:work-on-time\n                 enabled: false      # 先关\n                 enabled: true       # 再开\n\n> `target` 必须是精确的 entryId（`include:work-on-time`），传包名会报 `unknown-plugin`。"
+    },
+    {
+      "section": "工具",
+      "text": "| 工具 | 作用 |\n| --- | --- |\n| `pv_enqueue` | 入队一个需求 + 任务清单。峰时唯一应该调用的写操作；不传 `tasks` 时按换行/分号自动拆分（最多 12 条）。 |\n| `pv_status` | 查看当前峰/谷、距下次切换多久、队列与批次详情（可传 `batchId`）。 |\n| `pv_complete` | 标记批次完成：`outcome` 为 `done`/`partial`/`failed`，附 `summary`。 |\n| `pv_cancel` | 取消一个还没开的批次。 |\n| `pv_run` | 立刻强制开跑（跳过峰谷判断）。峰时用它会在该批次运行期间临时放行执行类工具。 |\n| `pv_config` | 改配置：峰时窗口、节假日、时区、心跳、守卫开关等。 |"
+    },
+    {
+      "section": "配置",
+      "text": "配置优先级：内置默认值 → `cordis.patch.yml` 的 `config:` → `$DSH_HOME/work-on-time.config.json`（`pv_config` 写入这里，**最高**）。\n所以用 `pv_config` 改过之后，再改 `cordis.patch.yml` 不会生效；要恢复 patch 默认值，删掉 `$DSH_HOME/work-on-time.config.json` 再重载。\n\n常用项（都可在 `cordis.patch.yml` 或 `pv_config` 里改）：\n\n```yaml\ntimeZone: Asia/Shanghai\npeakWindows:\n  - { days: [1, 2, 3, 4, 5], start: '09:00', end: '12:00' }\n  - { days: [1, 2, 3, 4, 5], start: '14:00', end: '18:00' }\n\n`days` 用 ISO 数字：1=周一 … 7=周日。"
+    },
+    {
+      "section": "法定节假日表",
+      "text": "内置表目前只覆盖 **2026 年**（国务院办公厅 2026 年部分节假日安排）。\n节假日按“休息日（不上班）”处理：落在节假日的工作日一律算谷时。\n\n- 以后的年份公布后，改 `index.js` 里的 `BUILTIN_HOLIDAYS`，或用 `pv_config({ extraHolidays: [...] })` 追加。\n- 想临时把某个节假日变回工作日，用 `excludeHolidays`。\n- 当前年份不在覆盖范围时，`pv_status` 和系统提示都会给出提示，避免“节假日没生效”的静默错误。"
+    },
+    {
+      "section": "数据文件",
+      "text": "| 文件 | 内容 |\n| --- | --- |\n| `$DSH_HOME/work-on-time.state.json` | 队列与批次（原子写）。插件重载时把上次遗留的 `running`/`interrupted` 批次重新排队成 `queued`，并在下次唤醒文案里提示“先检查已完成部分，避免重复劳动”。 |\n| `$DSH_HOME/work-on-time.config.json` | `pv_config` 的持久化覆盖。 |\n\n从旧名（`dsh-peak-valley-queue`）升级时，首次启动会自动把 `peak-valley-queue.*.json` 复制成 `work-on-time.*.json`，队列不丢。"
+    },
+    {
+      "section": "测试",
+      "text": "仓库自带离线自测（假的 Cordis 上下文 + 临时 `DSH_HOME`，不碰真实数据）：\n\n```bash\nnode test/mock-test.mjs"
+    },
+    {
+      "section": "PASS: 97 passed, 0 failed",
+      "text": "```\n\n覆盖：日期/星期/节假日判定、时段边界（08:59/09:00/11:59/12:00/13:59/14:00/17:59/18:00）、\n周末与节假日、`excludeHolidays`/`extraWorkdays`、跨零点窗口、全天窗口、下一切换点，\n以及入队、峰时拦截、`pv_run` 强制开跑、`pv_complete`、`pv_cancel`。"
+    },
+    {
+      "section": "项目结构",
+      "text": "```text\nindex.js            # 零依赖宿主插件（只 import node: 内置模块）\ncordis.patch.yml    # bundle 插入声明 + 默认配置\nlocale/{zh,en}.json # 插件管理器里的标题/描述\nicon.svg            # 图标\n\n为什么零依赖：本地 `link:` 方式安装的插件，运行时解析不到 `@deepseek-ai/*` 这类 bare specifier，\n所以工具用普通对象注册（不用 `defineTool`），配置也不导出 schemastery schema。"
+    },
+    {
+      "section": "限制",
+      "text": "- 需要 DSH 进程在运行：插件是宿主插件，应用关掉就不会有任何调度。\n- 谷时唤醒的是**原会话**：会话得还能恢复（模型、工作目录都在）。会话被删掉的话，批次会一直排队，直到手动 `pv_cancel` 或改配置。\n- 强杀进程时，已在跑的批次下次启动会被重新排队，可能重复执行 — 唤醒文案会提醒模型先检查已完成的步骤。\n- 峰时拦截是“工具级”的：如果用 `pv_config({ peakGuard: false })` 关掉，模型在峰时就能直接干活。"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](./LICENSE) © 2026 YuGaN525"
+    }
+  ],
+  "skipped": []
+}

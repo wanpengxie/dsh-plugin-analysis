@@ -1,0 +1,144 @@
+{
+  "repo": "Robin1987China/dsh-connection-rpc-fix",
+  "commit": "97c70cd8ca0f6423c93fa5c531c25f2a13745388",
+  "extracted_at": "2026-11-11T14:17:54.319009+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 11734,
+    "lines_by_language": {
+      "JSON": 32,
+      "JavaScript": 5,
+      "Markdown": 222,
+      "Other": 23,
+      "YAML": 23
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-connection-rpc-fix",
+    "version": "0.1.0",
+    "description": "Community bundle that restores the plugin-facing connection.rpc.handle() API in the dsh Web composition.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "license": "MIT",
+    "author": "Robin1987China",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "rpc"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Community fix: the plugin-facing connection.rpc.handle() API never registers.\n#\n# `dsh-client-connection` provides `connection.rpc.handle(channel, handler)` for\n# third-party plugins, but its service holds the plugin's own context\n# (`inject: [webRuntime]`) and `register()` reads `owner.webServer` on that\n# context:\n#\n#   return owner.effect(() => owner.webServer.register(route), ...);\n#\n# The access throws `cannot get property \"webServer\" without inject`, the throw\n# is swallowed inside `owner.effect`, and the channel is never mounted. Browser\n# callers then fall through to the static handler and get HTTP 405.\n#\n# The official `/api` route is unaffected because it uses a context obtained\n# from `ctx.inject([\"webServer\"], ...)`. This row gives the service's own\n# context the same service, so `register()` finds what it reads.\n#\n# Verified: with this patch a probe plugin's rpc.handle() returns instead of\n# throwing, and its channel answers 401 (registered, behind the connection\n# fence) where it previously answered 405.\n\n- id: connection\n  inject: [webRuntime, webServer]\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-14T09:23:33Z",
+    "created_at": "2026-09-14T09:23:27Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-connection-rpc-fix",
+      "text": "English | [中文](README.zh.md)\n\nA community **bundle** that restores the plugin-facing `connection.rpc.handle()` API in the DeepSeek Harness Web composition.\n\nMaintained by [@Robin1987China](https://github.com/Robin1987China)"
+    },
+    {
+      "section": "The symptom",
+      "text": "A third-party plugin registers a private Web RPC channel, and every browser-side call to it fails:\n\n```text\ncannot get property \"webServer\" without inject\n```\n\nNothing is logged where the plugin can see it, and the browser request falls through to the static handler and answers **HTTP 405**.\n\n**English:** connection.rpc.handle not working · plugin RPC channel returns 405 · cannot get property webServer without inject"
+    },
+    {
+      "section": "The symptom",
+      "text": "**中文：** 插件 RPC 通道注册不上 · 浏览器端一律 405 · cannot get property webServer without inject"
+    },
+    {
+      "section": "Who this affects",
+      "text": "Anyone shipping a plugin that needs a browser-reachable channel through `connection.rpc.handle(channel, handler)`. The official `/api` transport is **not** affected — only the plugin-facing API is."
+    },
+    {
+      "section": "Root cause",
+      "text": "In `@deepseek-ai/dsh-client-connection`:\n\n```js\nconst inject = ['credentials'];                       // the package's own injections\n\nasync function apply(ctx, config) {\n  const connection = new HostConnectionService(ctx, ...);   // the service holds this ctx\n\nThe plugin row declares `inject: [webRuntime]`, so the service's context never carries `webServer`. The property access throws inside `owner.effect`, the throw is swallowed, and the channel is never mounted."
+    },
+    {
+      "section": "Root cause",
+      "text": "The package's own doc comment says it mounts the browser transport “When `webServer` is present” — the plugin-facing API assumes it unconditionally."
+    },
+    {
+      "section": "The fix",
+      "text": "This bundle patches one row, giving the service's context the service it reads:\n\n```yaml\n- id: connection\n  inject: [webRuntime, webServer]\n```"
+    },
+    {
+      "section": "Install",
+      "text": "As a bundle — the official distribution form:\n\n```sh\ncd ~/.dsh/profiles/web\nnpm install dsh-connection-rpc-fix\n```\n\nthen add it to that profile's `package.json`:\n\n```json\n{\"dsh\": {\"profile\": {\"bundles\": [\"@deepseek-ai/dsh-base\", \"@deepseek-ai/dsh-web-app\", \"dsh-connection-rpc-fix\"]}}}\n```\n\nOr, without installing anything, patch it yourself in `~/.dsh/profiles/web/cordis.patch.yml`:\n\n```yaml\n- id: connection\n  inject: [webRuntime, webServer]\n```"
+    },
+    {
+      "section": "Verification",
+      "text": "A probe plugin calls `ctx.connection.rpc.handle('/lab-probe', handler)` at startup, and the channel is then probed over HTTP. A registered channel sits behind the connection fence and answers **401** to an unauthenticated request; an unregistered one falls through and answers **405**.\n\n| | plugin log | `POST /lab-probe` |\n|---|---|---|\n| before | `THREW: cannot get property \"webServer\" without inject` | **405** |\n| after | `returned without throwing (disposer: function)` | **401** |"
+    },
+    {
+      "section": "Verification",
+      "text": "Both runs used an isolated `DSH_HOME` on a separate port; the `POST /api` control answered 401 in both.\n\nThe patch was also confirmed to work when delivered as a **bundle** (listed in `dsh.profile.bundles`) rather than as an inline patch layer, which is the form this package ships."
+    },
+    {
+      "section": "Scope and limits",
+      "text": "- It patches a **composition row**, not the package. The underlying access is still unguarded, so read the upstream reports below before assuming a future release is fixed.\n- It targets the **Web** composition. A deployment that mounts `connection` without a web server was already broken for this API and gains nothing here.\n- It does not make `rpc.handle()` tolerate a missing web server; it makes the web server present."
+    },
+    {
+      "section": "Upstream reports",
+      "text": "- [#6105](https://github.com/deepseek-ai/deepseek-harness/discussions/6105) — connection.rpc.handle() cannot register plugin RPC channels (browser gets HTTP 405)\n- [#6179](https://github.com/deepseek-ai/deepseek-harness/discussions/6179) — always throws (cannot get property webServer without inject)\n- [#6289](https://github.com/deepseek-ai/deepseek-harness/discussions/6289) — cannot mount third-party Web RPC channels\n- [#6081](https://github.com/deepseek-ai/deepseek-harness/discussions/6081) — the Web bundle should declare a modules to webServer activation dependency"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

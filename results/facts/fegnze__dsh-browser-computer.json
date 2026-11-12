@@ -1,0 +1,340 @@
+{
+  "repo": "fegnze/dsh-browser-computer",
+  "commit": "9472f36df6a16f3bc88cf48415f1b5153a753850",
+  "extracted_at": "2026-11-11T20:03:36.032331+00:00",
+  "tree": {
+    "files": 30,
+    "bytes": 411099,
+    "lines_by_language": {
+      "JSON": 77,
+      "JavaScript": 2899,
+      "Markdown": 381,
+      "Other": 24,
+      "YAML": 165
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
+      ".github/workflows/release.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "assets/icon-transparent.png",
+      "cordis.patch.yml",
+      "docs/zh.md",
+      "icon.png",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "src/client.js",
+      "src/config.mjs",
+      "src/doctor.mjs",
+      "src/host.mjs",
+      "src/http.mjs",
+      "src/mcp-probe.mjs",
+      "src/packs.mjs",
+      "src/probes.mjs",
+      "src/proc.mjs",
+      "src/tools.mjs",
+      "test/client.test.mjs",
+      "test/consistency.test.mjs",
+      "test/doctor.test.mjs",
+      "test/host.test.mjs",
+      "test/http.test.mjs",
+      "test/mcp-probe.test.mjs",
+      "test/probes.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-browser-computer",
+    "version": "0.1.6",
+    "description": "让 DeepSeek Harness 直接操作浏览器与电脑：以插件形式装配 playwright-mcp 与 peekaboo-mcp，并提供一键依赖安装、系统权限引导与连接自检",
+    "type": "module",
+    "main": "./src/host.mjs",
+    "icon": "./icon.png",
+    "license": "MIT",
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "mcp",
+      "playwright",
+      "peekaboo",
+      "browser-automation",
+      "computer-use"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/fegnze/dsh-browser-computer.git"
+    },
+    "homepage": "https://github.com/fegnze/dsh-browser-computer#readme",
+    "bugs": {
+      "url": "https://github.com/fegnze/dsh-browser-computer/issues"
+    },
+    "exports": {
+      ".": "./src/host.mjs",
+      "./client": "./src/client.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "dsh": {
+      "manifestVersion": 1,
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-slots"
+        ]
+      }
+    },
+    "engines": {
+      "node": ">=22",
+      "dsh": ">=0.2.0-rc.2 <0.3.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "~4.0.4",
+      "@deepseek-ai/dsh-app-boot": ">=0.2.0-rc.2 <0.3.0"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "src",
+      "icon.png",
+      "locale",
+      "README.md",
+      "docs/zh.md"
+    ],
+    "scripts": {
+      "test": "node --test test/*.test.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 浏览器与电脑操控 —— 装上即生效的配置层。\n#\n# 本文件就是这个插件的本体：两条 MCP 行把 playwright-mcp / peekaboo-mcp 接进 DSH，\n# 让模型直接拿到操作浏览器与电脑的工具。src/ 里的东西只是「一键检查 / 装依赖 /\n# 引导权限 / 验证连接」的辅助能力；删掉那两条行，辅助工具就失去意义。\n#\n# 三条行：\n#   browser-computer   —— 插件本体（辅助工具 + 斜杠命令）\n#   playwright-mcp     —— 浏览器操控\n#   peekaboo-mcp       —— 电脑操控（macOS）\n#\n# 路径一律经 !!js 在加载时解析，不写死任何本机绝对路径；`!!js >-` 折叠块用来容纳\n# 含 ` : ` 的三元表达式（写成单行 plain scalar 会被 YAML 当成映射）。\n\n- insert:\n    - id: browser-computer\n      name: dsh-browser-computer\n      config:\n        probeTimeoutMs: 90000\n        # 插件激活时自动跑一遍「查环境 → 装缺的依赖 → 查授权 → 需要就打开授权面板」\n        autoRepairOnStart: true\n        # 体检/修复时是否允许打开「系统设置」对应面板（只打开面板，不改任何授权）\n        allowOpenSettings: true\n        packages:\n          playwright: '@playwright/mcp@latest'\n          peekaboo: '@steipete/peekaboo'\n\n    # npx 必须是绝对路径：Finder/Dock 启动的 App 只有最小 PATH，裸 npx 解析不到。\n    - id: playwright-mcp\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: playwright\n        transport: stdio\n        command: !!js >-\n          process.platform === 'win32'\n            ? process.execPath.replace(/[^\\\\]+$/, 'npx.cmd')\n            : process.execPath.replace(/[^/]+$/, 'npx')\n        args:\n          - '-y'\n          - '@playwright/mcp@latest'\n        # cwd 决定 Playwright 持久 profile 的 workspace-hash 与 file:// 根；\n        # DSH_HOME 一定存在，避免 cwd 不存在导致子进程直接起不来。\n        cwd: !!js >-\n          process.env.DSH_HOME || process.env.HOME || '/tmp'\n        failOnStartupError: false\n        toolCallTimeoutMs: 120000\n\n    # --no-remote 强制本机执行：避免绕到 Peekaboo Bridge/daemon（那是另一套授权，\n    # 而且会起一个常驻进程）。--allow-foreground 是「真正能点、能打字」的前提；\n    # 只需要后台无障碍操作时，删掉这一个参数即可降权。\n    - id: peekaboo-mcp\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: peekaboo\n        transport: stdio\n        command: !!js >-\n          process.platform === 'win32'\n            ? process.execPath.replace(/[^\\\\]+$/, 'npx.cmd')\n            : process.execPath.replace(/[^/]+$/, 'npx')\n        args:\n          - '-y'\n          - '@steipete/peekaboo'\n          - 'mcp'\n          - '--no-remote'\n          - '--allow-foreground'\n        cwd: !!js >-\n          process.env.DSH_HOME || process.env.HOME || '/tmp'\n        failOnStartupError: false\n        toolCallTimeoutMs: 120000\n"
+    }
+  ],
+  "entries": [
+    "src/host.mjs",
+    "src/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "cordis.patch.yml:44"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "cordis.patch.yml:44"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "cordis.patch.yml:67"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "cordis.patch.yml:67"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/doctor.mjs:26"
+    },
+    {
+      "name": "DSH_PROFILE",
+      "kind": "env",
+      "where": "src/doctor.mjs:31"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/probes.mjs:281"
+    },
+    {
+      "name": "DSH_PROFILE",
+      "kind": "env",
+      "where": "src/probes.mjs:282"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/fegnze/dsh-browser-computer.git",
+      "where": "package.json:22"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/fegnze/dsh-browser-computer#readme",
+      "where": "package.json:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/fegnze/dsh-browser-computer/issues",
+      "where": "package.json:26"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "src/http.mjs:37"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 7,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-10-15T12:48:44Z",
+    "created_at": "2026-10-14T09:05:05Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/client.js",
+    "src/config.mjs",
+    "src/doctor.mjs",
+    "src/host.mjs",
+    "src/http.mjs",
+    "src/mcp-probe.mjs",
+    "src/packs.mjs",
+    "src/probes.mjs",
+    "src/proc.mjs",
+    "src/tools.mjs"
+  ],
+  "readme": [
+    {
+      "section": "Browser & Computer Control (`dsh-browser-computer`)",
+      "text": "Turns \"let DSH drive a browser and a computer\" into a plugin wired through a single installation.\nThe MCP capabilities are declared by two rows in `cordis.patch.yml` — `playwright-mcp`\nand `peekaboo-mcp`. That part follows the official \"configuration-only bundle\" recipe\n(`templates/mcp` + `references/mcp-bundle.md`): MCP wiring alone requires no Host or Client\nentry file. This package additionally provides Host and Client entries for health checks,\nrepair, and the status UI. See the activation steps below."
+    },
+    {
+      "section": "Browser & Computer Control (`dsh-browser-computer`)",
+      "text": "Once activated it automatically runs \"check environment → install missing dependencies →\ncheck permissions → open the permission panels that need attention\", and the UI is just a\nstatus line plus one **Repair** button. It **never writes profile config** (that is the\nofficial plugin manager's exclusive job) and **never changes system permissions** (it only\nopens the relevant System Settings panel for you to click)."
+    },
+    {
+      "section": "What it wires",
+      "text": "| Row | Provider | What you get |\n| --- | --- | --- |\n| `playwright-mcp` | `@playwright/mcp` | Real-browser control driven by accessibility snapshots and stable refs: navigate, click, fill, tabs, screenshots, network, cookies/storage |\n| `peekaboo-mcp` | `@steipete/peekaboo` | Read/write the macOS accessibility tree, screenshots, real mouse and keyboard input (macOS only) |"
+    },
+    {
+      "section": "What it wires",
+      "text": "`command` is resolved at load time via `!!js` to the absolute `npx` that sits next to `node` —\nno machine-specific path is hard-coded, and it does not rely on the minimal `PATH` a\nFinder/Dock-launched app receives (a bare `npx` cannot be resolved there, so the server dies\nsilently)."
+    },
+    {
+      "section": "Install and activation",
+      "text": "Add any of these specs on DSH's official Plugins page. For profiles that allow CLI\nmanagement, use the commands below. If the Electron App exclusively owns the desktop\nprofile, use its plugin manager instead of trying to manage that profile from the CLI.\n\n```bash"
+    },
+    {
+      "section": "1) from npm (recommended; specify @version for reproducible installs)",
+      "text": "dsh plugin --profile <profile> add dsh-browser-computer"
+    },
+    {
+      "section": "2) straight from GitHub",
+      "text": "dsh plugin --profile <profile> add github:fegnze/dsh-browser-computer"
+    },
+    {
+      "section": "3) local development (points at this directory; refresh/restart requirements still apply)",
+      "text": "dsh plugin --profile <profile> add link:<absolute path to this repo>\n```\n\n**After installing you must fully quit and reopen the DSH App.** Historical measurements:"
+    },
+    {
+      "section": "3) local development (points at this directory; refresh/restart requirements still apply)",
+      "text": "- The two MCP rows appear in the config layer immediately after install (`Config.listConfigs`\n  shows `playwright-mcp` / `peekaboo-mcp`), but they are **not** materialised into\n  `mcp__playwright__*` / `mcp__peekaboo__*` tools in the running session, and no MCP child\n  process is spawned.\n- The Host half's JavaScript is held by the process module cache: without a restart,\n  activation still reports errors from the previous revision.\n- The official mcp-bundle recipe itself ends with \"install, then call\n  `mcp__<serverName>__<tool>` to verify\"."
+    },
+    {
+      "section": "3) local development (points at this directory; refresh/restart requirements still apply)",
+      "text": "After the restart, verify by asking the model to call `browser_computer_repair`, by running the\nslash command `/browser-computer repair`, or by calling an MCP tool directly (for example\n`mcp__playwright__browser_navigate`).\n\nThe Client half (the section on the plugin page) needs **one more step: refresh the page**.\nOnly after the App restarts does the boot graph include this plugin's client entry, so an\nalready-open page has to be refreshed once to pick it up."
+    },
+    {
+      "section": "What it does on its own",
+      "text": "Plugin activation (install, or App restart) runs `repair` once, without you clicking anything:"
+    },
+    {
+      "section": "What it does on its own",
+      "text": "1. **Check environment** — Node / npx / browser binaries / dependency-package caches\n2. **Install missing dependencies** — `npx -y <package> --version` warms playwright-mcp and\n   peekaboo-mcp; **already-cached packages are never re-downloaded**\n3. **Check permissions** — Screen Recording / Accessibility (`--no-remote`, so the state\n   belongs to the DSH App's own process chain)\n4. **Guide permissions** — if anything is not granted, open the matching System Settings panel\n   (it only opens panels; it never grants anything)"
+    },
+    {
+      "section": "What it does on its own",
+      "text": "The whole pass is idempotent and runs in the background; a failure in any step only writes one\nlog line and **never breaks activation**. Set `autoRepairOnStart: false` to turn it off."
+    },
+    {
+      "section": "UI: a status line and one button",
+      "text": "The UI lives on **this plugin's own detail page** (official slot `plugins.detail.section`), not\nin the host Settings page — this is the plugin's own health check, not a host preference. The\n`Section` component returns `null` for other plugins' subjects (it only renders when\n`subject.kind === 'bundle' && subject.pkg.name === <package name>`), so it never leaks onto\nother plugin pages.\n\nThere are exactly two things:"
+    },
+    {
+      "section": "UI: a status line and one button",
+      "text": "- **A one-line status** plus a status card (environment / the three permissions / MCP\n  connection), read once automatically when the page opens (read-only, no network)\n- **One \"Repair\" button** → `POST /api/repair`: installs missing dependencies, opens the panels\n  that need authorisation, and finally verifies the connection"
+    },
+    {
+      "section": "UI: a status line and one button",
+      "text": "Both endpoints pass two fences: a custom intent header (which blocks cross-site simple\nrequests) and `connection.admit` (the Host/Origin fence plus browser authentication). The UI\ndoes not `require` any Harness Client package; controls and styles are its own and reference\nonly `--dsw-alias-*` theme tokens."
+    },
+    {
+      "section": "UI: a status line and one button",
+      "text": "In a previous development environment, a Client change did **not** need an App restart:\nediting `src/client.js` rebuilt the graph and the live page picked it up (the plugin's entry\nappeared in `plugins.detail.section`'s occupants). Refresh-free updates require an active\n`pnpm run dev:web` watcher in the same checkout. Without verifying that watcher, rebuild the\naffected Web artifacts and refresh the existing page; automatic updates are not promised.\nHost changes require a full restart."
+    },
+    {
+      "section": "The two actions",
+      "text": "| Command | Tool | Side effects | What it does |\n| --- | --- | --- | --- |\n| `/browser-computer check` | `browser_computer_check` | none (no network) | local dependencies, macOS permission state, profile wiring conflicts |\n| `/browser-computer repair` | `browser_computer_repair` | installs packages, may open panels | install missing dependencies → check and guide permissions → verify the MCP connection (`verify: false` skips that) |"
+    },
+    {
+      "section": "The two actions",
+      "text": "With no argument it runs `repair`. The tool surface is deliberately just these two: tool\nschemas are a permanent context cost."
+    },
+    {
+      "section": "macOS permissions: the pitfall that wastes half an hour",
+      "text": "TCC (System Settings → Privacy & Security) has **no** \"Event Synthesizing\" switch. That is\nPeekaboo's name for a capability it derives; it actually hangs off Accessibility:"
+    },
+    {
+      "section": "macOS permissions: the pitfall that wastes half an hour",
+      "text": "| Name in the report | Where in System Settings | What it affects |\n| --- | --- | --- |\n| Screen Recording | Privacy & Security → Screen Recording | screenshots, window enumeration |\n| Accessibility | Privacy & Security → Accessibility | accessibility-tree reads/writes, background clicks |\n| Event Synthesizing | same place; it opens automatically once Accessibility is granted | synthetic keyboard, foreground pointer actions |\n\nTwo things you must know:"
+    },
+    {
+      "section": "macOS permissions: the pitfall that wastes half an hour",
+      "text": "1. **The grant target is the DSH App**, not your terminal. The plugin uses `--no-remote` so\n   Peekaboo reports permissions from the local execution environment, which attributes the\n   state to the DSH App's process chain. Going through a Peekaboo Bridge/daemon instead is a\n   different grant *and* spawns a resident process.\n2. **Restart the DSH App after granting.** A TCC change does not necessarily take effect for an\n   already-running process."
+    },
+    {
+      "section": "Security boundaries (read before installing)",
+      "text": "- This plugin's `computer` row passes `--allow-foreground`: **without it, real clicking and\n  typing are impossible**. If you only need background accessibility work, delete that single\n  argument from `cordis.patch.yml` to reduce the privilege.\n- Playwright MCP ships `browser_run_code_unsafe`, which the vendor labels \"RCE-equivalent\".\n  Page content is untrusted input; do not point it at your daily-driver browser profile first.\n- The plugin never touches permissions, so the ceiling is entirely your permission preset.\n- Context cost: the two packs together contribute roughly 50 tool schemas to every system\n  prompt. If that is not worth it, delete the corresponding row from `cordis.patch.yml`."
+    },
+    {
+      "section": "Do not wire it twice",
+      "text": "If you already added MCP rows with the same `serverName` to\n`~/.dsh/profiles/<profile>/cordis.patch.yml` by hand, they collide with the rows this plugin\ndeclares: **two MCP instances and duplicate tool names**. The `check` stage reports such\nconflicts (`wiring.conflicts`) but **will not edit your config** — removing the manual row is\nyour call."
+    },
+    {
+      "section": "Rollback",
+      "text": "Remove the plugin on the official Plugins page, or for CLI-managed profiles:\n\n```bash\ndsh plugin --profile <profile> remove dsh-browser-computer\n```\n\nRemoving it retires both MCP rows. To keep the capability but drop the health-check tools,\ndelete just the `browser-computer` row."
+    },
+    {
+      "section": "Development",
+      "text": "```bash\ncd dsh-browser-computer\nnode --test test/*.test.mjs\n```\n\nThe tests never run a real `npx`: subprocess, filesystem and environment are all injected.\nWorth knowing:"
+    },
+    {
+      "section": "Development",
+      "text": "- `mcp-probe.test.mjs` — runs real newline-delimited JSON-RPC over in-memory streams, covering\n  success / RPC error / timeout / failure to spawn\n- `doctor.test.mjs` — behaviour of `check` / `repair`, including \"a failure is never dressed up\n  as success\"\n- `http.test.mjs` — the route's two fences (intent header + admit), 404, bad JSON, error\n  passthrough\n- `client.test.mjs` — **actually executes the Client bundle envelope** in a controlled global,\n  which catches a wrong envelope id, a wrong export shape, a wrong slot registration, a style\n  tag that was not tagged with its owner before insertion, or a stray `require` of another\n  Harness Client package\n- `host.test.mjs` — **`commands` / `webServer` must be declared through `ctx.inject`**\n- `consistency.test.mjs` — the arguments declared in the patch must match `src/packs.mjs`'s\n  argv, the patch must contain no hard-coded local paths, and the icon must satisfy\n  dsh-app-boot's four rules"
+    },
+    {
+      "section": "Three pitfalls we hit (so you do not)",
+      "text": "1. **Never use `ctx.get('service')` during `apply`.** Measured: both `ctx.get('webServer')` and\n   `ctx.get('commands')` return `undefined` while a plugin is applying, so an\n   `if (svc?.register)` guard **silently** skips the registration — everything looks fine at\n   install time and you only discover the 404 (or a slash command that does not exist) when you\n   click. Declare optional services with `ctx.inject([...], (c) => …)`; `ctx.get` is only safe\n   at **request-handling time**, when the context is fully assembled (for example reading\n   `connection`).\n2. **The icon not filling the card is not your problem.** The Host's `PackageArtwork` always\n   renders `<img width=size height=size>` with `CARD_ARTWORK_SIZE = 36` (`ROW_ARTWORK_SIZE = 30`\n   for component rows) inside a 48×48 card, so that ring of whitespace is Host layout. Editing\n   the icon file cannot change it.\n3. **Permission state has three values, not two.** In Peekaboo's JSON the permission name lives\n   in the **value**'s `name` field\n   (`{ data: { permissions: [ { name, isRequired, isGranted } ] } }`), not in an object key;\n   looking it up by key never matches and reports all three as `unknown`. And `unknown` **"
+    },
+    {
+      "section": "Icon assets",
+      "text": "- `icon.png` — the icon the plugin actually uses: **transparent background**, only the arrow\n  subject itself, cropped tight to the artwork bounds, 256×256, 47 KB (`dsh-app-boot`'s ceiling\n  is 256 KiB).\n- `assets/icon-transparent.png` — a 768×768 master of the same artwork for reuse or re-export.\n- Both are RGBA with alpha 0 in the corners, so they show no white box on dark or light\n  backgrounds. Remember the Host still scales the image to 36×36; that ring is layout, not a\n  white border inside the file."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- The `computer` pack is macOS-only; on other platforms the report marks it unsupported rather\n  than pretending it works.\n- `repair` pulls packages with `npx -y`, so the first run can be slow; a timeout is reported\n  explicitly with a \"just retry\" hint.\n- Permission reading depends on the Peekaboo CLI's output. If that format changes, the state\n  degrades to `unknown`; the report never guesses.\n- The health check only verifies \"the MCP server connects and its tools are there\". It does not\n  verify that a particular action succeeds — that depends on page content and the current\n  foreground window, which are runtime facts."
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,216 @@
+{
+  "repo": "dududreamer/dsh-cookie-janitor",
+  "commit": "5c96a671541e6a47b2b258c9acae0b199613a786",
+  "extracted_at": "2026-11-11T19:29:29.688595+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 29204,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 228,
+      "Markdown": 384,
+      "Other": 41,
+      "YAML": 22
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/root-cause.md",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-cookie-janitor",
+    "version": "1.0.0",
+    "description": "Collapses the port-suffixed dsh-auth-* cookie pile so the DeepSeek Harness desktop shell never exhausts Node's request-header budget.",
+    "type": "module",
+    "license": "MIT",
+    "author": "dududreamer",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "cordis",
+      "cookie",
+      "431"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/dududreamer/dsh-cookie-janitor.git"
+    },
+    "bugs": {
+      "url": "https://github.com/dududreamer/dsh-cookie-janitor/issues"
+    },
+    "homepage": "https://github.com/dududreamer/dsh-cookie-janitor#readme",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-cookie-janitor —— 把 dsh-auth-* 这堆 cookie 收敛回一条。\n#\n# 为什么需要它：\n#   桌面壳每次都让 Web Host 用 `--port 0` 起服务（临时端口）。浏览器会话 cookie 的名字\n#   是由监听 authority 算出来的，而明文 HTTP 的 authority 是 `host:port`。cookie 又不按\n#   端口隔离，于是每次启动都在 127.0.0.1 下新签一条 `dsh-auth-<sha256(host:port)>`，\n#   旧的永不回收。约到第 71 条时 `Cookie` 请求头越过 Node 默认的 16384 字节\n#   `max-http-header-size`，启动握手拿到 431，壳里报 `desktop welcome: Web authentication\n#   failed`，而弹窗只会劝你重装或禁用插件。\n#\n# 它做什么：\n#   每次启动只有一条 cookie 是有意义的 —— 本进程即将为自己 authority 签发的那条。\n#   凡是「正在签发新 cookie」的响应，就顺手对请求里带过来的其他所有 dsh-auth-* 名字\n#   下发 Max-Age=0；已认证的 /api 响应同理。jar 于是稳定在一条，不再无界增长。\n#\n# 安全边界：\n#   授权路径上没有新 cookie 要发时，它什么都不做；API 路径上如果算出来的当前 cookie 名\n#   不在请求里（上游改了命名算法），同样不动手。两种情况都是「不清理」而不是「清空」。\n- insert:\n    - id: dsh-cookie-janitor\n      name: dsh-cookie-janitor\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_COOKIE_JANITOR_LOG",
+      "kind": "env",
+      "where": "index.js:47"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "${host",
+      "url": "http://${host",
+      "where": "index.js:75"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/dududreamer/dsh-cookie-janitor.git",
+      "where": "package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/dududreamer/dsh-cookie-janitor/issues",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/dududreamer/dsh-cookie-janitor#readme",
+      "where": "package.json:23"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-11-01T10:16:41Z",
+    "created_at": "2026-11-01T10:16:24Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-cookie-janitor",
+      "text": "> Stops the DeepSeek Harness desktop shell from bricking itself with `desktop welcome: Web authentication failed`.\n> The session cookie pile is not cleaned up by upstream — this plugin collapses it back to one entry on every launch.\n\n[English summary](#english-summary) · [问题](#问题) · [根因](#根因) · [修法](#修法) · [安装](#安装) · [验证](#验证) · [回滚](#回滚) · [边界](#边界)\n\n---"
+    },
+    {
+      "section": "问题",
+      "text": "DeepSeek Harness 桌面版重启若干次之后，启动必定失败：\n\n```\ndesktop welcome: Web authentication failed\n```\n\n弹窗只给两个建议：**重装** 或 **禁用插件**。两条都不解决——重装不清 cookie，禁用插件更不对症，\n因为坏掉的东西跟插件无关。\n\n删掉 `Network/Cookies` 能救回来一次，但**过 70 多次重启就会原样复发**。这个插件就是来断这条复发的。"
+    },
+    {
+      "section": "根因",
+      "text": "| 环节 | 代码位置（`@deepseek-ai/...`） | 事实 |\n|---|---|---|\n| 端口随机 | `dsh-desktop-host/lib/index.js:234-240` | 启动参数写死 `--port 0`，每次启动拿一个临时端口 |\n| 名字吃端口 | `dsh-client-connection/lib/index.js:307-316` | `requestAudience()` 对明文 HTTP 返回 `url.host`，**含端口** |\n| 名字 = 哈希 | 同文件 `:335-337` | `cookieName = \"dsh-auth-\" + base64url(sha256(authority))` |\n| cookie 不按端口隔离 | 同文件 `:347-350` | 只发 `Max-Age / Path=/ / Expires / HttpOnly / SameSite=Strict`，**无 Domain，无端口维度** |\n| 生命周期 30 天 | 同文件 `:1017` | `cookieMaxAgeDays` 默认 30 |\n| 无人回收 | 全库 | 搜不到任何 `cookies.remove`；主 jar 没有任何 prune 逻辑 |\n| 撞上限 | Node 默认 | `max-http-header-size = 16384` 字节 |\n| 报错的点 | `lib/main.js:8884-8886` | `net.fetch(url, {credentials:\"include\"})` → 非 2xx 就抛 `desktop welcome: Web authentication failed` |\n| 弹窗在误导 | `lib/main.js:8378` | `if (response === 2) await operations.disablePlugins()` —— 这是**任何** fatal 错误的共用兜底文案，它根本没读 HTTP 状态码 |"
+    },
+    {
+      "section": "根因",
+      "text": "结果：每启动一次，就在 `127.0.0.1` 下新签一条 `dsh-auth-<hash>`，旧的永不回收。\n因为 cookie 不区分端口，它们全部堆在同一个域下，越积越多。\n\n**实测边界**（对活着的 host 直发不同大小的 `Cookie` 头）：\n\n| Cookie 头长度 | 服务端响应 |\n|---|---|\n| 8128 B | `401 Unauthorized` |\n| 15128 B | `401 Unauthorized` |\n| 17128 B | `431 Request Header Fields Too Large` |\n| 20128 B | `431 Request Header Fields Too Large` |\n\n单条 `name=value` ≈ 226 B，加 `\"; \"` 分隔符 228 B；再加请求行 + `Host` + `Cookie: ` 约 100 B。\n→ **第 71 条还塞得下，第 72 条越界。**（流传的「70 条」差两条，量级是对的。）"
+    },
+    {
+      "section": "根因",
+      "text": "> 注意：撞 431 的**不是**转发链路。`forwardWebRequest` 只塞单条 `hostCookie`。\n> 只有启动握手那一发 `credentials: \"include\"` 会把整个 jar 的 cookie 全带上，\n> 所以这个故障的形态固定是「**启动即失败**」，跑起来之后反而一切正常。"
+    },
+    {
+      "section": "修法",
+      "text": "关键洞察：**每次启动只有一条 cookie 是有意义的 —— 本进程即将为自己 authority 签发的那条。**\n\n所以插件不「清空」，只做「收敛」：凡是「正在签发新 cookie」的响应，顺手对请求里带过来的\n**其他所有** `dsh-auth-*` 名字下发 `Max-Age=0`。\n\n```\nset-cookie: dsh-auth-<hashA>=; Max-Age=0; Expires=Thu, 01 Jan 1970 ...\nset-cookie: dsh-auth-<hashB>=; Max-Age=0; Expires=Thu, 01 Jan 1970 ...\nset-cookie: dsh-auth-<hashC>=v1.xxx; Max-Age=2592000; Path=/ ...   ← 当前这条，排在后面\n```\n\n同一个响应里对一个名字下发多次时后者覆盖前者，所以即使名字算错、把当前这条也列进了删除列表，\n紧跟其后的真值也会把它救回来。**顺序本身就是安全网。**\n\n两个挂载点："
+    },
+    {
+      "section": "修法",
+      "text": "| 挂载点 | 触发时机 | 作用 |\n|---|---|---|\n| `connection.authorizeIndex` / `connection.authorizeConnect` | 每次启动的认证握手 | 拿响应自身的 `set-cookie` 名字做 keep，清掉其余全部 |\n| `connection/request` waterfall | 运行期每个已认证 `/api` 请求 | 用 `base64url(sha256(host))` 反推当前名，**必须真的出现在请求里**才动手 |\n\n第二条的守卫很重要：算出来的名字若不在请求头里（说明上游改了命名算法），直接跳过——\n宁可不清，也不清空。**代码里没有「清空」这条路径。**"
+    },
+    {
+      "section": "前置",
+      "text": "- DeepSeek Harness **桌面版**（遇到了这个 bug 才需要它；HTTPS 部署下 authority 不含端口，本来就不会堆积）\n- 能写到 `$DSH_HOME`（默认 `~/.dsh`）和当前 profile 目录"
+    },
+    {
+      "section": "1. 放进 local-plugins",
+      "text": "```bash\ngit clone https://github.com/dududreamer/dsh-cookie-janitor.git\nmkdir -p \"$DSH_HOME/local-plugins\"\ncp -r dsh-cookie-janitor \"$DSH_HOME/local-plugins/\"\n```\n\nWindows PowerShell：\n\n```powershell\ngit clone https://github.com/dududreamer/dsh-cookie-janitor.git\nNew-Item -ItemType Directory -Force \"$env:USERPROFILE\\.dsh\\local-plugins\" | Out-Null\nCopy-Item .\\dsh-cookie-janitor \"$env:USERPROFILE\\.dsh\\local-plugins\\\" -Recurse\n```"
+    },
+    {
+      "section": "2. 链接进 profile 的 node_modules",
+      "text": "```powershell"
+    },
+    {
+      "section": "Windows（Junction，无需管理员）",
+      "text": "$scope = \"$env:USERPROFILE\\.dsh\\profiles\\desktop\\node_modules\"\nNew-Item -ItemType Junction -Path \"$scope\\dsh-cookie-janitor\" `\n  -Target \"$env:USERPROFILE\\.dsh\\local-plugins\\dsh-cookie-janitor\"\n```\n\n```bash"
+    },
+    {
+      "section": "macOS / Linux",
+      "text": "ln -s \"$DSH_HOME/local-plugins/dsh-cookie-janitor\" \\\n      \"$DSH_HOME/profiles/desktop/node_modules/dsh-cookie-janitor\"\n```"
+    },
+    {
+      "section": "3. 在 profile 补丁层激活",
+      "text": "编辑 `$DSH_HOME/profiles/desktop/cordis.patch.yml`，在末尾追加：\n\n```yaml\n- insert:\n    - id: dsh-cookie-janitor\n      name: dsh-cookie-janitor\n      config: {}\n\n在 profile 的 `package.json` 里声明依赖，避免将来 `pnpm install` 把链接清掉：\n\n```json\n\"dependencies\": {\n  \"dsh-cookie-janitor\": \"file:../../local-plugins/dsh-cookie-janitor\"\n}\n```"
+    },
+    {
+      "section": "4. 生效",
+      "text": "profile 若为 `patchReload: live`，改完补丁层**当场热加载，不用重启**（而重启恰恰是这个故障的触发点）。"
+    },
+    {
+      "section": "验证",
+      "text": "插件把每次动作追加到 `<tmpdir>/dsh-cookie-janitor.log`：\n\n```\n2026-11-01T09:11:18.656Z apply loaded (pid 37868)\n2026-11-01T09:11:19.676Z authorize: collapsing 39 stale cookie(s), keeping the one being issued\n2026-11-01T09:11:30.173Z apply loaded (pid 14520)\n2026-11-01T09:11:31.120Z authorize: collapsing 1 stale cookie(s), keeping the one being issued\n\n第一次清 **39** 条（那时 jar 里约 41 条，离 71 的悬崖差 30 次重启），\n下一次启动只清 **1** 条——**稳态达成**，之后永远只清 1 条，再也不可能撞到 16384。"
+    },
+    {
+      "section": "验证",
+      "text": "> ⚠️ **不要用 `Network/Cookies` 的文件大小判断有没有修好。**\n> SQLite 只把页标记为空闲，文件不会立刻缩小（实测最终从 32768 收缩到 20480 是几十次启动之后的事）。\n> 看日志里的条数。\n\n想关掉日志：启动宿主前设 `DSH_COOKIE_JANITOR_LOG=off`。"
+    },
+    {
+      "section": "回滚",
+      "text": "两步，任意一步单独做都能让它停摆：\n\n1. 删掉 profile `cordis.patch.yml` 末尾的 `- insert: dsh-cookie-janitor` 段；\n2. 删掉 `node_modules/dsh-cookie-janitor` 链接。"
+    },
+    {
+      "section": "边界",
+      "text": "- 只解决**本机明文 HTTP 下 cookie 按端口堆积**。HTTPS 的 authority 是 origin（不含端口），本来就不会堆积，\n  插件在那里也不会做任何事。\n- 上游若改了命名算法，waterfall 侧会静默停手（届时需要同步 `currentName()`）；\n  授权侧不受影响，它用的是响应自带的 `set-cookie` 名字，不猜。\n- **真正的断根在上游**：把 `requestAudience` 里的端口去掉，或者给 cookie 加 prune。\n  这个插件是那次改动落地之前，本机可用的等效方案。\n\n更详细的证据链与实测数据见 [docs/root-cause.md](docs/root-cause.md)。"
+    },
+    {
+      "section": "English summary",
+      "text": "The desktop shell binds its Web host to an ephemeral port (`--port 0`). For a plain HTTP listener\nthat authority is `host:port`, so session cookies are named `dsh-auth-<base64url(sha256(host:port))>`.\nCookies are not scoped by port, so every launch mints a new entry next to all previous ones while\nsharing `Path=/` and a 30-day lifetime. At ~228 bytes per pair, the accumulated `Cookie` header\nexceeds Node's default 16384-byte `max-http-header-size` around the 71st launch, the handshake gets\n`431`, and the shell reports it as `desktop welcome: Web authentication failed`."
+    },
+    {
+      "section": "English summary",
+      "text": "This plugin never wipes the jar. On the response that mints a new session cookie (and on every\nauthenticated API response afterwards) it appends `Max-Age=0` for every *other* `dsh-auth-*` name the\nclient sent, ordering the deletions before the live `set-cookie`. A same-name overwrite later in the\nsame response wins, so the live cookie survives even if the name derivation is wrong. On the API path\nit also refuses to act when the computed name is absent from the request — the failure mode is\n\"do nothing\", never \"delete everything\"."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

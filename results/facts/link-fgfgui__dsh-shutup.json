@@ -1,0 +1,129 @@
+{
+  "repo": "link-fgfgui/dsh-shutup",
+  "commit": "92b1512a5e956924fdcdd13ddaa3cfac181c7cce",
+  "extracted_at": "2026-11-11T23:45:50.158687+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 16706,
+    "lines_by_language": {
+      "JSON": 27,
+      "JavaScript": 221,
+      "Markdown": 66,
+      "Other": 8,
+      "YAML": 125
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "pnpm-lock.yaml",
+      "preview-shutup.yml",
+      "startup.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-shutup",
+    "version": "0.2.0",
+    "description": "Shut up DSH web: no browser token gate, inverted --no-open (default stays quiet), --host 0.0.0.0 allowed",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./startup": "./startup.js"
+    },
+    "files": [
+      "index.js",
+      "startup.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "license": "MIT",
+    "dependencies": {
+      "@deepseek-ai/dsh-cmdline": "^0.1.2-rc.1",
+      "commander": "^15.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-shutup bundle patch\n#\n# Layer order (later wins): bundles -> profile cordis.patch.yml -> $DSH_HOME patch -> --patch.\n# This file is the bundle layer, so a user overlay can still override us.\n#\n# 1) Allow --host 0.0.0.0 again (0.0.1-rc.1 CLI surface): the ban lives in the\n#    upstream `web-startup` plugin's *code*, and loader patches cannot rename a\n#    row (`name` mismatch => skipped), so the sanctioned move is disabling that\n#    row and inserting a drop-in replacement (startup.js) that provides the\n#    identical `webStartup` service without the rejection. Auth behavior is\n#    untouched: still the 0.0.1-rc.1 style clean URLs, no ?token= gate.\n# 2) Invert --no-open: upstream web-runtime uses `!!js ctx.webStartup.openBrowser`\n#    (commander maps `--no-open` to `open=false`, default `open=true`).\n#    Negating it makes the default quiet and `--no-open` open the browser.\n#    NOTE: patch replaces the whole `config`, so every key is restated here.\n# 3) Register the host half below (index.js) that drops the ?token= gate.\n\n- id: web-startup\n  disabled: true\n\n- id: web-runtime\n  config:\n    openBrowser: !!js \"!ctx.webStartup.openBrowser\"\n    printUrl: true\n    surfaceContext: true\n    trustedHosts: !!js ctx.webStartup.trustedHosts\n\n- insert:\n    - id: web-startup-shutup\n      name: dsh-shutup/startup\n    - id: shutup\n      name: dsh-shutup\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "startup.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "…",
+      "url": "http://…/`",
+      "where": "startup.js:20"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-cmdline": "^0.1.2-rc.1",
+      "commander": "^15.0.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-09-08T17:20:25Z",
+    "created_at": "2026-09-08T17:11:39Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "startup.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-shutup",
+      "text": "让 DSH web 启动即安静的 profile 插件（bundle）：**免 token + 反转 `--no-open` + 允许 `--host 0.0.0.0`**。"
+    },
+    {
+      "section": "行为",
+      "text": "| 维度 | 上游默认（0.1.2-rc.1） | 装本插件后 |\n|---|---|---|\n| 浏览器自动打开 | 默认打开，`--no-open` 关闭 | **默认不打开，`--no-open` 反而打开**（字面反转） |\n| token 门禁 | 启动打印 `http://127.0.0.1:PORT/?token=xxx`，`/` 与 `/api` 无 cookie 则 `401` | **回到初版 0.0.1-rc.1 风格**：直接 `http://127.0.0.1:PORT/`，无 token、无 401 |\n| `--host` | `0.0.0.0` 直接报错拒绝启动 | **允许**（恢复初版 `--host` 文案与 LAN 示例）；打印 `dsh web: http://127.0.0.1:PORT/ (LAN: http://<本机IP>:PORT/)`，两边都是干净 URL |\n| Host 信任墙 | 回环 / `--trusted-host` 外 `403` | **保留**：只放行 401，不动 403（LAN IP 由运行时自动加入信任） |"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ngit clone https://github.com/link-fgfgui/dsh-shutup.git\ncd dsh-shutup\ndsh plugin --profile web add .\n```"
+    },
+    {
+      "section": "验证",
+      "text": "```sh\ndsh --profile web --dump-config   # 确认 \"# == dsh-shutup\" 层：web-startup 被禁用、\n                                  # web-startup-shutup/shutup 已插入、web-runtime 的 openBrowser 取反\n```"
+    },
+    {
+      "section": "使用",
+      "text": "```sh\ndsh --profile web                              # 安静启动，直接打开打印的干净 URL\ndsh --profile web --no-open                    # 反而弹浏览器（反转语义）\ndsh --profile web --host 0.0.0.0 --port 3080   # 局域网可访问，同时打印 LAN 地址\ndsh plugin --profile web remove dsh-shutup     # 移除\n\n`startup.js` 的依赖（`commander` + `@deepseek-ai/dsh-cmdline`）已在包内\n`pnpm install` 好；profile 侧是 `link:` 安装，改包内文件即时生效，无需重装。"
+    },
+    {
+      "section": "⚠️ 安全警告",
+      "text": "`--host 0.0.0.0` + 无 token = **局域网内任何设备可直接操作你的 harness\n（约等于远程代码执行）**。只在可信网络用；公用 Wi-Fi / 有不可信设备时别开。\n上游当初禁 `0.0.0.0` 就是这个原因。"
+    },
+    {
+      "section": "仓库结构",
+      "text": "```\n.\n├── package.json        # dsh-shutup，dsh.bundle.patch + exports(. / ./startup)\n├── cordis.patch.yml    # 禁用上游 web-startup、反转 openBrowser、注册本包两行\n├── index.js            # host 半：connection 服务去 token 化（401→放行，403 保留）\n\n实现要点：`0.0.0.0` 禁令写在上游 `web-startup` 插件**代码**里，patch 换不掉一行的\n`name`（对不上会被 loader 跳过），所以用正统手法——`disabled: true` 掉上游行，\n再插入 `web-startup-shutup` 行提供完全相同的 `webStartup` 服务。"
+    },
+    {
+      "section": "版本",
+      "text": "- `0.1.0` — 免 token + 反转 `--no-open`\n- `0.2.0` — 允许 `--host 0.0.0.0`（startup 替换行），鉴权保持初版风格"
+    }
+  ],
+  "skipped": []
+}

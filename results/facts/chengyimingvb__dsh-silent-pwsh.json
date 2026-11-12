@@ -1,0 +1,200 @@
+{
+  "repo": "chengyimingvb/dsh-silent-pwsh",
+  "commit": "ab483999637bf19a5d476ba6c76084a27c05ffbc",
+  "extracted_at": "2026-11-11T18:22:11.708571+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 23151,
+    "lines_by_language": {
+      "JSON": 31,
+      "JavaScript": 244,
+      "Markdown": 163,
+      "Other": 81,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "install.ps1",
+      "lib/index.js",
+      "package.json",
+      "test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-silent-pwsh",
+    "version": "0.1.0",
+    "description": "Self-healing DeepSeek-Harness plugin: keeps confined pwsh/bash console windows invisible (SW_HIDE) on Windows — no black console flash on every sandboxed command.",
+    "type": "module",
+    "main": "lib/index.js",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "pwsh",
+      "sandbox",
+      "console",
+      "windows"
+    ],
+    "license": "MIT",
+    "author": "chengyimingvb <as8506@qq.com>",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/chengyimingvb/dsh-silent-pwsh.git"
+    },
+    "homepage": "https://github.com/chengyimingvb/dsh-silent-pwsh#readme",
+    "bugs": {
+      "url": "https://github.com/chengyimingvb/dsh-silent-pwsh/issues"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-silent-pwsh bundle patch: mount the self-healing console-visibility\n# patch plugin. On every host start the plugin ensures the windows-acl runner\n# spawns confined children with STARTF_USESHOWWINDOW | SW_HIDE (no black\n# console flash) and that the taskkill / capability-probe spawns are hidden;\n# a reinstall or app upgrade that restores the packaged files heals on the\n# next boot.\n- insert:\n    - id: silent-pwsh\n      name: 'dsh-silent-pwsh'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_INSTALL_ROOT",
+      "kind": "env",
+      "where": "lib/index.js:35"
+    },
+    {
+      "name": "DSH_INSTALL_ROOT",
+      "kind": "env",
+      "where": "test.mjs:18"
+    },
+    {
+      "name": "DSH_INSTALL_ROOT",
+      "kind": "env",
+      "where": "test.mjs:41"
+    },
+    {
+      "name": "DSH_INSTALL_ROOT",
+      "kind": "env",
+      "where": "test.mjs:55"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/chengyimingvb/dsh-silent-pwsh.git",
+      "where": "package.json:25"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/chengyimingvb/dsh-silent-pwsh#readme",
+      "where": "package.json:27"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/chengyimingvb/dsh-silent-pwsh/issues",
+      "where": "package.json:29"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-08-15T15:50:16Z",
+    "created_at": "2026-08-15T15:15:16Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-silent-pwsh",
+      "text": "A **DeepSeek-Harness plugin** for Windows that makes sandboxed (confined) `pwsh` / `bash` calls spawn their console window **hidden** (`SW_HIDE`) — no black console window flashes on every command."
+    },
+    {
+      "section": "Problem",
+      "text": "Every sandboxed pwsh call in DeepSeek-Harness runs through the windows-acl runner (`dsh-sandbox-windows-acl/lib/runner.js`), which spawns the confined child with a fresh console window unless `STARTF_USESHOWWINDOW | SW_HIDE` is set in the child's `STARTUPINFOW`. The shipped package omits it, so **every confined command flashes a black console window** on the desktop. (`CREATE_NO_WINDOW` is not an option: under the restricted token it makes the child die with `STATUS_DLL_INIT_FAILED` (`0xC0000142`) — verified by the DSH maintainers. `SW_HIDE` keeps the console alive and simply never shows it.)"
+    },
+    {
+      "section": "Problem",
+      "text": "Two related flashes are also fixed: the process-tree `taskkill` termination and the one-time sandbox capability probe, whose spawns lacked `windowsHide`."
+    },
+    {
+      "section": "How it works",
+      "text": "DSH's plugin model is loader-config patches plus Cordis plugins; no config seam can change those native spawn flags. So this plugin is a **self-healing patch plugin**: on every host start (before any confined command runs) it idempotently checks and re-applies a three-file patch:"
+    },
+    {
+      "section": "How it works",
+      "text": "| File (under `<host>\\node_modules`) | Patch |\n|---|---|\n| `@deepseek-ai/dsh-sandbox-windows-acl/lib/types-CNjZgO4h.js` | both `encodeStartupInfo` calls: `dwFlags: 256` → `257` (+`STARTF_USESHOWWINDOW`), add `wShowWindow: 0` (`SW_HIDE`) |\n| `@deepseek-ai/dsh-subprocess-local/lib/index.js` | `taskkill` `spawnSync` gets `windowsHide: true` |\n| `@deepseek-ai/dsh-sandbox-local/lib/index.js` | windows-acl capability probe `spawnSync` gets `windowsHide: true` |"
+    },
+    {
+      "section": "How it works",
+      "text": "The patch only rewrites files that are in the expected pre-patch shape; if an upgrade changes them, it warns and skips instead of corrupting them. **Reinstall or upgrade the app and the patch is re-applied automatically on the next boot.**"
+    },
+    {
+      "section": "Install",
+      "text": "Requirements: DeepSeek-Harness desktop app, `node` and `pnpm` on `PATH`."
+    },
+    {
+      "section": "From GitHub (recommended)",
+      "text": "```powershell\ndsh plugin --profile web add github:chengyimingvb/dsh-silent-pwsh"
+    },
+    {
+      "section": "or with a full URL",
+      "text": "dsh plugin --profile web add https://github.com/chengyimingvb/dsh-silent-pwsh\n```"
+    },
+    {
+      "section": "From a local folder / zip",
+      "text": "```powershell"
+    },
+    {
+      "section": "extract the zip, cd into dsh-silent-pwsh, then:",
+      "text": ".\\install.ps1                      # installs into the 'web' profile\n.\\install.ps1 -Profile headless    # or another profile"
+    },
+    {
+      "section": "if blocked by execution policy:  powershell -ExecutionPolicy Bypass -File .\\install.ps1",
+      "text": "```\n\nThen **restart DeepSeek Harness**. The host log will show `[silent-pwsh] up to date` (or `[silent-pwsh] patched …` when it had to heal).\n\n> **Gotcha:** if pnpm fails with a supply-chain policy error (`minimumReleaseAge`), add the reported `package@version` to the profile's `pnpm-workspace.yaml` `minimumReleaseAgeExclude` list and re-run."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```powershell\ndsh plugin --profile web remove dsh-silent-pwsh\n```\n\nThe patched files are left as-is. To restore the shipped files manually:\n\n```powershell\n$chunk = \"$env:ProgramFiles\\DeepSeek Harness\\resources\\host\\node_modules\\@deepseek-ai\\dsh-sandbox-windows-acl\\lib\\types-CNjZgO4h.js\"\n(Get-Content $chunk -Raw) -replace 'dwFlags: 257,`n`t`twShowWindow: 0,', 'dwFlags: 256,' | Set-Content $chunk -NoNewline -Encoding utf8"
+    },
+    {
+      "section": "likewise remove ', windowsHide: true' from the taskkill and probe spawnSync calls.",
+      "text": "```"
+    },
+    {
+      "section": "Configuration",
+      "text": "- `DSH_INSTALL_ROOT` — point at the directory containing `node_modules` when the host root cannot be auto-detected. Default detection: `<app dir>\\resources\\host` derived from `process.execPath`, with `cwd` and plugin-location fallbacks."
+    },
+    {
+      "section": "Development / verification",
+      "text": "```powershell\nnode test.mjs   # idempotence against the real host files + heal-a-reverted-copy round trip\n```\n\nVerified: confined pwsh still executes correctly through the runner (exit 0, output flows through inherited stdio, no `0xC0000142` regression)."
+    },
+    {
+      "section": "Notes for maintainers",
+      "text": "The packaged app already ships a fixed-but-unused chunk (`types-C1ecepac.js`); wiring the entry imports to it is the upstream fix. This plugin exists so users on shipped builds get the behavior now, self-healing across reinstalls."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

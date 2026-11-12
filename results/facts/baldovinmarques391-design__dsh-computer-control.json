@@ -1,0 +1,408 @@
+{
+  "repo": "baldovinmarques391-design/dsh-computer-control",
+  "commit": "2f8410e25c17be017cfaf925d7eb920fa03dc292",
+  "extracted_at": "2026-11-11T17:42:14.138614+00:00",
+  "tree": {
+    "files": 26,
+    "bytes": 489297,
+    "lines_by_language": {
+      "JSON": 70,
+      "JavaScript": 6432,
+      "Markdown": 349,
+      "Other": 1940,
+      "YAML": 116
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "lib/compaction-scan.mjs",
+      "lib/compaction.mjs",
+      "lib/desktop-helper.ps1",
+      "lib/desktop.mjs",
+      "lib/frames.mjs",
+      "lib/prompt.mjs",
+      "lib/relay.mjs",
+      "lib/tools.mjs",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/check-helper-bom.mjs",
+      "test/config-validation-coverage.mjs",
+      "test/frames-unit.mjs",
+      "test/integration-combination-test.mjs",
+      "test/prompt-section-test.mjs",
+      "test/relay-integration-test.mjs",
+      "test/relay-unit.mjs",
+      "test/run-all.mjs",
+      "test/schema-assembly-test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-computer-control",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "index.js",
+    "description": "Turn desktop operation into discrete tool calls that each return the frames captured around the call.",
+    "license": "MIT",
+    "icon": "./icon.svg",
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "computer-use",
+      "desktop-automation",
+      "windows"
+    ],
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "locale",
+      "icon.svg",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node test/run-all.mjs"
+    },
+    "engines": {
+      "dsh": ">=0.1.7-rc.2 <0.3.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.1.7-rc.2 <0.3.0",
+      "@deepseek-ai/dsh-tools": ">=0.1.7-rc.2 <0.3.0",
+      "@deepseek-ai/schemastery": "3.18.4"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/dsh-llm": {
+        "optional": false
+      },
+      "@deepseek-ai/dsh-tools": {
+        "optional": false
+      },
+      "@deepseek-ai/schemastery": {
+        "optional": false
+      }
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The computer-control bundle: one host plugin that registers the computer_* tools.\n#\n# The row name must be the bare package name, exactly as in package.json: a\n# subpath here stops the client module scan from classifying the row. Every key\n# below is a Config field of the plugin; the loader replaces a row's whole config\n# instead of merging it, so restate anything you keep when overriding this row.\n- insert:\n    - id: computer-control\n      name: dsh-computer-control\n      config:\n        # Frame rate the recorder produces; ffmpeg holds it at full screen size.\n        capturesPerSecond: 10\n        # Upper bound on frames returned by one call. Two by default: the last frame at or\n        # before input injection, and the settled end state. Every captured frame is saved to\n        # disk regardless, and computer_frames reads the frames between two saved ones on\n        # demand, so keeping this small does not lose the history.\n        maxFrames: 2\n        # Upper bound on frames attached as images to one tool result. The rest stay on disk\n        # with their paths still printed.\n        maxAttachedImages: 2\n        # Fraction of the 32x32 frame signature that must move to count as a change. One\n        # cell is 0.000977, so this is three cells, which is what a pointer, a checkbox, or a\n        # highlighted menu row moves.\n        changeThreshold: 0.003\n        # Extra capture after the action completes, so repaints are included.\n        settleMs: 700\n        # Consecutive unchanged tail frame pairs required before the envelope reports the window\n        # as settled. Two pairs means three mutually identical frames, which is what separates a\n        # screen that stopped from one sampled twice inside a single clock second.\n        settleRunFrames: 2\n        # Hard cap on one capture window; also sizes the tool timeout budget.\n        maxWindowMs: 15000\n        # Longest passive watch allowed by computer_wait.\n        maxWaitSeconds: 10\n        # Longest string accepted by computer_type.\n        maxTypeChars: 2000\n        # Largest wheel gesture accepted by computer_scroll, in notches.\n        maxScrollClicks: 10\n        # Largest step count accepted by computer_drag.\n        maxDragSteps: 120\n        # Largest integer zoom accepted by computer_screenshot.\n        maxZoom: 8\n        # Ceiling on the pixel count of one zoomed region capture, checked before any\n        # allocation. The helper receives this value, so raising it really raises the limit.\n        maxZoomedPixels: 16000000\n        # Longest edge of a captured frame; the recorder scales to this size itself.\n        frameMaxEdge: 1024\n        # JPEG quality of a captured frame.\n        frameQuality: 75\n        # ffmpeg executable that records the screen.\n        ffmpegPath: ffmpeg\n        # Directory for the staged helper, recorder ring, screenshots, and markers. Empty\n        # means a directory under the system temp directory.\n        tempRoot: ''\n        # ffmpeg -q:v for recorded frames; lower is better quality and larger files.\n        recorderQuality: 5\n        # Recorded video a call can reach back through for its own first frame.\n        recorderBufferMs: 4000\n        # Milliseconds the recorder runs before input is injected, so the action has a\n        # frame from before it to anchor on.\n        recorderPrimeMs: 400\n        # How long the recorder is kept after a call before it stops. Not per-call: ffmpeg\n        # needs 1.5-2 s before its first frame, so a per-call restart would re-prime on\n        # every call. One recorder spans a burst of calls and stops once the burst ends.\n        recorderIdleStopMs: 30000\n        # auto attaches frames when the calling route accepts images; text never does.\n        imageMode: auto\n        # Timeout budget for a single capture or probe call.\n        captureTimeoutMs: 20000\n        # Added to maxWindowMs when deriving an action tool timeout.\n        actionTimeoutSlackMs: 10000\n        # Delete this conversation's images after a compaction summarises them.\n        #\n        # OFF, deliberately. Eight adversarial reviews of the cleanup each found a real defect, and the\n        # last showed that the tests written to prove the defect class was closed were blind to the very\n        # defect they existed to catch. The feature deletes bytes, so it ships unarmed: with this false\n        # a compaction deletes nothing and every image stays on disk.\n        #\n        # Arm it after reading DELIVERY.md. What would justify arming it by default is a stretch of real\n        # use in which shape-coverage-test.mjs and rev8-form-axis-guard.mjs stay green against logs\n        # written by the running DSH version -- those two fail as soon as a new place to carry a\n        # reference appears, which is the failure every one of the eight reviews found.\n        compactionCleanupEnabled: false\n        # Which desktop the screen and input work happens on.\n        #\n        #   agent  the relayed instance's desktop — the agent's own, by default the deputy account\n        #   user   this process's own Windows session — the person at the keyboard\n        #   auto   prefer agent; fall back to user ONLY when the relay cannot be reached at all\n        #   local / relay   mechanism-named spellings of user / agent, kept for existing deployments\n        #\n        # `auto` never retries a command the relay actually answered: a relay that was reached may\n        # already have performed the action, and running it again on the user's desktop would be a\n        # second action nobody asked for — the shape of the \"it grabbed my mouse\" failure this\n        # deployment exists to prevent. Every fallback is logged.\n        #\n        # Not a preference either way: ffmpeg's gdigrab and SendInput only ever act on the caller's own\n        # session, so an instance that must drive another account's desktop has to delegate to one\n        # running there.\n        desktopTarget: local\n        # Origin of the relay instance, used when desktopTarget is agent, relay, or auto.\n        relayUrl: \"\"\n        # Ceiling for one forwarded command, so a hung relay cannot hold a tool call open forever.\n        relayTimeoutMs: 60000\n        # Bearer token for the relay protocol, shared with the driving instance. Empty here would\n        # mean no /relay route exists at all on this instance, which is the default everywhere.\n        relayToken: \"\"\n        # The account pairing, for deployments that run automated sessions as a second Windows\n        # account. While either account is empty the prompt carries no account paragraph at all, which\n        # is the default: a plugin has no business assuming a machine has two accounts, let alone\n        # naming them.\n        agentAccount: \"\"\n        userAccount: \"\"\n        # That person's desktop and documents folders, named in the account paragraph. Leave empty\n        # when they are the profile's own folders.\n        userDesktop: \"\"\n        userDocuments: \"\"\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:45"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:407"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/desktop.mjs:58"
+    },
+    {
+      "name": "DSH_COMPUTER_PSH",
+      "kind": "env",
+      "where": "lib/desktop.mjs:68"
+    },
+    {
+      "name": "SystemRoot",
+      "kind": "env",
+      "where": "lib/desktop.mjs:70"
+    },
+    {
+      "name": "USERNAME",
+      "kind": "env",
+      "where": "lib/prompt.mjs:26"
+    },
+    {
+      "name": "USER",
+      "kind": "env",
+      "where": "lib/prompt.mjs:26"
+    },
+    {
+      "name": "CC_DIAG",
+      "kind": "env",
+      "where": "test/integration-combination-test.mjs:80"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3079",
+      "where": "index.js:146"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3079`",
+      "where": "index.js:271"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3079`",
+      "where": "lib/relay.mjs:156"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/relay-integration-test.mjs:63"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/relay-integration-test.mjs:153"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/relay-integration-test.mjs:194"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/relay-integration-test.mjs:214"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/relay-integration-test.mjs:241"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/relay-integration-test.mjs:257"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/relay-unit.mjs:51"
+    },
+    {
+      "host": "192.168.1.10",
+      "url": "http://192.168.1.10:3079",
+      "where": "test/relay-unit.mjs:73"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3079",
+      "where": "test/relay-unit.mjs:84"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:1",
+      "where": "test/relay-unit.mjs:85"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/relay-unit.mjs:112"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/relay-unit.mjs:158"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/relay-unit.mjs:163"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "test/relay-unit.mjs:197"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "test/relay-unit.mjs:202"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 9,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-03T09:08:43Z",
+    "created_at": "2026-10-03T09:07:58Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/compaction.mjs",
+    "lib/desktop.mjs",
+    "lib/frames.mjs",
+    "lib/prompt.mjs",
+    "lib/relay.mjs",
+    "lib/tools.mjs",
+    "package.json",
+    "test/run-all.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-computer-control",
+      "text": "A DeepSeek Harness bundle that turns Windows desktop operation into discrete tool\ncalls. Every call performs exactly one action and returns the frames captured from\njust before that action until a settle period after it, so the model never has to\nremember to take a screenshot."
+    },
+    {
+      "section": "Installing",
+      "text": "`dsh plugin` forwards its arguments verbatim to pnpm in the profile directory, so a\ncheckout, a git specifier, or a published tarball are all installed the same way:\n\n```sh\ndsh plugin --profile web add <path-to-this-checkout>\n```\n\nThe peer dependencies (`@deepseek-ai/dsh-tools`, `@deepseek-ai/dsh-llm`,\n`@deepseek-ai/schemastery`) are supplied by the harness, so this package declares them\nrather than depending on them, and a checkout normally has no `node_modules` of its own."
+    },
+    {
+      "section": "Installing",
+      "text": "DeepSeek Harness does not accept external pull requests; the documented way for a\ncommunity plugin to be found is a public repository carrying the `dsh-plugin` GitHub\ntopic, which is why `package.json` lists it under `keywords`.\n\nThe suites under `test/` resolve their imports against this checkout and against the\nharness packages, so they run from any working directory once the peers are installed:\n\n```sh\nnpm test          # or: node test/run-all.mjs\n```"
+    },
+    {
+      "section": "What you get",
+      "text": "| Tool | One call does | Returns |\n|---|---|---|\n| `computer_probe` | Nothing; reports screen geometry, pointer position and shape, and the window under the pointer | Text only, no image |\n| `computer_screenshot` | Nothing; captures the screen, or a rectangle at an integer zoom | One image |\n| `computer_move` | Moves the pointer | Frames around the move |\n| `computer_click` | Presses and releases one button once | Frames around the click |\n| `computer_drag` | Presses, sweeps, releases | Frames across the gesture |\n| `computer_scroll` | One wheel gesture | Frames around the gesture |\n| `computer_type` | Types a string as Unicode keystrokes | Frames while the text lands |\n| `computer_key` | Presses and releases one named key | Frames around the key |\n| `computer_chord` | Holds modifiers, presses one key, releases everything | Frames around the chord |\n| `computer_wait` | Injects nothing and watches | Frames over the wait |\n| `computer_frames` | Reads the recorded frames between two earlier frames | Up to the tool's own `maxFrames` (default 16); at most `maxAttachedImages` of them arrive as images and the rest are printed as paths |"
+    },
+    {
+      "section": "What you get",
+      "text": "`computer_frames` is the only tool that takes no new capture: it re-reads the recorder ring between two frames a previous call returned, which is how a two-frame envelope is enough to reconstruct the motion between them without paying for more images on every call."
+    },
+    {
+      "section": "Reading between two returned frames",
+      "text": "A call captures ten to thirty frames and returns two of them. `computer_frames` reaches back into the\nrecorder ring for the rest of that span:\n\n```markdown\n<computer-control action=\"frames\">\nresult: ok\nfrom: <the earlier frame the call printed>\nto: <the later frame the call printed>"
+    },
+    {
+      "section": "Reading between two returned frames",
+      "text": "Two things in that envelope are deliberate. `recorded between them` reports what the ring held, so a\nthin answer is distinguishable from a span the recorder never covered, and `attached` names how many\nof the listed frames arrived as images: the bound is `maxAttachedImages`, which exists to keep one\ncall's cost predictable, so frames past it are saved and printed as paths rather than attached. An\nunattached frame can be read later with `read_image` instead of being asked for again, for as long as\nthe deployment's screenshot directory keeps it: that directory holds the most recent\n`SHOT_RETENTION` files, after which the oldest saved paths stop resolving and a later request for one\nsays so rather than reporting a missing file."
+    },
+    {
+      "section": "Discrete by design",
+      "text": "There is no hold, repeat, macro, loop, or \"run this until\" parameter, and no way to\nleave a button or a key down across calls:"
+    },
+    {
+      "section": "Discrete by design",
+      "text": "- `computer_click` sends its press and release in one injected batch.\n- `computer_key` and `computer_chord` release every key they press inside the same call.\n- `computer_drag` is one atomic gesture; its step count is bounded by `maxDragSteps`.\n- Every tool is registered as concurrency-unsafe, so the registry serializes desktop input.\n- `computer_scroll` refuses a zero-notch gesture instead of reporting a no-op as success."
+    },
+    {
+      "section": "Discrete by design",
+      "text": "To click twice, call `computer_click` twice. Each call then comes back with its own frames."
+    },
+    {
+      "section": "Configuration",
+      "text": "Every value below is a `Config` field; override the row in your profile's\n`cordis.patch.yml`, restating the keys you keep, because a patch replaces a row's\nwhole `config`."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `capturesPerSecond` | `10` | Frame rate the recorder produces |\n| `maxFrames` | `2` | Frames returned by one call (1 to 20): the pre-action reference and the settled end state. `computer_frames` is capped lower, at 16 |\n| `maxAttachedImages` | `2` | Frames attached as images (0 to 19); further frames are still saved to disk and their paths printed |\n| `changeThreshold` | `0.003` | Signature movement that counts as a change |\n| `settleMs` | `700` | Extra capture after the action completes |\n| `settleRunFrames` | `2` | Consecutive unchanged tail frame pairs required before the envelope calls the window settled |\n| `maxWindowMs` | `15000` | Ceiling on one capture window (200 to 120000); also sizes the tool timeout |\n| `maxWaitSeconds` | `10` | Longest passive watch |\n| `maxTypeChars` | `2000` | Longest string computer_type accepts (up to 20000) |\n| `maxScrollClicks` | `10` | Largest wheel gesture, in notches |\n| `maxDragSteps` | `120` | Largest drag step count |\n| `maxZoom` | `8` | Largest integer zoom (1 to 16) |\n| `maxZoomedPixels` | `16000000` | Pixel ceiling for one zoomed capture, checked before any allocation |\n| `frameMaxEdge` | `1024"
+    },
+    {
+      "section": "Implementation",
+      "text": "Capture is delegated to **ffmpeg** (`-f gdigrab`), which holds a real frame rate at full\nscreen size: measured 9.9-10.7 fps at 1600x900 and at 1024 wide, with no dropped frames.\nffmpeg scales to `frameMaxEdge` itself, so no frame is ever encoded by this bundle. The\nin-process GDI+ path exists only as a fallback and costs 100-300 ms per frame, because a\nPowerShell downscale-and-JPEG-encode dominates it; that cost is scaling, not capture."
+    },
+    {
+      "section": "Implementation",
+      "text": "`lib/desktop-helper.ps1` is a long-lived PowerShell helper that owns input injection and\nsupervises the recorder. It speaks newline-delimited JSON over stdin/stdout and is\ndelivered as a BOM-encoded copy under a per-process temp directory, because Windows\nPowerShell 5.1 reads a BOM-less script as ANSI. `lib/desktop.mjs` supervises that\nprocess, `lib/frames.mjs` selects the frames worth returning, and `lib/tools.mjs`\ndeclares the tools."
+    },
+    {
+      "section": "Implementation",
+      "text": "Frame records come from the files the recorder writes. Their instant is the file's\ncreation time, not the poll that noticed them: NTFS keeps sub-millisecond creation times,\nand a poll would quantize every frame in one sweep onto the same instant. Frames are\nemitted in ordinal name order, because that is capture order while creation timestamps can\ntie or step backwards by a few milliseconds. The helper also runs a bare blocking\n`ReadLine`, because `Console.In.Peek()` blocks on a redirected pipe in this PowerShell and\nan \"idle slice\" loop around it hangs the helper."
+    },
+    {
+      "section": "Implementation",
+      "text": "- **The recorder must be stopped, not just the helper.** ffmpeg is the helper's child, so\n  killing the helper alone leaves a recorder writing frames forever; a measured leak of 16\n  orphaned recorders reached 2.4 GB of frames. The watchdog covers a host that dies, and\n  `sweepOrphanRecorders()` covers a helper that was killed.\n- **The ring is trimmed by frame count, never by age.** A caller may still need a frame\n  that no age window would keep, so the count is the safe bound, and it is applied only\n  after a call has handed its frames over."
+    },
+    {
+      "section": "Implementation",
+      "text": "Returned captures are downscaled, so the result publishes the mapping back to real screen\npixels: the envelope names the `screen` rectangle and each frame carries a `scale` factor.\nA model that measures a feature in a returned image multiplies by `scale` to get the\ncoordinate it should click."
+    },
+    {
+      "section": "Implementation",
+      "text": "Frame selection anchors on the injection instant rather than on the largest difference: it\nkeeps the newest frame captured before input, the settled end frame, and then the changed\nframes nearest the injection."
+    },
+    {
+      "section": "What the model sees",
+      "text": "One system-prompt section, registered through `ctx.systemPrompt.section()` in the slot the harness reserves for computer-use plugins (`TOOL_COMPUTER_USE`, order 3000) and resolved by a provider on each assembly; the code is `lib/prompt.mjs`, the registration is in `index.js`. It has three parts, of which only the first is unconditional:"
+    },
+    {
+      "section": "What the model sees",
+      "text": "- The standing description of the tools and of what a call returns.\n- The account paragraph, present only when this process runs as the paired agent account: which Windows account the session is, which account the person at the keyboard works as, and that their files may be read and written freely. `COMPUTER_CONTROL_ACCOUNTS=agent:user` overrides the pairing.\n- The desktop-target paragraph, present only when `desktopTarget` is not `local` or `user`: that commands act on the paired account's desktop rather than this session's, and that a shell command and a UAC prompt follow whoever executes them."
+    },
+    {
+      "section": "What the model sees",
+      "text": "Nothing is added to the conversation, so the guidance neither competes with the user's own messages nor grows the history."
+    },
+    {
+      "section": "Verbatim standing description",
+      "text": "```markdown\nComputer-control tools drive a desktop: computer_probe and computer_screenshot read the screen, and computer_move, computer_click, computer_drag, computer_scroll, computer_type, computer_key, computer_chord and computer_wait operate it."
+    },
+    {
+      "section": "Verbatim standing description",
+      "text": "A call returns two images by default: the last frame at or before the input was injected, and the settled frame after it. Read the first as the state the action started from and the second as its result; the envelope marks which returned frame is which. Every captured frame is also written to disk and the result prints an absolute path for each frame it returns, and those paths stay valid across a restart."
+    },
+    {
+      "section": "Token effect",
+      "text": "Conditional, and fixed within each condition. The standing description is 1005 characters in every request. The account paragraph adds 1196 characters and appears only in the paired agent account. The desktop-target paragraph adds 628 characters, or 690 when `desktopTarget` is `auto` because that value also states the fallback, and appears only when the target is not `local` or `user`. A deployment that runs as the user's own account with the default target therefore pays the standing description alone."
+    },
+    {
+      "section": "KV Cache effect",
+      "text": "Prefix-stable. The section is part of the system prompt and its text is identical across the requests of a deployment, so it extends the reusable prefix rather than replacing earlier tokens. Three package-owned changes invalidate reuse from that point on: moving a session between Windows accounts, which adds or removes the account paragraph; changing `desktopTarget` between `local` or `user` and any other value, which adds or removes the desktop-target paragraph; and switching between `agent`, `relay`, and `auto`, which changes that paragraph's length. All three are deployment changes, and a profile-patch edit that alters them is applied live by the loader without a restart."
+    },
+    {
+      "section": "What the model sees",
+      "text": "Present in every request of a session whose profile mounts this bundle; the eleven tool definitions and their parameter descriptions are sent on every turn, and nothing here is conditional or capped. One entry per tool in the request's tool list, in registration order: the eight action tools (`computer_move`, `computer_click`, `computer_drag`, `computer_scroll`, `computer_type`, `computer_key`, `computer_chord`, `computer_wait`), then `computer_screenshot`, `computer_probe`, and `computer_frames`. The descriptions state that each call performs exactly one action, and the parameter descriptions name every bound (`maxTypeChars`, `maxDragSteps`, `maxScrollClicks`, `maxZoom`, `maxWaitSeconds`) so a rejected argument is predictable rather than surprising."
+    },
+    {
+      "section": "Token effect",
+      "text": "A fixed cost per request for as long as the bundle is mounted, proportional to the eleven schemas. The parameter maps are deliberately narrow: coordinates are integers, a type string is capped, and no tool exposes a free-form object."
+    },
+    {
+      "section": "KV Cache effect",
+      "text": "Append-only and stable. The tool list is byte-identical across turns of a session, so it forms part of the reusable request prefix and does not invalidate it."
+    },
+    {
+      "section": "What the model sees",
+      "text": "Only on a turn where the model actually called one of the eight action tools or the screenshot tool, and only when the calling route accepts images: `imageMode: text` suppresses attachment entirely, and a route without image input receives the envelope text and no attachments. Up to `maxFrames` frames come as images, each carrying its offset in milliseconds relative to the instant input was injected, plus a text envelope naming the screen rectangle, the image-to-screen `scale`, the cursor, the window under the pointer, the captured and returned frame counts, and the gap between returned frames. One frame is the deliberate pre-action reference, and the envelope labels it so the gap from it to the rest is not read as a sampling gap."
+    },
+    {
+      "section": "Verbatim envelope",
+      "text": "```markdown\n<computer-control action=\"click\">\nresult: ok\ndetail: {...}\ncaptured: 12 frame(s), of which 2 were not returned"
+    },
+    {
+      "section": "Token effect",
+      "text": "The dominant cost of this package. An image is billed by its pixel dimensions, so `frameMaxEdge` and `maxAttachedImages` are the two knobs that control it: lowering either cuts tokens per call directly. A 1024x576 frame is far cheaper than the 1600x900 screen it came from, and is why capture downscales at all."
+    },
+    {
+      "section": "KV Cache effect",
+      "text": "Replaces earlier request tokens rather than appending to a stable prefix, so it does not extend a reusable prefix. Frames are never re-sent: they belong to the tool result of one turn, and a later turn that no longer shows them restores the shorter request."
+    },
+    {
+      "section": "Known Limitations and Deferred Work",
+      "text": "- **The recorder is not literally free while idle.** It is started by the first call of a\n  burst and stopped by a watchdog once `recorderIdleStopMs` elapses with no further call.\n  During that grace window the screen is still being captured; set `recorderIdleStopMs` to\n  a small value to shrink the window at the cost of re-priming (each cold start costs about\n  1.5-2 s before the recorder's first frame).\n- **Frame time is the moment the file was written, not the moment the pixels were read.**\n  `gdigrab` capture, JPEG encode, and DWM composition put a lag of roughly one frame\n  interval between the screen and the frame that represents it. A frame's offset is\n  therefore accurate to about one interval, not exact.\n- **A live pointer is composited into recorded frames.** The cursor may be drawn at a\n  position that does not match the moment the rest of the frame was captured.\n- **Recording is Windows-only.** It depends on `gdigrab`; there is no equivalent path for\n  macOS or Linux, and no plan for one in this package.\n- **The in-process fallback is much slower.** When the recorder cannot start, the helper\n  falls back to GDI+ capture, which this machine measures at 2-3 fps at 1024 px"
+    }
+  ],
+  "skipped": []
+}

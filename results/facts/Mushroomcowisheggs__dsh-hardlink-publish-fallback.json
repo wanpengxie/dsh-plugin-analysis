@@ -1,0 +1,199 @@
+{
+  "repo": "Mushroomcowisheggs/dsh-hardlink-publish-fallback",
+  "commit": "3783213666574d17a39f081e63a9414c86520644",
+  "extracted_at": "2026-11-11T13:03:51.515752+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 38537,
+    "lines_by_language": {
+      "JSON": 41,
+      "JavaScript": 321,
+      "Markdown": 495,
+      "Other": 27,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "DEFECT-REPORT.md",
+      "LICENSE",
+      "POST.md",
+      "PRIOR-REPORTS.md",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/plugin.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-hardlink-publish-fallback",
+    "version": "0.1.0",
+    "description": "Completes a write-tool file creation that failed because the volume cannot publish new files via hard link (exFAT/FAT/network shares).",
+    "type": "module",
+    "main": "index.js",
+    "scripts": {
+      "test": "node test/plugin.test.mjs"
+    },
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "bundle",
+      "exfat",
+      "hardlink"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Mushroomcowisheggs/dsh-hardlink-publish-fallback.git"
+    },
+    "bugs": {
+      "url": "https://github.com/Mushroomcowisheggs/dsh-hardlink-publish-fallback/issues"
+    },
+    "homepage": "https://github.com/Mushroomcowisheggs/dsh-hardlink-publish-fallback#readme",
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE",
+      "test"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The configuration layer this bundle contributes.\n#\n# One row, no services and no configuration: the plugin registers a single\n# `tools/execute` listener that only ever acts on a write whose publication\n# already failed. A profile lists this bundle by package name, so Node\n# resolution (not a relative path) finds the installed code.\n- insert:\n    - id: hardlink-publish-fallback\n      name: dsh-hardlink-publish-fallback\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Mushroomcowisheggs/dsh-hardlink-publish-fallback.git",
+      "where": "package.json:23"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Mushroomcowisheggs/dsh-hardlink-publish-fallback/issues",
+      "where": "package.json:26"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Mushroomcowisheggs/dsh-hardlink-publish-fallback#readme",
+      "where": "package.json:28"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-09-24T17:01:08Z",
+    "created_at": "2026-09-24T15:28:37Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-hardlink-publish-fallback",
+      "text": "Completes a `write` tool call that failed because the volume cannot publish a new\nfile by hard link."
+    },
+    {
+      "section": "The problem it solves",
+      "text": "On Windows, `@deepseek-ai/dsh-fs-local` publishes a **new** file by hard-linking\nits staged temp file onto the target. That link is the no-clobber guard: it\nrefuses to overwrite a file that appeared since the write intent was decided.\n\nVolumes without hard-link support — **exFAT**, **FAT32** (removable drives), and\nsome network shares — reject the call. Node surfaces the rejection as `EISDIR`\n(not `ENOTSUP`/`EPERM`), so the write fails with:"
+    },
+    {
+      "section": "The problem it solves",
+      "text": "```\ncannot write \"<workspace>\\<file>\": EISDIR: illegal operation on a directory,\n  link '<workspace>\\.<file>.<pid>.<uuid>.tmpdir\\<file>.tmp' -> '<workspace>\\<file>'\n```\n\nBecause the caller's create-if-absent intent is never satisfied, **every attempt\nto create a new file in that workspace fails**, permanently. Updating an existing\nfile is unaffected: that path publishes with rename/ReplaceFileW instead. The\nresult is a confusing half-broken tool — \"edits work, creating never does\"."
+    },
+    {
+      "section": "The problem it solves",
+      "text": "The same volumes also lack **symbolic links**, which is a separate and more\nsevere limitation for `dsh` itself: `dsh-app-boot`'s `healProfilesModuleFallback`\nsymlinks the install into the profile at composition time, so a `DSH_HOME` placed\non such a volume cannot boot any profile at all. This plugin does not address\nthat; keep `DSH_HOME` on a symlink-capable filesystem."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "1. Lets the real `write` run, untouched.\n2. Only if it failed with the hard-link publish signature, re-checks that the\n   target is still absent, then publishes with an intent-free write — the rename\n   path the volume supports, and the one every file update already uses.\n3. Records the same observation a successful write records.\n4. If anything in the takeover fails, returns the original error unchanged."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "**Default behavior is not modified.** An unaffected write never enters the\ntakeover, no existing row is overridden, and no service is replaced. Detection is\nstrict: both the `.tmpdir` staging marker and the `link ` verb must be present in\na `FS_IO_ERROR` message, so unrelated `EISDIR` failures (a directory target, a bad\npath component) are never touched."
+    },
+    {
+      "section": "Install",
+      "text": "Install from GitHub. Pin a tag or commit — without a ref, pnpm installs whatever\nthe default branch points at *now*, so a later push would silently change what\nruns on users' machines:\n\n```sh\ndsh plugin --profile web add \"github:Mushroomcowisheggs/dsh-hardlink-publish-fallback#v0.1.0\""
+    },
+    {
+      "section": "strongest: pin the exact commit",
+      "text": "dsh plugin --profile web add \"github:Mushroomcowisheggs/dsh-hardlink-publish-fallback#<40-char-sha>\"\n```\n\nThis package is plain JavaScript with **no `prepare`/build script**, so pnpm has\nno lifecycle script to run and no `allowBuilds` authorization is needed. (That\nrequirement applies to git dependencies that build from source; if a future\nversion ever gains a build step, users must allowlist it in the profile's\n`pnpm-workspace.yaml`.)"
+    },
+    {
+      "section": "Always quote paths",
+      "text": "When installing from a local checkout or a tarball, **double-quote the path**. An\nunquoted Windows path is mangled before pnpm ever sees it: sequences such as `\\d`,\n`\\h`, and `\\t` are read as escapes, so\n\n```sh"
+    },
+    {
+      "section": "registry package literally named \"dir\\my-plugin\"",
+      "text": "dsh plugin --profile web add some\\dir\\my-plugin"
+    },
+    {
+      "section": "RIGHT",
+      "text": "dsh plugin --profile web add \"some\\dir\\my-plugin\"\n```\n\n```sh"
+    },
+    {
+      "section": "from a local checkout",
+      "text": "dsh plugin --profile web add \"<path-to-checkout>\""
+    },
+    {
+      "section": "from a tarball",
+      "text": "pnpm pack\ndsh plugin --profile web add \"<path-to-checkout>\\dsh-hardlink-publish-fallback-0.1.0.tgz\"\n```\n\n`dsh plugin add` appends the bundle to the profile's `dsh.profile.bundles`\nautomatically, because this package declares `dsh.bundle`."
+    },
+    {
+      "section": "Verify",
+      "text": "```sh\ndsh --profile web --dump-config          # look for \"# == dsh-hardlink-publish-fallback\"\n```\n\nThen, in a workspace on the affected volume, ask the agent to create a new file.\nWithout the plugin it fails with the `EISDIR`/`link` error above; with it the call\nreports `Created file` as normal."
+    },
+    {
+      "section": "Verify",
+      "text": "Confirmed on real hardware (fixed exFAT volume, plugin installed from the published\ntag): new-file creation, creation inside a directory that had to be made, a second\nwrite to the same file without an intervening read, and no staging residue. Files\nthis plugin creates record the same observation a normal successful write records,\nso they behave like any other file afterwards."
+    },
+    {
+      "section": "Scope and limitations",
+      "text": "- **Only repairs new-file creation.** Updates and `edit` never used the hard-link\n  path, so they are already fine and are not intercepted.\n- **Windows-oriented symptom, host-agnostic logic.** The plugin keys on the\n  failure signature, not on the platform, so it also covers any POSIX filesystem\n  that refuses `link()` with the same shape.\n- **Does not help when writing to a drive root.** A separate, cross-filesystem\n  defect makes `writeFileAtomic` call `mkdir(<root>, { recursive: true })`,\n  which returns `EPERM` on Windows drive roots (verified here on both an NTFS and\n  an exFAT volume). Because this plugin completes the write through the same\n  service, a new file written directly at a drive root still fails. Use a subdirectory.\n- **Not a substitute for an upstream fix.** This is a runtime workaround for a\n  defect in `dsh-fs-local`'s publication logic; see\n  [DEFECT-REPORT.md](./DEFECT-REPORT.md) for the full analysis and a proposed fix.\n- **A small, inherited TOCTOU window.** The absence re-check and the write are\n  separate calls. This is the same window the original `writeText` already has\n  between its own probe and its publication; the no-clobber guard is what the\n  re-c"
+    },
+    {
+      "section": "Testing",
+      "text": "The suite replaces the plugin's seams (`fs`, `sandboxPolicy`) with fakes that\nreproduce the semantics of a hard-link-less volume, so it needs no exFAT volume, no\nrunning harness, and no dependencies — it runs anywhere Node runs. It asserts the\noutcomes that matter for this plugin's contract: the hard-link failure is completed\nwithout a no-replace guard, a target that exists by the time the takeover runs is\n**never** overwritten, unrelated failures and successful writes are passed through\nuntouched, and a failure inside the takeover leaves the caller's original outcome\nin place."
+    },
+    {
+      "section": "Repository layout",
+      "text": "```\n.\n├── package.json           # declares dsh.bundle.patch\n├── cordis.patch.yml       # the configuration layer this bundle contributes\n├── index.js               # the plugin module\n\nThe package files must stay at the repository **root**: a git install packs the\nwhole repository rather than applying the `files` allowlist, so `package.json`,\n`index.js`, and `cordis.patch.yml` all have to resolve from the root."
+    },
+    {
+      "section": "Discovery",
+      "text": "The repository carries the GitHub `dsh-plugin` topic, which is how\n`CONTRIBUTING.md` asks community plugins to make themselves discoverable."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](./LICENSE)."
+    }
+  ],
+  "skipped": []
+}

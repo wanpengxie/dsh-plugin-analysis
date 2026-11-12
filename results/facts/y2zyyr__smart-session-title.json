@@ -1,0 +1,658 @@
+{
+  "repo": "y2zyyr/smart-session-title",
+  "commit": "f7887be5d44e1498f7c366852d5e74646b3f558e",
+  "extracted_at": "2026-11-12T12:56:04.412323+00:00",
+  "tree": {
+    "files": 40,
+    "bytes": 685070,
+    "lines_by_language": {
+      "JSON": 70,
+      "JavaScript": 10468,
+      "Markdown": 870,
+      "Other": 35,
+      "TypeScript": 1229,
+      "YAML": 60
+    },
+    "outline": [
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "client.js",
+      "cordis.patch.yml",
+      "lib/capabilities.d.ts",
+      "lib/capabilities.js",
+      "lib/commands.d.ts",
+      "lib/commands.js",
+      "lib/config.d.ts",
+      "lib/config.js",
+      "lib/index.d.ts",
+      "lib/index.js",
+      "lib/observability.d.ts",
+      "lib/observability.js",
+      "lib/provider.d.ts",
+      "lib/provider.js",
+      "lib/route.d.ts",
+      "lib/route.js",
+      "lib/settings-schema.d.ts",
+      "lib/settings-schema.js",
+      "lib/settings.d.ts",
+      "lib/settings.js",
+      "lib/title-affix.d.ts",
+      "lib/title-affix.js",
+      "lib/title-policy.d.ts",
+      "lib/title-policy.js",
+      "lib/title-preview.d.ts",
+      "lib/title-preview.js",
+      "lib/title-prompt.d.ts",
+      "lib/title-prompt.js",
+      "lib/tokens.d.ts",
+      "lib/tokens.js",
+      "package.json",
+      "validation/verify-host-policy.mjs",
+      "validation/verify-i18n.mjs",
+      "validation/verify-preview.mjs",
+      "validation/verify-provider.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "smart-session-title",
+    "version": "0.5.0-rc.18",
+    "description": "Replacement session-title provider for DeepSeek Harness: compresses oversized first prompts instead of failing, and gates weak prompts.",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./client": {
+        "default": "./client.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh-CN.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-slots",
+          "@deepseek-ai/dsh-client-ui-settings-general",
+          "@deepseek-ai/dsh-client-ui-primitives"
+        ],
+        "platform": "web"
+      }
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "session-title"
+    ],
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": "^0.1.5-rc.1 || ^0.2.0-rc.1",
+      "@deepseek-ai/dsh-session-title": "^0.1.5-rc.1 || ^0.2.0-rc.1",
+      "@deepseek-ai/schemastery": "~3.18.2",
+      "@deepseek-ai/dsh-settings": "^0.1.5-rc.1 || ^0.2.0-rc.1"
+    },
+    "engines": {
+      "node": ">=22.15.0"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/y2zyyr/smart-session-title.git"
+    },
+    "publishConfig": {
+      "access": "public",
+      "tag": "next"
+    },
+    "homepage": "https://github.com/y2zyyr/smart-session-title#readme",
+    "bugs": {
+      "url": "https://github.com/y2zyyr/smart-session-title/issues"
+    },
+    "scripts": {
+      "test": "node validation/verify-host-policy.mjs && node validation/verify-provider.mjs && node validation/verify-i18n.mjs && node validation/verify-preview.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# smart-session-title bundle patch.\n#\n# `@deepseek-ai/dsh-session-title` allows exactly ONE registered provider:\n# `SessionTitleService.register()` throws\n#   session-title provider \"<id>\" is already registered\n# on a second registration. The `@deepseek-ai/dsh-base` bundle mounts\n# `@deepseek-ai/dsh-session-title-first-prompt-llm` under the row id\n# `session-title-llm`, so this plugin MUST disable that row in a later patch\n# layer before inserting its own provider. Verified: dsh-app-boot\n# `applyEntryPatches()` applies each bundle's patch list in\n# `dsh.profile.bundles` order, then the profile layer, so a row inserted by\n# dsh-base is addressable by id here.\n#\n# Phase 1 deliberately leaves `purpose`, `automatic` cadence and the\n# SessionTitleService itself untouched.\n\n# Step 1 — retire the built-in provider (single-provider slot).\n- id: session-title-llm\n  disabled: true\n\n# Step 2 — insert our provider.\n- insert:\n    - id: smart-session-title\n      name: 'smart-session-title'\n      config:\n        # Soft targets for the generated title (Core enforces maxTitleBytes: 80).\n        targetWords: 6\n        targetCjkCharacters: 12\n        # Raw-prompt ceiling we are willing to read at all.\n        maxRawInputBytes: 65536\n        # Budget actually sent to the title model. This is the load-bearing\n        # change: the built-in provider hard-failed (threw) above 4096 bytes\n        # and never even reached the model.\n        targetPreparedInputBytes: 12000\n        # A fenced code block larger than this is replaced by a placeholder.\n        codeBlockKeepBytes: 400\n        # Output ceiling for ONE title call. Generous on purpose: reasoning\n        # models (MiMo, DeepSeek V4 Flash) spend this budget on their thinking\n        # before any title text, and the old 96-token cap made them return\n        # `max-tokens` with nothing usable. A normal title still emits ~10\n        # tokens; this only bounds a runaway answer, it is not a cost knob.\n        maxOutputTokens: 1024\n        timeoutMs: 15000\n        maxAttempts: 2\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/index.d.ts",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/y2zyyr/smart-session-title.git",
+      "where": "package.json:57"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/y2zyyr/smart-session-title#readme",
+      "where": "package.json:63"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/y2zyyr/smart-session-title/issues",
+      "where": "package.json:65"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a/b",
+      "where": "validation/verify-host-policy.mjs:25"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a/b",
+      "where": "validation/verify-host-policy.mjs:61"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "command",
+      "name": "继续写",
+      "where": "lib/provider.js:380"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 36,
+    "pushed_at": "2026-10-04T08:35:29Z",
+    "created_at": "2026-09-13T09:09:30Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-10-04T08:35:29Z",
+      "inactive_days": 39,
+      "commit_count": 36,
+      "checked_at": "2026-11-12T12:56:04.412323+00:00",
+      "signals": [
+        "list:pushed_at=2026-10-04T08:35:29Z",
+        "list:commits=36"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "lib/capabilities.js",
+    "lib/commands.js",
+    "lib/config.js",
+    "lib/index.d.ts",
+    "lib/index.js",
+    "lib/observability.js",
+    "lib/provider.js",
+    "lib/route.js",
+    "lib/settings-schema.js",
+    "lib/settings.js",
+    "lib/title-affix.js",
+    "lib/title-policy.js",
+    "lib/title-preview.js",
+    "lib/title-prompt.js",
+    "lib/tokens.js",
+    "package.json",
+    "validation/verify-host-policy.mjs",
+    "validation/verify-i18n.mjs",
+    "validation/verify-preview.mjs",
+    "validation/verify-provider.mjs"
+  ],
+  "readme": [
+    {
+      "section": "smart-session-title",
+      "text": "English | [简体中文](README.zh-CN.md)\n\nSmarter automatic session titles for **DeepSeek Harness (DSH)**.\n**0.5.0-rc.18 — release candidate**, intended for the npm `next` tag.\n\nThis release adds **title preview and batch before/after comparison**: generate candidates without replacing titles, then apply only those you select. It also fixes exclusion reassembly, final title limits, settings bounds, live locks, fallback route ownership, permanent-error retries, and repeated Goal retitling."
+    },
+    {
+      "section": "smart-session-title",
+      "text": "The redesigned interface uses grouped forms, blue action buttons, and Title settings / Batch optimize navigation. Both pages share the same responsive panel width, so switching tabs keeps the border aligned. Common title rules stay visible; advanced parameters and detailed help are collapsed. A footer Save settings button saves all edits and shows the result. Batch processing supports automatic loading, title/ID search and project filters, with side-by-side title comparisons that stack in narrow panels. Batch routing reflects saved settings; fixed-model mode hides redundant automatic fallback. Date format appears only when a date affix is enabled."
+    },
+    {
+      "section": "What it does",
+      "text": "Summarizes the first meaningful task into a short session title. By default,\n**the title uses the exact provider and model used by that conversation**.\nNo separate model setup is required."
+    },
+    {
+      "section": "What it does",
+      "text": "- Compresses oversized and code-heavy prompts instead of rejecting them.\n- Waits for a meaningful task when a conversation starts with a greeting.\n- Protects manual titles and prevents automatic title drift.\n- Provides `/retitle` and a header button for explicit regeneration; an explicit\n  request also outranks the weak-prompt filter, so a session whose messages are\n  only terse commands (`继续写` / `发布`) can still be retitled.\n- **Title shape and content**: a character cap, an optional date affix, a title\n  **style** (default / short task name / action + object) and a **language**\n  (auto / Chinese / English).\n- **Title exclusions**: delete customer names or internal codes from the\n  generation flow and re-check the final title — it constrains only titles this\n  plugin generates.\n- **Title lock**: a lock button beside the title; automatic generation skips it,\n  regeneration refuses, and the batch list excludes it.\n- **Optimizes titles of your stored sessions in bulk** — pick them from a list,\n  watch a progress bar, and keep the run going (or stop it) after Settings is\n  closed. See [Optimize past titles](#optimize-past-titles).\n- Adds native settings (the page footer shows the runni"
+    },
+    {
+      "section": "What it does",
+      "text": "DSH retains ownership of fallback titles, persistence, projections, cancellation,\nand stale-result protection. This plugin replaces only the title provider."
+    },
+    {
+      "section": "Why",
+      "text": "In the tested DSH version, the built-in provider rejects inputs above 4096 bytes\nbefore calling the model. This plugin compresses them first. A 15,536-byte prompt\nhas been validated with a real model. Neither DSH Core nor `app.asar` is modified;\nall model calls use DSH's existing LLM service."
+    },
+    {
+      "section": "Install",
+      "text": "Package: [`smart-session-title@next`](https://www.npmjs.com/package/smart-session-title).\nThe `next` tag deliberately identifies a release candidate.\n\nUse your DSH profile's package-management workflow to install the package into\nthat profile. For a manually managed profile, run this **inside the profile directory**:\n\n```bash\nnpm install smart-session-title@next --legacy-peer-deps\n```"
+    },
+    {
+      "section": "Install",
+      "text": "DSH supplies the runtime peers; `--legacy-peer-deps` prevents npm from\ninstalling a separate Core stack. Follow the compatibility requirements below.\nFor local installation, copying this package into the profile's\n`node_modules/smart-session-title` is also supported and has been verified on Desktop.\n\nBack up the profile's `package.json` and `cordis.patch.yml`. Add the bundle **after**\nthe base and Web bundles, preserving all other existing bundles:"
+    },
+    {
+      "section": "Install",
+      "text": "```json\n{\n  \"dsh\": {\n    \"profile\": {\n      \"bundles\": [\n\nRestart DSH. The bundle disables the built-in `session-title-llm` provider before\nregistering this one. The startup log includes\n`smart-session-title provider registered ... automatic=all-prompts`.\n\nTo uninstall, remove the bundle entry and restart, then remove the package.\nThis restores the built-in provider. Disabling only this plugin's row while leaving\nits replacement patch active does not restore the built-in provider."
+    },
+    {
+      "section": "Compatibility",
+      "text": "The last live installation and startup verification used **DSH Desktop 2.0.9**,\n**Core 0.1.5-rc.1**, **Cordis 4.0.2**, **Schemastery 3.18.2**, and **Node ≥22.15.0**.\nThe official `deepseek-harness` **v0.2.0-rc.1** release and its matching\nregistry packages use Core **0.2.0-rc.1**. The current local DSH Desktop 2.0.9\n`app.asar` provides Core **0.2.0-rc.2**, **Cordis 4.0.4**, and\n**Schemastery 3.18.4**. The plugin's required contracts were checked against\nthe official `rc.1` documentation and the local `rc.2` bundle, but it has not\nyet had a live startup verification on Core 0.2. Peer ranges cover both Core\ngenerations: `^0.1.5-rc.1 || ^0.2.0-rc.1` for DSH runtime packages and\n`~3.18.2` for Schemastery. Other Core versions have not been verified."
+    },
+    {
+      "section": "Compatibility",
+      "text": "Startup checks the title and LLM services, then validates settings before the\nprovider is registered. Core 0.1 uses `settings.register` and `settingsScope`;\nCore 0.2 uses volatile plugin Config and `configForms`. The Web client uses\nofficial slots, locale, and Remote commands. No version-string hard rejection\nis used."
+    },
+    {
+      "section": "Settings",
+      "text": "Open **Settings → Smart Session Title** on Core 0.1. Core 0.2 offers the same\nsettings from both **Settings → Smart Session Title** and\n**Plugins → Installed → smart-session-title**. Core 0.1 persists the\n`smart-session-title` namespace in **`$DSH_HOME/settings.yaml`**. Core 0.2\nstores the same fields in this plugin's\nvolatile Config in the active DSH profile. Both use DSH's own atomic writes,\nrevisions, and change notifications. Changes affect the next generation; an\nin-flight request keeps its initial policy, except that a new title lock aborts it and prevents accepting its result. The plugin creates no sidecar file,\ncustom watcher, or HTTP server.\nThe footer of the page shows the loaded plugin version, so a bug report can name\nthe exact build."
+    },
+    {
+      "section": "Settings",
+      "text": "| Field | Default | Purpose |\n|---|---|---|\n| `enabled` | `true` | Master AI-title switch |\n| `mode` | Follow the session¹ | `current-session`, `configured`, or `disabled` |\n| `provider` | Unset | Existing DSH provider ID |\n| `model` | Unset | Model ID belonging to that provider |\n| `timeoutMs` | 15000 | Per-attempt timeout; UI range 1000–120000 ms |\n| `maxAttempts` | 2 | Total attempts; range 1–3 |\n| `maxTitleCharacters` | Unset (inherits 80 bytes) | Entire title **character cap**, including the date (Unicode code points); range 8–120 |\n| `titleDatePosition` | Unset (no date) | `prefix` / `suffix`: put the session's creation date before or after the title |\n| `titleDateFormat` | `ymd` | `ymd` (`2026-09-13`) or `md` (`09-13`); unused while no position is chosen |\n| `titleStyle` | Unset (plugin default, currently action + object) | `action-object` or `short-name` |\n| `titleLanguage` | Unset (follows the task's main language) | `zh` or `en`, forced |\n| `titleExclusions` | Unset (nothing excluded) | String list of words that must not appear in a generated title; at most 50 entries of at most 64 characters |\n| `lockedSessionIds` | Unset (nothing locked) | String list of session ids who"
+    },
+    {
+      "section": "Settings",
+      "text": "¹ For older deployments only, an explicit provider/model pin in the bundle row\nremains effective until the user chooses a mode. The shipped bundle has no pin.\nExplicit `current-session` always uses the session route."
+    },
+    {
+      "section": "Settings",
+      "text": "Edit settings, then click **Save settings** in the page footer. Changes stay local until saved; model and title rules are written together. Failed saves and page navigation retain your edits. Batch optimization uses the last saved route. Provider and model must both be selected in fixed-model mode.\n**Advanced** exposes timeout and attempts. Empty numeric fields inherit the bundle\nconfiguration; deployment-level compression options are in `cordis.patch.yml`."
+    },
+    {
+      "section": "Title shape and content (cap, date, style, language, exclusions)",
+      "text": "- **Maximum title characters**: empty inherits the deployment config, i.e. DSH's\n  `maxTitleBytes: 80` (about 26 CJK characters or 80 Latin characters). A value\n  between 8 and 120 applies a code-point cap *on top of* the byte cap, and the\n  cut prefers a separator so a word is not sliced in half.\n- **Date position / Date format**: the date is the **session's creation time**\n  (`session.header.createdAt`, local time), not the moment of generation —\n  regenerating a title, or batch-retitling an old session, keeps that session's\n  own day. Choose a prefix (`2026-09-13 Title`), a suffix\n  (`Title · 2026-09-13`), or none.\n- The affix is **reserved out of the 80-byte budget** before the body is\n  shortened: DSH truncates an over-long title from the *tail*, so an unreserved\n  suffix would be the first thing lost. A character cap therefore leaves room\n  for the date automatically. If the date would leave fewer than four body characters, it is omitted; an 8-character cap therefore omits a full year–month–day date.\n- A date containing an excluded term, or forming one across the body/date boundary, is omitted.\n- When no usable date exists (a session header without `createdAt`, or an\n  unreso"
+    },
+    {
+      "section": "Style and language",
+      "text": "| Setting | Title for the same task (\"检查登录接口并解决超时问题\") |\n|---|---|\n| Default (action + object) + Auto | 修复登录接口超时 |\n| Short task name + Chinese | 登录接口超时 |\n| Action + object + English | Fix login API timeout |"
+    },
+    {
+      "section": "Style and language",
+      "text": "- **Language: Auto** (the default) follows the language primarily used by the\n  task; technology names such as React or API, and error identifiers, keep their\n  original form. Choosing **Chinese** or **English** forces a translation, and\n  keeps those names unchanged too.\n- Both settings **replace** the corresponding default rule in the system prompt\n  instead of stacking next to it: asking for a short task name does not also ask\n  for a verb plus object. The retry directive follows the same preferences, so a\n  setting can never look \"intermittent\" on the second attempt.\n- Automatic generation, manual regeneration and batch runs share one code path,\n  so one setting covers all three.\n- **Changing a setting never rewrites an existing title** — titles live in the\n  session log and only the next generation reads the new value.\n- Limit: the fallback title (AI off) and the previous title retained after a\n  failed generation are both unaffected by style and language."
+    },
+    {
+      "section": "Title exclusions",
+      "text": "Fill one word per line under **Title exclusions** (customer names, internal\nproject codes), at most 50 entries of at most 64 characters:\n\n```text\nAcme Corp\ninternal-project-x\n```\n\nWith the task \"修复客户甲的订单导出错误\", an accepted result is\n\"修复订单导出错误\". Two layers:"
+    },
+    {
+      "section": "Title exclusions",
+      "text": "1. **Before generation** the words are **deleted** from the text handed to the\n   model (the terms themselves appear in neither the prompt nor the logs), and the\n   model is told that some names were removed on purpose, to refer to them\n   generically, and never to guess or restore one.\n2. **After generation** the **exact string about to be stored** is checked again;\n   a surviving term triggers one retry with a stronger directive."
+    },
+    {
+      "section": "Title exclusions",
+      "text": "If the last attempt still contains the term, the plugin **deletes the term from\nthe title** rather than giving the title up — because giving it up leaves DSH's\nfallback title on the sidebar, and that fallback is the opening of the raw first\nmessage, i.e. precisely the path that would display the name. If deleting the\nterm leaves nothing that passes validation, the generation fails outright and the\nsidebar keeps what it had."
+    },
+    {
+      "section": "Title exclusions",
+      "text": "Matching is **literal**: terms containing ASCII letters ignore case (`Acme` hides\n`ACME`), everything else matches exactly. There is no stemming, alias or\ntranslation — add `客户甲`, `ClientA` and `甲方` separately.\n\n**It constrains only titles this plugin generates.** That boundary is deliberate:"
+    },
+    {
+      "section": "Title exclusions",
+      "text": "- DSH's fallback title (**what a brand-new session shows until the model\n  answers**, taken from the raw first message) is not affected;\n- titles you renamed by hand are not affected;\n- the conversation itself is never modified — what the main model receives is\n  unrelated to this setting;\n- the term list itself is stored in plain text in DSH-managed settings: `settings.yaml`\n  on Core 0.1 or the active profile configuration on Core 0.2."
+    },
+    {
+      "section": "Title exclusions",
+      "text": "So its accurate name is \"title exclusions\", **not a privacy or redaction\nfeature**. Its most practical use is alongside **Optimize past titles**, to strip\na name out of a whole batch of historical titles."
+    },
+    {
+      "section": "Title lock",
+      "text": "The **lock button** beside a session title (to the right of \"Regenerate title\")\npins that title. The button shows the state itself: a closed padlock means\nlocked, and the hover text and accessible label always name what a click will do\n(\"Lock title\" / \"Unlock title\").\n\nAutomatic generation, `/retitle`, preview, application and batch processing honour it:"
+    },
+    {
+      "section": "Title lock",
+      "text": "| Rule | Actual behaviour |\n|---|---|\n| Automatic generation skips locked sessions | the provider abstains (`locked`) without a model call |\n| Regeneration says why it will not run | the button is disabled and reads \"Title is locked; unlock it first\" |\n| The batch list excludes locked sessions | they are not listed, and the count is joined by \"Locked sessions skipped: N\" |\n| A batch run cannot reach them | even \"Select all\" cannot select a locked row |"
+    },
+    {
+      "section": "Title lock",
+      "text": "- The lock lives in this plugin's **host-managed configuration** (`lockedSessionIds`),\n  **not in browser localStorage**: it survives a new window, a cleared browser\n  profile, and a DSH restart.\n- Locking during generation aborts the model stream. A final live check refuses the result even if a settings notification was missed. A full 500-entry lock list permits unlocking but rejects a new lock before writing.\n- There is no \"include anyway\" override — unlocking is an explicit action. That is\n  deliberate: a lock that one entry point can bypass is not a lock.\n- **Two things it cannot lock**, the same class of limit as the exclusion words:\n  ① while a session still has no title, DSH Core sets a fallback derived from the\n  first message; ② renaming a title yourself in DSH's UI is unaffected. The lock\n  protects an EXISTING title from this plugin's automatic, regenerate and batch\n  paths.\n- The honest cost: the id list lives in a config file, and a settings reset or a\n  restored settings backup drops every lock with it."
+    },
+    {
+      "section": "Optimize past titles",
+      "text": "The same page lists your **stored sessions** with the title each one currently\nhas, so you can batch-regenerate titles written before this plugin was installed.\nPick the rows (filter by project, select all within the current filter), then\nstart the run. Up to 300 rows are rendered at once — narrow with the project\nfilter for larger histories."
+    },
+    {
+      "section": "Optimize past titles",
+      "text": "- One generation at a time, **strictly sequential**. Each session may make up to `maxAttempts` model calls; an automatic fallback pass can add calls. Preview also calls the model, while applying a candidate does not.\n- Selected titles are rewritten, **including titles you renamed by hand** — the\n  explicit `/retitle` path is DSH's documented way to unpin a manual title.\n- Sessions without an eligible user message and subagent sessions are skipped\n  (the host has nothing to generate from, or refuses to resume them).\n- Progress (completed / succeeded / failed) is owned by a plugin-scope runner,\n  not by the page: **closing Settings does not stop a run**, and reopening the\n  page shows the live progress again. Only reloading the whole DSH window\n  interrupts a run, and every session that already finished keeps its new title.\n  **Stop** is immediate: `commands/execute` accepts a trailing `AbortSignal`, so\n  the in-flight generation is cancelled rather than waited out, the queue does not\n  continue, and the interrupted session is counted as neither success nor failure.\n  Stop is reachable both in the settings page and from a small global progress\n  pill (`shell.overlay`), which is what "
+    },
+    {
+      "section": "Preview and apply",
+      "text": "Click **Preview title** beside a conversation title to see its previous title and a candidate. Generating the preview calls the configured title model but does not write a `session/title` event. **Apply this title** saves that exact candidate through DSH's official `sessionTitle.rename()`; application makes no new model call. The accepted title has user ownership and is protected from automatic regeneration."
+    },
+    {
+      "section": "Preview and apply",
+      "text": "In **Batch optimize**, select sessions and click **Preview selected**. Review the side-by-side previous/candidate pairs, which stack in narrow panels. After preview, the session picker collapses; expand **Change session selection** to edit it. Search and project filters also apply to candidates. Filtering keeps existing selections, and the footer counts all selected candidates. Uncheck any you do not want, then click **Apply selected** in the footer. Applied rows are marked; failed applications retain their reason. **Optimize directly** still regenerates and writes immediately; its fallback option is under **Direct optimization and fallback**. Both preview and application run serially and support Stop. Closing Settings retains progress and comparisons; reloading the window clears the client queue and comparison view."
+    },
+    {
+      "section": "Preview and apply",
+      "text": "Previews use the current saved route without the temporary automatic fallback, which would invalidate their settings revision. Fix a failed route, save it, and preview again. The host keeps at most 500 candidates for one hour. New user input, Goal changes, title changes, or relevant title setting/route changes require a new preview. Locks and the AI switch are checked again at application. A host restart or plugin unload clears the cache."
+    },
+    {
+      "section": "Preview and apply",
+      "text": "Command equivalents are `/title-preview` (returns a JSON candidate with `previewId`) and `/title-apply <previewId>`. Tokens belong to one session and can be applied once. DSH records command lifecycle/results as usual; a preview changes no title and adds no synthetic user message."
+    },
+    {
+      "section": "Model modes",
+      "text": "- **current-session:** uses the actual conversation `request.route`, never a\n  substituted global default model.\n- **configured:** sends only title requests to the saved provider/model pair.\n  The main conversation route stays unchanged. Incomplete pairs are rejected.\n- **disabled**, or `enabled=false`: zero title-model calls and zero provider-title\n  events. Fallback titles, manual renaming, and title projections keep working."
+    },
+    {
+      "section": "Model modes",
+      "text": "Configured mode supports using a different provider and model from the conversation."
+    },
+    {
+      "section": "Regenerate",
+      "text": "Run `/retitle` or click the regenerate button beside the session title.\nOrdinary user-input sessions invoke DSH's official `SessionTitleService.refresh()`; Goal-only sessions use the guarded recovery described below.\nThe button shows loading, prevents duplicate requests, and returns to idle afterward."
+    },
+    {
+      "section": "Regenerate",
+      "text": "**Explicit regeneration can replace a manual title.** Automatic generation cannot.\nFailures preserve the previous title; cancellation never retries.\nWhen AI titles are disabled, `/retitle` returns `AI title generation is disabled.`\nwithout a model call. A third party calling bare `refresh()` does not receive the\nplugin's explicit permission token for replacing a manual title."
+    },
+    {
+      "section": "Regenerate",
+      "text": "**Explicit `/retitle` outranks the weak-prompt filter.** When no message names a\ntask — typically a writing-mode session whose only human messages are terse\ncommands such as `继续写` or `发布` — `/retitle` generates from the **newest** such\ncommand instead of failing. Automatic scheduling keeps the filter unchanged:\ngreetings, bare URLs, paths, code-only and punctuation-only prompts still abstain."
+    },
+    {
+      "section": "Regenerate",
+      "text": "A session driven only by DSH `/goal` commands is also retitleable on explicit\nrequest. Core does not include Goal-source messages in its ordinary title input,\nso the plugin reads the newest Goal objective as an explicit-only temporary input;\nit does not append a synthetic conversation message or use this path for automatic\ntitle scheduling. Repeated `/retitle` after `/goal edit` uses the new objective even when a previous title exists. A newer generation supersedes an older one, and intervening input, route changes or manual renaming prevents stale output from being saved. Accepted Goal titles use the official `rename()` API and have user ownership."
+    },
+    {
+      "section": "Regenerate",
+      "text": "Permanent adapter failures such as `UNKNOWN_MODEL`, `NO_ADAPTER`, `AUTH` and invalid credentials do not retry. Transient failures use cancellable backoff (250 ms, then 500 ms), respecting `providerRetryAfterMs` only within a bounded window of at most 5 seconds and no longer than `timeoutMs`. A longer retry-after is reported as a failure instead of retrying early. Output-quality retries remain bounded by `maxAttempts`."
+    },
+    {
+      "section": "Weak first prompts",
+      "text": "`Hello → Thanks → Are you there? → Help me audit database performance` spends no\ntitle calls on the greetings and generates a title when the task appears.\nAccepted provider titles do not drift with later messages. Child sessions do not\nautomatically receive titles."
+    },
+    {
+      "section": "Weak first prompts",
+      "text": "The policy reads messages and titles replayed by Core, rather than maintaining its\nown history. Reopening a greeting-only session after a real process restart and\nsending a meaningful task has been verified through the Web UI.\n`/retitle` is an explicit request and relaxes exactly one weak shape: the newest\nshort imperative becomes an eligible source. Every other weak shape (greeting,\nbare URL/path/code, punctuation-only, demonstrative) still abstains even then."
+    },
+    {
+      "section": "Privacy",
+      "text": "Title generation is an additional model request, bounded by `maxAttempts`.\nBy default it uses the conversation's model. Configured mode sends the compressed\nfirst meaningful task to the explicitly selected provider, which may be different."
+    },
+    {
+      "section": "Privacy",
+      "text": "Titles never enter model context. The plugin does not append an extra\n`session/title-llm-request` prompt copy to the session log.\nOnly the fourteen declared Settings fields are accepted. Unknown credential-shaped\nfields such as `apiKey`, token, cookie, credential, secret, and password are rejected.\nCredentials remain entirely managed by DSH."
+    },
+    {
+      "section": "Privacy",
+      "text": "Plugin diagnostics contain no full prompt, model response, or credential.\nRaw adapter error messages are replaced with fixed failure descriptions to prevent\nsensitive input being echoed into diagnostic logs."
+    },
+    {
+      "section": "Observability",
+      "text": "The plugin uses **`ctx.logger`**. Desktop's official **FileExporter / LogFileSink**\npersists records in **`<DSH userData>/logs/host/dsh-YYYY-MM-DD.log`**, with warnings\nand errors also written to `.error.log`. On macOS, userData is commonly\n`~/Library/Application Support/DSH Desktop/`."
+    },
+    {
+      "section": "Observability",
+      "text": "Search for `smart-session-title generation`. Metadata includes sessionId, route,\nattempt, rawBytes, preparedBytes, elapsedMs, result/outcome, and failureReason.\nOutcomes distinguish generated, abstained, failed, timed-out, retried, and cancelled.\nDesktop's own masking may replace sessionId with `****`; the plugin does not bypass it.\nEnable info-level logging to retain success and abstention records."
+    },
+    {
+      "section": "Observability",
+      "text": "`/title-status` shows process-local counters, which reset on restart. Persistent\nhistory lives in the log files. Standalone SDK/Web runners may not install a file\nexporter by default; the plugin does not create its own sink. Real disk persistence\nhas been tested using the shipped Desktop exporter in an isolated DSH runtime."
+    },
+    {
+      "section": "Conflicts",
+      "text": "DSH permits only one title provider. An `already registered` error means another\nprovider is active and loading must fail. Do not enable another third-party title\nprovider alongside this plugin. The supplied bundle replaces the built-in one."
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Problem | Likely cause / action |\n|---|---|\n| Always fallback | Model failed, output was rejected, or AI is disabled; inspect diagnostics |\n| already registered | Another title provider is active; remove the conflicting bundle |\n| /retitle says disabled | Master switch is off or mode is disabled |\n| Configured model fails | Provider/model unavailable or unsuitable for the short output budget; try Current session model |\n| Title never updates | Inspect logs; existing manual/provider titles are automatically protected |\n| Greeting remains | No meaningful task yet; send the actual task |\n| Settings prevent startup | Invalid value or unknown field; correct the plugin namespace |\n| No successful generations in log files | Check Desktop log level and its file exporter |\n| Batch: most old sessions fail with `model error: upstream failure` | Those sessions logged a provider/model DSH no longer serves, so \"Current session model\" cannot work for them. The list flags them before the run; switch to Configured model (or tick the fallback) and use Retry failed |\n| Configured model selected, but titles still follow the session model | The provider+model pair was not saved. Click Save settings t"
+    },
+    {
+      "section": "Package contents",
+      "text": "This repository contains the installable plugin, bilingual documentation, and license.\nPrivate development reports, session records, and local test fixtures are excluded."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **REASONING_CONTROL_UNAVAILABLE_CONFIRMED:** there is no uniform cross-adapter\n  reasoning-disable control. The plugin inherits adapter defaults instead of forcing `off`.\n- A reasoning model's thinking is billed against the same output budget: the old\n  96-token cap made them return `max-tokens` with no title text at all. The\n  default is now `maxOutputTokens: 1024`, and a `max-tokens` finish with **no\n  text block** is treated as budget starvation and retried once. A model that did\n  emit text and kept going is still a terminal protocol failure — its paragraph\n  is never salvaged into a title.\n- Configured mode picks the provider and model from those already registered\n  in DSH, and falls back to manual IDs when a provider lists no models. Settings\n  and header copy follow the DSH UI language (zh/en dictionaries; other\n  languages fall back to English).\n- The batch runner lives in the **Web client half**, not on the host: closing the\n  settings page does not stop a run, but reloading the DSH window does. The host\n  modules in `lib/*.js` are tracked and shipped. Their original TypeScript sources\n  are unavailable, so JavaScript is maintained directly alongside `lib/*.d.ts`.\n  A p"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    },
+    {
+      "section": "Development checks",
+      "text": "Run `npm test` with Node.js 22.15 or newer. The repository includes client/i18n,\nhost-policy, provider behavior, preview lifecycle and host integration tests; no additional dependencies are needed.\nValidation files are excluded from the published package by the `files` whitelist."
+    },
+    {
+      "section": "Development checks",
+      "text": "Settings reject out-of-range or fractional numeric input with an explanation and\nverify persisted values after writes. Automatic fallback preserves overall batch\ncounts and shows retry progress separately. Stopping it is reported as stopped;\nmode, provider/model changes and explicit same-value saves during fallback are preserved when restoring the route.\nThe exclusion tests drive the real provider with a fake model stream and assert\nthat a term never reaches either half of the prompt, that a surviving term is\nretried exactly once and then deleted, and that an all-excluded prompt abstains\nwithout a model call.\nThe lock tests cover all four entry points: the provider abstains AND does not\nconsume the `/retitle` permission, the command handler refuses, the header button\ndisables itself with the reason, and the batch list drops locked rows so that even\n\"Select all\" cannot reach them.\nThe short-command tests cover both sides: a session made only of `继续写` / `发布`\nstill abstains with zero model calls on an automatic schedule, while an explicit\n`/retitle` generates from the newest one and overrides a manual title — and a\nnoise-only session (greeting, URL, code) still abstains even for `/ret"
+    },
+    {
+      "section": "Development checks",
+      "text": "The settings page shows model choices and common title rules directly, with a unified Save settings button in the footer. Advanced parameters and usage help start collapsed. Navigation switches between settings and batch comparison. The layout adapts to narrow panels and DSH's dark theme; fields have associated labels and visible keyboard focus.\n\nTitle rules use two columns, stack in narrow panels, and give exclusion words a full-width editor.\nDetailed rules stay in a collapsed help section."
+    },
+    {
+      "section": "Copy the current SessionId",
+      "text": "The conversation header shows the current session ID in small, muted monospace text. Click to copy the full ID even when the display is truncated; hover to see the full value. Paste it into another conversation to help an agent locate this session (reading requires suitable tools and permissions). Open another session first to copy its ID. A failed clipboard write offers a read-only field for manual copying."
+    },
+    {
+      "section": "Copy the current SessionId",
+      "text": "In plugin settings, **Show Session ID** changes this after clicking Save settings. It is on by default, persists as `showSessionId`, and works independently of AI title generation and title locking. It does not change session titles.\n\nOn DSH Desktop 2.0.9 the ID occupies a separate left-aligned line between the title toolbar and the conversation/trajectory tabs. This scoped layout depends on the verified host CSS class; if it changes, the ID falls back to the inline header slot."
+    },
+    {
+      "section": "Copy the current SessionId",
+      "text": "The conversation header shows text labels for Regenerate title and Lock title / Title locked. Regeneration replaces the current title, including manual titles, without rerunning the conversation. Locking blocks automatic, manual and batch generation by this plugin; click Title locked to unlock. Chatting, manual renaming and DSH fallback titles remain available. The settings page explains these actions too."
+    },
+    {
+      "section": "Copy the current SessionId",
+      "text": "Controls share consistent heights, spacing and button hierarchy, with primary actions anchored at the bottom. Candidate titles use a pale blue background, completion and in-flight progress have distinct presentations, and detailed help starts collapsed."
+    },
+    {
+      "section": "Copy the current SessionId",
+      "text": "Title model requests omit the optional `sessionId` association from the first attempt, including with `maxAttempts: 1`. This retains rc.16 isolation from session-linked DSH request extensions. A global `REQUEST_EXTENSION` failure is terminal and reports its cause without repeating the request. All model calls still use `ctx.llm.stream()`.\n\nThe Core 0.2 global settings entry, late settings-service mounting, supported refresh icon, and explicit query-container sizing from rc.16 remain in place."
+    },
+    {
+      "section": "Copy the current SessionId",
+      "text": "The additional regressions cover exclusions reconstructed by deletion, compressed placeholders and system examples; final title/date caps; both settings schema generations; locks during streaming; permanent/transient errors and cancellation during backoff; one-shot previews, expiry and stale-session rejection; selected batch application; repeated Goal edits and superseded Goal generations. The fake React renderer tracks effect dependencies and cleanup, and exercises effect replay and unmount cancellation."
+    },
+    {
+      "section": "smart-session-title",
+      "text": "[English](README.md) | 简体中文\n\nDeepSeek Harness 会话智能标题插件。**0.5.0-rc.18 — 发布候选版本**，发布时使用 npm `next` 标签。"
+    },
+    {
+      "section": "功能",
+      "text": "本版新增**标题预览与批量旧／新标题对比**：先生成候选，确认后只应用勾选项。修复排除词删除后重组、最终标题长度、设置列表越界、生成中锁定、兜底覆盖用户路由、永久错误重复调用，以及 Goal 编辑后再次重生成的问题。\n\n设置页采用分组表单与蓝色操作按钮，通过「标题设置／批量优化」切换页面。两页使用相同的自适应面板宽度，切换时外框保持对齐。常用标题规则直接展示，高级参数和详细说明折叠；底部「保存设置」按钮统一保存并显示结果。批量页支持自动加载、标题或 ID 搜索和项目筛选，旧／新标题并排显示，窄窗口改为上下对照。批量路由显示已保存配置；固定模型模式隐藏重复的自动兜底选项。日期格式仅在添加日期时显示。\n\n自动把会话任务概括为短标题。默认直接使用**该会话实际使用的 provider/model**，无需另选模型。\n压缩过长、代码密集的输入，拒绝无任务含义的问候和无用模型输出；保留 DSH 的 fallback、人工标题保护、持久化、投影与并发控制。"
+    },
+    {
+      "section": "功能",
+      "text": "- 提供 `/retitle` 与标题旁的重新生成按钮，显式重新生成可覆盖人工标题，且不受弱提示过滤限制\n  （全为 `继续写` / `发布` 这类短命令的会话也能改名；自动生成照旧过滤）。\n- **标题格式与内容**：字数上限、日期前缀/后缀，以及标题**风格**（默认/简短任务名/动作＋对象）与**语言**（自动/中文/英文）。\n- **标题排除词**：把客户名、内部代号等词从生成流程中删除，并复核最终标题；只约束本插件生成的标题。\n- **标题锁定**：会话标题旁的锁按钮；自动生成跳过、重新生成拒绝、批量默认排除。\n- **批量优化历史会话标题**：列表勾选、进度条、关闭设置页后继续跑，并且随时可停。\n- 设置页页脚显示当前插件版本，便于反馈问题时指明构建版本。"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "已验证的 DSH 内建 provider 在输入超过 4096 bytes 时不调用模型。本插件会压缩再生成；15,536-byte 原始测试提示已通过真实模型验证。\n它只替换 provider，不修改 Core 或 `app.asar`，不自建 LLM HTTP client。"
+    },
+    {
+      "section": "安装",
+      "text": "手动管理的 profile 可在其目录内执行：\n\n```bash\nnpm install smart-session-title@next --legacy-peer-deps\n```\n\n运行时 Core 依赖由 DSH 提供；此参数避免 npm 安装另一套 Core。请确认下方兼容版本。\n\n从 npm 安装：`smart-session-title@next`（当前为 RC 版本）。将包放入所选 profile 的 `node_modules/smart-session-title`，在该 profile 的 `package.json` 中把 bundle 放在 base/Web bundle 之后：\n\n```json\n{\n  \"dsh\": {\n    \"profile\": {\n      \"bundles\": ["
+    },
+    {
+      "section": "安装",
+      "text": "保留 profile 中原有的其他 bundles。备份 profile 的 `package.json` 和 `cordis.patch.yml` 后再编辑，重启 DSH。\n`cordis.patch.yml` 会禁用内建 `session-title-llm`，然后注册本插件。\n启动日志应包含 `smart-session-title provider registered ... automatic=all-prompts`。\n\n移除 bundle 并重启即可恢复内建 provider。不要直接禁用本插件行而留下禁用内建 provider 的 patch。\n已在真实 DSH Desktop profile 完成安装和启动验证。"
+    },
+    {
+      "section": "兼容性",
+      "text": "上一次完成真实安装与启动验证的环境：DSH Desktop **2.0.9**、Core **0.1.5-rc.1**、Cordis **4.0.2**、Schemastery **3.18.2**，Node **≥22.15.0**。\n官方 `deepseek-harness` **v0.2.0-rc.1** release 及其 registry packages 使用 Core **0.2.0-rc.1**。本机 DSH Desktop 2.0.9 的 `app.asar` 提供 Core **0.2.0-rc.2**、Cordis **4.0.4**、Schemastery **3.18.4**。已对照官方 `rc.1` 文档和本机 `rc.2` bundle 检查本插件所需的 API 契约，但尚未在 Core 0.2 上完成插件启动验证。peerDependencies 覆盖 Core 两代：DSH 运行时包使用 `^0.1.5-rc.1 || ^0.2.0-rc.1`，Schemastery 使用 `~3.18.2`。\n其他 Core 版本尚未验证。\n启动时检查 title service、LLM；注册 provider 前会验证设置。Core 0.1 使用\n`settings.register` / `settingsScope`；Core 0.2 使用 volatile plugin Config / `configForms`。\nWeb 端使用 DSH 原生 slots、locale 和 Remote commands。\n插件不按版本字符串硬编码拒绝。"
+    },
+    {
+      "section": "设置",
+      "text": "Core 0.1 打开 **设置 → 智能会话标题**；Core 0.2 可在 **设置 → 智能会话标题** 或 **插件 → 已安装 → smart-session-title** 打开相同设置页。\nCore 0.1 通过 DSH 官方 settings service 写入 **`$DSH_HOME/settings.yaml` 的 `smart-session-title` namespace**；\nCore 0.2 将相同字段存入当前 DSH profile 中本插件的 volatile Config。两者都由 DSH 负责原子写入、revision 和变更通知。\n没有插件自建 sidecar、watcher 或 HTTP 服务。下一次生成实时使用新设置，当前进行中的请求保持开始时的配置；新设的标题锁例外，会中断生成并阻止结果写入。\n设置页页脚显示当前插件版本。"
+    },
+    {
+      "section": "设置",
+      "text": "| 字段 | 默认 | 含义 |\n|---|---|---|\n| `enabled` | `true` | AI 标题总开关 |\n| `mode` | 未选择时跟随会话¹ | `current-session` / `configured` / `disabled` |\n| `provider` | 未设置 | 已在 DSH 中配置的 provider ID |\n| `model` | 未设置 | 同一 provider 下的 model ID |\n| `timeoutMs` | 15000 | 每次尝试期限；UI 范围 1000–120000 ms |\n| `maxAttempts` | 2 | 总尝试数；范围 1–3 |\n| `maxTitleCharacters` | 未设置（继承 80 字节） | **整个标题**的字数上限，包含日期（Unicode 码点）；范围 8–120 |\n| `titleDatePosition` | 未设置（不加日期） | `prefix` / `suffix`：把会话创建日期放在标题前或后 |\n| `titleDateFormat` | `ymd` | `ymd`（`2026-09-13`）或 `md`（`09-13`）；未选位置时该项无作用 |\n| `titleStyle` | 未设置（插件默认，当前为「动作＋对象」） | `action-object`（动作＋对象）或 `short-name`（简短任务名） |\n| `titleLanguage` | 未设置（跟随任务主要语言） | `zh`（中文）或 `en`（英文），强制生效 |\n| `titleExclusions` | 未设置（不排除） | 字符串数组：不希望出现在生成标题里的词，最多 50 条、每条 ≤ 64 字符 |\n| `lockedSessionIds` | 未设置（无锁定） | 字符串数组：标题被锁定、任何入口都不得改写的会话 id，最多 500 条 |"
+    },
+    {
+      "section": "设置",
+      "text": "¹ 兼容原 Phase 1/2 部署：若在 bundle 行配置中明确钉住了 provider/model，且用户从未选择模式，仍保留该路由。\n显式选择 `current-session` 后始终使用会话路由。本插件随附配置没有钉住模型。\n\n选择「固定模型」后，先填完整 provider/model，再点击「保存设置」，一次提交完整路由。\nID 来自 DSH 的 Models 页面；本插件没有模型浏览器，也不接受凭据字段。\n所有设置先编辑，再点击页面底部的「保存设置」统一生效；保存失败保留填写内容。切换页面保留未保存的草稿，批量优化使用最后保存的模型配置。模型提示与标题操作说明位于页面底部的「使用说明」。"
+    },
+    {
+      "section": "标题格式与内容（字数、日期、风格、语言、排除词）",
+      "text": "- **标题最大字数**：留空表示继承部署配置，也就是 DSH 的 `maxTitleBytes: 80`（约 26 个汉字或 80 个西文字符）。\n  填写 8–120 后，先按字节截断、再按字数截断，两个上限同时成立；截断优先落在分隔符处，避免切断单词。\n- **日期位置 / 日期格式**：日期取**会话创建时间**（`session.header.createdAt`，本地时区），不是「生成时刻」——\n  重新生成标题、或对历史会话批量补标题，日期都保持该会话自己的那天。位置可选前缀（`2026-09-13 标题`）\n  或后缀（`标题 · 2026-09-13`），也可选「不添加」。\n- 前缀与后缀都会**先从 80 字节预算里扣除**再截断正文：DSH 对超长标题是按字节**从尾部**截断的，\n  不预留的话后缀会第一个被吃掉。字数上限也包含日期，正文可用字数会减去日期占用的空间。若不足以为正文留下 4 个字符，则省略日期；例如字数上限为 8 时不添加完整年月日。\n- 日期本身命中排除词，或在正文与日期的连接处拼出排除词时，省略日期。\n- 日期取不到（会话头缺少 `createdAt`、或时区不可解析）时不加前后缀，而不是生成一个坏标题。\n- 该日期只作用于**本插件生成的标题**：AI 关闭时的 fallback 标题、以及你手动重命名的标题由 DSH Core 生成/写入，\n  不会带上它。"
+    },
+    {
+      "section": "风格与语言",
+      "text": "| 设置 | 同一段任务「检查登录接口并解决超时问题」的标题 |\n|---|---|\n| 默认（或动作＋对象）＋自动 | 修复登录接口超时 |\n| 简短任务名＋中文 | 登录接口超时 |\n| 动作＋对象＋英文 | Fix login API timeout |\n\n- **语言「自动」**（默认）跟随任务内容的主要语言，技术名称（React、API、错误标识符）保持原样；\n  选**中文**或**英文**则强制翻译，技术名称同样保持原样。\n- 这两项**替换**系统提示里对应的默认规则，而不是叠加：选「简短任务名」时不会同时要求「动词＋对象」，\n  重试指令也跟随同一设置，所以不会出现「第一次遵守、重试又变回去」。\n- 三者（自动生成、手动重新生成、批量处理）走同一个入口，因此设置对三种场景同时生效。\n- **修改设置不会重写已有标题**——标题已写在会话日志里，只有下一次生成才会用新设置。\n- 边界：AI 关闭时的 fallback 标题、以及模型失败时保留的旧标题，都不受风格/语言影响。"
+    },
+    {
+      "section": "标题排除词",
+      "text": "在 **标题排除词** 里每行填一个词（例如客户名、内部项目代号），最多 50 条、每条 ≤ 64 字符：\n\n```text\n客户甲\n内部项目代号\n```\n\n任务是「修复客户甲的订单导出错误」时，生成结果可以是「修复订单导出错误」。两层处理：\n\n1. **生成前**：这些词会从送给模型的提示文本中**删除**（词本身不会出现在提示或日志里），\n   并告知模型「部分名称已被移除，需要用概括性称呼，不要猜测或还原」。\n2. **生成后**：对**最终要入库的那个标题字符串**再检查一次；仍命中时先带强化指令重试一次。\n\n最后一次尝试仍命中时，**直接把这个词从标题里删掉**，而不是放弃这个标题。原因是：放弃会让 DSH 的\nfallback 标题留在侧栏上，而 fallback 正是取首条用户消息的开头——那才是真正会把客户名显示出来的路径。\n若删词后标题已经空到无法通过校验，本次生成明确失败（侧栏保留原样），不做无意义的兜底。"
+    },
+    {
+      "section": "标题排除词",
+      "text": "匹配规则：**按字面匹配**。含英文字母的词忽略大小写（`Acme` 命中 `ACME`），其余按原文精确匹配；\n不存在词形还原、别名或翻译——`客户甲` / `ClientA` / `甲方` 需要分别添加。\n\n**它只能约束本插件生成的标题**，这是刻意不扩大宣传的边界：\n\n- DSH 的 fallback 标题（**新会话在模型回答前显示的就是它**，取自首条消息原文）不受影响；\n- 你手动重命名的标题不受影响；\n- 对话原文当然不会被修改——发给主模型的对话内容与本设置无关；\n- 排除词表本身以明文存在 DSH 管理的设置中：Core 0.1 是 `settings.yaml`，Core 0.2 是当前 profile 配置。\n\n因此它的准确名字是「标题排除词」，**不是隐私或脱敏功能**。它最实际的用途是配合**批量优化历史标题**，\n把一批历史标题里的名字一次性去掉。"
+    },
+    {
+      "section": "标题锁定",
+      "text": "会话标题旁的**锁定按钮**（在「重新生成标题」右边）用于把某个标题钉死。锁定状态由按钮本身显示：\n闭合的锁表示已锁定，鼠标悬停与无障碍标签始终说明点击会做什么（「锁定标题」/「解锁标题」）。\n\n锁定覆盖自动生成、`/retitle`、预览、应用预览及批量处理：\n\n| 你的规则 | 实际行为 |\n|---|---|\n| 自动生成跳过锁定会话 | provider 直接弃权（`locked`），不发起模型调用 |\n| 手动重新生成提示已锁定 | 重新生成按钮变为禁用并显示「标题已锁定，请先解锁」 |\n| 批量列表排除锁定会话 | 列表不显示它们，并在计数旁显示「已跳过已锁定会话: N」 |\n| 批量运行覆盖不到它们 | 连「全选」也选不中锁定行 |"
+    },
+    {
+      "section": "标题锁定",
+      "text": "- 生成中锁定会立即中断模型流；接受结果前再次读取锁定状态，避免遗漏通知后仍然写入。达到 500 个锁定项后仍可解锁，但新增项会在写入前被拒绝。\n- 锁定状态保存在**插件自己的 DSH 托管配置**（`lockedSessionIds`），\n  **不是浏览器 localStorage**：换窗口、清浏览器数据、重启 DSH 后锁定都还在。\n- 没有「仍然包含」的覆盖开关——解锁是一个明确动作。这是刻意的：锁定若能被某个入口绕过就不叫锁定。\n- **锁不住的两件事**（与排除词同类的边界）：① 会话还没有标题时，DSH Core 仍会写入取自首条消息的\n  fallback 标题；② 你自己在 DSH 界面手动改名不受影响。锁定保护的是**已有标题**不被本插件的自动、\n  重新生成与批量路径改写。\n- 代价（诚实说明）：会话 id 列表存在配置文件里，且「重置设置」或还原配置备份会一并丢掉锁定。"
+    },
+    {
+      "section": "批量优化历史标题",
+      "text": "同一页面会列出**已存储的会话**及各自当前标题，用于给插件安装之前产生的会话补做标题优化：\n勾选要处理的行（可按项目目录筛选后全选）再开始；单次最多渲染 300 行，历史很多时先用项目目录筛选。"
+    },
+    {
+      "section": "批量优化历史标题",
+      "text": "- 每次只处理一个会话，**严格串行**。每个会话可能按 `maxAttempts` 重试，自动兜底还会增加调用；预览也调用模型，应用预览不再调用。\n- 被选中的标题会被重写，**包括你手动改过的标题**——显式 `/retitle` 是 DSH 设计上解开人工标题钉住的方式。\n- 没有可用用户消息的会话与子代理会话会被跳过（前者无内容可生成，后者 host 拒绝恢复）。\n- 进度（已完成 / 成功 / 失败）由插件作用域的运行器持有，而不是页面状态：**关闭设置页不会中断批次**，\n  重新打开设置页会继续显示实时进度。只有刷新整个 DSH 窗口才会中断；已完成会话的新标题都已落盘。\n  **停止是即时的**：`commands/execute` 接受尾部 `AbortSignal`，因此当前会话的生成会被真正中断，队列不再继续，\n  被中断的会话既不算成功也不算失败。停止入口有两个：设置页内按钮，以及全局的小进度浮标（`shell.overlay`）——\n  后者让「设置页已关闭」的后台批次也能随时停。\n- 失败项会显示 **host 给出的真实原因**（路由失效 / 超时 / maxOutputTokens / 无可用消息），而不是笼统的「失败」；\n  **重试失败项** 会用当前生效的路由设置只重跑这些会话。\n- 路由注意：**跟随当前会话模型** 使用每个已存储会话自己记录的模型；旧会话记录的 provider/model 可能已不存在、\n  或凭据已失效，这类失败会在毫秒级返回。此时切到 **指定模型** 选一个可用组合，再点 **重试失败项**。\n- 列表会显示每个会话**记录的模型**（取自 DSH 的 `modelSelection` 投影），并在**开跑前**标出 DSH 已不再提供的那些\n  并给出数量：这些会话在「跟随当前会话模型」下必然失败。\n- **自动兜底**（默认关闭，需手动勾选）：已保存「指定模型」时，跑完一批后会用该路由**只重跑失败的会话一次**，\n  结束后仅在仍拥有临时路由时恢复原来的标题模式；用户中途保存的 mode/provider/model（包括同值模式）会保留。重跑期间是一次真实的设置写入，因此默认不开启。\n  勾选状态记在浏览器本地存储，而不是会跨窗口和重启共享的 DSH 设置中；它只控制当前浏览器的批量行为。"
+    },
+    {
+      "section": "标题预览与应用",
+      "text": "在会话标题旁点击「预览标题」，查看原标题和候选标题。预览调用标题模型，但不写入 `session/title`。点击「应用此标题」后，才通过 DSH 官方 `sessionTitle.rename()` 保存该候选，应用不再次调用模型。确认的标题按人工标题保护，自动生成不会覆盖。\n\n在「批量优化」页选择会话后点击「预览所选」，查看并排的原／候选标题；窄窗口自动改为上下对照。预览完成后，会话选择区收起，可通过「重新选择会话」展开。搜索和项目筛选也适用于候选标题，筛选不会清掉已有勾选；底部会显示全部已勾选候选数。取消不满意项的勾选，再点击底部「应用所选」。已应用项会标记，失败项保留原因。「直接优化」会直接生成并保存；它的兜底选项收在「直接优化与兜底设置」中。预览、应用均串行处理并支持停止，关闭设置页保留进度和对比；刷新整个窗口会清空客户端队列与对比视图。"
+    },
+    {
+      "section": "标题预览与应用",
+      "text": "预览使用当前已保存的路由，不执行临时切换设置的自动兜底；修正路由并保存后，应重新预览。host 内存中最多保留 500 个候选，有效期一小时。新增用户输入、Goal 变更、标题变化或相关标题规则／路由变化后，旧候选拒绝应用；应用前还会检查锁定和 AI 开关。host 重启或插件卸载会清空缓存。\n\n对应命令为 `/title-preview`（返回带 `previewId` 的 JSON 候选）和 `/title-apply <previewId>`。候选 ID 仅属于原会话，成功应用后不能重复使用。DSH 仍按常规记录命令执行与结果；预览不改标题，也不追加伪造的用户消息。"
+    },
+    {
+      "section": "模型模式",
+      "text": "- **current-session**：使用 `request.route`，即当前会话实际的 provider/model，不替换成全局默认模型。\n- **configured**：仅标题使用保存的 provider/model；主会话模型不变。缺任一字段立即拒绝保存。\n- **disabled**（或关闭 Enabled）：标题 LLM calls = 0，provider title events = 0；fallback、人工改名、标题投影照常。\n\nConfigured 模式支持标题与主会话使用不同的 provider/model。"
+    },
+    {
+      "section": "重新生成",
+      "text": "使用 `/retitle`，或点击会话标题旁的重新生成按钮。普通用户输入走官方 `SessionTitleService.refresh()`；纯 Goal 会话走下文的受保护恢复路径。\n按钮在请求中禁用并显示 loading，完成后恢复；重复点击合并同一会话的请求。\n**显式重新生成可以替换人工标题**；自动生成始终保护人工标题。失败保留旧标题，取消不重试。\nAI 关闭时 `/retitle` 返回 `AI title generation is disabled.`，不调用模型。\n第三方直接调用裸 `refresh()` 不会获得本插件显式覆盖人工标题的 token。\n\n**显式 `/retitle` 不受弱提示过滤限制**：当会话里没有任何「有任务」的消息时（典型是写作模式，\n人工消息只有 `继续写` / `发布` 这类短祈使句），`/retitle` 会取**最新一条**这类短命令生成标题，\n而不是直接失败。自动生成照旧过滤：问候、纯 URL/路径/代码、纯标点、指代不明的短句仍然弃权。"
+    },
+    {
+      "section": "重新生成",
+      "text": "仅由 DSH `/goal` 驱动的会话也支持显式 `/retitle`：Goal objective 不属于 Core 普通 `user/message`\n标题输入，插件会在显式请求时读取最新 Goal objective 作为临时标题输入；不会向会话追加伪造消息。\n这条恢复路径只用于显式操作，不会让自动标题调度改写 Goal 会话。`/goal edit` 后再次 `/retitle` 会使用新 objective，即使已有标题也会重新生成。新的生成会取消旧请求；期间输入、路由或人工标题发生变化时，旧结果拒绝写入。Goal 标题通过官方 `rename()` 保存，按人工标题保护。\n\n`UNKNOWN_MODEL`、`NO_ADAPTER`、`AUTH`、无效凭据等永久错误不重试。临时错误使用可取消的退避等待（250 ms、500 ms）；`providerRetryAfterMs` 只有在不超过 5 秒且不超过 `timeoutMs` 时才等待后重试，超过窗口则明确失败，不提前重试。输出质量重试仍受 `maxAttempts` 限制。"
+    },
+    {
+      "section": "弱语义首条消息",
+      "text": "`你好 → 谢谢 → 在吗 → 帮我审计数据库性能`：前三条 0 次标题调用，真实任务出现后才生成一次。\n后续消息不会使 provider 标题漂移，子会话不会自动生成标题。\n决策读取 Core 回放的消息和标题，不依赖插件内存历史。\n`/retitle` 是显式请求，会放宽这条过滤——但只放宽「短祈使句」这一类，且取最新一条；\n其余弱消息形态（问候、纯 URL/路径/代码、纯标点、指代不明）即使显式请求也仍然拒绝。"
+    },
+    {
+      "section": "隐私",
+      "text": "标题生成是额外的 LLM 请求；默认使用当前会话模型，失败时最多重试到 `maxAttempts`。\nconfigured 模式会把压缩后的首条有效任务发送给所选 provider，该 provider 可能不同于会话 provider。\n标题不会进入模型上下文；插件不额外保存 `session/title-llm-request` 提示副本。\n\n插件 Settings 只允许十四个声明字段，unknown-key guard 拒绝 `apiKey`、token、cookie、credential、secret、password 等未知字段。\nUI 只处理模型 ID 和运行参数，凭据完全由 DSH 管理。\n诊断不写完整 Prompt、完整模型响应或凭据；adapter 原始错误文本也不写入插件日志，避免错误回显敏感输入。"
+    },
+    {
+      "section": "本地诊断",
+      "text": "插件使用 **`ctx.logger`**。DSH Desktop 的正式 `FileExporter` / `LogFileSink` 将其持久化至\n**`<DSH userData>/logs/host/dsh-YYYY-MM-DD.log`**，warn/error 同时进入 `.error.log`。\n本机通常为 `~/Library/Application Support/DSH Desktop/logs/host/`；请以实际 userData 为准。\n日志级别需允许 info 才能看到成功/abstain；warn 包含失败/超时。"
+    },
+    {
+      "section": "本地诊断",
+      "text": "检索 `smart-session-title generation`：字段包括 sessionId、route、attempt、rawBytes、preparedBytes、elapsedMs、result/outcome、failureReason。\n结果区分 generated、abstained、failed、timed-out、retried、cancelled。\nDSH 自己的日志脱敏器可能把 sessionId 显示为 `****`；插件不绕过它。\n`/title-status` 可查看当前进程内计数；计数重启归零，持久历史以日志为准。\n纯 SDK/Web 运行器未必默认配置文件 exporter；本插件不会自行创建文件 sink。\nPhase 3 已在隔离真实 DSH runtime 挂载原装 Desktop exporter，确认成功和失败日志真正落盘。"
+    },
+    {
+      "section": "插件冲突",
+      "text": "全局只能有一个标题 provider。`already registered` 表示另一个 provider 仍活跃，启动应失败。\n不要同时启用内建标题 provider 或其他第三方标题插件。本 bundle 已负责替换内建 provider。"
+    },
+    {
+      "section": "故障排查",
+      "text": "| Problem | Likely cause / 处理 |\n|---|---|\n| Always fallback | 模型失败、输出被拒绝或 AI disabled；检查本地诊断 |\n| already registered | 另一个标题 provider 活跃；移除冲突 bundle |\n| /retitle says disabled | AI 总开关关闭或 mode=disabled |\n| configured model fails | provider/model 不可用或模型输出不适合短标题；选择 Current session model |\n| title never updates | 检查 smart-session-title 日志；已有人工/provider 标题会受保护 |\n| greeting remains | 尚无 meaningful task；发送真实任务 |\n| 设置启动失败 | 无效值或未知字段；修正该 namespace，provider 不会部分加载 |\n| 日志文件没有成功记录 | 检查 Desktop logLevel 和正式文件 exporter 是否启用 |\n| 批量时大量旧会话 `model error: upstream failure` | 这些会话记录的 provider/model 已不在 DSH 中，「跟随当前会话模型」对它们必然失败；列表会提前标出，切「指定模型」（或勾选自动兜底）后点「重试失败项」 |\n| 选了「固定模型」但标题仍跟随会话模型 | provider+model 未保存。选择完整 provider/model 后点击底部「保存设置」；所有修改保存前都只是本地草稿 |\n| 刷新窗口后批次不见了 | 运行器在客户端半：关闭设置页不受影响，但整个窗口刷新会中断；已写入的标题不会回滚 |\n| 点了停止好像没停 | 停止会 abort 在飞的生成；若仍拖住说明 adapter 忽略了取消，按日志里那个会话排查 |"
+    },
+    {
+      "section": "发布内容",
+      "text": "此仓库仅包含可安装插件、中英文说明和许可证。开发报告、会话记录、本机测试资料不公开。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **REASONING_CONTROL_UNAVAILABLE_CONFIRMED**：没有跨 adapter 的统一 reasoning-disabled 控制。插件不硬塞 `off`，沿用 adapter 默认行为。\n- reasoning 模型的思考也计入输出预算：早期 96-token 的上限会让它们返回 `max-tokens` 却没有标题正文。\n  现在默认 `maxOutputTokens: 1024`，且「一个文本块都没有的 `max-tokens`」按预算不足处理并重试一次；\n  已经产出正文却停不下来的模型仍按协议失败处理（不把整段解释救成标题）。\n- Configured 模式的 provider/model 从 DSH 已注册的模型中选择，取不到列表时回退手动输入；设置页与标题按钮文案跟随 DSH 界面语言（中英双语词典，其他语言回退英文）。\n- 批量运行器位于 **Web 客户端半**而非 host：关闭设置页不会中断，但刷新 DSH 窗口会中断；host 模块 `lib/*.js` 已入库且随包发布，原始 TypeScript 源码不可用，因此直接维护 JavaScript，并同步维护 `lib/*.d.ts`。目前未实现持久任务队列与 host 层路由回退。\n- 自动兜底的勾选状态与批次队列不持久化：刷新窗口后回到空闲态（已写入的标题不受影响）。\n- 不做任务漂移自动重命名、快捷键、云同步、遥测、独立数据库或复杂模型管理。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    },
+    {
+      "section": "开发验证",
+      "text": "使用 Node.js 22.15 或更新版本运行 `npm test`。仓库包含客户端/i18n、host 策略和\nprovider 行为测试，无需新增依赖。`files` 白名单保证验证文件不随 npm 包发布。"
+    },
+    {
+      "section": "开发验证",
+      "text": "设置界面会解释数字越界或非整数错误，并在写入后核对实际保存值。自动兜底保留\n整批会话统计，单独显示重试进度；停止重试会显示已停止，恢复路由时保留期间观察到\n的用户模式修改。兜底偏好存于浏览器 localStorage，批量队列不持久化，刷新后回到空闲状态。\n排除词的验证用假模型流驱动真实 provider：断言排除词不会进入提示的任何一半、残留时恰好重试\n一次随后被删除、以及整段内容都是排除词时直接弃权且不发起模型调用。\n锁定的验证覆盖四个入口：provider 弃权且**不消耗** `/retitle` 令牌、`/retitle` 处理器拒绝、\n客户端按钮本地禁用并给出原因、批量列表排除锁定行且「全选」也选不中。\n短祈使句的验证同时覆盖两侧：全为 `继续写` / `发布` 的会话在自动调度下仍弃权且零模型调用，\n显式 `/retitle` 则取最新一条生成并覆盖人工标题，而问候/URL/代码类纯噪声会话即使显式请求也仍然弃权。\n输出上限的验证覆盖两侧：`max-tokens` 且**没有文本块**时重试一次（并断言两次调用的 `maxTokens` 都是配置值），\n而**有文本块**的 `max-tokens` 仍是终态协议失败、只调用一次。"
+    },
+    {
+      "section": "开发验证",
+      "text": "设置页直接展示模型选择和标题规则，底部提供统一保存按钮；高级参数与使用说明默认折叠。两个页面通过标签切换，批量页支持搜索、项目过滤和勾选应用。布局适配窄窗口与 DSH 深色主题，表单关联标签并提供清晰的键盘焦点提示。\n\n「标题规则」采用两栏表单，窄窗口切为单栏，排除词使用整行输入框。\n详细规则收在折叠说明中，避免长文案挤占控件空间。"
+    },
+    {
+      "section": "复制当前 SessionId",
+      "text": "对话顶部以浅灰色小字号等宽字体显示当前会话 ID。点击复制完整 ID（不受显示省略影响），悬停可查看完整值。粘贴到其他对话可帮助 agent 定位此会话；读取需要相应工具与权限。复制其他会话的 ID 需先打开该会话。剪贴板写入失败时提供只读输入框，方便手动复制。\n\n在插件设置中使用 **显示 Session ID** 开关，点击「保存设置」后显示或隐藏。默认开启，通过 `showSessionId` 持久保存，独立于 AI 标题生成和标题锁定，不修改会话标题。\n\n在 DSH Desktop 2.0.9 中，ID 单独显示在标题工具栏下方、“对话 / 轨迹”标签上方，并与标签左对齐。此布局使用已核实的 host CSS 类；升级后若类名变化，将回退为标题栏内显示。\n\n会话顶部的「重新生成标题」会按当前标题设置替换现有标题（包括人工标题），不会重新运行对话。「锁定标题」阻止本插件自动、手动和批量生成标题；锁定后显示「标题已锁定」，点击可解锁。锁定不影响聊天、人工改名或 DSH 兜底标题。设置页底部的「使用说明」中也提供这些说明。"
+    },
+    {
+      "section": "复制当前 SessionId",
+      "text": "设置页统一控件高度、间距与按钮层级，主要操作固定在底部；批量候选标题用浅蓝底突出，完成状态与在途进度分别显示，标题操作说明默认折叠。\n\n标题模型请求从第一次调用起就省略可选 `sessionId` 会话关联，`maxAttempts: 1` 时同样如此，保留 rc.16 对会话关联扩展的隔离。全局 `REQUEST_EXTENSION` 仍失败时明确报错且不重复调用；所有模型调用仍走 `ctx.llm.stream()`。\n\n保留 rc.16 的 Core 0.2 全局设置入口、延迟加载设置服务的挂载、受支持的刷新图标，以及避免设置面板挤成窄列的查询容器宽度设置。\n\n新增验证覆盖：删除后重新拼出的排除词、压缩占位符与系统提示示例、包含日期的最终字数上限、两代设置 schema、生成中锁定、永久／临时错误及退避中取消、预览的一次性应用／过期／会话变化拒绝、批量勾选应用，以及已有标题的 Goal 编辑和生成竞争。React 替身追踪 effect 依赖与 cleanup，并验证 effect 重放及卸载取消。"
+    }
+  ],
+  "skipped": []
+}

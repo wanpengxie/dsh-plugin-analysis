@@ -1,0 +1,702 @@
+{
+  "repo": "slaren/dsh-llm-llamacpp",
+  "commit": "1b6db1eb5feb79bb000c5d849b1a115a95e185a6",
+  "extracted_at": "2026-11-12T04:48:24.120397+00:00",
+  "tree": {
+    "files": 19,
+    "bytes": 523989,
+    "lines_by_language": {
+      "JSON": 83,
+      "JavaScript": 8771,
+      "Markdown": 1209,
+      "Other": 42,
+      "YAML": 56
+    },
+    "outline": [
+      ".gitignore",
+      "AGENTS.md",
+      "CREDITS.md",
+      "LICENSE",
+      "LLAMA_CPP_INTEGRATION.md",
+      "README.md",
+      "TODO.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "package-lock.json",
+      "package.json",
+      "test/card-runtime.mjs",
+      "test/client-test.mjs",
+      "test/host-test.mjs",
+      "test/parity-test.mjs",
+      "test/template-test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-llm-llamacpp",
+    "version": "1.0.0",
+    "private": true,
+    "license": "MIT",
+    "type": "module",
+    "description": "Adds llama.cpp servers as DSH model providers, with model and context discovery, per-session slot affinity, and live throughput and KV-cache readings.",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "CREDITS.md",
+      "test"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation",
+          "@deepseek-ai/dsh-api-remotes"
+        ]
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.4"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-llm-llamacpp\n      name: 'dsh-llm-llamacpp'\n      config:\n        # Every entry becomes a provider route you can select in the model picker,\n        # named by its key. There is no discovery and no rewriting of other\n        # providers: a request goes to the endpoint written here, and a wrong\n        # `baseURL` shows up as a validation error on its row rather than a missing\n        # route.\n        #\n        # This map is editable from Settings → Models: each route is a row under\n        # \"Third-party model providers\" that opens this plugin's own card, and a save\n        # there applies immediately — the map is a volatile config field, so the\n        # loader commits it without re-applying the plugin. A page edit lands in this\n        # same block of the profile's cordis.patch.yml, which then wins over this\n        # seed.\n        #\n        # It starts EMPTY on purpose: the plugin serves no route until one is added\n        # from the page, and the page's add list always offers one \"llama.cpp (new\n        # server)\" row for that (and every later) server. A seeded route here would be\n        # composition-layer config, which the page cannot delete (only a user-layer\n        # profile can).\n        #\n        # The map key (`llamacpp-local` here) is the provider route id. The GUI\n        # assigns the first free `llamacpp*` id and never asks for one; advanced\n        # deployments that need a stable external key can rename it here.\n        #\n        # A server profile is only what the user owns:\n        #\n        # servers:\n        #   llamacpp-local:\n        #     # The bare name used in the UI; the row and picker render it as\n        #     # `llama.cpp (<alias>)`. Optional: defaults to the endpoint's host:port.\n        #     alias: local\n        #     # Required, and must include the API path: requests go to\n        #     # `${baseURL}/chat/completions`, and llama-server's OpenAI-compatible\n        #     # base is `http://127.0.0.1:9931/v1`. A bare host:port is rejected.\n        #     baseURL: http://127.0.0.1:9931/v1\n        #     # Optional credential reference, resolved through DSH credentials (then\n        #     # the launch environment) on every request. Nothing here writes a secret.\n        #     apiKeyEnv: LLAMACPP_LOCAL_API_KEY\n        #\n        # The served model(s), context window, and default output cap are NOT config:\n        # they are read from the server's `/v1/models` and `/props` every time the\n        # picker resolves a model.\n        servers: {}\n        # How often the page asks /llamacpp-metrics/live for the current snapshot,\n        # in milliseconds. The pill's progress comes from this process's SSE state,\n        # so a closed metrics dialog causes no upstream request; while the dialog is\n        # open, each poll also reads /metrics and /slots. Lower is smoother but more\n        # local requests; clamped to 500..60000 ms (500 here).\n        clientPollMs: 500\n        # Stream idle ceiling in ms, matching pi-ai's default: a server that stops\n        # sending bytes fails as TIMEOUT (retryable) instead of hanging the turn\n        # until the user aborts. 0 disables the guard.\n        streamIdleTimeoutMs: 300000\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "LLAMA_CPP_PROVIDER",
+      "kind": "env",
+      "where": "test/host-test.mjs:54"
+    },
+    {
+      "name": "LLAMA_CPP_BASE",
+      "kind": "env",
+      "where": "test/host-test.mjs:56"
+    },
+    {
+      "name": "LLAMA_CPP_MODEL",
+      "kind": "env",
+      "where": "test/host-test.mjs:57"
+    },
+    {
+      "name": "DSH_CHECKOUT",
+      "kind": "env",
+      "where": "test/host-test.mjs:91"
+    },
+    {
+      "name": "MISSING_KEY",
+      "kind": "env",
+      "where": "test/host-test.mjs:1964"
+    },
+    {
+      "name": "DSH_CHECKOUT",
+      "kind": "env",
+      "where": "test/parity-test.mjs:60"
+    },
+    {
+      "name": "PARITY_TRACE",
+      "kind": "env",
+      "where": "test/parity-test.mjs:246"
+    },
+    {
+      "name": "LLAMA_CPP_TEMPLATE_SERVER",
+      "kind": "env",
+      "where": "test/template-test.mjs:18"
+    },
+    {
+      "name": "LLAMA_CPP_TEMPLATE_MODEL",
+      "kind": "env",
+      "where": "test/template-test.mjs:19"
+    },
+    {
+      "name": "LLAMA_CPP_TEMPLATE_DIR",
+      "kind": "env",
+      "where": "test/template-test.mjs:20"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "client.js:89"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ggml-org/llama.brand`",
+      "where": "client.js:192"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "client.js:1068"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1`",
+      "where": "cordis.patch.yml:37"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "cordis.patch.yml:38"
+    },
+    {
+      "host": "host",
+      "url": "http://host:9931/v1`",
+      "where": "index.js:80"
+    },
+    {
+      "host": "host",
+      "url": "http://host:port`",
+      "where": "index.js:134"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "index.js:2345"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "index.js:2531"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "index.js:2746"
+    },
+    {
+      "host": "x",
+      "url": "http://x:8080/v1",
+      "where": "test/client-test.mjs:584"
+    },
+    {
+      "host": "devbox.local",
+      "url": "http://devbox.local:9931/v1",
+      "where": "test/client-test.mjs:587"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/client-test.mjs:594"
+    },
+    {
+      "host": "office.local",
+      "url": "http://office.local:8080/v1",
+      "where": "test/client-test.mjs:597"
+    },
+    {
+      "host": "devbox",
+      "url": "http://devbox:9931/v1",
+      "where": "test/client-test.mjs:599"
+    },
+    {
+      "host": "devbox",
+      "url": "http://devbox:9931/v1",
+      "where": "test/client-test.mjs:601"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:606"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:608"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:609"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:611"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:612"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:614"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:616"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:617"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:619"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:625"
+    },
+    {
+      "host": "x",
+      "url": "http://x/v1",
+      "where": "test/client-test.mjs:627"
+    },
+    {
+      "host": "devbox.local",
+      "url": "http://devbox.local:9931/v1",
+      "where": "test/client-test.mjs:660"
+    },
+    {
+      "host": "devbox.local",
+      "url": "http://devbox.local:9931/v1",
+      "where": "test/client-test.mjs:686"
+    },
+    {
+      "host": "devbox.local",
+      "url": "http://devbox.local:9931/v1",
+      "where": "test/client-test.mjs:708"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/client-test.mjs:744"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/client-test.mjs:752"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/client-test.mjs:758"
+    },
+    {
+      "host": "office.local",
+      "url": "http://office.local:8080/v1",
+      "where": "test/client-test.mjs:760"
+    },
+    {
+      "host": "office.local",
+      "url": "http://office.local:8080/v1",
+      "where": "test/client-test.mjs:768"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/client-test.mjs:776"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/client-test.mjs:791"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/client-test.mjs:799"
+    },
+    {
+      "host": "host",
+      "url": "http://host:9931/v1",
+      "where": "test/host-test.mjs:3"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/host-test.mjs:56"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${local.address(",
+      "where": "test/host-test.mjs:192"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${local.address(",
+      "where": "test/host-test.mjs:225"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${local.address(",
+      "where": "test/host-test.mjs:267"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${local.address(",
+      "where": "test/host-test.mjs:313"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/v1",
+      "where": "test/host-test.mjs:335"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:570"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:674"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:731"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:801"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:882"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "test/host-test.mjs:966"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:992"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:59999",
+      "where": "test/host-test.mjs:1039"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:1140"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:1298"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:1366"
+    },
+    {
+      "host": "metrics-test",
+      "url": "http://metrics-test",
+      "where": "test/host-test.mjs:1452"
+    },
+    {
+      "host": "metrics-test",
+      "url": "http://metrics-test",
+      "where": "test/host-test.mjs:1471"
+    },
+    {
+      "host": "metrics-test",
+      "url": "http://metrics-test",
+      "where": "test/host-test.mjs:1475"
+    },
+    {
+      "host": "metrics-foreign",
+      "url": "http://metrics-foreign",
+      "where": "test/host-test.mjs:1477"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:1498"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${failing.address(",
+      "where": "test/host-test.mjs:1534"
+    },
+    {
+      "host": "rate-test",
+      "url": "http://rate-test",
+      "where": "test/host-test.mjs:1588"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:1656"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "test/host-test.mjs:1715"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3",
+      "where": "test/host-test.mjs:1716"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:4",
+      "where": "test/host-test.mjs:1717"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:5",
+      "where": "test/host-test.mjs:1718"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:6",
+      "where": "test/host-test.mjs:1719"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7",
+      "where": "test/host-test.mjs:1720"
+    },
+    {
+      "host": "devbox.local",
+      "url": "http://devbox.local:9931/v1",
+      "where": "test/host-test.mjs:1831"
+    },
+    {
+      "host": "office.local",
+      "url": "http://office.local:8080/v1/",
+      "where": "test/host-test.mjs:1832"
+    },
+    {
+      "host": "bare.local",
+      "url": "http://bare.local:9931",
+      "where": "test/host-test.mjs:1839"
+    },
+    {
+      "host": "lab",
+      "url": "http://lab:9931/v1",
+      "where": "test/host-test.mjs:1844"
+    },
+    {
+      "host": "office.local",
+      "url": "http://office.local:8080/v1",
+      "where": "test/host-test.mjs:1845"
+    },
+    {
+      "host": "devbox.local",
+      "url": "http://devbox.local:9931",
+      "where": "test/host-test.mjs:1847"
+    },
+    {
+      "host": "office.local",
+      "url": "http://office.local:8080",
+      "where": "test/host-test.mjs:1847"
+    },
+    {
+      "host": "x",
+      "url": "http://x:1/v1",
+      "where": "test/host-test.mjs:1853"
+    },
+    {
+      "host": "x",
+      "url": "http://x:2/v1",
+      "where": "test/host-test.mjs:1854"
+    },
+    {
+      "host": "good",
+      "url": "http://good:9931/v1",
+      "where": "test/host-test.mjs:1855"
+    },
+    {
+      "host": "office.local",
+      "url": "http://office.local:8080/v1",
+      "where": "test/host-test.mjs:1883"
+    },
+    {
+      "host": "devbox.local",
+      "url": "http://devbox.local:9931/v1",
+      "where": "test/host-test.mjs:1889"
+    },
+    {
+      "host": "office.local",
+      "url": "http://office.local:8080/v1",
+      "where": "test/host-test.mjs:1890"
+    },
+    {
+      "host": "devbox.local",
+      "url": "http://devbox.local:9931/v1",
+      "where": "test/host-test.mjs:1905"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/host-test.mjs:1911"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:1958"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "test/host-test.mjs:2036"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9931/v1",
+      "where": "test/host-test.mjs:2149"
+    },
+    {
+      "host": "one.local",
+      "url": "http://one.local:8080/v1",
+      "where": "test/host-test.mjs:2213"
+    },
+    {
+      "host": "one.local",
+      "url": "http://one.local:8080/v1",
+      "where": "test/host-test.mjs:2214"
+    },
+    {
+      "host": "two.local",
+      "url": "http://two.local:8080/v1",
+      "where": "test/host-test.mjs:2241"
+    },
+    {
+      "host": "good",
+      "url": "http://good:9931/v1",
+      "where": "test/host-test.mjs:2261"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/parity-test.mjs:166"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/template-test.mjs:59"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/template-test.mjs:69"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.4"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 5,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-10-24T17:15:05Z",
+    "created_at": "2026-10-24T14:55:01Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-llm-llamacpp",
+      "text": "A Cordis plugin for **DeepSeek Harness** that adds one or more **llama.cpp**\nservers as model providers and shows this session's live prompt and decode\nprogress in the composer dock.\n\n> Private package: not published to npm. Tested with DSH `0.2.x` and a current\n> `llama-server` build."
+    },
+    {
+      "section": "Features",
+      "text": "- **Declared routes, no interception.** Every key in `servers` becomes a\n  provider route with its own `baseURL`, optional `alias`, and optional\n  credential reference. Nothing is auto-discovered or rewritten.\n- **Settings → Models integration.** Add and edit servers from the Models page;\n  each row shows a green/red reachability dot. Removing a route is a hand edit\n  of the `servers` map.\n- **Live discovery.** Models come from `/v1/models`; loaded context, output cap,\n  and modalities come from `/props`; reasoning levels come from the server's\n  own `/apply-template` list.\n- **Dock pill and dialog.** Prompt progress with ETA, current prompt/decode\n  tok/s, per-slot context and KV use, cache hit rate, and the raw server\n  metrics.\n- **Warm caches under concurrency.** Sessions are pinned to a stable llama.cpp\n  slot, and idle slots are reused without evicting active conversations.\n- **Streaming parity.** Retryable failure codes, assistant reasoning replay,\n  image handling, parallel tool calls, and disjoint usage accounting match the\n  stock pi-ai route.\n- **Headless-friendly.** Routes, discovery, and streaming work without a web\n  server; the pill and dialog simply do not mount."
+    },
+    {
+      "section": "Requirements",
+      "text": "- DeepSeek Harness `0.2.x`.\n- `llama-server` with the OpenAI-compatible API. `/props` supplies model and\n  context facts, `/apply-template` supplies reasoning levels, and `/metrics` and\n  `/slots` supply the live server readings."
+    },
+    {
+      "section": "Launching llama.cpp",
+      "text": "Start `llama-server` with the flags that expose the readings this plugin shows:\n\n```sh\nllama-server \\\n  -m /path/to/model.gguf \\\n  --host 127.0.0.1 --port 9931 \\\n  --metrics --slots --jinja"
+    },
+    {
+      "section": "Launching llama.cpp",
+      "text": "- `--metrics` enables `/metrics`: throughput, prompt-cache hit rate, speculative\n  decoding, and the server counters in **All metrics**. It is optional — the pill\n  and **Server slots** still work without it — but without it the All metrics\n  section only says that metrics are disabled.\n- `--slots` enables `/slots`, which feeds **Server slots** and the session-context\n  line. Current builds enable it by default; do not pass `--no-slots` unless you\n  accept losing those readings. If `--metrics` is also off, the dialog then has\n  no server readings at all: only the pill's own SSE progress remains.\n- `--jinja` uses the model's Jinja chat template, which reasoning and tool calls\n  depend on. Current builds enable it by default; add it explicitly if your build\n  disables Jinja or you pass `--no-jinja`.\n- `--api-key` is optional. If you use it, store the same key in the DSH provider\n  card.\n- `-np` above 1 lets concurrent sessions keep separate slots, and `-c` sets the\n  context window. The plugin reads both from `/props`; neither is configured in\n  DSH."
+    },
+    {
+      "section": "Launching llama.cpp",
+      "text": "`--props` is not required: the plugin only reads `/props` with GET, and that flag\nonly enables `POST /props`."
+    },
+    {
+      "section": "Install",
+      "text": "Install the bundle directly from GitHub. Open **Settings → Plugins** and install\nfrom the GitHub spec below, or call `plugin_manager` with `action:\ninstall_bundle` and:\n\n```text\ngithub:slaren/dsh-llm-llamacpp\n```\n\nThe HTTPS form works too: `https://github.com/slaren/dsh-llm-llamacpp`. The\nmanager installs the package and its dependencies, selects the bundle, and\napplies the bundled `cordis.patch.yml`. Restart the host if DSH reports that a\nrestart is required."
+    },
+    {
+      "section": "Command line",
+      "text": "The same install from a shell, using `npx`:\n\n```sh\nnpx @deepseek-ai/dsh plugin --profile web add github:slaren/dsh-llm-llamacpp\n```\n\n`web` is the profile to install into; substitute another profile name when\nneeded. If `dsh` is already on your `PATH`, use `dsh plugin ...` instead of\n`npx @deepseek-ai/dsh plugin ...`.\n\nFor local development, clone the repository and install the checkout by path\ninstead:"
+    },
+    {
+      "section": "Command line",
+      "text": "```sh\ngit clone https://github.com/slaren/dsh-llm-llamacpp.git\ncd dsh-llm-llamacpp\nnpm install\n```\n\nThen pass the absolute path (for example `link:/path/to/dsh-llm-llamacpp`) to\n`install_bundle`. A host-side change needs a plugin reload; client changes\nappear after a page refresh."
+    },
+    {
+      "section": "Configure",
+      "text": "1. Open **Settings → Models → Add model provider** and choose **llama.cpp (new\n   server)**.\n2. Enter the full API base URL, for example `http://127.0.0.1:9931/v1`.\n   A bare `host:port` is rejected.\n3. Optionally set an alias and an API key (stored as a DSH credential\n   reference) for servers started with `--api-key`. No secret is stored in the\n   plugin config.\n\nOr declare routes directly in the profile patch:"
+    },
+    {
+      "section": "Configure",
+      "text": "```yaml\n- insert:\n    - id: dsh-llm-llamacpp\n      name: dsh-llm-llamacpp\n      config:\n\nModel ids, context window, output cap, and reasoning levels are read from the\nserver, never configured here."
+    },
+    {
+      "section": "Usage",
+      "text": "While a request is streaming, the pill shows progress such as\n`prompt 250/1K (25%) · ETA 5s · 100 tok/s`, then\n`decode · 226 tok · 44 tok/s`. Click it for the Live progress, Server slots, and\nAll metrics sections; collapsed sections keep their headline and persist the\npreference in `localStorage`."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nnode --check index.js client.js\nnode test/client-test.mjs\nnode test/parity-test.mjs\nLLAMA_CPP_BASE=http://127.0.0.1:9931/v1 \\\n\n`test/template-test.mjs` is an optional live matrix that starts `llama-server`\nwith different chat templates. See [`AGENTS.md`](AGENTS.md) for architecture and\ninvariants, [`LLAMA_CPP_INTEGRATION.md`](LLAMA_CPP_INTEGRATION.md) for upstream\nproposals, and [`CREDITS.md`](CREDITS.md) for the llama.brand attribution."
+    },
+    {
+      "section": "Notes",
+      "text": "- The plugin does not start or manage `llama-server`.\n- Telemetry endpoints are optional; the dialog degrades when they are absent.\n- Not affiliated with or endorsed by ggml-org."
+    },
+    {
+      "section": "License",
+      "text": "The plugin code is released under the [MIT License](LICENSE).\n\nThe llama.brand mark in `icon.svg` and in the client's pill and dialog title is\nthird-party artwork. It is not relicensed by MIT; see [CREDITS.md](CREDITS.md)\nfor its license and the brand-usage grant."
+    }
+  ],
+  "skipped": []
+}

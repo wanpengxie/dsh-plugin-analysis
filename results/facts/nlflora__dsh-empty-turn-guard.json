@@ -1,0 +1,179 @@
+{
+  "repo": "nlflora/dsh-empty-turn-guard",
+  "commit": "f8664a5f040ddbeeee95d822d84ab60d2ac7eb7a",
+  "extracted_at": "2026-11-12T02:04:37.718077+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 24766,
+    "lines_by_language": {
+      "JSON": 63,
+      "JavaScript": 516,
+      "Markdown": 96,
+      "Other": 24,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test-integration.mjs",
+      "test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@nlflora/dsh-empty-turn-guard",
+    "version": "0.1.0",
+    "description": "Recover a DeepSeek Harness turn that ended with reasoning only — no text, no tool call — by steering the same turn one more step. Structure-only detection, no judge model.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE",
+      "test.mjs",
+      "test-integration.mjs"
+    ],
+    "scripts": {
+      "check": "node --check index.js",
+      "test": "node test.mjs && node test-integration.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-llm": "*"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/dsh-llm": {
+        "optional": true
+      }
+    },
+    "engines": {
+      "node": ">=22",
+      "dsh": ">=0.2.1-rc.1"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "agent",
+      "turn",
+      "recovery",
+      "reasoning"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/nlflora/dsh-empty-turn-guard.git"
+    },
+    "homepage": "https://github.com/nlflora/dsh-empty-turn-guard#readme",
+    "bugs": {
+      "url": "https://github.com/nlflora/dsh-empty-turn-guard/issues"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch：把这个插件插进 profile 的层栈。\n#\n# 只写 id + name，不带 config、不带 !!js 表达式 —— 这样市场可以热挂载，\n# 不需要重启 profile。具体配置放在 profile 自己的 cordis.patch.yml 里覆盖。\n- insert:\n    - id: empty-turn-guard\n      name: '@nlflora/dsh-empty-turn-guard'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/nlflora/dsh-empty-turn-guard.git",
+      "where": "package.json:53"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/nlflora/dsh-empty-turn-guard#readme",
+      "where": "package.json:55"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/nlflora/dsh-empty-turn-guard/issues",
+      "where": "package.json:57"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-10-30T10:19:49Z",
+    "created_at": "2026-10-28T11:46:56Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "test-integration.mjs",
+    "test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-empty-turn-guard",
+      "text": "兜住一类**空回合**：模型整轮只产出思考（reasoning），既没有正文、也没有调用任何工具，而 agent 循环把它当作正常完成收尾——界面上只有一个思考气泡，标记「已完成」，一个字没输出。\n\n插件监听 `agent/turn-stopping`，用**纯结构判断**认出这种轮次，然后往同一轮里 `steer` 一条提示，让循环再走一步。"
+    },
+    {
+      "section": "它治的是什么",
+      "text": "在 216 个会话、13758 条 assistant 消息里统计到的 49 例「只有思考、没有输出」，按结束原因分：\n\n| 结束原因 | 数量 | 说明 |\n| --- | --- | --- |\n| `max-tokens` | 16 | 思考把输出额度（4096）吃光，还没轮到写正文 |\n| `aborted` | 14 | 用户中断 |\n| `completed` | 11 | **正常结束但零输出** ← 本插件的主要目标 |\n\n其中「思考退化」有两种典型形态，都是模型侧的重复循环：\n\n```\n… **writing** ✅. Let me go. Hmm — **the tool call** ✅. Let me go. Hmm — the script ✅. Hmm — go.\n… 做。 做。 做。 做。 做。 做。 做。 做。 做。 做。 做。 做。 做。 …\n```\n\nDSH 看到「没有工具调用、也没有文本」，判定模型已经给出最终答复（空），按 `completed` 收尾。它无法区分「模型认为不需要回答」和「模型卡死了说不出话」。"
+    },
+    {
+      "section": "与 dsh-loop-continue 的区别",
+      "text": "`dsh-loop-continue` 治的是相邻但不同的问题：模型**写了**「现在我重新应用修改」却忘了调用工具。它的两条硬门槛是：\n\n1. 结束在**只有文本**的 step；\n2. 本回合**此前至少调用过一次工具**。\n\n本插件的场景**两条都不满足**（一个字都没有，首次 step 就卡死也可能），所以另起一个。\n\n另一个差别：`dsh-loop-continue` 需要一个裁判模型判 true/false（因为「这句话是不是承诺了动作」是主观判断）；本插件是三个布尔值就能定的结构判断，**不产生额外的模型调用**。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile <profile> add @nlflora/dsh-empty-turn-guard\n```\n\n本地开发：\n\n```sh\ndsh plugin --profile <profile> add link:/path/to/dsh-empty-turn-guard\n```"
+    },
+    {
+      "section": "配置",
+      "text": "在 profile 的 `cordis.patch.yml` 里按 id `empty-turn-guard` 覆盖：\n\n```yaml\n- id: empty-turn-guard\n  config:\n    enabled: true\n    maxContinuations: 2        # 每轮最多补救几次"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认 | 说明 |\n| --- | --- | --- |\n| `enabled` | `true` | 总开关 |\n| `maxContinuations` | `2` | 每轮最多补救次数，防止无限循环 |\n| `minReasoningChars` | `40` | 思考太短视为「模型就是选择不回答」，不干预 |\n| `detectRepetition` | `true` | 是否做重复检测（只影响日志里的原因标注） |\n| `repetitionMinRepeats` | `6` | 判定退化的重复次数阈值 |\n| `assumedMaxOutputTokens` | `4096` | 判断是否撞到输出上限 |\n| `steerText` | 内置 | 常规补救提示，可整段替换 |\n| `steerTextCapped` | 内置 | 撞到输出上限时的提示（要求压缩思考） |\n| `debug` | `false` | 打印每次判定 |"
+    },
+    {
+      "section": "判定规则",
+      "text": "**要补救**，必须同时满足：\n\n1. 本轮没有非空 `text` 块；\n2. 本轮没有 `tool-call` 块；\n3. 本轮至少有一条 assistant 消息；\n4. 思考文字 ≥ `minReasoningChars`。\n\n不满足任何一条就放行，让回合正常结束。正常的「只调用工具不说话」的 step 有 `tool-call`，不会被误伤。"
+    },
+    {
+      "section": "它不做什么",
+      "text": "- **不改模型行为**。重复退化是模型侧的问题，插件只能事后补救一次，不能保证下一次不犯。\n- **不调裁判模型**，所以也不增加 token 消耗。\n- **不处理 `aborted`**：用户主动中断的轮次不该被自动续上。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

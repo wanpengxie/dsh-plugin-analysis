@@ -1,0 +1,310 @@
+{
+  "repo": "vitas/dsh-codex-review",
+  "commit": "230ea975c0351e986f69ce286f8d996027a29bd1",
+  "extracted_at": "2026-11-12T10:07:11.900534+00:00",
+  "tree": {
+    "files": 18,
+    "bytes": 125850,
+    "lines_by_language": {
+      "JSON": 93,
+      "JavaScript": 1991,
+      "Markdown": 237,
+      "Other": 23,
+      "TypeScript": 527,
+      "YAML": 99
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "config.mjs",
+      "cordis.patch.yml",
+      "index.mjs",
+      "lib/client.js",
+      "package.json",
+      "review.mjs",
+      "scripts/build-client.mjs",
+      "src/client/SettingsCard.tsx",
+      "src/client/index.tsx",
+      "src/host/index.js",
+      "test/host.test.mjs",
+      "test/review.test.mjs",
+      "test/shared.test.mjs",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-codex-review",
+    "version": "0.4.0",
+    "description": "A deterministic /review command for DeepSeek Harness: a reviewer subagent pinned to a subscription-backed Codex model, with a settings card, one reviewer session per chat, and /review reset to forget it.",
+    "type": "module",
+    "main": "./index.mjs",
+    "exports": {
+      ".": "./index.mjs",
+      "./client": "./lib/client.js",
+      "./config": "./config.mjs",
+      "./review": "./review.mjs",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.mjs",
+      "config.mjs",
+      "review.mjs",
+      "src/host/index.js",
+      "lib/client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=22"
+    },
+    "scripts": {
+      "build": "node scripts/build-client.mjs",
+      "prepack": "node scripts/build-client.mjs",
+      "check": "node --check index.mjs && node --check config.mjs && node --check review.mjs && node --check src/host/index.js && tsc --noEmit",
+      "typecheck": "tsc --noEmit",
+      "test": "node --test \"test/**/*.test.mjs\""
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-settings-plugins",
+          "@deepseek-ai/dsh-client-ui-plugin-manager"
+        ]
+      }
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "codex",
+      "review",
+      "subagent"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/vitas/dsh-codex-review.git"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": ">=3.18.1"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/schemastery": {
+        "optional": true
+      }
+    },
+    "devDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.4",
+      "@types/react": "^18.3.31",
+      "esbuild": "^0.25.12",
+      "typescript": "^5.9.3"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle-layer patch for dsh-codex-review.\n#\n# Applied by the loader when this package is listed in `dsh.profile.bundles`\n# (or installed with `dsh plugin add`), BEFORE the profile's own\n# `cordis.patch.yml`. The user's profile patch addresses the same row by id\n# (`- id: codex-review`) and its `config` REPLACES this one wholesale — a\n# patch's `config` is not deep-merged, so restate every field you want to keep.\n#\n# This row also has a settings card on the Plugins page (see `src/client/`), which\n# writes into the same row. A card edit replaces this whole `config` with the\n# fields the card drew plus the schema defaults — so a field set only here and\n# absent from the schema (`childMaxDepth`, `persona`) reverts to its default after\n# a card edit. Everything else survives because the schema restates it.\n#\n# The reviewer is pinned by `provider` + `model` through the subagent service's\n# `agentOptions`, NOT by the session's route. `openai-codex` is the\n# subscription-backed ChatGPT route; if another plugin owns that route (for\n# example `dsh-codex-auth`, which registers it from the Codex CLI login in\n# ~/.codex/auth.json), nothing else here changes.\n#\n# Verification, in order: `dsh --profile <p> --dump-config` must show this row\n# with no load errors, and `/review` must answer — a route that is declared but\n# has no credentials fails at the first call, in the command result, with the\n# provider's own message.\n\n- insert:\n    - id: codex-review\n      name: dsh-codex-review\n      config:\n        # --- Who reviews ----------------------------------------------------\n        # `backend` names a registered subagent backend, not a model: `spawn`\n        # is the harness's in-process fresh child (empty conversation, same\n        # tools and working directory as the parent), `fork` would inherit this\n        # conversation, and `codex` names the out-of-process Codex CLI backend\n        # when a plugin providing it is installed.\n        backend: spawn\n        # The reviewer's route. Deliberately not the session's own route: the\n        # model that wrote the change is the worst judge of it.\n        provider: openai-codex\n        # Models the account provider registers: gpt-6.1-sol, gpt-6-astra,\n        # gpt-6-luna, gpt-6-sol, gpt-5.6-luna, gpt-5.6-sol, gpt-5.6-terra,\n        # gpt-5.5, gpt-5.4, gpt-5.3-codex-spark (text only). Which of them an\n        # account may actually call is the account's business, so the settings\n        # card offers this list and still accepts a typed id.\n        model: gpt-5.6-sol\n        # Reviewer memory across calls in one chat. `shared` opens one continuable\n        # reviewer child per session and hands it every later review, so it\n        # remembers the revisions it already reviewed; its answer arrives in the\n        # conversation and the command result is only a receipt. `fresh` runs a\n        # one-shot reviewer per call and renders the report as the command's own\n        # result, with no memory.\n        conversation: shared\n        # null leaves the effort to the route; otherwise one of\n        # off, minimal, low, medium, high, xhigh, max.\n        reasoningEffort: null\n        # 0 forbids the reviewer from delegating further, but the request is\n        # rejected by backends that do not advertise `depthLimit`, so null\n        # (send nothing) is the safe default outside the in-process backends.\n        childMaxDepth: null\n        # Optional per-child persona section; requires the backend's `persona`\n        # capability. The prompt below carries the reviewer's standing\n        # instruction, so this stays null by default.\n        persona: null\n\n        # --- The command ----------------------------------------------------\n        command: review\n        description: Review the current change set with the pinned reviewer model\n        inputHint: \"[focus — files, area, or the question you want answered; \\\"reset\\\" forgets the reviewer]\"\n\n        # --- What the reviewer is told --------------------------------------\n        # The default brief, so that a bare `/review` is a complete request: the\n        # stance, the search order, and the evidence bar are all here.\n        instruction: |-\n          You are a delegated code reviewer, not the author and not a fixer: you report,\n          you never edit a file, and you never run a command that changes the repository.\n\n          You did not write this code, so your value is an outside read: judge the change\n          against what it claims to do and against the code it touches, not against how\n          you would have written it.\n\n          Hunt for, in roughly this order:\n          - correctness: wrong result, off-by-one, wrong operator, inverted condition,\n            unreachable branch, unhandled null/empty/zero, silent truncation or rounding;\n          - failure handling: an error swallowed, a resource not released, a retry that\n            cannot succeed, a partial write left behind;\n          - contracts: a caller not updated, a changed return shape or default, a\n            migration or back-compat break, a test still asserting the old behaviour;\n          - security and data: unvalidated input crossing a boundary, injection, a secret\n            in the diff or the log, a destructive command, a permission widened;\n          - concurrency and state: a shared mutable value, an await inside a loop, a race,\n            a cache that never expires.\n\n          Verify before you claim: open the file, read the surrounding code, check the\n          caller and the test. Anything you could not verify is a question, not a finding.\n        diffCommand: git --no-pager diff HEAD\n        statusCommand: git --no-pager status --short\n        # The review text is clamped here before it reaches the session; the\n        # child session keeps the whole report.\n        maxOutputChars: 40000\n"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "lib/client.js",
+    "config.mjs",
+    "review.mjs",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "NODE_ENV",
+      "kind": "env",
+      "where": "scripts/build-client.mjs:29"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/vitas/dsh-codex-review.git",
+      "where": "package.json:60"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.4",
+      "@types/react": "^18.3.31",
+      "esbuild": "^0.25.12",
+      "typescript": "^5.9.3"
+    }
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 8,
+    "pushed_at": "2026-10-01T18:45:07Z",
+    "created_at": "2026-10-01T18:43:23Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-10-01T18:45:07Z",
+      "inactive_days": 41,
+      "commit_count": 8,
+      "checked_at": "2026-11-12T10:07:11.900534+00:00",
+      "signals": [
+        "list:pushed_at=2026-10-01T18:45:07Z",
+        "list:commits=8"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "config.mjs",
+    "cordis.patch.yml",
+    "index.mjs",
+    "lib/client.js",
+    "package.json",
+    "review.mjs",
+    "scripts/build-client.mjs",
+    "src/host/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-codex-review",
+      "text": "Announced in the DeepSeek Harness community: [Show Your Plugins! #8596](https://github.com/deepseek-ai/deepseek-harness/discussions/8596).\n\nA deterministic `/review` command for DeepSeek Harness: it sends the current\nchange set to a reviewer subagent pinned to a route you name — by default the\nsubscription-backed `openai-codex` route."
+    },
+    {
+      "section": "dsh-codex-review",
+      "text": "By default the reviewer is one continuing session per chat: the first `/review`\nopens it, every later one hands it the next revision, and the report comes back\nas a message in the conversation. Set `conversation: fresh` for a one-shot child\nwhose report is returned as the command's own result instead."
+    },
+    {
+      "section": "Why this exists",
+      "text": "Two things are wrong with asking the current agent to review its own work. It\nwrote the code, so it is judging its own reasoning; and in a harness that routes\nper turn, \"review this\" may well land on a different model than you expect,\nchosen by a router rather than by you."
+    },
+    {
+      "section": "Why this exists",
+      "text": "DSH already has the pieces: a slash command can call the subagent service\ndirectly, and a start request can pin the child's route through `agentOptions`.\nSo `/review` is one command that does exactly that, with no LLM client, no\ncredentials of its own, and no dependency on which model the session is running."
+    },
+    {
+      "section": "Why this exists",
+      "text": "Because the route is pinned, this is also the way to review with a ChatGPT\nsubscription instead of per-token API billing: point `provider` at\n`openai-codex` and the child's calls go through that route's own authentication."
+    },
+    {
+      "section": "Type `/review`, nothing else",
+      "text": "The command needs no argument. The reviewer arrives with a standing brief — the\nstance (report, never edit a file), a search order (correctness, failure\nhandling, contracts, security, concurrency and state), and an evidence bar (a\nclaim you could not verify is a question, not a finding) — and the prompt tells\nit how to find something to judge: the change set as it stands, untracked files\nincluded; the newest commit when the tree is clean; and, when the workspace is not\na Git repository at all, the repositories inside it that report changes — a\nsession workspace is often a directory of checkouts, and reading all of them is\nnot a review."
+    },
+    {
+      "section": "Type `/review`, nothing else",
+      "text": "Anything you type after the command narrows **what to judge**; it never replaces\nthe brief, and it never narrows what the reviewer reads.\n\n```\n/review                                    the change set as a whole\n/review focus on the cache invalidation    the same review, aimed\n/review reset                              forget the reviewer: the next review starts fresh\n```"
+    },
+    {
+      "section": "Type `/review`, nothing else",
+      "text": "`/review reset` is the one input that is not a review. The shared reviewer is a\nsingle session per chat, which is what lets it tell you what moved since last\ntime; the bare word `reset` retires that session and stops it if it is still\nworking. Only the whole input counts — `/review reset the cache` reviews the\ncache — and nothing deletes the retired session, so a reset followed by a host\nrestart *before* the next review re-adopts it."
+    },
+    {
+      "section": "Type `/review`, nothing else",
+      "text": "The brief is the row's `instruction`, so a profile can replace it wholesale —\nthe field next to the ones the settings card writes."
+    },
+    {
+      "section": "Install",
+      "text": "```bash"
+    },
+    {
+      "section": "from the checkout",
+      "text": "dsh plugin --profile web add /Users/vitas/git/dsh-codex-review"
+    },
+    {
+      "section": "or as a dependency",
+      "text": "dsh plugin --profile web add link:~/git/dsh-codex-review\n```\n\nThe package is a bundle: installing it mounts the `codex-review` row and the\n`/review` command. A restart is not needed for the row itself, but the command\nappears only once the profile has recomposed."
+    },
+    {
+      "section": "The route it needs",
+      "text": "`/review` does not authenticate anything. It needs a route named by `provider`\nto exist and to work. For the subscription path that is the `openai-codex`\nprovider — either the one pi-ai ships (OAuth sign-in with your ChatGPT\nPlus/Pro account) or the one a plugin registers from your Codex CLI login:"
+    },
+    {
+      "section": "The route it needs",
+      "text": "- `dsh-codex-auth` — registers `openai-codex` from `~/.codex/auth.json`, so the\n  CLI login you already have is the credential; no second sign-in.\n- `dsh-subagent-codex` — a different shape: a subagent **backend** named\n  `codex` that runs `codex exec` out of process. Use it by setting\n  `backend: codex` and a route the CLI itself resolves.\n\nIf a call fails, the failure is the provider's own message, returned in the\ncommand result — a declared route with no credentials, or an unknown model id."
+    },
+    {
+      "section": "Configuration",
+      "text": "Two writers touch this row. In the Web UI, open **Plugins → dsh-codex-review**:\nthe card picks the route and the reviewer model (its list is the running\ncomposition's own model catalog, so subscription models a route plugin\nregistered appear there too), the memory mode, the reasoning effort, and the\ncommand name. The same fields belong in your profile's `cordis.patch.yml` (see\n[`cordis.patch.yml`](cordis.patch.yml) for the shipped defaults and the commented\nrationale):"
+    },
+    {
+      "section": "Configuration",
+      "text": "| field | default | meaning |\n| --- | --- | --- |\n| `backend` | `spawn` | subagent backend: `spawn` (fresh in-process child), `fork` (inherits this conversation), or a plugin-provided one such as `codex` |\n| `provider` | `openai-codex` | LLM route the reviewer is pinned to |\n| `model` | `gpt-5.6-sol` | model id on that route |\n| `conversation` | `shared` | `shared` keeps one reviewer session per chat that remembers earlier reviews; `fresh` starts a one-shot reviewer per call |\n| `reasoningEffort` | `null` | one of `off`…`max`, or `null` to let the route decide |\n| `childMaxDepth` | `null` | `0` forbids the reviewer from delegating further; `null` sends nothing (safe for backends without the `depthLimit` capability) |\n| `persona` | `null` | per-child persona text, if the backend supports it |\n| `command` | `review` | the slash command name |\n| `instruction`, `diffCommand`, `statusCommand` | see patch | what the reviewer is told and what it runs first |\n| `maxOutputChars` | `40000` | cap on the review text handed back |"
+    },
+    {
+      "section": "Configuration",
+      "text": "**A patch's `config` replaces the row's config wholesale — it is not deep\nmerged.** When you override one field, restate the ones you want to keep."
+    },
+    {
+      "section": "What it deliberately does not do",
+      "text": "- **No automatic review.** It runs when a human types the command. Automatic\n  per-turn or per-tool-call review is a different feature with a different cost\n  profile (one model call per turn, or per tool call).\n- **No fixing.** The reviewer reads and reports; the main agent implements.\n- **No credentials and no runtime dependencies.** Anything that authenticates\n  stays the route's business.\n- **No parent conversation inherited** with the default `spawn` backend: the\n  reviewer sees the repository and its own earlier reviews, not the argument that\n  produced the change. That is the point; use `backend: fork` when you want the\n  opposite."
+    },
+    {
+      "section": "Reviewer memory, and why the report is a message",
+      "text": "`conversation: shared` is built on DSH's own *continuable* children, not on a\nstore of this plugin's: the first `/review` calls\n`subagents.startContinuable`, and every later one finds that child again through\nthe durable child catalog (`subagents.listChildren`) and hands it the prompt with\n`sendMessage`. Three consequences worth knowing:"
+    },
+    {
+      "section": "Reviewer memory, and why the report is a message",
+      "text": "- The command's own result is a **receipt**, not the review. The child answers\n  into the conversation — which is what makes the review visible to the main\n  agent. `conversation: fresh` is the mode that awaits the child and returns the\n  report as the command result.\n- The memory survives a host restart: a child that has gone idle is cold-resumed\n  from its own durable session by the delivery itself, so the reviewer still\n  knows what it flagged last time.\n- `/review` continues the newest `reviewer`-labelled continuable child of the\n  session, and there is no reset yet. To start over, run one review with\n  `conversation: fresh`, or open a new chat."
+    },
+    {
+      "section": "Reviewer memory, and why the report is a message",
+      "text": "Each later prompt is shorter and asks for the delta: what was fixed, what is\nstill open, what is new."
+    },
+    {
+      "section": "Verification",
+      "text": "```bash\nnpm run build   # esbuild → lib/client.js, the browser card; ship it, the host never builds it\nnpm run check   # syntax of every module + tsc --noEmit\nnpm test        # node:test, no test dependencies\n```\n\nThen, against a real profile:\n\n```bash\ndsh --profile web --dump-config | grep -A3 codex-review   # the row composed\n```\n\nand type `/review` in a session. The honest test of the route is the first real\ncall: it either returns a review or returns the provider's error."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](LICENSE)."
+    }
+  ],
+  "skipped": []
+}

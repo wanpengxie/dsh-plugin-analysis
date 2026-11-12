@@ -1,0 +1,129 @@
+{
+  "repo": "slohmaier/dsh-a11y-announcer",
+  "commit": "3580652d1cdb4106a929e14f98688689a6d88846",
+  "extracted_at": "2026-11-12T04:50:31.897598+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 19138,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 349,
+      "Markdown": 93,
+      "Other": 24,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@deepseek-ai/dsh-a11y-announcer",
+    "description": "Accessibility plugin for the DeepSeek Harness web UI: announces tool calls as they appear and finished assistant messages through an aria-live region so screen readers read them aloud.",
+    "version": "0.1.0-rc.8",
+    "publishConfig": {
+      "access": "public"
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/types/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/types/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./client": {
+        "types": "./lib/types/client/index.d.ts",
+        "default": "./lib/client.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-connection",
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-ui-conversation",
+          "@deepseek-ai/dsh-client-ui-layout"
+        ],
+        "platform": "web"
+      }
+    },
+    "scripts": {
+      "build": "node build.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-a11y-announcer\n      name: '@deepseek-ai/dsh-a11y-announcer'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-09-14T14:10:20Z",
+    "created_at": "2026-08-21T11:40:07Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-a11y-announcer",
+      "text": "Accessibility plugin for the DeepSeek Harness web UI. Announces tool calls as\nsoon as they appear and finished assistant messages through an `aria-live`\nregion. NVDA/JAWS/VoiceOver read the live region automatically, without moving\nthe user's focus."
+    },
+    {
+      "section": "Behavior",
+      "text": "- **Tool calls** are announced shortly after they appear (\"Tool: <name +\n  content>\"), once their text is briefly stable — NOT when they finish (the\n  start is the interesting moment). A short debounce (TOOL_SETTLE_MS=400ms)\n  avoids reading the very first streaming fragment (e.g. a half token like\n  \"ulti\" from \"multi-...\").\n- The last **finished** assistant message is announced with its full text over\n  the live region (not while streaming).\n- Only the visible answer text is read; the agent's internal reasoning (\"Think\"\n  block) is excluded so streamed reasoning fragments are not read aloud.\n- Deduplication via `data-chat-anchor-key`: each element is announced only\n  once; re-renders do not trigger a new announcement.\n- Assistant settle is detected via the `data-streaming` attribute (dsh removes\n  it once streaming finishes), so only complete text is announced.\n- No replay: nodes already present when loading an old session are not walked\n  through, only new events from now on."
+    },
+    {
+      "section": "Deep-diving announcement",
+      "text": "- While the dsh \"Deep diving...\" status (agent working) is active, \"Deep\n  diving...\" is announced every 5 seconds over the live region for as long as\n  the state persists (first announcement after 5s, then every 5s).\n- Detection by content: a `role=\"status\"` element whose text contains \"Deep\n  diving\". IMPORTANT: dsh may additionally render an EMPTY `role=\"status\"`\n  element; therefore match on text content, not on the first role=status.\n- Fallback: in addition to the MutationObserver, a 1s polling loop (for missed\n  mutations)."
+    },
+    {
+      "section": "How it works",
+      "text": "- Client plugin, discovered via `dsh.client` metadata (`platform: web`) and\n  activated as its own bundle (`dsh.bundle.patch` = cordis.patch.yml with\n  `- insert`) in the web profile.\n- `lib/index.js` = plain host loader entry (`apply`/`inject`), NO\n  `window.__ModuleLoader__` wrapper (server-side, otherwise \"window is not\n  defined\" and the plugin is not activated).\n- `lib/client.js` = browser bundle (ModuleLoader wrapper). Uses a\n  MutationObserver on the `[data-slot=\"conversation.session\"]` container and\n  selects targets via `data-chat-flow-kind` / `data-chat-anchor-key`.\n- Assistant settle detection via the `data-streaming` attribute: dsh renders\n  the assistant markdown root with `data-streaming` while it streams and\n  REMOVES it once the full text is settled. The plugin observes attribute\n  changes (`attributes` + `attributeFilter: [\"data-streaming\"]`) and only\n  announces when the node is no longer streaming — so it never reads partial\n  output.\n- Tool calls are announced after a short debounce (TOOL_SETTLE_MS=400ms) once\n  their text is briefly stable, without waiting for completion.\n- Text extraction: clones the node and REMOVES the agent's internal reasoning\n  (\"Think\" b"
+    },
+    {
+      "section": "Installation",
+      "text": "- Package: this repository (e.g. cloned to `/opt/dsh/plugins/dsh-a11y-announcer/`).\n- Add as a file dependency in `/opt/dsh/package.json` and\n  `/mnt/ssd/dsh/profiles/web/package.json`.\n- Add as a bundle in `dsh.profile.bundles` (profiles/web/package.json).\n- After changes to `lib/client.js`: restart `dsh web` (no bundle build needed,\n  the file is served directly)."
+    },
+    {
+      "section": "Files",
+      "text": "- `lib/client.js` — browser bundle (MutationObserver + aria-live announcement)\n- `lib/index.js` — host loader entry (empty)\n- `cordis.patch.yml` — `- insert` of the loader entry\n- `package.json` — `dsh.client` + `dsh.bundle` + `exports[\"./client\"]`"
+    },
+    {
+      "section": "Tests",
+      "text": "Logic verified in jsdom (see development test cases):\n- A tool call is announced shortly after appearing (\"Tool: <name>\") with its\n  full text, without waiting for completion; streaming fragments (e.g. \"ulti\"\n  from \"multi-...\") are not announced thanks to the short debounce.\n- A finished assistant is only announced after text stability (900ms) with the\n  full text, not while streaming.\n- The live region has `aria-live=\"polite\"`.\n- Deduplication via `data-chat-anchor-key` works."
+    }
+  ],
+  "skipped": []
+}

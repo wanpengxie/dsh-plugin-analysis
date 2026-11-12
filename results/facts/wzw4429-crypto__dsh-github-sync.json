@@ -1,0 +1,489 @@
+{
+  "repo": "wzw4429-crypto/dsh-github-sync",
+  "commit": "9112dc975a83a5cc101555eb3c93c0825ff30dfb",
+  "extracted_at": "2026-11-12T11:34:24.387769+00:00",
+  "tree": {
+    "files": 26,
+    "bytes": 185131,
+    "lines_by_language": {
+      "JSON": 81,
+      "JavaScript": 4087,
+      "Markdown": 130,
+      "Other": 46,
+      "YAML": 69
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "lib/activity.js",
+      "lib/checks.js",
+      "lib/config.js",
+      "lib/exec.js",
+      "lib/git.js",
+      "lib/github.js",
+      "lib/localfs.js",
+      "lib/pipeline.js",
+      "lib/repos.js",
+      "lib/state.js",
+      "lib/sync.js",
+      "lib/tools.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/run-tests.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-github-sync",
+    "version": "1.0.0",
+    "description": "GitHub repository sync for DSH: bidirectional git sync with pre-push checks, Actions/CI monitoring with run-detail drill-down, repo add/remove/rename, local file browsing, and a scheduled automation pipeline — from the web panel or agent tools.",
+    "type": "module",
+    "license": "MIT",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "icon": "./icon.svg",
+    "meta": {
+      "title": "GitHub Sync",
+      "description": "GitHub 仓库双向同步、Actions 触发与监控、CI 状态展示、推送前本地检查与 DSH 自动化流水线"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-layout",
+          "@deepseek-ai/dsh-client-ui-sidebar"
+        ]
+      }
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "lib",
+      "locale",
+      "icon.svg",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "github",
+      "git-sync",
+      "github-actions",
+      "ci"
+    ],
+    "publishConfig": {
+      "access": "public"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/wzw4429-crypto/dsh-github-sync.git"
+    },
+    "homepage": "https://github.com/wzw4429-crypto/dsh-github-sync#readme",
+    "bugs": {
+      "url": "https://github.com/wzw4429-crypto/dsh-github-sync/issues"
+    },
+    "scripts": {
+      "test": "node --test test/run-tests.mjs",
+      "check": "node --check index.js && node --check client.js && node --test test/run-tests.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-github-sync —— 插件配置层\n#\n# config 会原样传给 apply(ctx, config)，不做 schema 校验。可调项：\n#\n#   enabled:            true|false        总开关（false 时定时停用，工具/面板仍可手动触发）\n#   runOnStart:         true|false        DSH 启动后立即跑一轮同步（默认 false）\n#   intervalMinutes:    number >= 1       定时同步间隔（默认 30）\n#   token:              string            GitHub PAT（也可用 tokenEnv 指向环境变量，推荐）\n#   tokenEnv:           string            读取 PAT 的环境变量名（默认 GITHUB_TOKEN）\n#   storageFile:        string            状态文件路径（默认 <profile>/github-sync-state.json）\n#   cloneRoot:          string            面板/工具「加入同步」缺省克隆目录（默认 ~/dsh-github-sync）\n#   notifyAgent:        true|false        事件发生时用 agent.followup 唤醒会话（默认 true）\n#   notifyOn:           [string]          触发通知的事件：conflict / error / checks / pipeline / pull / push\n#   autoCommit:         true|false        合并前是否自动提交未暂存改动（默认 false，安全）\n#   conflictPolicy:     report|merge|rebase|prefer-remote|prefer-local\n#                         report = 分叉时只报告不动手（默认，最安全）\n#   onCheckFailure:     block|warn        推送前检查失败时：block=中止推送（默认）/ warn=仅告警\n#   checks:             [{name, run, onFail}]  全局默认的推送前本地检查（仓库级可覆盖）\n#   repos:              [仓库配置]        见下方示例\n#       name:           展示名\n#       path:           本地 git 仓库路径（必填）\n#       remote:         远端名（默认 origin）\n#       branch:         分支（默认当前分支）\n#       mode:           bidirectional | pull | push（默认 bidirectional）\n#       autoCommit / conflictPolicy / checks / onCheckFailure  均可按仓库覆盖\n#       commitMessage:  autoCommit 时的提交信息\n#       ciWorkflow:     GitHub Actions workflow 文件名（如 ci.yml）——流水线里触发\n#       workflowFile:   workflow 的 id 或文件名（dispatch 接口用，默认同 ciWorkflow）\n#       ensureCiWorkflow: true|false      仓库缺少 CI workflow 时自动创建（需 PAT）\n#   pipeline:           流水线行为\n#       triggerCi:      同步成功后触发 CI（默认 true，需 ciWorkflow）\n#       waitCi:         等待 CI 跑完并汇报结论（默认 true）\n#       waitTimeoutMinutes: 等待上限（默认 10）\n#       pollIntervalSeconds: 轮询间隔（默认 20）\n#\n- insert:\n    - id: github-sync\n      name: 'dsh-github-sync'\n      # 包内只放默认配置，不放任何密钥与机器相关路径。\n      # 你的 token 与仓库列表请写在 profile 自己的 patch 层\n      # （$DSH_HOME/profiles/<name>/cordis.patch.yml，按 id+name 覆盖）：\n      #   - id: github-sync\n      #     name: dsh-github-sync\n      #     config: { token: 'ghp_...', repos: [...] }\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "index.js:41"
+    },
+    {
+      "name": "GIT_AUTHOR_NAME",
+      "kind": "env",
+      "where": "test/run-tests.mjs:32"
+    },
+    {
+      "name": "GIT_AUTHOR_EMAIL",
+      "kind": "env",
+      "where": "test/run-tests.mjs:33"
+    },
+    {
+      "name": "GIT_COMMITTER_NAME",
+      "kind": "env",
+      "where": "test/run-tests.mjs:34"
+    },
+    {
+      "name": "GIT_COMMITTER_EMAIL",
+      "kind": "env",
+      "where": "test/run-tests.mjs:35"
+    },
+    {
+      "name": "GIT_CONFIG_GLOBAL",
+      "kind": "env",
+      "where": "test/run-tests.mjs:38"
+    },
+    {
+      "name": "GIT_CONFIG_SYSTEM",
+      "kind": "env",
+      "where": "test/run-tests.mjs:39"
+    },
+    {
+      "name": "TEST_DSH_TOKEN",
+      "kind": "env",
+      "where": "test/run-tests.mjs:117"
+    },
+    {
+      "name": "TEST_DSH_TOKEN",
+      "kind": "env",
+      "where": "test/run-tests.mjs:120"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "test/run-tests.mjs:538"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "test/run-tests.mjs:539"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "test/run-tests.mjs:576"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo",
+      "where": "client.js:54"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo",
+      "where": "client.js:122"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo、git@github.com:owner/repo.git）",
+      "where": "index.js:331"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${renamed.fullName",
+      "where": "index.js:378"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/.extraheader",
+      "where": "lib/git.js:40"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com",
+      "where": "lib/github.js:38"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${owner",
+      "where": "lib/github.js:103"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${parsed.owner",
+      "where": "lib/repos.js:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo",
+      "where": "lib/tools.js:146"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wzw4429-crypto/dsh-github-sync.git",
+      "where": "package.json:59"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wzw4429-crypto/dsh-github-sync#readme",
+      "where": "package.json:61"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wzw4429-crypto/dsh-github-sync/issues",
+      "where": "package.json:63"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r.git",
+      "where": "test/run-tests.mjs:161"
+    },
+    {
+      "host": "gitlab.com",
+      "url": "https://gitlab.com/o/r.git",
+      "where": "test/run-tests.mjs:163"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r.git",
+      "where": "test/run-tests.mjs:164"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/.extraheader",
+      "where": "test/run-tests.mjs:166"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r.git",
+      "where": "test/run-tests.mjs:368"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com/repos/o/r/actions/workflows/ci.yml/dispatches",
+      "where": "test/run-tests.mjs:381"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r.git",
+      "where": "test/run-tests.mjs:434"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/name.git",
+      "where": "test/run-tests.mjs:583"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r",
+      "where": "test/run-tests.mjs:584"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r.git",
+      "where": "test/run-tests.mjs:585"
+    },
+    {
+      "host": "gitlab.com",
+      "url": "https://gitlab.com/o/r",
+      "where": "test/run-tests.mjs:586"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a/b.git",
+      "where": "test/run-tests.mjs:598"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a/b.git",
+      "where": "test/run-tests.mjs:599"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a/c.git",
+      "where": "test/run-tests.mjs:600"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r1.git",
+      "where": "test/run-tests.mjs:627"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r",
+      "where": "test/run-tests.mjs:642"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/old-run.git",
+      "where": "test/run-tests.mjs:747"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/new-run.git",
+      "where": "test/run-tests.mjs:750"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/cfg-renamed.git",
+      "where": "test/run-tests.mjs:754"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com/repos/o/old-name",
+      "where": "test/run-tests.mjs:771"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/new-name",
+      "where": "test/run-tests.mjs:773"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/new-name",
+      "where": "test/run-tests.mjs:780"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/renamed.git",
+      "where": "test/run-tests.mjs:789"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-14T14:46:26Z",
+    "created_at": "2026-10-14T14:46:14Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-10-14T14:46:26Z",
+      "inactive_days": 28,
+      "commit_count": 1,
+      "checked_at": "2026-11-12T11:34:24.387769+00:00",
+      "signals": [
+        "list:pushed_at=2026-10-14T14:46:26Z",
+        "list:commits=1"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "lib/activity.js",
+    "lib/checks.js",
+    "lib/config.js",
+    "lib/exec.js",
+    "lib/git.js",
+    "lib/github.js",
+    "lib/localfs.js",
+    "lib/pipeline.js",
+    "lib/repos.js",
+    "lib/state.js",
+    "lib/sync.js",
+    "lib/tools.js",
+    "package.json",
+    "test/run-tests.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-github-sync",
+      "text": "DSH 插件：GitHub 仓库自动双向同步 + Actions/CI 流水线 + 本地推送前检查。同一套能力同时暴露给 **Agent 工具**、**Web 面板**和**定时器**。"
+    },
+    {
+      "section": "功能",
+      "text": "| 能力 | 说明 |\n| --- | --- |\n| 双向同步 | fetch → 计算 ahead/behind → 并入远端（快进 / merge / rebase，冲突即回滚）→ 跑推送前检查 → push |\n| 冲突策略 | `report`（默认，只报告不动手）/ `merge` / `rebase` / `prefer-remote` / `prefer-local`；任何冲突都会 abort 并回滚，绝不留半合并状态 |\n| 推送前检查 | `checks` 列表（shell 命令），`onFail: block`（阻止推送）或 `warn`（记一笔继续） |\n| Actions/CI | 自动补 `.github/workflows/dsh-ci.yml`（缺失时创建）、`workflow_dispatch` 触发、轮询 run 到完成、查看 runs/checks/status |\n| 工作流 | 列出 workflows、按 ref 分发触发（支持 inputs） |\n| 通知 | 同步/流水线事件按 `notifyOn` 过滤，经 `agent.followup()` 唤醒 agent |\n| Web 面板 | 侧栏 \"GitHub Sync\" 面板：仓库卡片、状态、CI runs、一键 同步/流水线/触发CI/补CI文件、**文件浏览器**、**全部仓库列表 + 一键加入同步/手动添加/移除**，15s 自动刷新 |\n| 仓库管理 | 全部仓库（`/user/repos`，需 PAT，缓存 5 分钟）；「加入同步」自动克隆到 `cloneRoot/<owner>/<name>`（可指定本地路径；已是 git 仓库的路径直接注册）；运行时加入的仓库持久化在状态文件，「移除」只出列表、不动磁盘 |\n| 改名同步 | 面板/工具改名 → GitHub `PATCH /repos`（需 admin）+ 本地 `git remote set-url`；配置仓库的改名记在状态文件的映射里（不改 cordis.patch.yml），运行时仓库直接改条目；历史/CI 缓存跟随新名 |\n| 活跃置顶 | 按「未提交改动(+1000) + 顶层文件最新 mtime(权重100) + 最近提交(权重60)」的时近度阶梯分排序，活跃仓库自动排前面；卡片显示「使用中 / N 分钟前」徽章 |\n| Actions 详情 | 卡片「Actions 运行」区：最近 runs 列表 → 点开某次 run → jobs 与每一步（step）的结论；带 ↗ GitHub 跳转 |\n| 本地文件 | 卡片「本地文件」区：直接读本地克隆磁盘（不走 GitHub、不需 PAT），目录/文件树 + 文本预览（≤128 KB，二进制只给元数据）；路径被约束在仓库根内（`path"
+    },
+    {
+      "section": "安装",
+      "text": "零运行时依赖，直接从 GitHub 安装（需要 dsh 自带 pnpm）：\n\n```powershell\ndsh plugin --profile <profile> add https://github.com/wzw4429-crypto/dsh-github-sync\n```\n\n发到 npm 之后也可以用包名安装：`dsh plugin --profile <profile> add dsh-github-sync`。安装后**重启 dsh** 生效。"
+    },
+    {
+      "section": "配置放在哪里",
+      "text": "包内的 [cordis.patch.yml](cordis.patch.yml) **只声明插件行、不带任何配置**；你的 token、仓库列表、定时周期等写在 **profile 自己的 patch 层**（`$DSH_HOME/profiles/<profile>/cordis.patch.yml`），按 `id` + 模块名覆盖：\n\n```yaml\n- id: github-sync\n  name: dsh-github-sync\n  config:\n    token: 'ghp_...'\n\n这样密钥与机器路径不会进插件仓库，插件升级也不会覆盖你的配置。面板/工具运行时「加入同步」的仓库存在状态文件里，无需改配置。"
+    },
+    {
+      "section": "认证（PAT）",
+      "text": "两种方式，二选一（`token` 优先）：\n\n1. **环境变量（推荐）**：设置 `GITHUB_TOKEN=<PAT>`（或改 `tokenEnv` 指向别的变量名）。PAT 需要 `repo` 权限（私库）和 `workflow` 权限（触发 Actions / 写 workflow 文件）。\n2. **配置直填**：`config.token: '<PAT>'`。\n\ntoken 绝不会出现在日志、工具输出、面板或错误消息里（`redactedConfig` 脱敏）；git 的 fetch/push 通过 **env 注入** `http.extraheader` 使用 PAT（不进进程参数），无 token 或非 github.com https 远端时回退系统凭据助手/SSH 密钥。"
+    },
+    {
+      "section": "配置项（profile patch 层的 `github-sync.config`）",
+      "text": "```yaml\n- id: github-sync\n  name: 'dsh-github-sync'\n  config:\n    enabled: true            # 总开关"
+    },
+    {
+      "section": "状态与数据",
+      "text": "- 状态文件：`<profile>/github-sync-state.json`（每仓库 `lastSync` / `lastPipeline` / `history`（尾 20 条）/ `ci` 缓存）。\n- 同步语义：`up-to-date` / `pulled` / `pushed` / `synced` 为成功；`dirty` / `diverged-report` / `conflict` / `checks-blocked` 为安全停住（工作树与 HEAD 不受损）；`error` 为 git/环境失败。"
+    },
+    {
+      "section": "开发",
+      "text": "```powershell"
+    },
+    {
+      "section": "语法检查 + 测试（35 项：config/state/checks/真实 git 同步 10 场景/github mock/pipeline/tools/host 冒烟/本地浏览防穿越/活跃度/改名/setRemoteUrl）",
+      "text": "node --test test/run-tests.mjs\n```\n\n状态文件里的 `\"codeGen\": N` 是已加载代码的代号指纹：改完代码重启 dsh 后该值应更新，用于自检新代码是否生效。"
+    },
+    {
+      "section": "环境要求",
+      "text": "- dsh（DeepSeek Harness）能加载 bundle，自带 pnpm 与 Node\n- Node ≥ 20（仅本地开发/测试需要）\n- `git` 在 PATH 中；需要 GitHub API 功能（列全部仓库、Actions/CI、改名、私有库）时配置 PAT，仅做公开库拉取可以不用"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,160 @@
+{
+  "repo": "snow930/dsh-self-upgrade",
+  "commit": "f8238336fc55fcc8f542bfecae7334870f2489ff",
+  "extracted_at": "2026-11-12T04:56:43.214928+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 31701,
+    "lines_by_language": {
+      "JSON": 35,
+      "JavaScript": 798,
+      "Markdown": 72,
+      "Shell": 41,
+      "YAML": 6
+    },
+    "outline": [
+      "README.md",
+      "cordis.patch.yml",
+      "install.sh",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-self-upgrade",
+    "description": "Settings-page DSH self-upgrade: check the running host against the npm registry, run `npm install -g @deepseek-ai/dsh@latest` on confirmation, and restart the host instance.",
+    "version": "0.1.1",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-connection",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/snow930/dsh-self-upgrade.git"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# bundle patch for the dsh-self-upgrade plugin: inserts its plugin row into the\n# web profile roster. Applied as a profile bundle layer (the `dsh.bundle.patch`\n# manifest field).\n- insert:\n    - id: dsh-self-upgrade\n      name: dsh-self-upgrade\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_SELF_UPGRADE_PORT",
+      "kind": "env",
+      "where": "lib/index.js:178"
+    },
+    {
+      "name": "PORT",
+      "kind": "env",
+      "where": "lib/index.js:178"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/snow930/dsh-self-upgrade/main/install.sh",
+      "where": "install.sh:3"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/snow930/dsh-self-upgrade.git",
+      "where": "install.sh:7"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/@deepseek-ai%2Fdsh/latest",
+      "where": "lib/index.js:31"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/snow930/dsh-self-upgrade.git",
+      "where": "package.json:28"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-09-10T21:20:33Z",
+    "created_at": "2026-08-23T14:38:16Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-self-upgrade",
+      "text": "DSH (DeepSeek Harness) 自升级插件：在 Web GUI 设置页添加「系统更新」区块，一键检查版本并执行升级。"
+    },
+    {
+      "section": "功能",
+      "text": "- **版本检查**：自动对比运行中 DSH 宿主版本与 npm registry 最新版\n- **一键升级**：点击按钮执行 `npm install -g @deepseek-ai/dsh@latest`\n- **实时进度**：SSE 流式推送安装日志，无需刷新即可看到每行输出\n- **自动重启**：安装完成后自动停止旧实例、等待端口释放、后台拉起新实例、刷新页面\n- **安全回滚**：npm 安装失败时旧实例不受影响，天然回滚"
+    },
+    {
+      "section": "安装",
+      "text": "**推荐：从 npm 安装**：\n\n```bash\ndsh plugin --profile web add dsh-self-upgrade\n```\n\n或手动编辑 `profiles/web/package.json`：`dependencies` 增加\n`\"dsh-self-upgrade\": \"^0.1.0\"`、`dsh.profile.bundles` 追加 `\"dsh-self-upgrade\"`，\n然后在 profiles/web 下 `pnpm install`。\n\n**本地开发（维护者迭代）**：link 到本地检出，修改源码后重启 DSH Web 即生效，\n无需重新发布 npm：\n\n```bash\ndsh plugin --profile web add link:~/git/dsh-self-upgrade\n```"
+    },
+    {
+      "section": "服务端（`lib/index.js`）",
+      "text": "Cordis 插件，注册 4 个 loopback-only HTTP 端点：\n\n| 端点 | 方法 | 功能 |\n|---|---|---|\n| `/api/self-upgrade/check` | GET | 返回 `{current, latest, hasUpdate}` |\n| `/api/self-upgrade/run` | POST | 生成升级脚本并以 detached 进程执行 |\n| `/api/self-upgrade/status` | GET | 返回阶段推断 + 日志尾部（轮询用） |\n| `/api/self-upgrade/stream` | GET | SSE 实时流式推送日志（安装阶段用） |\n\n升级脚本流程：`npm install -g` → `kill 旧进程` → `等端口释放` → `setsid nohup dsh web`。"
+    },
+    {
+      "section": "客户端（`lib/client.js`）",
+      "text": "通过 `settings.section` slot 注册设置页一级区块「系统更新」。安装阶段用 `EventSource` 接收 SSE 实时日志；重启阶段（旧进程已死）自动 fallback 到轮询。"
+    },
+    {
+      "section": "安全",
+      "text": "- 所有端点仅接受 loopback（127.0.0.1 / ::1）请求\n- 升级脚本内容由服务端固定生成，不接受任意命令注入\n- 目标版本白名单校验（仅 semver 格式）\n- npm 安装失败 = 旧进程不动，零影响"
+    },
+    {
+      "section": "文件结构",
+      "text": "```\ndsh-self-upgrade/\n├── package.json        # 插件清单 + dsh.client 声明\n├── cordis.patch.yml    # loader entry 注册\n├── lib/"
+    },
+    {
+      "section": "卸载",
+      "text": "从 profile `package.json` 删除 `dsh-self-upgrade` 依赖和 bundles 条目，`pnpm install` 即可。"
+    }
+  ],
+  "skipped": []
+}

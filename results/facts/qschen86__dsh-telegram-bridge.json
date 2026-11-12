@@ -1,0 +1,147 @@
+{
+  "repo": "qschen86/dsh-telegram-bridge",
+  "commit": "b7734ee50ee7533fe645adf828c765e0579f1f19",
+  "extracted_at": "2026-11-12T03:16:05.730248+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 80233,
+    "lines_by_language": {
+      "JSON": 32,
+      "JavaScript": 1615,
+      "Markdown": 105,
+      "Other": 29,
+      "YAML": 16
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "data/config.example.json",
+      "lib/index.js",
+      "package.json",
+      "test/approval-auto-decide.test.mjs",
+      "test/approval-policy.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-telegram-bridge",
+    "version": "0.4.0",
+    "description": "DSH host plugin: notify via Telegram when a conversation finishes or needs user confirmation (ask_user_question / approvals), and let you reply from Telegram to continue the session. Bare messages (no sessionId) are app-routed: calendar-related text goes to the calendar app conversation, everything else creates a new conversation in the chat app. Since v0.4.0 it is also the single truth source of the per-session approval policy (ask / allowed-once / rejected) — Telegram's /approve and the web card's third button turn the same knob; grants made from the web live in process memory only and are revoked on restart.",
+    "type": "module",
+    "main": "lib/index.js",
+    "scripts": {
+      "test": "node --test"
+    },
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "data/config.example.json"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-telegram-bridge bundle patch: one host row inserted over the web layer.\n# Host-only plugin: no browser half, no dsh.client declaration.\n# v0.4.0 起它同时是「会话审批策略」的唯一真相源：网页提权卡的第三键也写这张表。\n- insert:\n    - id: telegram-bridge\n      name: 'dsh-telegram-bridge'\n      description: 'Telegram 通知桥：会话完成/待确认推送，回复可继续推进'\n      scenes:\n        - '人不在电脑前时接收进度通知'\n        - '用手机回复继续推进任务'\n      features:\n        - '会话完成/待确认时推送'\n        - '分会话回复继续推进'\n        - '无会话时自动识别应用'\n        - '跨设备一致'\n        - '会话审批策略唯一真相源：/approve 与网页提权卡「本会话都允许」拧同一个旋钮（网页那份只存内存、重启收回）'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_TELEGRAM_BOT_TOKEN",
+      "kind": "env",
+      "where": "lib/index.js:27"
+    },
+    {
+      "name": "botToken",
+      "kind": "file",
+      "where": "lib/index.js:95"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "api.telegram.org",
+      "url": "https://api.telegram.org/bot",
+      "where": "lib/index.js:41"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-09-05T05:19:31Z",
+    "created_at": "2026-08-17T07:03:03Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-telegram-bridge",
+      "text": "DSH host 插件：通过 Telegram 机器人推送通知，并支持在 Telegram 上回复继续推进会话。"
+    },
+    {
+      "section": "功能",
+      "text": "- **会话完成通知**：agent 完成一轮（回到 idle）后，向 Telegram 发送通知。所有通知\n  统一模板，按固定字段顺序：**侧边栏 icon 名称（工作区标题，如「日历待办」）→ 会话 id →\n  会话名（session/title 事件）→ 通知类型（✅ 会话结束 / 🔐 需要授权 / ❓ 需要确认 /\n  ⏰ 日程提醒 / ℹ️ 其他）→ 通知内容概要**；**回复该消息即可继续会话**。\n  已通知的回合基线持久化在 state.json（宿主重启不丢失）；发送失败不推进基线，\n  下次 idle 自动重试，避免静默丢通知。首次见到某会话 idle 时：若其最近活动晚于\n  桥接启动时刻（新建会话、或重启后恢复的会话），直接推送并建立基线（新会话的第一轮\n  完成也会通知）；仅当会话活动全部早于桥接启动（宿主重启加载的历史会话）时才只记基线\n  不推送，避免补发旧回合的噪音。其他插件经 telegramBridge.sendAll(text, {type, sessionId})\n  发送时可带类型前缀并让回复直达对应会话。\n- **需要确认通知**：\n  - ask_user_question（模型请求确认）→ 推送问题与选项，在 Telegram 回复选项编号 / 文字 / custom: 内容 即可回答，agent 自动继续。\n  - 权限审批（sandbox approval）→ 推送工具名与原因；可回复 /approve <编号> allow|deny 为会话设置自动审批策略（也可用环境变量设全局默认）。\n- **Telegram 消息路由**（按优先级）：\n  1. 回复通知消息 → 直达对应会话（通知 message id → 会话 id 映射持久化在 state.json，宿主重启后依然有效；即使映射丢失，也会从被回复消息正文里的 #sess: 标签恢复）；\n  2. 消息正文带 #sess:<会话id> → 直达该会话；\n  3. 全局恰好只有一个待回答的确认问题 → 该消息视为对它的回答；\n  4. **应用路由**（消息未携带任何 sessionId 时）：按关键词自动识别所属应用——\n     - 日历相关（日程/待办/提醒/会议/预约/安排/日历/todo/calendar/remind/meeting/appointment/schedule/event 等）→ 发送到**日历应用**的对话（dsh-calendar-todo；首次使用自动创建会话）；\n     - 其他消息 → 默认为**对话应用**（dsh-chat-app），并在其中**新建一个对话**（每次一条新会话）。\n  关键词表可扩展：`DSH_TELEGRAM_CALENDAR_KEYWORDS` 环境变量或 config.json `"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile web add dsh-telegram-bridge"
+    },
+    {
+      "section": "dsh plugin --profile web add https://github.com/qschen86/dsh-telegram-bridge/releases/download/v0.1.0/dsh-telegram-bridge-0.1.0.tgz",
+      "text": "dsh --profile web --dump-config   # 验证条目已加入 bundles"
+    },
+    {
+      "section": "重启 dsh web（host 半生效）",
+      "text": "```"
+    },
+    {
+      "section": "初始化（首次安装）",
+      "text": "1. 在 Telegram 找 @BotFather 创建机器人，拿到 token（tg 前缀，如 `123456:ABC...`）。\n2. **提供 token**（二选一，config.json 优先）：\n   - 把 `data/config.example.json` 复制为 `data/config.json`，填入 `botToken`；或\n   - 设置环境变量 `DSH_TELEGRAM_BOT_TOKEN`（注意：环境变量需对 **dsh web 进程**可见——\n     launchd 托管时加进 plist 的 `EnvironmentVariables`，只写 `~/.zshrc` 不生效）。\n   - 二者都不填时插件不激活（启动日志有警告）。\n3. 重启 dsh web 后，在 Telegram 给机器人发 **/start**（未配置授权列表时自动注册当前 chat），\n   再发 **/status** 确认桥接状态。\n4. 可选环境变量：`DSH_TELEGRAM_ALLOWED_CHATS`（逗号分隔的 chat id，同 config.json\n   `allowedChats`）、`DSH_TELEGRAM_APPROVAL_DEFAULT`（ask / allowed-once / rejected）、\n   `DSH_TELEGRAM_PREFIX`（命令前缀，默认 /）。"
+    },
+    {
+      "section": "Telegram 命令",
+      "text": "| 命令 | 说明 |\n| --- | --- |\n| /start | 注册当前 chat（未配置授权列表时） |\n| /list | 列出会话（编号） |\n| /s <编号|会话id> <内容> | 向指定会话发送消息 |\n| /q <编号> <答案> | 回答指定会话的待确认问题 |\n| /approve <编号> allow|deny|ask | 设置会话自动审批策略（与网页提权卡的「本会话都允许」同一个旋钮） |\n| /status | 桥接状态 |\n| /help | 帮助 |\n\n回复通知消息本身即可：**继续会话**（完成通知）、**回答问题**（问题通知，支持选项编号 / 文字 / custom: 内容）、**allow / deny 审批**（审批通知）。如果回复的是问题通知但该确认已失效（已在网页回答，或会话被中断/取消），会收到明确提示而不会把答案当作普通消息发进会话。"
+    },
+    {
+      "section": "说明",
+      "text": "- 通过 Telegram Bot API getUpdates 长轮询收发，无需公网地址 / webhook。\n- 数据（授权 chat、审批策略、通知消息 → 会话 id 映射）持久化在插件 data/state.json（映射最多保留最近 500 条）。其中**审批策略只有经 `/approve` 设置的才落盘**；网页提权卡「本会话都允许」记的那份只存活于 host 进程内存，**重启即收回**（回到逐次确认），读取顺序固定为 内存 → `approvalPrefs` → 默认策略。\n- 自动放行的生效方式：在引擎把这张卡端给人之前，先把 `approval/decided` 写进会话日志 —— api-proxy 的应答器发现这条 ask 已有决定就让路，本插件的应答器再返回日志里那个结果，卡根本不会弹。这个 append **不能**在 `approval/asked` 的观察者里就地做（dsh-session 拒绝同一次发布中的重入 append，异常还会被引擎吞成一行 warn），所以由 `autoDecideApproval` 推到微任务里落。**v0.3.0 及更早这条是死代码**：策略记上了、下一条照样问人，`/approve … allow` 从未真正放行过。\n- 会话 id 以 #sess:<id> 标签内嵌在通知消息中；回复消息时会自动用它恢复路由，即使映射表因重启或清理而缺失。"
+    },
+    {
+      "section": "配置",
+      "text": "`data/config.json`（模板见 `data/config.example.json`）：\n\n| 字段 | 默认 | 说明 |\n| --- | --- | --- |\n| `botToken` | 空 | @BotFather 创建的 token；优先于环境变量 `DSH_TELEGRAM_BOT_TOKEN` |\n| `allowedChats` | `[]` | 授权 chat id 列表。**空 = 不限制**：任何 chat 发 `/start` 即自动授权并持久化到 `data/state.json`；非空 = 仅列表内的 chat 可交互。想只给自己用就填自己的 chat id |\n| `calendarKeywords` | 内置表 | 应用路由的日历关键词（与内置表合并；也可用环境变量 `DSH_TELEGRAM_CALENDAR_KEYWORDS`，逗号分隔） |"
+    },
+    {
+      "section": "配置",
+      "text": "> 环境变量方式：`DSH_TELEGRAM_BOT_TOKEN` / `DSH_TELEGRAM_ALLOWED_CHATS` /\n> `DSH_TELEGRAM_APPROVAL_DEFAULT` / `DSH_TELEGRAM_PREFIX`。二者都不填时插件不激活。"
+    }
+  ],
+  "skipped": []
+}

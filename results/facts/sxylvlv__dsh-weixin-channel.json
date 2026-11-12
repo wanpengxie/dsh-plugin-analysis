@@ -1,0 +1,476 @@
+{
+  "repo": "sxylvlv/dsh-weixin-channel",
+  "commit": "5167001b642d98277e684144d7800f86bb87ec79",
+  "extracted_at": "2026-11-12T05:36:05.948475+00:00",
+  "tree": {
+    "files": 38,
+    "bytes": 294795,
+    "lines_by_language": {
+      "JSON": 416,
+      "JavaScript": 4430,
+      "Markdown": 689,
+      "Other": 1139,
+      "YAML": 69
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "bin/weixin-login.mjs",
+      "client/client.js",
+      "cordis.patch.snippet.yml",
+      "cordis.patch.yml",
+      "docs/出站媒体实测结论.md",
+      "docs/功能说明.md",
+      "docs/移植改写清单.md",
+      "index.mjs",
+      "lib/bridge.mjs",
+      "lib/ilink.mjs",
+      "lib/log.mjs",
+      "lib/login.mjs",
+      "lib/media.mjs",
+      "lib/message.mjs",
+      "lib/monitor.mjs",
+      "lib/outbound.mjs",
+      "lib/store.mjs",
+      "lib/ui-server.mjs",
+      "lib/video-frame.mjs",
+      "package-lock.json",
+      "package.json",
+      "tools/cdn-decode.mjs",
+      "tools/cdn-probe.mjs",
+      "tools/cdn-verify.mjs",
+      "tools/deploy.mjs",
+      "tools/ffmpeg-common.ps1",
+      "tools/ffmpeg-frames.ps1",
+      "tools/ffmpeg-scene.ps1",
+      "tools/mf-frames.ps1",
+      "tools/retoggle.mjs",
+      "tools/send-file-test.mjs",
+      "tools/send-test.mjs",
+      "tools/shell-frame.ps1",
+      "tools/watchdog.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-weixin-channel",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "微信（腾讯 ilink bot）通道插件 for DSH：把微信消息接成 DSH 会话，文本/图片/文件/语音/视频双向，出站可推文档。移植自 @tencent-weixin/openclaw-weixin。",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "dsh-bundle",
+      "weixin",
+      "wechat",
+      "ilink",
+      "clawbot",
+      "channel"
+    ],
+    "license": "MIT",
+    "author": "sxylvlv",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/sxylvlv/dsh-weixin-channel.git"
+    },
+    "homepage": "https://github.com/sxylvlv/dsh-weixin-channel#readme",
+    "bugs": {
+      "url": "https://github.com/sxylvlv/dsh-weixin-channel/issues"
+    },
+    "engines": {
+      "node": ">=22"
+    },
+    "main": "index.mjs",
+    "exports": {
+      ".": "./index.mjs",
+      "./client": "./client/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "bin": {
+      "dsh-weixin-login": "bin/weixin-login.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [],
+        "platform": "web"
+      }
+    },
+    "files": [
+      "index.mjs",
+      "cordis.patch.yml",
+      "cordis.patch.snippet.yml",
+      "lib",
+      "bin",
+      "client",
+      "tools/*.ps1",
+      "tools/watchdog.mjs",
+      "docs/功能说明.md",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "login": "node bin/weixin-login.mjs",
+      "deploy": "node tools/deploy.mjs",
+      "pack:check": "npm pack --dry-run"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1",
+      "qrcode": "^1.5.4",
+      "qrcode-terminal": "^0.12.0"
+    },
+    "publishConfig": {
+      "registry": "https://registry.npmjs.org/",
+      "access": "public"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch —— 装好本包后，这一层会自动并入 profile 的层栈。\n#\n# 生效条件（两个都在本包里）：package.json 声明 \"dsh\": { \"bundle\": { \"patch\": \"./cordis.patch.yml\" } }，\n# 且本文件存在。之后 `dsh plugin --profile web add dsh-weixin-channel` 会自动把包名追加进\n# profile 的 dsh.profile.bundles，**不需要手改 profile 的 cordis.patch.yml**。\n#\n# 平面判定：host 组合（不是 agent preset）。一个进程级长轮询连接，一个微信账号对应多个 DSH 会话；\n# 不发布任何 service（纯消费者 + 后台循环）⇒ 不需要 isolate realm，裸行即可。\n\n- insert:\n    - id: weixin-channel\n      name: 'dsh-weixin-channel'\n      config:\n        # 微信会话在哪个目录里干活。默认继承 DSH 进程的工作目录；\n        # 建议显式指定，例如：workspacePath: 'D:\\deepwork\\my-project'\n        workspacePath: !!js process.env.DSH_WEIXIN_WORKSPACE ?? process.cwd()\n\n        # 权限：**默认只读**。微信是外部输入源，确认可信后再放宽。\n        # 可选值：read-only | workspace-write | danger-full-access\n        permissionPreset: read-only\n        agentPreset: standard\n\n        # 白名单：形如 xxx@im.wechat 的微信 userId。\n        # 留空即可 —— 扫码登录（dsh-weixin-login）会把扫码者写进状态目录的白名单。\n        # 想额外加人再填这里；**不要**写成通配。\n        allowFrom: []\n\n        # 指定账号；留空则由状态目录里已登录的账号决定。\n        accountId: ''\n\n        # 出站行为\n        maxReplyChars: 4000\n        replyProgress: true\n\n        # 长轮询（服务端可下发覆盖）\n        longPollTimeoutMs: 35000\n"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "bin/weixin-login.mjs",
+    "client/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_WEIXIN_WORKSPACE",
+      "kind": "env",
+      "where": "cordis.patch.snippet.yml:16"
+    },
+    {
+      "name": "DSH_WEIXIN_ALLOW_FROM",
+      "kind": "env",
+      "where": "cordis.patch.snippet.yml:23"
+    },
+    {
+      "name": "DSH_WEIXIN_ACCOUNT",
+      "kind": "env",
+      "where": "cordis.patch.snippet.yml:26"
+    },
+    {
+      "name": "DSH_WEIXIN_WORKSPACE",
+      "kind": "env",
+      "where": "cordis.patch.yml:16"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.mjs:114"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/log.mjs:23"
+    },
+    {
+      "name": "DSH_WEIXIN_DEBUG",
+      "kind": "env",
+      "where": "lib/log.mjs:50"
+    },
+    {
+      "name": "DSH_WEIXIN_NO_GREET",
+      "kind": "env",
+      "where": "lib/monitor.mjs:39"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/store.mjs:24"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/ui-server.mjs:94"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "lib/ui-server.mjs:94"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/ui-server.mjs:94"
+    },
+    {
+      "name": "DSH_WEIXIN_FFMPEG",
+      "kind": "env",
+      "where": "lib/video-frame.mjs:45"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/video-frame.mjs:55"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/cdn-decode.mjs:23"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/cdn-probe.mjs:25"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/cdn-verify.mjs:23"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/deploy.mjs:22"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/retoggle.mjs:15"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/send-file-test.mjs:25"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/send-test.mjs:17"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/watchdog.mjs:28"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "lib/ilink.mjs:12"
+    },
+    {
+      "host": "${status.redirect_host",
+      "url": "https://${status.redirect_host",
+      "where": "lib/login.mjs:202"
+    },
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "lib/store.mjs:19"
+    },
+    {
+      "host": "novac2c.cdn.weixin.qq.com",
+      "url": "https://novac2c.cdn.weixin.qq.com/c2c",
+      "where": "lib/store.mjs:20"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/sxylvlv/dsh-weixin-channel.git",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/sxylvlv/dsh-weixin-channel#readme",
+      "where": "package.json:23"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/sxylvlv/dsh-weixin-channel/issues",
+      "where": "package.json:25"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "package.json:73"
+    },
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "tools/cdn-decode.mjs:27"
+    },
+    {
+      "host": "novac2c.cdn.weixin.qq.com",
+      "url": "https://novac2c.cdn.weixin.qq.com/c2c",
+      "where": "tools/cdn-decode.mjs:28"
+    },
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "tools/cdn-probe.mjs:29"
+    },
+    {
+      "host": "novac2c.cdn.weixin.qq.com",
+      "url": "https://novac2c.cdn.weixin.qq.com/c2c",
+      "where": "tools/cdn-probe.mjs:30"
+    },
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "tools/cdn-verify.mjs:27"
+    },
+    {
+      "host": "novac2c.cdn.weixin.qq.com",
+      "url": "https://novac2c.cdn.weixin.qq.com/c2c",
+      "where": "tools/cdn-verify.mjs:28"
+    },
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "tools/send-file-test.mjs:60"
+    },
+    {
+      "host": "novac2c.cdn.weixin.qq.com",
+      "url": "https://novac2c.cdn.weixin.qq.com/c2c",
+      "where": "tools/send-file-test.mjs:62"
+    },
+    {
+      "host": "novac2c.cdn.weixin.qq.com",
+      "url": "https://novac2c.cdn.weixin.qq.com/c2c",
+      "where": "tools/send-file-test.mjs:86"
+    },
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "tools/send-file-test.mjs:107"
+    },
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "tools/send-file-test.mjs:130"
+    },
+    {
+      "host": "ilinkai.weixin.qq.com",
+      "url": "https://ilinkai.weixin.qq.com",
+      "where": "tools/send-test.mjs:50"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1",
+      "qrcode": "^1.5.4",
+      "qrcode-terminal": "^0.12.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-09-14T03:16:55Z",
+    "created_at": "2026-09-14T02:24:07Z"
+  },
+  "runtime_files": [
+    "bin/weixin-login.mjs",
+    "client/client.js",
+    "cordis.patch.yml",
+    "index.mjs",
+    "lib/bridge.mjs",
+    "lib/ilink.mjs",
+    "lib/log.mjs",
+    "lib/login.mjs",
+    "lib/media.mjs",
+    "lib/message.mjs",
+    "lib/monitor.mjs",
+    "lib/outbound.mjs",
+    "lib/store.mjs",
+    "lib/ui-server.mjs",
+    "lib/video-frame.mjs",
+    "package.json",
+    "tools/deploy.mjs",
+    "tools/watchdog.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-weixin-channel",
+      "text": "把**微信**接成 DeepSeek Harness 的一个入口：在微信里发消息 = 在一个真实的 DSH 会话里下指令。\n\n- 一条微信对话 = 一个 DSH 会话，**跨消息长期复用**；微信里发「新对话」才另起一个。\n- **双向媒体**：微信发来的图片/文件/语音/视频进得了会话；DSH 生成的文档/图片/压缩包推得回微信。\n- **文本提问**：微信侧没有交互式选择题，需要你决策时它用编号列表问你。\n\n来源：`@tencent-weixin/openclaw-weixin@2.4.8`（Tencent，MIT）从 OpenClaw 插件平面到 DSH Cordis 插件平面的移植。\n协议层（ilink HTTP 接口、扫码登录状态机、CDN AES 加解密）沿用原实现语义。\n\n---"
+    },
+    {
+      "section": "它工作在哪",
+      "text": "```\n微信 App → 腾讯 ilink bot（ilinkai.weixin.qq.com）\n        → getUpdates 长轮询（客户端发起，**不需要公网入口/域名/证书**）\n        → dsh-weixin-channel（跑在 DSH 进程里的 Cordis host 插件）\n        → DSH 会话（agents.resume/create + followup）\n\n一个长轮询连接，多个微信用户 → 各自独立会话。\n\n---"
+    },
+    {
+      "section": "前置",
+      "text": "- DSH（`dsh` 命令可用），Node ≥ 22\n- 一个**腾讯 ilink 机器人**账号（扫码授权即可，无需自建服务端）"
+    },
+    {
+      "section": "方式 A：作为 bundle 安装（推荐）",
+      "text": "```sh"
+    },
+    {
+      "section": "1. 装进 web profile",
+      "text": "dsh plugin --profile web add dsh-weixin-channel"
+    },
+    {
+      "section": "2. 扫码登录（此刻不需要 DSH 在跑）",
+      "text": "npx dsh-weixin-login"
+    },
+    {
+      "section": "3. 启动 / 重启 DSH",
+      "text": "dsh web\n```\n\n因为本包声明了 `dsh.bundle`，第 1 步会自动把 `dsh-weixin-channel` 追加进 profile 的\n`dsh.profile.bundles`；它自带的 `cordis.patch.yml` 会插入插件行。**不需要手改 profile 的 patch 文件。**"
+    },
+    {
+      "section": "方式 B：手工放置",
+      "text": "1. 把整个目录放到 `$DSH_HOME/profiles/web/` 下（与 `cordis.patch.yml` 同级）\n2. 把 `cordis.patch.snippet.yml` 的内容追加进 `$DSH_HOME/profiles/web/cordis.patch.yml`\n3. `node bin/weixin-login.mjs` 扫码登录\n4. `dsh web`"
+    },
+    {
+      "section": "登录做了什么",
+      "text": "`dsh-weixin-login` 打印二维码（终端 + PNG），扫码授权后：\n\n- 账号凭据写入 `$DSH_HOME/weixin/accounts/<accountId>.json`（权限 0600）\n- **把扫码者加入白名单** —— 所以 `allowFrom` 留空也能用，且外部陌生号仍被拒绝\n\n---"
+    },
+    {
+      "section": "可视化面板",
+      "text": "装好之后，在 DSH 里打开 **设置 → 微信通道**，一页看完通道状态：\n\n- **通道状态**：running/stopped、构建版本、宿主 pid、当前账号、看门狗是否在跑、状态时间\n- **扫码登录 / 换一个微信**：点一下就在面板里出二维码，过期自动换新码；微信要求「手机上的数字」时下方有输入框；还带「停止登录」\n- **已登录账号**：账号 id、扫码者 userId、登录时间（**只显示元数据，不显示 token**）\n- **最近日志**：`channel.log` 尾部，长串密钥形态自动脱敏\n- **重载通道**：换号后点它让新账号生效\n\n实现方式：宿主半（`lib/ui-server.mjs`）把数据与动作注册成同源的 `/dsh-weixin/*` 本机路由，客户端半（`client/client.js`）是这个包 `dsh.client` 声明的静态客户端模块。**面板不增加任何对外监听**，只在 DSH 自己的本机服务上多几个路由。\n\n---"
+    },
+    {
+      "section": "配置",
+      "text": "改 `$DSH_HOME/profiles/web/cordis.patch.yml` 里那一行的 `config`，或改本包的 `cordis.patch.yml` 后重装。\n必填只有 `workspacePath`（默认取 DSH 进程工作目录）。"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认 | 说明 |\n| --- | --- | --- |\n| `workspacePath` | `process.cwd()` | 微信会话在哪个目录里干活 |\n| `permissionPreset` | **`read-only`** | `read-only` / `workspace-write` / `danger-full-access`。**微信是外部输入源，建议先只读** |\n| `agentPreset` | `standard` | 与部署里已装的 preset 名一致 |\n| `allowFrom` | `[]` | 微信 userId 白名单；扫码者会自动进白名单。**不要写通配** |\n| `accountId` | `''` | 留空 = 用状态目录里已登录的账号 |\n| `maxReplyChars` | `4000` | 腾讯侧单条文本上限，超出按段落分段发送 |\n| `replyProgress` | `true` | 先回执「收到，正在处理…」 |\n| `longPollTimeoutMs` | `35000` | 服务端可下发覆盖 |\n| `ensureSessionVisible` | `true` | 保证通道会话不被浏览器侧的「归档」隐藏 |\n| `watchdog` | `true` | 自愈看门狗：通道静默失效（热重组把行弄丢、进程被杀）时自动重挂。日志见 `channel.log` 的 `[watchdog]` 行；禁用 = 设为 `false` 或在状态目录放 `watchdog.off` |\n| `extractVideoFrame` / `videoFrameCount` / `videoSceneExtra` | `true` / `3` / `2` | 视频抽帧（默认只在你说「分析视频」时触发） |\n| `staleTokenMs` / `minSendIntervalMs` / `maxConsecutiveSendFailures` / `sendCooldownMs` | `600000` / `1500` / `3` / `300000` | 出站守卫：令牌过期阈值、最小发送间隔、断路器阈值与冷却 |"
+    },
+    {
+      "section": "配置",
+      "text": "---"
+    },
+    {
+      "section": "微信侧指令",
+      "text": "| 你说 | 效果 |\n| --- | --- |\n| 直接说话 | 正常对话（复用当前会话） |\n| `新对话` / `/new` / `/reset` / `重置对话` | 下一条消息开一个全新会话（旧会话保留在 DSH 里） |\n| `/status` | 回报当前账号、会话 id、权限预设 |\n| `/分析` / `分析视频`（可 `/分析 2`） | 抽帧分析最近（或倒数第 N）条视频；会把宫格图回发给你 |\n| `/视频信息` / `/视频列表` | 视频元数据 / 最近保存的列表 |\n| `/frames N` | 临时改抽帧数（1~16，仅本次进程有效） |\n| `/pair` | 自助加入白名单（需 `autoPair: true`，默认关） |\n\n**能力对照**"
+    },
+    {
+      "section": "微信侧指令",
+      "text": "| 方向 | 类型 | 支持 |\n| --- | --- | --- |\n| 微信 → DSH | 文字 / 图片 / 文件（docx·xlsx·pptx·pdf·zip）/ 语音（有服务端转写时）/ 视频（默认只存不分析） | ✅ |\n| DSH → 微信 | 文字（超长自动分段）/ 图片 / **视频** / 文档与压缩包 | ✅ |\n\nDSH 侧要主动发文件时，在回复里**单独占一行**写 `MEDIA:<绝对路径>`，该行不会作为文字发出。\n\n---"
+    },
+    {
+      "section": "安全须知（重要）",
+      "text": "- **微信消息 = 一个能在你本机跑工具的外部输入源。** 默认给的是 `read-only` + 白名单；确认可信后再放宽到 `workspace-write` 或 `danger-full-access`。\n- `allowFrom` 为空表示\"只认已扫码登录的号\"，**不是**\"谁都行\"。\n- 凭据文件 0600；日志有脱敏，但**不要把 token 打进聊天**。\n- 本插件默认不改 DSH 的审批策略。想让危险动作回微信确认，需要额外接审批流（本包未实现）。\n\n---"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **协议是逆向来的**：腾讯 ilink 接口没有公开文档，AES 配方与引用参数都是实测确定。腾讯侧改动会直接打断它，不保证长期可用。\n- **主动发视频已接入**（2026-09-14 真机验证：3 秒 mp4 正常送达并播放）。配方要点：引用参数取自上传响应头 `x-encrypted-param`、`aes_key = base64(hex)`、带 `encrypt_type: 1`、**不能带 `full_url`**。\n- **语音没有本地转写**：服务端不给转写时只能存下 SILK 音频，模型无法直接听。\n- **视频历史只在内存**：插件重启后 `/分析` 找不到上一条，视频文件本身仍在磁盘。\n- **热重组的失效模式已被看门狗兜住**：profile patch 被重写时偶发\"旧行拆掉、新行插不回来\"，通道会静默失效。默认开启的看门狗（独立进程，随通道挂载拉起）会在约 60 秒内判定并**换新 id 重挂**。想关掉见配置表的 `watchdog`。\n- 只做**单聊**，未接群聊。"
+    },
+    {
+      "section": "已知边界",
+      "text": "排障先看 `$DSH_HOME/weixin/channel.log`（收发每一步都留痕），再看 `$DSH_HOME/weixin/mount-status.json`（插件挂载状态）。\n\n---"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。见 [LICENSE](LICENSE)。\n\n移植自 Tencent 的 `@tencent-weixin/openclaw-weixin`（MIT）。协议与商标权利归腾讯；本项目与腾讯无隶属关系。"
+    }
+  ],
+  "skipped": []
+}

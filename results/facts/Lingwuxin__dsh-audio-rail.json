@@ -1,0 +1,168 @@
+{
+  "repo": "Lingwuxin/dsh-audio-rail",
+  "commit": "f9ee105ad6177cd78d02296593c9a256334cc785",
+  "extracted_at": "2026-11-11T12:09:54.699963+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 1699051,
+    "lines_by_language": {
+      "JSON": 33,
+      "JavaScript": 312,
+      "Markdown": 137,
+      "Other": 499,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "build.cmd",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/demo1.gif",
+      "docs/demo1.mp4",
+      "index.js",
+      "package.json",
+      "src/AudioRailCapture.cs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-audio-rail",
+    "version": "1.0.1",
+    "private": true,
+    "type": "module",
+    "description": "DSH Web GUI 会话右侧快捷跳转锚点（turn rail）随音乐律动：宿主侧 WASAPI 环回采集 + FFT 频段经 SSE 推送，浏览器侧驱动锚点短条伸缩，宛如旋转 90° 的频谱柱。",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "bin",
+      "src",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-chat"
+        ]
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-audio-rail bundle patch: one dual-face row in the web profile. The node\n# half (exports \".\") owns the WASAPI capture helper process and the\n# /audio-rail/* routes; the `dsh.client` declaration serves the browser half\n# (exports \"./client\") which animates the turn-rail marks.\n- insert:\n    - id: ui-dsh-audio-rail\n      name: '@local/dsh-audio-rail'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-09-27T04:15:48Z",
+    "created_at": "2026-09-18T15:21:28Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-audio-rail",
+      "text": "**中文** | [English](README.en.md)\n\n让 DSH Web GUI 会话页面右侧的「快捷跳转锚点」（turn rail）随系统正在播放的音乐律动——像把频谱可视化的柱形旋转了 90°。\n\n> **兼容性声明**：当前版本（v1.0.1）仅针对 **dsh v0.1.7-rc.2** 适配验证。本插件依赖 `dsh-client-ui-chat` 的 TurnNavigator DOM 契约（`_marks` 容器内的 `_mark` 按钮、`data-index` 排序、固定 20px 短条、scaleX 状态系数）；DSH 升级若再次重构该组件，视觉效果可能失效（采集与 SSE 音频管线不受影响）。不同版本请自查该组件结构。"
+    },
+    {
+      "section": "效果演示",
+      "text": "GitHub 会剥离手写 `<video>` 标签，所以用 GIF 内联自动循环播放；有声完整版见 [demo1.mp4](docs/demo1.mp4)。"
+    },
+    {
+      "section": "原理",
+      "text": "```\n┌─ bin/AudioRailCapture.exe ─┐   stdout JSON    ┌─ index.js (host) ─┐   SSE    ┌─ client.js (browser) ─┐\n│ WASAPI 环回采集默认渲染端点 │ ───────────────▶ │ /audio-rail/events │ ───────▶ │ 每个锚点绑定一个频段， │\n│ FFT → 12 个对数频段 @30fps │                  │ /audio-rail/status │          │ scaleX 伸缩 ::before  │\n└────────────────────────────┘                  └────────────────────┘          └────────────────────────┘"
+    },
+    {
+      "section": "原理",
+      "text": "- **采集**：`src/AudioRailCapture.cs`（csc.exe 编译，零依赖单文件）以环回模式捕获默认渲染端点的系统混音（WASAPI shared mode + `AUDCLNT_STREAMFLAGS_LOOPBACK`），FFT 后归约为 12 个对数分布频段（45 Hz–16 kHz）。归一化采用「约 1 秒滑窗均值」为基准的相对动态映射（-9/+17 dB 窗口）：持续内容停在中线、鼓点瞬态上冲、弱奏回落，不会像峰值跟踪那样一直顶格。约 30 fps 输出 JSON 行，静默时输出衰减到 0。\n- **宿主**：`index.js` 注册 `/audio-rail/events`（SSE）与 `/audio-rail/status`。有订阅者才启动采集进程，最后一个订阅者断开 15 秒后停止；崩溃按指数退避重启（设备热插拔 exit 3 可恢复）。\n- **浏览器**：`client.js` 注入一条 CSS 规则，把锚点短条（`.…_mark::before`）的 `transform` 变为 `translateY(-50%) scaleX(var(--dsh-audio-rail-scale, .6))`；EventSource 接收频段帧，rAF 循环内对每个锚点做攻击/释放平滑后写入 CSS 变量。宿主的短条为固定 20px、以 scaleX 表达状态长度（.4 未加载 / .6 默认 / .9 预览 / 1 当前），插件把音频脉冲**乘在宿主状态系数之上**（上限 26px），状态样式完全保留。低音在底部锚点。尊重 `prefers-reduced-motion`（此时完全不启用）。"
+    },
+    {
+      "section": "安装",
+      "text": "克隆后先编译采集器（`build.cmd` 调用 Windows 自带的 .NET Framework csc.exe，无需安装任何依赖）：\n\n```\nbuild.cmd\n```\n\n然后在 DeepSeek Harness 会话里让 agent 安装 bundle，或手动：\n\n```\ndsh plugin --profile web add link:<本仓库克隆路径>\n```\n\n安装后浏览器页面自动热加载，无需刷新。"
+    },
+    {
+      "section": "备注",
+      "text": "- 本机（部分 Windows 版本/运行时组合）`IMMDevice::Activate` 对 `IID_IAudioClient` 返回 `E_NOINTERFACE`，因此 helper 按 `IAudioClient3 → IAudioClient2 → IAudioClient1` 顺序探测，并且设备以下的 COM 调用全部走原始 vtable 委托（避开该运行时对 `Activate` 封送抛 `InvalidCastException` 的问题）。\n- 高采样率设备（如 192 kHz）会自动放大 FFT 点数，保证低频段分辨率。\n- 卸载/禁用插件后，SSE 断开，采集进程随之退出，不产生常驻开销。\n- 仅支持 Windows（WASAPI 是 Windows 音频栈）。"
+    },
+    {
+      "section": "文件",
+      "text": "| 文件 | 作用 |\n| --- | --- |\n| `index.js` | Host 半面：路由 + 采集进程生命周期 |\n| `client.js` | 浏览器半面：样式注入 + SSE + rAF 动画 |\n| `src/AudioRailCapture.cs` | WASAPI 环回采集 + FFT（C#5，csc.exe 可编译） |\n| `build.cmd` | 采集器一键编译脚本（调用系统自带 csc.exe） |\n| `bin/AudioRailCapture.exe` | 采集器编译产物（**不随仓库分发**，由 `build.cmd` 生成，`.gitignore` 忽略） |\n| `docs/demo1.gif` | 效果演示（README 内联播放） |\n| `docs/demo1.mp4` | 效果演示完整视频 |\n| `cordis.patch.yml` | bundle 补丁，插入 `ui-dsh-audio-rail` 行 |"
+    },
+    {
+      "section": "许可",
+      "text": "[MIT](LICENSE)"
+    },
+    {
+      "section": "dsh-audio-rail",
+      "text": "[中文](README.md) | **English**\n\nA DeepSeek Harness (DSH) plugin that makes the quick-jump anchors (turn rail) on the right edge of the conversation page dance with whatever music your system is playing — like a spectrum analyzer rotated 90°."
+    },
+    {
+      "section": "dsh-audio-rail",
+      "text": "> **Compatibility**: the current release (v1.0.1) is adapted to and verified against **dsh v0.1.7-rc.2** only. The plugin relies on the TurnNavigator DOM contract of `dsh-client-ui-chat` (`_mark` buttons inside the `_marks` container, `data-index` ordering, fixed 20px bar, scaleX state factors); a DSH update that refactors that component can break the visual effect (the capture and SSE audio pipeline is unaffected). On any other dsh version, check that component first."
+    },
+    {
+      "section": "Demo",
+      "text": "GitHub strips hand-written `<video>` tags, so the demo ships as an auto-looping inline GIF; the full video with audio is at [demo1.mp4](docs/demo1.mp4)."
+    },
+    {
+      "section": "How it works",
+      "text": "```\n┌─ bin/AudioRailCapture.exe ───┐  stdout JSON   ┌─ index.js (host) ─┐   SSE    ┌─ client.js (browser) ──┐\n│ WASAPI loopback capture of   │ ─────────────▶ │ /audio-rail/events │ ───────▶ │ one band per anchor;   │\n│ the default render endpoint  │                │ /audio-rail/status │          │ ::before scaleX pulses │\n│ FFT → 12 log bands @ 30 fps  │                └────────────────────┘          └────────────────────────┘"
+    },
+    {
+      "section": "How it works",
+      "text": "- **Capture**: `src/AudioRailCapture.cs` (compiled with csc.exe, single zero-dependency binary) captures the system mix from the default render endpoint in loopback mode (WASAPI shared mode + `AUDCLNT_STREAMFLAGS_LOOPBACK`), then reduces it via FFT to 12 log-spaced bands (45 Hz–16 kHz). Normalization is relative to a ~1 s sliding-average loudness reference (-9/+17 dB window): sustained content rests at midline, transients punch upward, quiet passages dip — no peak-follower saturation. Frames stream as JSON lines at ~30 fps and decay to zero in silence.\n- **Host**: `index.js` registers `/audio-rail/events` (SSE) and `/audio-rail/status`. The capture process runs only while at least one page is subscribed, stops 15 s after the last client disconnects, and restarts with exponential backoff on crashes (exit code 3 = device hot-plug, recoverable).\n- **Browser**: `client.js` injects one CSS rule turning each mark bar's (`.…_mark::before`) `transform` into `translateY(-50%) scaleX(var(--dsh-audio-rail-scale, .6))`; an EventSource feeds band frames into a requestAnimationFrame loop with attack/release smoothing per anchor. The host draws each anchor as a fixed 20px bar whose state length i"
+    },
+    {
+      "section": "Install",
+      "text": "After cloning, build the capture helper first (`build.cmd` invokes the csc.exe that ships with .NET Framework on every Windows machine — nothing to install):\n\n```\nbuild.cmd\n```\n\nThen ask an agent in a DeepSeek Harness session to install the bundle, or manually:\n\n```\ndsh plugin --profile web add link:<path-to-this-clone>\n```\n\nThe browser client hot-loads after installation — no page refresh needed."
+    },
+    {
+      "section": "Notes",
+      "text": "- On some Windows/runtime combinations `IMMDevice::Activate` returns `E_NOINTERFACE` for `IID_IAudioClient`; the helper therefore probes `IAudioClient3 → IAudioClient2 → IAudioClient1`, and every COM call below the device goes through raw vtable delegates (sidestepping a runtime marshaling bug that throws `InvalidCastException` on `Activate`).\n- High-rate devices (e.g. 192 kHz) automatically use a larger FFT to keep the low bands resolved.\n- Uninstalling or disabling the plugin closes the SSE stream and the capture process exits — nothing stays resident.\n- Windows only (WASAPI is the Windows audio stack)."
+    },
+    {
+      "section": "Files",
+      "text": "| File | Role |\n| --- | --- |\n| `index.js` | Host half: routes + capture-process lifecycle |\n| `client.js` | Browser half: style injection + SSE + rAF animation |\n| `src/AudioRailCapture.cs` | WASAPI loopback capture + FFT (C# 5, builds with csc.exe) |\n| `build.cmd` | One-command helper build script (uses the system csc.exe) |\n| `bin/AudioRailCapture.exe` | Helper build output (**not distributed** with the repo — generated by `build.cmd`, git-ignored) |\n| `docs/demo1.gif` | Demo animation (inline in the README) |\n| `docs/demo1.mp4` | Full demo video |\n| `cordis.patch.yml` | Bundle patch inserting the `ui-dsh-audio-rail` row |"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

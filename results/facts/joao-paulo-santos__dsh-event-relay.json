@@ -1,0 +1,172 @@
+{
+  "repo": "joao-paulo-santos/dsh-event-relay",
+  "commit": "b43d8e42a474011d460db87dd5278c7524e2911d",
+  "extracted_at": "2026-11-11T22:20:32.643098+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 16338,
+    "lines_by_language": {
+      "JSON": 27,
+      "JavaScript": 228,
+      "Markdown": 140,
+      "Other": 38,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-event-relay",
+    "version": "0.3.1",
+    "description": "Event relay: one shared SSE channel pushing host-side events to subscribed browser surfaces. Frames carry an optional JSON payload — some plugins use it as a pure change signal (doorbell style, refetching their own truth), others consume the payload directly (notifications, kanban updates). Client opens the stream with the union of subscribed topic prefixes (server-side filtering) and signals reconnects via __relay/open.",
+    "type": "module",
+    "license": "MIT",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": []
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-event-relay: one SSE channel from host events to every browser surface.\n# The missing transport only — Cordis events remain the host-side bus.\n- insert:\n    - id: event-relay\n      name: dsh-event-relay\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/relay/events",
+      "where": "lib/client.js:22"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "lib/index.js:67"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-08-28T14:44:20Z",
+    "created_at": "2026-08-24T19:34:28Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-event-relay",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH)\nplugin: install it into a profile alongside your own plugins.\n\n**Push from host to browser.** The host can start a conversation; every other\nchannel (fetch, RPC) requires the browser to ask first. If your plugin's UI\nshould react the moment something happens host-side (a setting changed, a\nbuild finished, a notification arrived), this is that channel."
+    },
+    {
+      "section": "dsh-event-relay",
+      "text": "One shared SSE route (`/relay/events`) holds every subscriber's response open\nand streams JSON messages `{\"topic\",\"payload\"}` as things happen. One\nconnection per browser tab, no matter how many plugins subscribe."
+    },
+    {
+      "section": "Architecture",
+      "text": "```mermaid\nflowchart LR\n    subgraph HOST[\"🖥️ Host, dsh-event-relay (host half)\"]\n        P[\"publish(topic, payload)\"]\n        N[\"notifyClients<br/>filter per client\"]"
+    },
+    {
+      "section": "Plugin value proposition",
+      "text": "| alternative | falls short |\n|---|---|\n| polling | latency + waste (N fetches to learn \"nothing changed\") |\n| refetch on focus/navigation | free and correct, but updates only when the user acts |\n| your own EventSource/WebSocket per plugin | the browser caps ~6 connections/domain (HTTP/1.1); a few plugins permanently occupy them and **every other request queues**. This shared stream is one connection for the whole tab |\n| host RPC (`/api`) | request→response: the frontend can ask, but the host cannot interrupt |"
+    },
+    {
+      "section": "Plugin value proposition",
+      "text": "**One direction, on purpose.** Browser→host is transaction-shaped (command →\nreply): use plain HTTP (a route your host half registers) with status codes,\nvalidation, and error handling the stream doesn't have. Host→browser is\nnotification-shaped: unpredictable moments, all tabs at once. Different jobs,\ndifferent roads."
+    },
+    {
+      "section": "How to install",
+      "text": "Requires a DeepSeek Harness checkout and a profile (here `web`):\n\n```sh"
+    },
+    {
+      "section": "from the harness checkout",
+      "text": "pnpm dsh plugin --profile web add /path/to/dsh-event-relay"
+    },
+    {
+      "section": "verify the profile still composes",
+      "text": "pnpm dsh --profile web --dump-config\n```\n\nThen (re)start the harness; the host half loads at boot. Browser plugins\nconsume the client service with `ctx.get('eventRelay')`, nothing to wire up\nbeyond installing this package."
+    },
+    {
+      "section": "Producers (host plugins)",
+      "text": "```js\nconst relay = ctx.get('eventRelay')            // optional, degrade if absent\nrelay.publish('my-topic', payload)             // direct\nctx.on('my/event', (data) => relay.publish('my/event', data))   // mirror a Cordis event (do this in your plugin)\n```"
+    },
+    {
+      "section": "Consumers (browser bundles)",
+      "text": "```js\nconst relay = ctx.get('eventRelay')            // provided by this package's client half\nconst unsubscribe = relay.subscribe('kanban', (topic, payload) => { ... })\n// or raw: new EventSource('/relay/events?topics=kanban,notifications')\n```\n\n`payload` in the callback is whatever the publisher passed. Apply it directly\nor ignore it and refetch your own truth, both are first-class styles."
+    },
+    {
+      "section": "Consumers (browser bundles)",
+      "text": "Topic filtering: a subscription matches its exact topic and any child topic\n(`'kanban'` matches `'kanban/change'`). The browser's connection URL carries\nthe union of the tab's topics, so the server only sends what this tab listens\nfor. When the last listener of the tab unsubscribes, the connection closes."
+    },
+    {
+      "section": "Consumers (browser bundles)",
+      "text": "On every (re)open of the stream, subscribers of the synthetic topic `__relay`\nreceive `'__relay/open'`. Consumers that apply state from messages use it to\nresynchronize: anything missed while the stream was down is recovered by one\nrefetch."
+    },
+    {
+      "section": "Design",
+      "text": "Transport, not a bus: Cordis events remain the host-side event system; this\nonly carries messages across the plane boundary."
+    },
+    {
+      "section": "Design",
+      "text": "Payload is optional, not doorbell-only. Some plugins use the relay purely as a\nchange signal, a topic-only message that tells them to refetch their own\ntruth. Others consume the payload directly: the notifications demo pushes the\nnotification itself, a kanban board pushes change messages. `publish(topic,\npayload)`: send whatever is useful. Doorbells are one usage style, not the\ncontract."
+    },
+    {
+      "section": "Design",
+      "text": "Liveness, not correctness: the relay may be absent, and a consumer should\nfall back to pull-on-focus (or pull on `__relay/open`) rather than depend on\nthe stream for state.\nRoute roots are composition-level contracts (`/api`, `/plugins`,\n`/workspace-history`, `/notifications`, `/granular-settings` are taken)."
+    },
+    {
+      "section": "Debugging",
+      "text": "The wire can be listened to from a terminal. Very useful to verify publishes\nend-to-end without a browser:\n\n```\ncurl -N 'http://127.0.0.1:3080/relay/events'\n```\n\nAdd `?topics=<prefixes>` to mirror a client's filter; `-N` makes curl stream\ninstead of buffering."
+    },
+    {
+      "section": "Dependencies",
+      "text": "None"
+    },
+    {
+      "section": "Plugins dependent on this",
+      "text": "- [dsh-granular-settings](https://github.com/joao-paulo-santos/dsh-granular-settings) publishes doorbell-only change notifications for its scoped settings platform"
+    }
+  ],
+  "skipped": []
+}

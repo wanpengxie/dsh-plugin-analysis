@@ -1,0 +1,519 @@
+{
+  "repo": "kiterunner1/dsh-attention-beep",
+  "commit": "f5e992f6c206085e72094377d92e1720585790a2",
+  "extracted_at": "2026-11-11T22:51:00.894715+00:00",
+  "tree": {
+    "files": 40,
+    "bytes": 450477,
+    "lines_by_language": {
+      "JSON": 126,
+      "JavaScript": 5354,
+      "Markdown": 472,
+      "Other": 44,
+      "YAML": 70
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "assets/voice/approval.mp3",
+      "assets/voice/question.mp3",
+      "assets/voice/recovered.mp3",
+      "assets/voice/stall.mp3",
+      "assets/voice/taskEnd.mp3",
+      "assets/voice/toolTimeout.mp3",
+      "assets/voice/toolWarn.mp3",
+      "cordis.patch.yml",
+      "lib/audio.js",
+      "lib/client.js",
+      "lib/config.js",
+      "lib/guard.js",
+      "lib/index.js",
+      "lib/notices.js",
+      "lib/probe.js",
+      "lib/watchdog.js",
+      "package-lock.json",
+      "package.json",
+      "test/e2e/run.mjs",
+      "test/e2e/session-log.mjs",
+      "test/manual/guard-coverage.mjs",
+      "test/manual/probe-bench.mjs",
+      "test/manual/probe-design-check.mjs",
+      "test/manual/probe-live-verify.mjs",
+      "test/probe-plugin/cordis.patch.yml",
+      "test/probe-plugin/package.json",
+      "test/unit/audio.test.mjs",
+      "test/unit/config.test.mjs",
+      "test/unit/guard.test.mjs",
+      "test/unit/notices.test.mjs",
+      "test/unit/probe.test.mjs",
+      "test/unit/report.test.mjs",
+      "test/unit/watchdog.test.mjs",
+      "tools/make-voice-assets.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-attention-beep",
+    "version": "0.3.0",
+    "description": "DSH 提示音 + 卡死看门狗 + 命令守卫：任务结束或命令卡死时用人声提醒，自动中断卡住的 pwsh 调用并把「怎么继续」写回工具结果，并在 spawn 之前拦掉已知的性能陷阱写法。仅 Windows。 / Beeps, a stuck-command watchdog and a command guard for DeepSeek Harness. Windows only.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "assets",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-slots"
+        ]
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "beep",
+      "notify",
+      "alert",
+      "sound",
+      "hang",
+      "watchdog",
+      "stuck",
+      "voice",
+      "timeout",
+      "guard",
+      "windows"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/kiterunner1/dsh-attention-beep.git"
+    },
+    "homepage": "https://github.com/kiterunner1/dsh-attention-beep#readme",
+    "bugs": {
+      "url": "https://github.com/kiterunner1/dsh-attention-beep/issues"
+    },
+    "engines": {
+      "node": ">=18"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "dshTarget": "0.1.5-rc.1",
+    "os": [
+      "win32"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-attention-beep bundle patch: one host row over the web profile.\n# The row name resolves from the profile's own node_modules where\n# `dsh plugin --profile web add <path>` installed this package.\n#\n# Every key below is optional: the user layer (profile cordis.patch.yml) can\n# override any of them by id, and anything omitted keeps the plugin's own\n# fallback in lib/config.js (including `protectList` and the default\n# `<DSH_HOME>/logs/attention-beep.log` event log).\n- insert:\n    - id: attention-beep\n      name: dsh-attention-beep\n      config:\n        enabled: true\n        channel: host\n        # 提示音只提示根 Agent，还是包含子代理。\n        scope: root\n        # 卡死看门狗覆盖的会话范围：子代理卡死会拖住父代理，默认都管。\n        watchScope: all\n        watchTools:\n          - pwsh\n        # 响铃/预警阈值；确认无进展后允许动手的最早时刻；预警窗口。\n        warnMs: 120000\n        killMs: 180000\n        preWarnMs: 60000\n        # 无进展确认窗口与采样间隔。\n        silenceMs: 60000\n        sampleIntervalMs: 10000\n        # 绝对硬上限，0 = 关闭（只按“无进展”判据动手）。\n        hardCeilingMs: 0\n        # 自动打断 + 两级升级 + 每会话动作上限。\n        autoKill: true\n        escalateToTurnCancel: true\n        escalateGraceMs: 45000\n        maxAutoActionsPerSession: 3\n        # 仅观察模式：只响铃、写日志、发通知，不真的打断。\n        observeOnly: false\n        # 整轮无进展（stall）。\n        stallTimeoutMs: 180000\n        stallAutoResume: false\n        minIntervalMs: 1500\n        events:\n          question:\n            enabled: true\n            sound: voice:question\n          approval:\n            enabled: true\n            sound: voice:approval\n          taskEnd:\n            enabled: true\n            sound: voice:taskEnd\n          toolWarn:\n            enabled: true\n            sound: voice:toolWarn\n          toolTimeout:\n            enabled: true\n            sound: voice:toolTimeout\n          recovered:\n            enabled: true\n            sound: voice:recovered\n          stall:\n            enabled: true\n            sound: voice:stall\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "WINDIR",
+      "kind": "env",
+      "where": "lib/config.js:17"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/config.js:25"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/e2e/run.mjs:33"
+    },
+    {
+      "name": "APPDATA",
+      "kind": "env",
+      "where": "test/e2e/run.mjs:155"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "lib/notices.js:129"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "lib/notices.js:140"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kiterunner1/dsh-attention-beep.git",
+      "where": "package.json:55"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kiterunner1/dsh-attention-beep#readme",
+      "where": "package.json:57"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kiterunner1/dsh-attention-beep/issues",
+      "where": "package.json:59"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a.git",
+      "where": "test/unit/config.test.mjs:58"
+    },
+    {
+      "host": "fanyi.baidu.com",
+      "url": "https://fanyi.baidu.com/gettts?lan=${LAN",
+      "where": "tools/make-voice-assets.mjs:41"
+    },
+    {
+      "host": "fanyi.baidu.com",
+      "url": "https://fanyi.baidu.com/",
+      "where": "tools/make-voice-assets.mjs:54"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 16,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-09-15T11:21:26Z",
+    "created_at": "2026-09-15T11:12:29Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/audio.js",
+    "lib/client.js",
+    "lib/config.js",
+    "lib/guard.js",
+    "lib/index.js",
+    "lib/notices.js",
+    "lib/probe.js",
+    "lib/watchdog.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-attention-beep",
+      "text": "<p align=\"center\">\n  <samp>\n    <strong>中文</strong> ·\n    <a href=\"./README.en.md\">English</a>\n  </samp>\n</p>"
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "<p align=\"center\">\n  <img src=\"https://img.shields.io/github/repo-size/kiterunner1/dsh-attention-beep?style=flat-square\" alt=\"repo size\" />\n  <img src=\"https://img.shields.io/github/last-commit/kiterunner1/dsh-attention-beep?style=flat-square\" alt=\"last commit\" />\n  <img src=\"https://img.shields.io/github/license/kiterunner1/dsh-attention-beep?style=flat-square\" alt=\"MIT license\" />\n  <img src=\"https://img.shields.io/badge/platform-Windows-4D6BFE?style=flat-square\" alt=\"Windows only\" />\n  <img src=\"https://img.shields.io/badge/dsh-0.1.5--rc.1-blue?style=flat-square\" alt=\"DSH version\" />\n</p>"
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "> **命令卡住时替你脱困，任务跑完时叫得动你。**\n\n一个 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) 插件，装完做三件事：\n\n- **提示音** —— 任务结束、命令卡住、整轮无进展、模型向你提问或申请权限时，由 DSH **宿主进程**直接在本机发声；即使浏览器标签在后台、被静音、最小化也能听到。\n- **自动脱困** —— `pwsh` 命令确认卡住时，自动中断**这一次**工具调用，并把「发生了什么 + shell 现在什么状态 + 怎么继续」写回工具结果，让模型在同一轮里接着把任务做完。\n- **命令守卫** —— 已知的性能陷阱写法在 `spawn` 之前就被拒绝（约 0 ms 返回并附上改法），而不是白等几十秒到几分钟。\n\n声音由宿主进程播放（`System.Media.SoundPlayer` / WPF `MediaPlayer`），不经过浏览器。"
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "> ⚠️ **仅支持 Windows。** 三块能力都依赖 Windows：进程探针走 `Get-CimInstance Win32_Process`，音频走 .NET / WPF 播放器，命令守卫针对 PowerShell 方言。`package.json` 声明了 `os: [\"win32\"]`，在 macOS / Linux 上装不上——这是刻意的，比装完什么都不响要好。详见[平台支持](#平台支持)。"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "长任务跑起来之后，有三件事会反复咬你：\n\n| 你会遇到的 | 它怎么处理 |\n| --- | --- |\n| 长任务跑完了，你在别的标签页里，不知道 | 任务结束时**本机发声**，不依赖页面是否在前台 |\n| 命令卡住了（等输入、死锁、网络挂死），整轮就那么干等着 | 确认「没进展」后**自动中断这一次调用**，并把恢复指引写回给模型 |\n| 模型反复写出最贵的写法（递归枚举那类），一次赔上几分钟 | 在 `spawn` 之前**直接拒绝**，0 秒返回并给出改法 |"
+    },
+    {
+      "section": "一、提示音",
+      "text": "| 事件 | 什么时候响 | 默认声音 |\n| --- | --- | --- |\n| `taskEnd` | 一个任务（回合）跑完 | `voice:taskEnd` |\n| `toolWarn` | 命令跑太久，进入预警窗口 | `voice:toolWarn` |\n| `toolTimeout` | 确认卡死、自动中断时 | `voice:toolTimeout` |\n| `recovered` | 恢复说明已写回工具结果、任务继续 | `voice:recovered` |\n| `stall` | 整轮无进展 | `voice:stall` |\n| `question` | 模型用 `ask_user_question` 向你提问（客户端半边监听 `user-questions/request`） | `voice:question` |\n| `approval` | 需要你授权一次工具调用（监听 `approval/request`） | `voice:approval` |"
+    },
+    {
+      "section": "一、提示音",
+      "text": "人声文件是**随包发布的静态资源**（`assets/voice/*.mp3`，中文女声，约 180 KB），运行时不做任何合成：想换音色就替换同名文件，或在设置页每行「自定义文件…」填自己的 `.wav` / `.mp3` 绝对路径。每一行都有 **▶ 试听**，听到的就是真实提醒音。"
+    },
+    {
+      "section": "判据：不是「跑了多久」，而是「还有没有进展」",
+      "text": "`pwsh` 的两种形态在运行中都不产生会话事件（一次性工具只有 `tool/start` → `tool/result` 两个点；常驻 shell 的 PTY 在宿主平面读不到 scrollback）。所以判据取自操作系统：**枚举 DSH 进程的子孙进程，累加它们的 CPU 时间与 IO 字节**，看还在不在涨。\n\n两个限定条件缺一不可：\n\n- **只算被监视调用自己的子树** ——「调用开始之后才创建」的那些进程及其子孙。整棵树里长期存活的无关进程（web server、MCP server、浏览器）一直在涨，若一起累加，每次采样都会判「有进展」，自动中断就形同不存在。\n- **要超过空闲噪声底** —— 一条只是「还活着」的 `pwsh` 自己每秒就烧约 23 ms CPU、动约 6 KB IO（连它的 conhost）；真干活的命令高出一到两个数量级。所以「进展」的门槛是 **>10% 单核** 或 **>64 B/ms**。"
+    },
+    {
+      "section": "判据：不是「跑了多久」，而是「还有没有进展」",
+      "text": "于是：编译、下载、写文件 → 超过噪声底 → **不动手**；等输入（`git commit` 没带 `-m`、`Read-Host`、`pause`）、死锁、网络挂死 → 只剩噪声 → 才认为是卡死。"
+    },
+    {
+      "section": "闸门（默认值）",
+      "text": "注意**最早可动手时刻 = `max(killMs, warnMs + preWarnMs)`** —— 只把 `killMs` 调小是无效的：\n\n| 闸门 | 默认 | 含义 |\n| --- | --- | --- |\n| `warnMs` | 120s | 跑这么久还没返回 → 响铃 + 页面横幅（预警窗口开始） |\n| `preWarnMs` | 60s | 响铃后再给你这么久手动叫停 |\n| `killMs` | 180s | 从调用开始算，最早可动手的时刻 |\n| `silenceMs` | 60s | 被监视调用**自己的子树**的 CPU 与 IO 连续这么久都在噪声底之下，才算「确认无进展」 |"
+    },
+    {
+      "section": "闸门（默认值）",
+      "text": "再加三层保护：`protectList` 命中的命令（`npm install` / `pnpm build` / `git clone` 这类「正常就慢且安静」的）**只响铃、绝不自动打断**；`observeOnly` 演练模式只响铃写日志；`maxAutoActionsPerSession`（默认 3）防止「杀 → 续跑 → 又跑同一条 → 再杀」的死循环。**探针读不到数据时绝不打断。**"
+    },
+    {
+      "section": "动作：两级",
+      "text": "1. **一级（默认）** —— 只中止**这一次**工具调用（不是整轮、不是 `taskkill`）：工具自己的取消路径生效，常驻 shell 自行 `reset`；同时把恢复说明**附加到那条工具结果**上，模型在同一轮里就知道：原命令、已运行多久、为什么被打断、部分输出拿不到、shell 是否被重置（`cd` / 变量丢失、工作目录回到 workspace）、下一步怎么写（非交互 / `run_in_background` / `Start-Job` 轮询）、不要原样重跑。\n2. **二级** —— 若中止后工具仍不结束（超过 `escalateGraceMs`），说明框架层已经卡住：取消整轮，再 `followup()` 一条消息唤醒会话继续。"
+    },
+    {
+      "section": "人类等待：第三类，不在上面两级里",
+      "text": "上面两级都假定「没有工具在跑 = 这一轮死了」。而 `ask_user_question` 是**按设计**停在那里等人——它没有工具在跑，于是**用户思考被当成了卡死**。\n\n设计上分两层，互不依赖：\n\n1. **代码层 `humanWaitTools`**（默认 `[ask_user_question]`）：这类工具在飞期间，整轮判定**完全停摆**（连响铃都不响），并在答案到达时**重新起算**静默时间。它不能塞进 `watchTools`：那会被当成「该被监控的慢工具」，`killMs` 一到就把它杀掉，更糟。\n2. **配置层 `stallAutoResume: false`**（**默认**）：整轮层**任何情况下都只响铃、绝不取消回合**，兜住「提问窗口之外、没想到的等待形态」。"
+    },
+    {
+      "section": "人类等待：第三类，不在上面两级里",
+      "text": "> **⚠ 已知限制（第 1 层）**：在真实运行中观察到提问期间 `watchdog.humanWaits` **始终为空**——也就是第 1 层没有拿到 `ask_user_question` 的调用，它是否生效**未经证实**。单测覆盖的是直接调用 `watch()` 的路径，所以全绿也测不出这一点。追查止于宿主的工具分派层，根因尚未定位。\n>\n> 因此**实际兜底是第 2 层**：`stallAutoResume: false` 保证不会再有「思考时整轮被取消」。残留症状只是**偶发错误响铃**（`stall` 提示音）；嫌吵就把 `stallTimeoutMs` 调大（例如 300000）。\n\n想恢复整轮的自动取消，把 `stallAutoResume` 改回 `true`（第 1 层若确实生效，提问窗口仍会被豁免）。注意这只管**整轮**层——工具层（`warnMs` / `killMs` 掐掉卡住的 `pwsh`）完全不受影响，那才是本插件的主要价值，始终是全自动的。"
+    },
+    {
+      "section": "整轮无进展（stall）",
+      "text": "没有任何事件、没有工具在跑、进程也不动（`stallTimeoutMs`，默认 180s）时，**只响铃**提示。默认不取消回合，理由见上一节。"
+    },
+    {
+      "section": "三、命令守卫",
+      "text": "看门狗治「卡住」，守卫治「写法」。**前台**命令命中规则时**根本不会 spawn**，直接以工具错误返回并附上改法（约 0 ms）。`run_in_background: true` 是「确实要用原写法」的出口（后台不阻塞回合，守卫放行）。\n\n同一个目录、同一批文件，不同写法的实测：\n\n| 写法 | 耗时 |\n| --- | --- |\n| `Get-ChildItem -Recurse -Include *.js` | **>90s** |\n| `Get-ChildItem -Recurse -Filter  *.js` | 6.7s |\n| 原生 `grep` 工具 | **0.23s** |\n\n规则表（每条都说明「它防的是什么真实风险」）："
+    },
+    {
+      "section": "三、命令守卫",
+      "text": "| 规则 | 拒绝的写法 | 改法 |\n| --- | --- | --- |\n| `tilde-native-path` | `node ~/x`、`git -C ~/x`、`pwsh -File ~/x` —— `~` 只有 cmdlet 的 Path 参数才展开，传给原生命令是字面量，**必然失败** | 换成绝对路径（这条不提供「后台」出口：后台照样失败） |\n| `recurse-include` | `-Recurse` + `-Include` | `-Filter`，或原生 `grep` / `glob` 工具 |\n| `select-last-unbounded-process` | `Select-Object -Last` + 测试运行器 | 重定向到文件读尾部，或后台 |\n| `foreground-long-sleep` | 前台 `Start-Sleep -Seconds >= 60` | 改成带超时的轮询脚本，或后台 |\n| `explicit-long-timeout` | 非保护名单的命令显式设 `timeoutMs >= 180000` | 用 `run_in_background` 启动 |"
+    },
+    {
+      "section": "三、命令守卫",
+      "text": "**规则是量出来的，不是拍出来的。** 第一版还拦了 `-Recurse + Format-Table` / `+ Select-String` / `+ node_modules` 三种，回放全部前台调用后**删掉了**：它们平均只跑 4.3–11.7 秒，而拒绝一次要模型重写一轮，**改写成本 > 命令本身耗时**——这三条占了 87% 的拒绝量却只带来 12% 的收益。它们罕见的长尾交给 `hardCeilingMs` 兜底。任何新规则都要重新量一遍才能加。\n\n配置：`guardEnabled`（默认 true）、`guardAllow`（放行子串名单，默认空）。\n\n**配套建议**：`hardCeilingMs: 120000` —— 非保护命令硬上限 2 分钟。这一条专门治「模型自己把 `timeoutMs` 越加越长」。保护名单命中的命令不受硬上限约束。"
+    },
+    {
+      "section": "安装",
+      "text": "```powershell"
+    },
+    {
+      "section": "从 GitHub 装（推荐 pin 到 commit）",
+      "text": "dsh plugin --profile web add github:kiterunner1/dsh-attention-beep"
+    },
+    {
+      "section": "或先克隆再本地安装（改源码即生效）",
+      "text": "git clone https://github.com/kiterunner1/dsh-attention-beep.git\ncd dsh-attention-beep\ndsh plugin --profile web add .\n```\n\n装插件时**必须停掉正在运行的 DSH**，否则 `profiles/<name>/node_modules` 会被删到一半失败，留下「当前能跑、重启必死」的 profile。\n\n改**宿主代码**（`lib/*.js`）后必须重启 DSH 才生效（ESM 模块缓存）；客户端（`lib/client.js`）刷新页面即可。\n\n卸载：`dsh plugin --profile web remove dsh-attention-beep`，并把 `dsh.profile.bundles` 里的对应项移除。"
+    },
+    {
+      "section": "配置",
+      "text": "全部配置都在 loader 行的 `config` 里（默认值见 [`cordis.patch.yml`](./cordis.patch.yml)），用户层按 id 覆盖，或直接在「设置 → 提示音」里改（写入 `$DSH_HOME/settings.yaml`，改动实时生效）：\n\n```yaml\n- id: attention-beep\n  config:\n    enabled: true\n    scope: root              # 提示音：root | all（子代理是否也响）\n\n`sound` 支持三种写法：`voice:<key>`（内置人声）、预设名（`ding` / `chime` / `notify` / `tada` / `alarm` / `error` / `default` / `recycle` / `ring` / `beep`，均为 `%WINDIR%\\Media\\*.wav`）、任意 `.wav` / `.mp3` 绝对路径。文件不存在时回退 `beep`。"
+    },
+    {
+      "section": "配置",
+      "text": "事件日志：`$DSH_HOME/logs/attention-beep.log`，完整 JSONL 事件流（`warn` / `action` / `settled-aborted` / `resume` / `sound` / `breaker` / `stall` / `guard`），超过 2 MB 轮转一次。"
+    },
+    {
+      "section": "平台支持",
+      "text": "**仅 Windows。** 具体到三块能力：\n\n| 能力 | 在非 Windows 上 |\n| --- | --- |\n| 提示音 | 依赖 `System.Media.SoundPlayer` / WPF `MediaPlayer`，无对应实现 |\n| 卡死看门狗 | 探针用 `Get-CimInstance Win32_Process`，非 Windows 下 `probe.supported = false`，**自动中断失效**（不会崩，只是什么都不做） |\n| 命令守卫 | 规则针对 PowerShell 语法；DSH 在其它平台提供的是 `bash` 工具，默认 `watchTools: [pwsh]` 根本不匹配 |\n\n所以 `package.json` 里声明了 `os: [\"win32\"]`：非 Windows 上直接装不上。这是刻意的——比装完发现「什么都不响」要好。\n\n另外，守卫里唯一可能误伤非 Windows 的规则（`tilde-native-path`）已经加了平台门槛：POSIX shell 会自己展开 `~`，`node ~/x` 在那里是合法写法。"
+    },
+    {
+      "section": "测试",
+      "text": "```powershell\nnode --test test/unit/*.test.mjs   # 82 项：判据状态机、探针、音频解析、通知路由、守卫规则、报告文案\nnode test/e2e/run.mjs all          # 真实 DSH：一次性 pwsh / 常驻 pwsh / 回归 三个场景\n```\n\nE2E 会启动独立 headless 配置，跑一条 600 秒的静默命令，然后核对：响铃记录、自动中断、模型在工具结果里收到恢复说明、调用耗时远小于 600s、**没有残留进程**。"
+    },
+    {
+      "section": "说明与边界",
+      "text": "- 插件只调用本机系统音与进程枚举，**不发送任何网络请求**（人声资源是随包发布的静态文件）。\n- 探针每 `sampleIntervalMs` 采样一次，且只在「有被监控调用在跑」时才采样；连续有进展时会自动退避到 3 倍间隔，停下立刻恢复。\n- 探针**读不到数据时绝不打断**——「无法验证」不等于「没有进展」。\n- 这个插件的判据全部基于**操作系统事实**（进程 CPU/IO），不看工具输出。所以对任何不产生输出的长命令都适用，不需要为每个工具单独适配。"
+    },
+    {
+      "section": "FAQ",
+      "text": "**Q：会不会误杀正常的长任务？**\n判据是「自己的子树 CPU 与 IO 是否停止增长」，且要超过空闲噪声底，且要连续沉默 `silenceMs`。编译、下载、写文件都会持续产生 CPU/IO，不会被判卡死。再加上 `protectList` 会对已知「正常就慢且安静」的命令（`npm install` 等）完全禁用自动打断。\n\n**Q：为什么 `stallAutoResume` 默认是 `false`？**\n整轮的「没有事件 = 死了」这个假设不成立：模型在慢慢想、用户在打字回答，都表现为「没有事件」。整轮层默认只响铃，不替你做决定；真正有价值、也始终全自动的是**工具层**（掐掉卡住的那一条命令）。\n\n**Q：能只响铃、不自动中断吗？**\n能。`observeOnly: true` 进演练模式（只响铃 / 写日志 / 发通知），或 `autoKill: false`。\n\n**Q：换音色 / 关掉某类提示音？**\n设置页把对应事件的声音改成自己的 `.wav` / `.mp3` 路径，或把该事件的 `enabled` 关掉。每一行都有 ▶ 试听。"
+    },
+    {
+      "section": "FAQ",
+      "text": "**Q：它会不会拖慢 DSH？**\n探针是一个短命的 PowerShell 子进程，每 10 秒一次，且**只在有被监控调用在跑时**才采样；连续有进展时自动退避到 3 倍间隔。空闲时完全不采样。"
+    },
+    {
+      "section": "License",
+      "text": "MIT——见 [LICENSE](LICENSE)。"
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "<p align=\"center\">\n  <samp>\n    <a href=\"./README.md\">中文</a> ·\n    <strong>English</strong>\n  </samp>\n</p>"
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "<p align=\"center\">\n  <img src=\"https://img.shields.io/github/repo-size/kiterunner1/dsh-attention-beep?style=flat-square\" alt=\"repo size\" />\n  <img src=\"https://img.shields.io/github/last-commit/kiterunner1/dsh-attention-beep?style=flat-square\" alt=\"last commit\" />\n  <img src=\"https://img.shields.io/github/license/kiterunner1/dsh-attention-beep?style=flat-square\" alt=\"MIT license\" />\n  <img src=\"https://img.shields.io/badge/platform-Windows-4D6BFE?style=flat-square\" alt=\"Windows only\" />\n  <img src=\"https://img.shields.io/badge/dsh-0.1.5--rc.1-blue?style=flat-square\" alt=\"DSH version\" />\n</p>"
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "> **Gets you out when a command hangs; gets your attention when a task finishes.**\n\nA [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness) plugin that does three things:"
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "- **Beeps** — when a turn finishes, a command hangs, a whole turn goes quiet, or the model asks you a question or requests permission, the **host process** plays a voice prompt on this machine; it works even when the browser tab is in the background, muted or minimised.\n- **Self-rescue** — when a `pwsh` call is confirmed stuck, the plugin aborts **that one tool call** and writes \"what happened + what state the shell is in + how to continue\" back into the tool result, so the model can finish the job in the same turn.\n- **Command guard** — known performance traps are refused **before** `spawn` (returning in ~0 ms with the fix), instead of costing minutes."
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "Sound is played by the harness process itself (`System.Media.SoundPlayer` / WPF `MediaPlayer`), not through the browser."
+    },
+    {
+      "section": "dsh-attention-beep",
+      "text": "> ⚠️ **Windows only.** All three capabilities depend on Windows: the process probe uses `Get-CimInstance Win32_Process`, audio goes through .NET / WPF players, and the guard targets PowerShell idioms. `package.json` declares `os: [\"win32\"]`, so it will not install on macOS / Linux — deliberately, which beats installing and hearing nothing. See [Platform support](#platform-support)."
+    },
+    {
+      "section": "Why you need it",
+      "text": "| What happens to you | What it does |\n| --- | --- |\n| A long task finishes while you are in another tab and you never notice | Plays a sound **on this machine**; does not depend on the page being focused |\n| A command hangs (waiting for input, deadlock, wedged network) and the turn just sits there | Confirms \"no progress\", **aborts that one call**, and writes recovery guidance back to the model |\n| The model keeps writing the most expensive idioms (recursive enumeration and friends), costing minutes each time | **Refuses it before `spawn`**, returning in 0 s with the replacement |"
+    },
+    {
+      "section": "1. Beeps",
+      "text": "| Event | When it rings | Default sound |\n| --- | --- | --- |\n| `taskEnd` | A turn finished | `voice:taskEnd` |\n| `toolWarn` | A command has run long enough to enter the warning window | `voice:toolWarn` |\n| `toolTimeout` | A stuck call was confirmed and aborted | `voice:toolTimeout` |\n| `recovered` | The resume note was written into the tool result and the task continues | `voice:recovered` |\n| `stall` | A whole turn produced no progress | `voice:stall` |\n| `question` | The model asks you something via `ask_user_question` (client half listens on `user-questions/request`) | `voice:question` |\n| `approval` | A tool call needs your approval (listens on `approval/request`) | `voice:approval` |"
+    },
+    {
+      "section": "1. Beeps",
+      "text": "The voice prompts are **static assets shipped with the package** (`assets/voice/*.mp3`, ~180 KB), synthesised at build time and never at runtime: replace a file with your own to change the voice, or point a settings row at any `.wav` / `.mp3` absolute path. Every row has a **▶ preview** button that plays exactly what you will hear."
+    },
+    {
+      "section": "The signal: progress, not elapsed time",
+      "text": "Neither `pwsh` form produces session events while it runs (a one-shot call only has `tool/start` → `tool/result`; a persistent shell's PTY lives in a realm the host plane cannot read). So the signal comes from the OS instead: **enumerate the harness's descendant processes and sum their CPU time and I/O bytes**, then watch whether those totals still grow.\n\nTwo conditions are both required:"
+    },
+    {
+      "section": "The signal: progress, not elapsed time",
+      "text": "- **Only the watched call's own subtree** — processes created at or after the call started, plus their descendants. Long-lived unrelated processes in the same tree (web server, MCP servers, a browser) keep accruing CPU and I/O; summing them makes every single sample look like \"progress\", and the auto-abort can never fire.\n- **It must clear the idle noise floor** — a `pwsh` that is merely alive burns roughly 23 ms of CPU and moves ~6 KB of I/O per second (including its conhost); a process actually working is one to two orders of magnitude above that. So \"progress\" means **>10% of one core** or **>64 B/ms**."
+    },
+    {
+      "section": "The signal: progress, not elapsed time",
+      "text": "Hence: compiling, downloading or writing files → above the floor → **hands off**; waiting for input (`git commit` without `-m`, `Read-Host`, `pause`), deadlock or a wedged network wait → only noise → confirmed stuck."
+    },
+    {
+      "section": "Gates (defaults)",
+      "text": "Note that **the earliest moment it may act is `max(killMs, warnMs + preWarnMs)`** — lowering `killMs` alone does nothing:"
+    },
+    {
+      "section": "Gates (defaults)",
+      "text": "| Gate | Default | Meaning |\n| --- | --- | --- |\n| `warnMs` | 120s | Still not returned after this long → ring + page banner (warning window opens) |\n| `preWarnMs` | 60s | Time to stop it manually after the ring |\n| `killMs` | 180s | Earliest moment it may act, counted from the call's start |\n| `silenceMs` | 60s | The watched call's **own subtree** must stay below the noise floor this long to count as \"confirmed no progress\" |"
+    },
+    {
+      "section": "Gates (defaults)",
+      "text": "Plus three layers of protection: commands matching `protectList` (`npm install` / `pnpm build` / `git clone` — slow but healthy and quiet) are **always allowed to ring but never auto-interrupted**; `observeOnly` mode rings and logs without acting; `maxAutoActionsPerSession` (default 3) prevents a \"kill → resume → run the same thing → kill again\" loop. And **if the probe cannot read data, nothing is ever interrupted.**"
+    },
+    {
+      "section": "Two levels of action",
+      "text": "1. **Level one (default)** — abort **this one tool call** (not the turn, not `taskkill`): the tool's own cancellation path runs and a persistent shell resets itself. At the same time a resume note is **attached to that tool result**, so the model knows within the same turn: the original command, how long it ran, why it was interrupted, that partial output is unavailable, whether the shell was reset (`cd` / variables lost, working directory back to the workspace), how to proceed (non-interactive / `run_in_background` / polling a job), and not to re-run it verbatim.\n2. **Level two** — if the call still does not settle after the abort (beyond `escalateGraceMs`), the framework layer is wedged: the turn is cancelled and a `followup()` message wakes the session to continue."
+    },
+    {
+      "section": "Waiting on a human: the third class",
+      "text": "Both levels above assume \"no tool running = the turn is dead\". But `ask_user_question` is **designed** to park there and wait for a person — no tool is running, so **the user's thinking gets mistaken for a hang**.\n\nThere are two layers by design, independent of each other:"
+    },
+    {
+      "section": "Waiting on a human: the third class",
+      "text": "1. **Code layer, `humanWaitTools`** (default `[ask_user_question]`): while such a tool is in flight, the whole-turn judgement is **fully suspended** (not even a ring), and the silence clock **restarts** when the answer arrives. It must not go into `watchTools`: there it would be treated as \"a slow tool to watch\", and `killMs` would kill it, which is worse.\n2. **Config layer, `stallAutoResume: false`** (**the default**): the whole-turn layer **only rings, and never cancels the turn in any situation**, covering waiting shapes outside the question window that nobody anticipated."
+    },
+    {
+      "section": "Waiting on a human: the third class",
+      "text": "> **⚠ Known limitation (layer 1)**: in a real run, `watchdog.humanWaits` was observed to be **empty for the whole duration of a question** — layer 1 never saw the `ask_user_question` call, so whether it works is **unconfirmed**. The unit tests exercise a direct call into `watch()`, which is why a fully green suite does not catch this. The trail ends at the host's tool-dispatch layer; the root cause is not located.\n>\n> So **the layer that actually protects you is layer 2**: `stallAutoResume: false` guarantees a turn is never cancelled while you are thinking. The residual symptom is an **occasional spurious ring** (the `stall` sound); if it bothers you, raise `stallTimeoutMs` (e.g. 300000)."
+    },
+    {
+      "section": "Waiting on a human: the third class",
+      "text": "To restore whole-turn auto-cancel, set `stallAutoResume` back to `true` (if layer 1 does work, the question window stays exempt). Note this governs only the **whole-turn** layer — the tool layer (`warnMs` / `killMs` cutting off a stuck `pwsh`) is unaffected and remains fully automatic, which is where the plugin's main value lives."
+    },
+    {
+      "section": "Whole-turn stall",
+      "text": "When there are no events, no tools running and no process movement (`stallTimeoutMs`, default 180s), it **only rings**. It does not cancel the turn by default; see the previous section for why."
+    },
+    {
+      "section": "3. Command guard",
+      "text": "The watchdog treats \"hangs\"; the guard treats \"idioms\". A **foreground** command that hits a rule is **never spawned**: the guard answers with a tool error carrying the fix in ~0 ms. `run_in_background: true` is the escape hatch for when the slow form is genuinely wanted (background work cannot stall a turn, so the guard lets it through).\n\nSame directory, same files, different idioms, measured:"
+    },
+    {
+      "section": "3. Command guard",
+      "text": "| Idiom | Time |\n| --- | --- |\n| `Get-ChildItem -Recurse -Include *.js` | **>90s** |\n| `Get-ChildItem -Recurse -Filter  *.js` | 6.7s |\n| the native `grep` tool | **0.23s** |\n\nThe rules, each naming the real risk it prevents:"
+    },
+    {
+      "section": "3. Command guard",
+      "text": "| Rule | What it refuses | The fix |\n| --- | --- | --- |\n| `tilde-native-path` | `node ~/x`, `git -C ~/x`, `pwsh -File ~/x` — `~` is only expanded for a cmdlet's Path parameter, so handing it to a native command passes a literal and **must fail** | Use an absolute path (no \"run it in the background\" escape: backgrounding a broken path still fails) |\n| `recurse-include` | `-Recurse` + `-Include` | `-Filter`, or the native `grep` / `glob` tools |\n| `select-last-unbounded-process` | `Select-Object -Last` piped from a test runner | Redirect to a file and read its tail, or go background |\n| `foreground-long-sleep` | foreground `Start-Sleep -Seconds >= 60` | A polling script with a timeout, or go background |\n| `explicit-long-timeout` | an explicit `timeoutMs >= 180000` on a command outside the protect list | Start it with `run_in_background` |"
+    },
+    {
+      "section": "3. Command guard",
+      "text": "**The rules were measured, not guessed.** The first cut also refused `-Recurse + Format-Table` / `+ Select-String` / `+ node_modules`; replaying the whole foreground command history showed they average only 4.3–11.7 s, while a refusal forces a rewrite round trip — **the rewrite costs more than running it**. Those three produced 87% of the refusals for 12% of the benefit, so they were removed; their rare long tail (117–121 s) is what `hardCeilingMs` is for. Any new rule has to be measured the same way before it ships."
+    },
+    {
+      "section": "3. Command guard",
+      "text": "Config: `guardEnabled` (default true), `guardAllow` (substrings that exempt a command, default empty).\n\n**Recommended companion setting**: `hardCeilingMs: 120000` — a hard two-minute ceiling for non-protected commands, specifically to counter \"the model keeps raising `timeoutMs`\". Protected commands are exempt from the ceiling."
+    },
+    {
+      "section": "Install",
+      "text": "```powershell"
+    },
+    {
+      "section": "From GitHub (pin to a commit if you like)",
+      "text": "dsh plugin --profile web add github:kiterunner1/dsh-attention-beep"
+    },
+    {
+      "section": "Or clone first and install locally (source edits take effect immediately)",
+      "text": "git clone https://github.com/kiterunner1/dsh-attention-beep.git\ncd dsh-attention-beep\ndsh plugin --profile web add .\n```\n\n**Stop the running DSH** before installing plugins, otherwise `profiles/<name>/node_modules` gets deleted half-way and you are left with a profile that runs now and dies on restart.\n\nEditing **host code** (`lib/*.js`) requires restarting DSH (ESM module cache); the client half (`lib/client.js`) only needs a page refresh."
+    },
+    {
+      "section": "Or clone first and install locally (source edits take effect immediately)",
+      "text": "Uninstall: `dsh plugin --profile web remove dsh-attention-beep`, and drop the matching entry from `dsh.profile.bundles`."
+    },
+    {
+      "section": "Configuration",
+      "text": "Everything lives in the loader row's `config` (defaults in [`cordis.patch.yml`](./cordis.patch.yml)). The user layer overrides by id, or you edit it in **Settings → Beeps** (written to `$DSH_HOME/settings.yaml`, effective live):\n\n```yaml\n- id: attention-beep\n  config:\n    enabled: true\n    scope: root              # beeps: root | all (include sub-agents)"
+    },
+    {
+      "section": "Configuration",
+      "text": "`sound` accepts three forms: `voice:<key>` (bundled voice), a preset name (`ding` / `chime` / `notify` / `tada` / `alarm` / `error` / `default` / `recycle` / `ring` / `beep`, all `%WINDIR%\\Media\\*.wav`), or any absolute `.wav` / `.mp3` path. A missing file falls back to `beep`.\n\nEvent log: `$DSH_HOME/logs/attention-beep.log`, a full JSONL stream (`warn` / `action` / `settled-aborted` / `resume` / `sound` / `breaker` / `stall` / `guard`), rotated past 2 MB."
+    },
+    {
+      "section": "Platform support",
+      "text": "**Windows only.** Capability by capability:\n\n| Capability | On non-Windows |\n| --- | --- |\n| Beeps | Depend on `System.Media.SoundPlayer` / WPF `MediaPlayer`; no equivalent implementation |\n| Watchdog | The probe uses `Get-CimInstance Win32_Process`; elsewhere `probe.supported = false` and **auto-abort does nothing** (no crash, just no action) |\n| Command guard | The rules target PowerShell syntax; DSH ships the `bash` tool on those platforms, and the default `watchTools: [pwsh]` never matches |"
+    },
+    {
+      "section": "Platform support",
+      "text": "So `package.json` declares `os: [\"win32\"]`: it will not install elsewhere. That is deliberate — better than installing and hearing nothing.\n\nThe one guard rule that could misfire on POSIX (`tilde-native-path`) is additionally gated on the platform, because there the shell expands `~` itself and `node ~/x` is perfectly valid."
+    },
+    {
+      "section": "Tests",
+      "text": "```powershell\nnode --test test/unit/*.test.mjs   # 82 tests: decision state machine, probe, audio resolution, notice routes, guard rules, report copy\nnode test/e2e/run.mjs all          # real DSH: one-shot pwsh / persistent pwsh / regression\n```"
+    },
+    {
+      "section": "Tests",
+      "text": "The E2E run starts an isolated headless profile, launches a 600-second silent command, then verifies: the ring was recorded, the call was auto-aborted, the model received the resume note inside the tool result, the call took far less than 600 s, and **no processes were left behind**."
+    },
+    {
+      "section": "Notes and boundaries",
+      "text": "- The plugin only touches local system sounds and process enumeration; it **makes no network requests at all** (the voice assets ship with the package).\n- The probe samples once per `sampleIntervalMs`, and only while a watched call is running; it backs off to three times the interval while progress continues and resumes immediately when work stops.\n- The probe **never interrupts when it cannot read data** — \"unverifiable\" is not \"no progress\".\n- Every judgement is based on **operating-system facts** (process CPU / I/O), not tool output. So it works for any long command that produces no output, with no per-tool adaptation."
+    },
+    {
+      "section": "FAQ",
+      "text": "**Q: Will it kill a legitimately long task?**\nThe signal is \"the call's own subtree stopped accruing CPU and I/O\", it must clear the idle noise floor, and it must stay silent for `silenceMs`. Compiling, downloading and writing files all keep producing CPU/I/O and are never mistaken for hangs. `protectList` additionally disables auto-interruption entirely for commands that are known to be slow but quiet (`npm install` and friends)."
+    },
+    {
+      "section": "FAQ",
+      "text": "**Q: Why is `stallAutoResume` `false` by default?**\nThe whole-turn assumption \"no events = dead\" does not hold: a model thinking slowly and a user typing an answer both look like \"no events\". The whole-turn layer only rings and leaves the decision to you. The layer that is genuinely valuable — and still fully automatic — is the **tool** layer, cutting off the one stuck command."
+    },
+    {
+      "section": "FAQ",
+      "text": "**Q: Can it ring without ever interrupting?**\nYes: `observeOnly: true` for a dry run (ring / log / notify), or `autoKill: false`.\n\n**Q: How do I change the voice or mute an event?**\nPoint that event's sound at your own `.wav` / `.mp3` in the settings page, or set its `enabled` to false. Every row has a ▶ preview button."
+    },
+    {
+      "section": "FAQ",
+      "text": "**Q: Does it slow DSH down?**\nThe probe is a short-lived PowerShell child, once every 10 seconds, and **only while a watched call is running**; it backs off to 3× the interval while progress continues. When idle it does not sample at all."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](LICENSE)."
+    }
+  ],
+  "skipped": []
+}

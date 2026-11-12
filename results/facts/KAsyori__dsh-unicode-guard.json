@@ -1,0 +1,206 @@
+{
+  "repo": "KAsyori/dsh-unicode-guard",
+  "commit": "1479c57774d63c6a55e0812640c777b9a66f1153",
+  "extracted_at": "2026-11-11T11:31:45.487510+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 51579,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 879,
+      "Markdown": 304,
+      "Other": 45,
+      "YAML": 12
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "test/hooks.test.mjs",
+      "test/scrub.test.mjs",
+      "test/selfcheck.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-unicode-guard",
+    "version": "0.2.0",
+    "description": "DSH plugin that keeps the glyph which trips DeepSeek content moderation out of every model-visible surface, so a fetched page can never permanently break a session with HTTP 400 \"Content Exists Risk\".",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --test test/"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "deepseek",
+      "content-exists-risk",
+      "regional-indicator",
+      "flag-emoji",
+      "unicode",
+      "moderation",
+      "session"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/KAsyori/dsh-unicode-guard.git"
+    },
+    "homepage": "https://github.com/KAsyori/dsh-unicode-guard#readme",
+    "bugs": {
+      "url": "https://github.com/KAsyori/dsh-unicode-guard/issues"
+    },
+    "engines": {
+      "node": ">=24"
+    },
+    "dsh": {
+      "manifestVersion": 1,
+      "engines": {
+        "dsh": ">=0.1.7-rc.2"
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-unicode-guard bundle patch: inserts the plugin row into the profile roster.\n# Both halves live in one host module (exports \".\"); there is no browser half.\n#\n# mode: regional masks regional-indicator flags only (the glyph class that trips\n# DeepSeek's moderation) and leaves every other emoji intact. `astral` would also\n# strip emoji and rare CJK, so it is deliberately NOT the default.\n- insert:\n    - id: unicode-guard\n      name: dsh-unicode-guard\n      config:\n        mode: regional\n        verbose: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/KAsyori/dsh-unicode-guard.git",
+      "where": "package.json:36"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/KAsyori/dsh-unicode-guard#readme",
+      "where": "package.json:38"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/KAsyori/dsh-unicode-guard/issues",
+      "where": "package.json:40"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-27T11:08:42Z",
+    "created_at": "2026-09-27T11:00:11Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-unicode-guard",
+      "text": "**English** | [中文](README.zh.md)\n\nA [DSH](https://github.com/deepseek-ai) host-half plugin that keeps a small class\nof rare glyphs out of every model-visible surface."
+    },
+    {
+      "section": "The failure it prevents",
+      "text": "Some inference endpoints reject a request outright when its body contains a\nparticular glyph, answering with an HTTP 400 and the opaque reason\n`Content Exists Risk`. The usual way such a glyph enters a request is accidental:\nan agent fetches a web page whose language switcher or footer uses flag-style\nemoji, the whole page lands in a tool result, and from then on **every** request\nin that session replays it. Each retry is byte-identical, so each retry fails the\nsame way. The session cannot recover on its own."
+    },
+    {
+      "section": "The failure it prevents",
+      "text": "The glyph that matters here is a *regional indicator pair*: two adjacent code\npoints from the U+1F1E6..U+1F1FF block, which is how flag emoji are encoded.\nNothing about the page is objectionable - a page footer is enough."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "It rewrites the payload before the payload can hurt, at three layers:\n\n| Hook | Layer | Effect |\n| --- | --- | --- |\n| `tools/post-execute` | tool results | rewrites result content **before** it is appended to the session |\n| `agent/pre-step` | an already-affected session | replaces the offending surface node with a scrubbed copy, so the session's next turn is already clean |\n| `llm/stream` | the outgoing request | scrubs the serialized body itself - the last hook before adapter dispatch |"
+    },
+    {
+      "section": "What this plugin does",
+      "text": "The three layers matter because they cover different producers. Only the first\nsees a tool result; only the third sees text that never travels as one (compaction\nsummaries, instruction bodies, MCP server instructions, scheduled prompts)."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "A regional indicator pair is rewritten as a readable ASCII tag: the two code\npoints become `[FLAG:AB]`. A variation selector (U+FE0F) directly after such a\nrewrite is dropped so no bare selector is left behind. Everything else is\nuntouched - ordinary emoji, CJK text, and every other astral-plane character pass\nthrough unchanged."
+    },
+    {
+      "section": "As a bundle (recommended)",
+      "text": "```sh\ndsh plugin add dsh-unicode-guard\n```\n\nThe package ships a `cordis.patch.yml` that inserts its own row, so adding it to\nthe profile bundle list is enough."
+    },
+    {
+      "section": "Manually, into a profile",
+      "text": "Link the directory into the profile's `node_modules` and append one row to the\nprofile's `cordis.patch.yml`:\n\n```yaml\n- insert:\n    - id: unicode-guard\n      name: dsh-unicode-guard\n      config:\n\nA change to `cordis.patch.yml` is hot-reloaded; adding the link itself needs a\nrestart."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n| --- | --- | --- |\n| `mode` | `regional` | `regional` masks regional indicator pairs only. `astral` additionally replaces **every** non-BMP character with `replacement`, which destroys legitimate output - opt in deliberately. |\n| `replacement` | `U+FFFD` | Replacement used in `astral` mode only. |\n| `toolResults` | `true` | Scrub tool results before they are logged. |\n| `userMessages` | `true` | Scrub user-role messages during heal. |\n| `assistantMessages` | `false` | Scrub assistant messages during heal. |\n| `request` | `true` | Enable the `llm/stream` backstop. |\n| `verbose` | `true` | Log one line per rewrite through `ctx.logger`. |"
+    },
+    {
+      "section": "Configuration",
+      "text": "Unknown keys or wrong value types fail at mount time rather than silently doing\nnothing."
+    },
+    {
+      "section": "Verifying it works",
+      "text": "A mounted plugin logs exactly one line:\n\n```\n[I] [unicode-guard] unicode-guard: mounted (mode=regional, toolResults=true, ...)\n```\n\nEvery rewrite logs a warning, so you can watch it work:\n\n```\n[W] [unicode-guard] unicode-guard: scrubbed the web_fetch tool result\n[W] [unicode-guard] unicode-guard: healed 1 surface node(s), removed 2 glyph(s)\n[W] [unicode-guard] unicode-guard: scrubbed the outgoing request\n```"
+    },
+    {
+      "section": "Verifying it works",
+      "text": "An end-to-end check that does not depend on any log: read a file that contains a\nregional indicator pair. The tool result must show `[FLAG:AB]` where the file has\nthe raw pair."
+    },
+    {
+      "section": "How a session recovers",
+      "text": "A session that is already rejected heals on its **next turn**, with no retry:\n`agent/pre-step` runs before that turn's request is assembled, so the node is\nreplaced first and the very first request of the turn is already clean."
+    },
+    {
+      "section": "How a session recovers",
+      "text": "Repairs are *surface replacements*. The session log is append-only, so the\noriginal record stays on disk and is shadowed on the current surface. That is the\nsame mechanism the kernel uses for its own tool-result pruning, and it is what\nkeeps the log's integrity guarantees intact."
+    },
+    {
+      "section": "Design notes",
+      "text": "- **Projection, not mutation.** A message in `llm/stream` arrives deep-frozen; a\n  changed message is replaced by a clone. Rewriting in place would either throw\n  or corrupt a message that other listeners still hold.\n- **`assistant/message` cannot carry `sourceEventSeqs`.** The kernel rejects it\n  because that event embeds its own source stream, so the replacement intent\n  differs per event type.\n- **The whole payload, not just the message.** A tool result can carry a second\n  copy of its payload in `data.meta` (the `read` tool stores its numbered window\n  in `meta.lines`). That copy is never sent to the provider, but leaving it\n  tainted keeps the session file dirty for forks, exports, and UI replay, so it\n  is scrubbed too.\n- **A repair must never break the turn it repairs.** A node that throws during\n  healing is logged and skipped; the turn proceeds.\n- **UTF-16 care.** Regional indicators are surrogate pairs. Pairing walks code\n  points, never bare code units, and a lone surrogate is passed through rather\n  than mangled."
+    },
+    {
+      "section": "Tests",
+      "text": "```sh\nnode --test test/\n```\n\nThe suite has no dependencies and no fixtures to download. It covers the masker's\nedge cases (pairing, leftovers, variation selectors, idempotence, surrogate\nintegrity), the hook contracts, and the request-backstop rewrite.\n\n`test/selfcheck.test.mjs` fails the run if any file in this repository ever\ncontains a literal astral-plane character. A plugin that shipped one would be a\ntrigger source in its own right, so the property is enforced rather than\npromised."
+    },
+    {
+      "section": "Scope and limits",
+      "text": "- It masks the glyph classes it is configured for. `mode: astral` widens that to\n  all non-BMP characters.\n- It changes what the model sees: a flag-style emoji becomes `[FLAG:AB]`. That is\n  the point - an ASCII tag keeps the information readable while removing the\n  bytes that make the request fail.\n- Repairs do not shrink the log: shadowed records stay on disk.\n- It is a client-side robustness measure, not a replacement for whatever the\n  provider may do server-side. If the endpoint stops rejecting this glyph class,\n  the plugin degrades into a harmless normalizer."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

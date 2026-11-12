@@ -1,0 +1,493 @@
+{
+  "repo": "LLL-lyh0/dsh-archived-digest",
+  "commit": "f2690a83ada383dc973d76ba2d8f80b8546b0b47",
+  "extracted_at": "2026-11-11T11:50:08.494857+00:00",
+  "tree": {
+    "files": 53,
+    "bytes": 584606,
+    "lines_by_language": {
+      "JSON": 83,
+      "JavaScript": 11472,
+      "Markdown": 284,
+      "Other": 40,
+      "Shell": 142,
+      "YAML": 46
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/store/icon-180.png",
+      "docs/store/icon-96.png",
+      "docs/store/icon.svg",
+      "icon.svg",
+      "index.js",
+      "lib/backends.js",
+      "lib/consolidate.js",
+      "lib/digester.js",
+      "lib/distill.js",
+      "lib/facts.js",
+      "lib/inventory.js",
+      "lib/live-cursor.js",
+      "lib/llm.js",
+      "lib/memory-store.js",
+      "lib/selfcheck.js",
+      "lib/session-log.js",
+      "lib/state.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "scripts/.append-fingerprint.json",
+      "scripts/.live-fingerprint.json",
+      "scripts/accumprobe.mjs",
+      "scripts/appendcheck.mjs",
+      "scripts/asar-read.mjs",
+      "scripts/assemblerprobe.mjs",
+      "scripts/assemblertest.mjs",
+      "scripts/chunkshape.mjs",
+      "scripts/clienttest.mjs",
+      "scripts/clustermetric.mjs",
+      "scripts/compactprobe.mjs",
+      "scripts/copytest.mjs",
+      "scripts/dupecalibrate.mjs",
+      "scripts/e2e.mjs",
+      "scripts/hosttest.mjs",
+      "scripts/incrementaltest.mjs",
+      "scripts/livee2e-incremental.mjs",
+      "scripts/livee2e.mjs",
+      "scripts/livefp.mjs",
+      "scripts/livetest.mjs",
+      "scripts/memorytest.mjs",
+      "scripts/mini-react.mjs",
+      "scripts/mirrortest.mjs",
+      "scripts/mutate-incremental.sh",
+      "scripts/reload.sh",
+      "scripts/selftest.mjs",
+      "scripts/seqprobe.mjs",
+      "scripts/skillcompat.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-archived-digest",
+    "version": "0.5.0",
+    "type": "module",
+    "description": "把归档会话压缩成记忆、事实台账与可复用技能，统一存放管理，并可选地回收日志占用的空间。事实按 mem0 的 ADD/UPDATE/NOOP 合并、按 Zep 的时效模型保留已被取代的旧结论，再聚合成主题，可导出到已挂载的记忆插件。自动提炼可关闭，也可手动挑选要提炼的归档会话。Distil archived sessions into memories, fact-level memory and reusable skills, then reclaim the log space.",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "dsh-bundle",
+      "cordis",
+      "archive",
+      "session",
+      "memory",
+      "skill",
+      "digest"
+    ],
+    "license": "MIT",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "lib/*.js",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE",
+      "docs/store/*"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      }
+    },
+    "author": "LLL-lyh0",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/LLL-lyh0/dsh-archived-digest.git"
+    },
+    "homepage": "https://github.com/LLL-lyh0/dsh-archived-digest#readme",
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.1.2-alpha.1 || >=0.1.2-alpha.1 <0.2.0-0 || >=0.2.0-rc.1 <0.2.1-alpha.1 || >=0.2.1-alpha.1 <0.3.0-0"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/dsh-llm": {
+        "optional": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 归档会话提炼（Archived session digest）\n#\n# Host 侧：扫描已归档会话 → 解码（多帧 zstd JSONL）→ 提炼成一条记忆 + 可复用技能 +\n# 事实台账，落到 $DSH_HOME/archived-digest/{memories,skills,facts.json}；\n# 事实按 mem0 的 ADD/UPDATE/DELETE 合并去重，按 Zep 的时效模型保留 validUntil；\n# 再聚合成主题记忆，可导出到已挂载的记忆插件。可选回收日志空间。注册 archived_digest 工具。\n# Client 侧：在左侧栏注册管理面板，支持手动勾选要提炼的归档会话、浏览主题/事实、检索记忆。\n#\n# config 只用于「首次播种」settings.json；之后以面板里的选择为准（settingsExist() 保证不覆盖）。\n- insert:\n    - id: dsh-archived-digest\n      name: 'dsh-archived-digest'\n      config:\n        # 后台自动提炼总开关。false = 完全手动（默认关闭，避免在用户不知情时消耗 token）。\n        autoEnabled: false\n        autoIntervalMinutes: 30\n        autoMaxPerRun: 3\n        autoRetryFailed: true\n        # 提炼成功后如何处理日志：off | logs | dir | trash\n        cleanupMode: 'off'\n        cleanupMinAgeDays: 7\n        extractSkills: true\n        # 记忆层\n        extractFacts: true\n        autoConsolidate: true\n        exportToBackend: true\n        # 实时会话（未归档的）：默认关闭，因为每个会话花一次模型调用。\n        # 打开后「刚聊完的对话」也会沉淀成记忆；静默窗口避免只记住半截。\n        captureLiveSessions: false\n        liveMaxPerRun: 2\n        liveSettleSeconds: 90\n        # 进行中会话的只读增量提炼：只读 seq 水位线之后的新事件，会话日志一个字节都不改。\n        # 游标存在插件自己的 live-cursors.json 里。\n        incrementalLiveCapture: false\n        incrementalMinEvents: 40\n        # 自检精简：回头收拾记忆自己积累的噪声（重复事实 / 失效事实 / 重复技能）。\n        # 默认只测量不执行；合并技能风险最高，需要单独开。\n        selfCheckEnabled: false\n        selfCheckIntervalMinutes: 720\n        selfCheckApply: false\n        selfCheckMergeSkills: false\n        selfCheckPurgeTrash: false\n        maxSourceChars: 14000\n        maxTokens: 2400\n        provider: ''\n        model: ''\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/memory-store.js:27"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "lib/memory-store.js:46"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "scripts/e2e.mjs:19"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "scripts/hosttest.mjs:49"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "scripts/hosttest.mjs:225"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/incrementaltest.mjs:29"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "scripts/incrementaltest.mjs:30"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/livee2e-incremental.mjs:18"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "scripts/livee2e-incremental.mjs:18"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "scripts/livee2e.mjs:26"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/livetest.mjs:31"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "scripts/livetest.mjs:32"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/memorytest.mjs:39"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "scripts/memorytest.mjs:40"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/mirrortest.mjs:18"
+    },
+    {
+      "name": "DSH_ARCHIVED_DIGEST_SKILLS",
+      "kind": "env",
+      "where": "scripts/selftest.mjs:36"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/skillcompat.mjs:25"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "${host",
+      "url": "http://${host",
+      "where": "index.js:1064"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "index.js:1101"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/mem0ai/mem0",
+      "where": "lib/consolidate.js:11"
+    },
+    {
+      "host": "arxiv.org",
+      "url": "https://arxiv.org/abs/2501.13956",
+      "where": "lib/consolidate.js:13"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/mem0ai/mem0",
+      "where": "lib/facts.js:10"
+    },
+    {
+      "host": "arxiv.org",
+      "url": "https://arxiv.org/abs/2501.13956",
+      "where": "lib/facts.js:13"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LLL-lyh0/dsh-archived-digest.git",
+      "where": "package.json:51"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LLL-lyh0/dsh-archived-digest#readme",
+      "where": "package.json:53"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/mem0ai/mem0",
+      "where": "scripts/memorytest.mjs:6"
+    },
+    {
+      "host": "arxiv.org",
+      "url": "https://arxiv.org/abs/2501.13956",
+      "where": "scripts/memorytest.mjs:8"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$PORT/api/dsh-archived-digest/status",
+      "where": "scripts/reload.sh:38"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-27T14:41:32Z",
+    "created_at": "2026-10-27T13:02:04Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "lib/backends.js",
+    "lib/consolidate.js",
+    "lib/digester.js",
+    "lib/distill.js",
+    "lib/facts.js",
+    "lib/inventory.js",
+    "lib/live-cursor.js",
+    "lib/llm.js",
+    "lib/memory-store.js",
+    "lib/selfcheck.js",
+    "lib/session-log.js",
+    "lib/state.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-archived-digest · 归档会话提炼",
+      "text": "把**已归档的会话**压缩成一条条记忆和可复用技能，统一存放管理；再可选地回收那些日志占用的磁盘空间。自动清理可以整个关掉，也可以手动挑选要提炼哪几个归档会话。\n\nDSH 的归档只是把会话从列表里收起来——日志文件仍然完整躺在 `$DSH_HOME/sessions/` 下，一条都不少。本机实测：**77 条归档会话占 411 MB**，其中绝大部分是重复的流式 chunk、工具结果、推理块，以及每一轮都被重新注入的环境说明。这些内容对后来的会话毫无价值，但它们一直占着磁盘，而且在归档列表里堆成一片噪音。\n\n这个插件做的事很直接：把每个归档会话读一遍，只留下值得留的部分（结论、决策、坑、可复用的做法），写成人类和 agent 都能读的 markdown，然后把日志删掉。**提炼在前，删除在后**，顺序在代码里是强制的。"
+    },
+    {
+      "section": "记忆层：事实、时效、主题",
+      "text": "逐会话的摘要够用来\"留个记录\"，但不够用来\"回忆\"：77 个会话就是 77 段各自讲一角的文字，而真正想知道的是「这个项目我到底知道些什么」。\n\n所以提炼之后还有一层，参考了社区里已经跑通的做法："
+    },
+    {
+      "section": "记忆层：事实、时效、主题",
+      "text": "- **事实级写入（mem0）**——把每个会话的结论拆成一条条事实，逐条决定 `ADD / UPDATE / NOOP`。同一件事换个说法说是 **UPDATE**（旧结论标 `validUntil` 退役，不删），一模一样是 **NOOP**（只刷新 `lastSeenAt`），只有新话题才 **ADD**。这样纠正过的结论不会和错误的旧结论并排躺着。</br>参考：[mem0 的 ADD/UPDATE/DELETE 抽取管线](https://github.com/mem0ai/mem0)\n- **时效而非覆盖（Zep/Graphiti）**——退役的事实保留 `validUntil` 和 `supersededBy`，所以\"八月时我们以为是什么\"仍然答得出来。</br>参考：[Zep: A Temporal Knowledge Graph Architecture for Agent Memory](https://arxiv.org/abs/2501.13956)\n- **主题聚合**——事实按主题聚成尽量少的几块，每块正文里的每个条目都带 `^f00012` 这样的出处，可以追回产生它的会话。整合是**幂等**的：主题是事实的纯函数，跑两遍不会变成两份。\n- **可选导出**——检测到本机装了记忆插件（OpenViking / Mnemon）时可以把聚合结果推过去；**本地台账始终是真相源**，推送失败只记录原因，不回写。"
+    },
+    {
+      "section": "记忆层：事实、时效、主题",
+      "text": "聚合这一层有两个坑，都靠能在真实台账上跑的数字才发现：\n\n1. **拿候选事实去和「簇里所有成员拼起来的长文本」比相似度是自毁的**。候选只有一句话，而簇的文本随成员增加而变长，共享词占比反而下降——簇越大越难加入，正好反了。改成**最近成员（single-linkage）**：一个事实只要和簇里任何一条足够像就算同一主题。修前实测 `127/156` 个主题只含一条事实，等于没聚合。\n2. **光靠字面相似度根本跨不了会话**。事实来自不同会话时，讲同一件事也常常不共享任何字：「碰撞体穿透」vs「ShipHullCollision 扫掠」的字面重合远低于任何阈值。所以每个事实还带一个**主题名（subject）**——由该会话记忆的标题给出——同一会话的事实天然同主题；老台账里没有主题名的事实会在整合时用标题回填一次。修后同一台账是 `188/188` 个事实进入多事实主题、共 7 个主题。\n\n跑 `node scripts/clustermetric.mjs` 可以直接在真实 `facts.json` 上打出聚类分布——区分「在聚合」和「没在聚合」只能靠这个数。"
+    },
+    {
+      "section": "记忆层：事实、时效、主题",
+      "text": "相似度用的是免 embedding 的混合度量（拉丁词 Dice + 中文**单字** Dice）。这里踩过一个坑：最初用中文二元组，结果是「日志要先按 magic 切帧」和「日志需要按 magic bytes 切帧」只得了 0.33——人类的同义复述被判定为不同事实。换成单字集合后同一对是 0.77，而不相干的两句稳定在 0.05 以下。阈值因此落在 0.5（合并）与 0.3（聚类）这两个空档里。"
+    },
+    {
+      "section": "它产出什么",
+      "text": "```\n$DSH_HOME/archived-digest/\n├── memories/          # 一个归档会话 → 一条记忆 <slug>.md\n│   ├── <slug>.md\n│   └── index.json\n\n技能同时**发布一份**到 `$DSH_HOME/skills/<name>/SKILL.md`——这是技能中心和 agent 技能目录扫描的位置。只写在插件自己的目录里，技能就只会在本面板里可见，agent 永远加载不到（这个缺口在开发时抓到并补掉了，见 `scripts/mirrortest.mjs`）。发布失败（比如同名技能是你手写的）不会覆盖对方的文件，面板里会标成「同名技能已存在，未覆盖」。"
+    },
+    {
+      "section": "面板",
+      "text": "- **总览** — 归档条数、磁盘占用、提炼进度、自动开关状态、最近几次跑批记录。\n- **归档会话** — 一列所有归档会话，带状态徽章（待提炼 / 已提炼 / 已清理 / 失败 / 缺失 / 已固定）。前有复选框，可以手动勾选要提炼哪几个；顶部有「全选待提炼」「提炼所选」。\n- **进行中** — 未归档的实时会话（见下节）。每行显示水位线 `lastSeq`、待提炼字节数，带「只读」徽章；可以整批提炼，也可以只提炼某一条的**新内容**。\n- **主题记忆** — 聚合出的主题，每个条目带 `^f00001` 出处；顶部有「重新整合」「导出到记忆后端」和检索框。\n- **事实** — 事实台账：文本、类型、强度、出处；「显示已失效」展开被取代的旧事实（带 `→ 新 id`）；每条可以「忘记」（唯一会真正删行的操作，会二次确认）。\n- **记忆** — 逐会话的 markdown 记忆，可搜索、可展开看原文。\n- **技能** — 已提炼的技能，标注是否已发布到技能中心。\n- **自检** — 测量与压缩记忆本身（见下节）。「只统计，不改动」和「执行精简」是两个分开的按钮。\n- **设置** — 下面那些开关，改完即存。"
+    },
+    {
+      "section": "设置",
+      "text": "| 键 | 默认 | 含义 |\n| --- | --- | --- |\n| `autoEnabled` | `false` | 后台自动提炼总开关。**默认关闭**，因为提炼要花 token |\n| `autoIntervalMinutes` | `30` | 自动跑批间隔 |\n| `autoMaxPerRun` | `3` | 每次自动跑批最多提炼几个会话（串行，避免抢你交互的 token） |\n| `autoRetryFailed` | `true` | 失败过的会话下次是否重试（最多 3 次） |\n| `cleanupMode` | `'off'` | 提炼成功后怎么处理日志：`off` / `logs`（只删 `.zstd`）/ `dir`（删整个会话目录）/ `trash`（丢回收站） |\n| `cleanupMinAgeDays` | `7` | 只清理**日志 mtime** 超过这么多天的会话 |\n| `extractSkills` | `true` | 是否顺带提炼可复用技能 |\n| `extractFacts` | `true` | 是否把结论拆成事实行进台账（去重/可被取代） |\n| `autoConsolidate` | `true` | 提炼后是否自动重算主题 |\n| `exportToBackend` | `true` | 整合后是否推给已挂载的记忆插件（没有就跳过） |\n| `captureLiveSessions` | `false` | 是否也提炼**未归档**的实时会话（见下节） |\n| `liveMaxPerRun` | `2` | 每次自动跑批最多提炼几个实时会话 |\n| `liveSettleSeconds` | `90` | 实时会话静默多少秒后算结束 |\n| `incrementalLiveCapture` | `false` | 对**进行中**会话做增量提炼（只读，见下节） |\n| `incrementalMinEvents` | `40` | 新事件少于这么多就不值得调一次模型 |\n| `selfCheckEnabled` | `false` | 后台定期自检精简 |\n| `selfCheckIntervalMinutes` | `720` | 自检间隔 |\n| `selfCheckApply` | `false` | 后台自检是否真的执行（关着就只测量） |\n| `selfCheckMergeSkills` | `false` | 自检时是否合并重复技能（风险最高的一步，默认不做） |\n| `selfCheckPurgeTrash` | `false` | 自检时是否清空回收站 |\n| `maxSourceChars` | `14000` | 送给模型的原始转录上限（从尾部往前截，结论在尾部） |\n| `"
+    },
+    {
+      "section": "设置",
+      "text": "三处需要强调：\n\n**自动提炼默认是关的。** 关着的时候调度器仍然每 60 秒醒一次，但只读设置、什么都不做。要它自己干活，得在面板里打开。\n\n**`cleanupMode` 默认 `'off'`。** 提炼完不会自动删任何东西，直到你显式选一种清理模式。即使选了，也只会动**已经有记忆落盘**的会话——没有记忆的会话会被拒绝（`NOT_DIGESTED`），除非走强制路径。\n\n**`captureLiveSessions` 默认 `false`。** 见下节。"
+    },
+    {
+      "section": "实时会话：为什么「刚聊完的」原来不在范围内",
+      "text": "这是个容易被忽略的边界：**没有归档的会话，本插件看不到。** 归档动作由你触发，所以一段刚结束的对话要等你归档它才可能进记忆——而大多数人从不归档，于是记忆一直是空的。本机实测：某天写了 11 个会话，其中归档数为 **0**；全机 502 个会话里只有 77 个是归档的。\n\n打开「提炼实时会话」后，本插件会把**已静默**的未归档会话也当作提炼对象。\n\n**不需要任何会话钩子。** 这一点是实测出来的，不是猜的：正在进行的会话，它在磁盘上的日志已经完整且同步——从一段**运行中**的会话解出了 23609 个事件，包括它的最后一句话（见 `scripts/livee2e.mjs`）。日志按 flush 追加，所以「日志不再变化」就等于「这段对话结束了」，不需要向宿主询问任何东西。\n\n**静默窗口（默认 90 秒）。** 正在写的会话不会被提炼，否则只会记住半截对话；下次跑批再收它。窗口比任何一次模型调用加长工具执行的时间都长。"
+    },
+    {
+      "section": "实时会话：为什么「刚聊完的」原来不在范围内",
+      "text": "**成本是有意的上限。** 未归档会话很多（本机 426 个 / 245 MB，其中 422 个已静默），所以实时通道单独限流（默认每轮 2 个），不会把归档那部分的任务挤掉。这也是它默认关闭的原因。\n\n**安全不变式：清理永远只作用于归档会话。** `cleanup` 的 id 映射只从归档清单构建，所以实时会话不可能被删——实时通道只写记忆，从不回收磁盘。`scripts/livetest.mjs` 把这条钉住了。\n\n**「没有可记的」不是失败。** 一行字的会话被记为 `state.skipped` 而不是 `state.failed`，否则几百个短会话会把真正的失败埋掉；同时它也不会每轮都被重新解码。"
+    },
+    {
+      "section": "进行中的会话：只读增量提炼",
+      "text": "上一节的实时通道有一个说不出口的缺陷：它等会话**静默**才动手，于是你今天正在聊的这一段永远不会进记忆——而聊得越久的那一段，恰恰是最该被记住的。\n\n增量通道解决这个，并且遵守一条硬约束：**会话日志一个字节都不改。**\n\n**怎么做到的。** 每个事件的 JSON 里带一个单调递增的 `seq`（实测本会话 8350 个事件里 8349 个有 `seq`，且严格递增；唯一没有的是文件首行的 `session` 头事件，它自己就是第 0 条）。所以「提炼到哪了」可以表达成一个整数水位线，存在插件自己的 `<store>/live-cursors.json` 里——**永远不写进会话日志**。下一轮只读 `seq > lastSeq` 的事件。"
+    },
+    {
+      "section": "进行中的会话：只读增量提炼",
+      "text": "**怎么证明它是只读的。** 不能靠「sha256 没变」——进行中的会话本来就在被 agent 追加写，整文件哈希每一轮都在变。判据必须是**前缀不变**：记录上次的大小与前缀哈希，之后只比对 `buf.subarray(0, beforeSize)`。`scripts/appendcheck.mjs` 做的就是这个，实测输出 `+0 bytes appended / prefix IDENTICAL / RESULT: append-only`。\n\n**怎么标注已提炼部分。** 三层，都落在插件自己的存储里，不碰会话：\n\n1. 水位线 `lastSeq` —— 面板「进行中」每行显示它，以及「已是最新」/「有新内容 X MB」。\n2. 游标还记 `segments` 与 `bytesAtDigest`，所以一段会话被反复提炼多次是可数的。\n3. 记忆条目带 `partial: true`，渲染时也标明这是**部分**提炼。\n\n**回退保护。** 会话日志被截短（`detectRewind`）时水位线重置到 0，而不是永远跳过。否则一次日志损坏会让你此后再也读不到这段会话。"
+    },
+    {
+      "section": "进行中的会话：只读增量提炼",
+      "text": "**部分提炼的会话不能被清理。** 只提炼到 `seq=9646` 的会话，它的完整内容还没进记忆；`cleanupSession` 因此加了一道 `PARTIAL_DIGEST` 门禁，拒绝删这种会话的日志。同时 `needsDigest` 让 partial 会话仍然可以接受一次**完整**提炼——否则它会卡在「既不能清理、也不会再提炼」的死角里。"
+    },
+    {
+      "section": "自检精简：记忆自己也会变脏",
+      "text": "提炼会不断往里加东西，时间一长记忆自己就成了新的噪声源。自检就是回头收拾它。先测量，再决定要不要动手——这两个动作在面板上是两个分开的按钮。\n\n**为什么技能目录是最大的成本。** 技能会被宿主注入每一轮对话，所以它是**永久**开销，而且单调增长。本机实测：142 个技能、12841 字符、**约 3669 token 每一轮**。这比 facts 台账的噪声严重得多，所以自检把它排第一位。\n\n**三类动作，风险递增：**\n\n| 动作 | 做什么 | 默认 |\n| --- | --- | --- |\n| 重复事实合并 | 文本高度相似的同 kind 事实，保留强的、把弱的标 `validUntil` + `supersededBy` | 测量时只报告 |\n| 失效事实清理 | 强度低于地板的 `open` 类事实标为失效 | 同上 |\n| 重复技能合并 | 名字/描述高度相似的技能合成一个 | **默认关**，需显式勾选 |"
+    },
+    {
+      "section": "自检精简：记忆自己也会变脏",
+      "text": "**永远不会 delete。** 除了用户手动「忘记」，自检对事实只做 supersede——保留 `validUntil`、`supersededBy`、`supersededReason`，所以随时能看见「这条为什么被取代」。\n\n**阈值为什么是 0.75 而不是写入期的 0.5。** 在真实 1755 条事实上标定过：0.5–0.6 是「同话题不同事实」的假阳性带（例如 0.510 的「把代码注释里的历史断言与 git 提交版本对质」vs「会话未提供 git 是否可用的信息」——这显然是两件事）。0.9 以上才是真复述。写入期用 0.5 是因为那条路径有人看着、且合并是可逆的；无人值守的 housekeeping 不能拿 0.5 赌，静默毁掉两条不同事实不可接受。实测在 0.75 下 100 个候选对收敛到 **8 组真重复**。\n\n**「只统计」也会算完整代价。** 测量那一次仍然要比较 153 万个事实对（本机实测 `pairsCompared: 1539135`）——所以它是按钮，不是每秒轮询的东西。后台自检默认关闭（`selfCheckEnabled: false`）。"
+    },
+    {
+      "section": "Agent 工具",
+      "text": "注册了一个 `archived_digest` 工具，所以你也可以直接在对话里让它干活：\n\n```\naction: status       # 库存与进度\naction: sessions     # 列出归档会话\naction: digest       # 提炼（可带 sessionIds）\naction: cleanup      # 清理已提炼的会话\naction: memories     # 逐会话记忆列表\naction: skills       # 技能列表\naction: inspect      # 预览某个会话会被提炼成什么（不花 token）"
+    },
+    {
+      "section": "记忆层",
+      "text": "action: topics       # 聚合出的主题\naction: facts        # 事实台账（含失效历史）\naction: recall       # 检索记忆（query=...）\naction: remember     # 手动加一条事实，走同一套合并管线\naction: consolidate  # 重算主题\naction: export       # 推给已挂载的记忆插件"
+    },
+    {
+      "section": "进行中会话与自检",
+      "text": "action: live         # 未归档的实时会话（含水位线）\naction: live-digest  # 对进行中会话做只读增量提炼\naction: selfcheck    # 测量或执行记忆精简（apply / mergeSkills / purgeTrash）\naction: health       # 一次拿全：事实、技能目录成本、回收站、游标\n```\n\n`inspect` 只是解码加去噪，不调模型，适合先看看这个会话到底有没有值得留的东西。`remember` 也走同一个合并管线，所以你补一条和已有结论同义的事实会更新它，而不是并存。"
+    },
+    {
+      "section": "和记忆插件的关系",
+      "text": "本机装过三个记忆插件，但它们的状态不一样，这决定了插件怎么对接：\n\n| 插件 | 本机状态 | 对接方式 |\n| --- | --- | --- |\n| `@openviking/dsh-memory-plugin` | 已启用，但服务端 `127.0.0.1:1933` **从未监听** | 只做检测：它 `provide('openvikingMemory')` 但**没有文档写入 API**，只有会话捕获。明确返回 `NO_WRITE_API` 而不是伪造一次调用 |\n| `dsh-mnemon` | 已安装但**未启用**（不在 bundles 里） | 检测 `mnemon_*` 工具，有就调 `mnemon_remember` |\n| `memory-eternal` | 已安装但**未启用** | 未对接 |\n\n判据写在 `lib/backends.js` 里：**本地台账是真相源，后端只是镜像**。导出失败记录原因并显示，不回写台账；没有后端时面板直接说「本地存储就是唯一落盘处」，而不是给一个点了没反应的按钮。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash"
+    },
+    {
+      "section": "从 GitHub 装（推荐）",
+      "text": "dsh plugin add github:LLL-lyh0/dsh-archived-digest"
+    },
+    {
+      "section": "或者先 clone 再按本地路径装",
+      "text": "git clone https://github.com/LLL-lyh0/dsh-archived-digest\ndsh plugin add link:./dsh-archived-digest\n```\n\n装完**重启宿主**才生效（bundles 只在启动时读一次）。\n\n本插件依赖宿主自带的 `@deepseek-ai/dsh-llm`（LLM 后端），以 `peerDependencies` 声明、`optional: true`。它是懒加载的：加载不到时插件不会挂掉，而是退化成\"只做本地提炼、不调模型\"。"
+    },
+    {
+      "section": "从源码开发",
+      "text": "把插件目录链进 profile 的 `node_modules`，改源码即刻生效。**必须是链接，不能是拷贝**——用 `cp -r` 或某些 `ln -s` 在 Windows 上会得到一份拷贝，之后改源码不再生效，而且不报任何错：\n\n```bash\ncmd //c \"mklink /J dsh-archived-digest D:\\path\\to\\dsh-archived-digest\"\nstat -c '%i' node_modules/dsh-archived-digest/index.js /d/path/to/dsh-archived-digest/index.js"
+    },
+    {
+      "section": "两个 inode 必须相同",
+      "text": "```\n\n探针确认插件真的加载了：\n\n```bash\ncurl -s -o /dev/null -w \"%{http_code}\\n\" http://127.0.0.1:58902/api/dsh-archived-digest/status"
+    },
+    {
+      "section": "200 = 已加载；401 = 没加载（宿主网关直接拒了）",
+      "text": "```"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnode scripts/selftest.mjs      # 解码 / 提炼 / 清理 / JSON 修复 / 截断收缩，22 项\nnode scripts/hosttest.mjs      # 假 ctx 挂载整个 Host，37 项\nnode scripts/clienttest.mjs    # 迷你 React 渲染面板（含 9 个 tab），90 项\nnode scripts/memorytest.mjs    # 事实合并 / 时效 / 主题 / 检索 / 后端，27 项\n\n全部离线跑，不发网络请求，不碰真实 store。测试里临时改了 `DSH_HOME` 或 `DSH_ARCHIVED_DIGEST_SKILLS`，所以不会往你真实的 `~/.dsh/skills` 里丢假技能。"
+    },
+    {
+      "section": "测试",
+      "text": "记忆层的关键性质都配了**反向验证**——把实现改回错误的写法，对应用例必须变红。已验证的有：改回粗粒度分词会让三条用例红（同义复述被判为新事实）；让 `validUntil` 不落盘会让三条红；去掉检索相关性闸门会让「不相关查询返回 0 条」变红（它返回了全部 3 条）；去掉静默窗口会让「正在进行的会话不该被提炼」变红；去掉归档排除会让「实时清单不得包含归档会话」变红（它多吐了一条）；把流分片里的 `reasoning-delta` 改回写进 text 槽位会让 5 条红，忽略 `finish.reason` 会让 3 条红；让主题聚类的 `subject()` 无视显式主题名，会让「同一主题、毫无共同用词的两条事实必须聚到一起」变红（它裂成了 2 个主题）；把「截断后缩小输入」的循环停掉，会让「截断的提炼要缩小转录而不是只加预算」变红（它报 `MAX_TOKENS` 而不是成功）；把面板「只统计」的 `apply: false` 改成 `true`，会让「测量不得改动数据」变红（`incrementaltest` 里另有 8 个 mutation 覆盖水位线与自检阈值）。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**zstd 日志是多帧追加的。** `zstdDecompressSync(整个文件)` 和流式解码都**只吐出第一帧**——一个 16703 字节的文件只解出 211 字节，看起来像\"日志是空的\"。正确做法是按 magic bytes `28 b5 2f fd` 切帧逐段解压（`lib/session-log.js` 的 `decodeZstdFrames`）。\n\n**单条 `tool/result` 可以到 12958 字符。** 直接喂给模型会把上下文塞满，还会把 token 预算烧光在 glob 文件清单上。所以解析时只取 `user/message` 和 `assistant/message` 的 `text` 块，推理块和工具结果一律丢弃；再剥掉每轮注入的 `<system-reminder>`、`<available_skills>`、`<environment_context>` 整块。一个 174 轮、3.7 MB 的会话，去噪后送去提炼的正文是 14292 字符。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**自动清理的顺序必须是把 state 落盘再删。** `cleanupSession` 会**从磁盘重读** state 来判断这个会话到底提炼过没有；如果 `digestOne` 只在内存里 `recordDigest` 就去调它，读到的还是\"未提炼\"，于是被 `NOT_DIGESTED` 挡回去——而提炼本身是成功的，所以界面上一切正常，只有磁盘没被回收。这个 bug 一度存在，`scripts/selftest.mjs` 里的 `digestOne honours cleanupMode by itself` 就是为它加的回归（撤掉那行 `writeState` 该用例会红）。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**`document.documentElement.lang` 在客户端插件加载时还是空的。** locale 服务要稍后才写这个属性，而 `''` 不以 `zh` 开头，所以 `lang.startsWith('zh') ? zh : en` 会落到英文分支；更糟的是 `const t = pickCopy()` 只在工厂执行时算一次，整个会话就一直是英文。修法：改成每次取用时现读（`activeLanguage()`，空值按中文兜底，再看 `navigator.languages`），并把 `t` 换成 Proxy 让 `t.xxx` 每次解析当前语言——这样在设置里切语言不用刷新页面。`scripts/copytest.mjs` 把这条钉住了：撤掉修复该用例会红。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**宿主只在启动时快照客户端 bundle。** `dsh-client-modules` 用 `readFileSync` 在激活时读一次 `client.js` 缓存成 `record.bundle`，HMR 只重载 ESM 模块、不会重建客户端 combo。所以**改完 `client.js` 必须重启宿主**，否则浏览器拿到的还是旧代码，而且不会有任何报错。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**「会话」和「归档会话」不是一回事，这个差集会把功能整体架空。** 插件最初的取数口是 `workspace.json` 的 `archivedSessionIds`，而没有归档动作的会话永远不在里面——于是\"边聊边攒记忆\"完全不会发生，而且**不报任何错**：面板照常显示 77 条归档、进度正常、没有任何失败。实测本机 502 个会话里只有 77 个已归档，某天新写的 11 个全是 0 归档。修法是补一条实时通道（`listLiveSessions` + 静默窗口），并且在设计时确认了一个关键事实：**正在进行的会话，它在磁盘上的日志已经是完整的**（从一段运行中的会话解出 23609 个事件、含最后一句），所以实时提炼不需要任何会话钩子，只需要一个\"日志不再变化\"的静默判据。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**中文相似度不能用二元组。** 中文没有空格，二元组看起来是自然选择，但它对同义复述几乎失效：「日志要先按 magic 切帧」vs「日志需要按 magic bytes 切帧」只共享 `日志` 一个二元组，得分 0.33——低于任何合理阈值，于是同一件事会被反复 ADD 成多条。换成**单字集合**的 Dice 后同一对是 0.77，而无关句仍稳定在 0.05 以下。`scripts/memorytest.mjs` 里改了会红的正是这两条。\n\n**检索必须有相关性闸门，不能只靠权重。** 原来的 `score = relevance*0.7 + strength*0.3` 里，一条完全不相干的事实也能靠强度拿到 ≈0.25 分，于是「这次查询没有命中」被表达成「返回全部事实，按新旧排序」——使用者看到一堆结果，却一条都不对题。修法是先过 `MIN_RELEVANCE`（0.12）再算分；现在无关查询返回 0 条。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**推理通道会泄进正文，而且「被截断」会被当成「成功」。** `import('@deepseek-ai/dsh-llm')` 从插件位置解析会抛 `ERR_MODULE_NOT_FOUND`（profile 的 `node_modules/@deepseek-ai/` 下只有 `cosmokit` 和 `schemastery`），所以实际跑的是包内自带的降级 assembler。它最初把**所有** `*-delta` 都追加进同一个字符串，于是模型的思考（\"We need produce JSON only. Need compress session…\"）被当成回复正文，JSON 解析必然失败——表面症状是「模型没返回 JSON」，真因是分片归类错了。修法是按 `${index}#${分片自身声明的类型}` 建槽位，并且认 `finish.reason`：`reasoning-delta` 永远进不了 text 通道，`max-tokens` 会被如实报成截断而不是成功。`scripts/assemblerprobe.mjs` 打印真实分片形状，`scripts/assemblertest.mjs`（27 项）把这两条钉住——把 reasoning 改回 text 会让 5 条红，忽略 `finish.reason` 会让 3 条红。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**Windows 路径原样写进 JSON 就是一个坏转义。** 模型把 `\"cwd\": \"D:\\\\DeepSeekHarness\"` 写成 `\"cwd\": \"D:\\DeepSeekHarness\"`，而 `\\D` 不是合法 JSON 转义，`JSON.parse` 报 `Bad escaped character in JSON at position 228`——整个会话的记忆就这么没了，日志里只留一句「不是 JSON」。修法是修好而非放弃：已知转义（`\" \\ / b f n r t`）和 `\\uXXXX` 原样保留，其它反斜杠一律补成真转义。另外输出被截断时会按预算阶梯重试（更大 `maxTokens`），而不是直接判失败。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**「聚合」这个功能会静默地完全不聚合。** 主题是把事实聚成尽量少的几块，但它不报错：面板上「156 个主题」看起来像是聚得很细，实际是 `127` 个主题各含一条事实——等于没有聚合。两个独立原因叠在一起：① 拿候选事实去和「簇内所有成员拼起来的长文本」比相似度，簇越大分母越大、越难加入，正好反了；② 跨会话讲同一件事的两句话常常不共享任何字（「碰撞体穿透」vs「ShipHullCollision 扫掠」），字面相似度永远过不了阈值。修法是**最近成员比较**加**每个事实带主题名**（取自该会话记忆的标题，老台账整合时回填），同一台账变成 `188/188` 个事实进入 7 个多事实主题。判据是能在真实文件上跑的数字：`node scripts/clustermetric.mjs`。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**被截断时加大预算是错的，该缩小输入。** 有一个真实归档会话连续三次失败：`output hit the maxTokens=8000 ceiling and was truncated (reasoning 17853 chars before the answer)` —— 8000 的输出预算全花在思考上，一个答案字符都没写出来。原来的重试只是在 `MAX_TOKENS_CEILING = 8000` 内翻倍预算，对这种「思考占满预算」的情况，加预算只会买到更多思考。修法是**反过来缩输入**：`lib/digester.js` 保留解码后的事件列表（`read.eventList`），遇到 `MAX_TOKENS` 就把 `maxSourceChars` 减半重新抽取正文再试，下界是 `max(1500, 25%)`；要思考的东西少了，答案才装得下。同一个会话缩到 6628 字符后一次性成功。回归在 `selftest.mjs` 的「a truncated digest shrinks the transcript instead of only raising the budget」，停掉这个循环就会红。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**改 `touch cordis.patch.yml` 不会重载插件，看起来\"验证通过\"其实跑的还是旧代码。** 在 `index.js` 里加 `const BUILD = 'xxx'` 并让 `/status` 返回它之后才看清：`touch` 只改了 mtime，宿主仍在跑旧模块图（`build: undefined`）；**必须改文件内容**（哪怕追加一行注释）才会触发 watcher。这条元缺陷会让所有\"修完再验一遍\"的结论都不可信，所以 `scripts/reload.sh <build> <port>` 会改内容、等待、并断言 `/status` 里的 `build` 与传入值一致，不一致就报错退出。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**进行中的会话在线，\"已清理\"的会话不在线，两者都会被算成\"丢了\"。** `findSessionDir` 只在 `sessions/<slug>/<id>` 里找，所以已经清理到 `trash/` 的会话找不到——面板于是显示「38 缺失」，和「38 段对话被弄坏了」在界面上完全无法区分，而这 38 个其实都还能恢复。修法是 `trashedSessionIds()` 去 `trash/` 里反查，并且要同时认两种目录名（trash 目录名过了 `sessionSlug()`，`session-` 前缀被剥掉了，真实名形如 `01231136-…-1793096037689`）。修后 39 present + 38 cleaned + 0 missing = 77。`selftest.mjs` 里三条用例钉住这个分区。"
+    },
+    {
+      "section": "十四个实现上的坑（都已在代码里处理）",
+      "text": "**只有部分记忆的会话，既不能删也不能再提炼——除非你特意开一扇门。** 增量提炼只会记到当前水位线，所以那种会话的完整内容还没进记忆；`cleanupSession` 因此加了 `PARTIAL_DIGEST` 门禁拒绝删它。但只看这一条会制造死角：`needsDigest` 原本用 `if (session.digestedAt) continue`，于是这个会话**永远拿不到一次完整提炼**，永远停在\"不能删、不再提炼\"。修法是判据改成 `if (session.digestedAt && !partial) continue`。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

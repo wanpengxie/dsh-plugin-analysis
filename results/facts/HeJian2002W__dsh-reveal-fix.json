@@ -1,0 +1,145 @@
+{
+  "repo": "HeJian2002W/dsh-reveal-fix",
+  "commit": "30839456e373b530509532b8ad806c8879b421c8",
+  "extracted_at": "2026-11-11T10:44:33.123238+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 9505,
+    "lines_by_language": {
+      "JSON": 24,
+      "JavaScript": 71,
+      "Markdown": 91,
+      "Other": 26,
+      "YAML": 10
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-reveal-fix",
+    "version": "1.0.0",
+    "description": "Fix DSH's \"reveal in file manager\" on Windows: Explorer opened at Desktop, and windowsHide:true created the window hidden (SW_HIDE).",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "windows",
+      "explorer"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/HeJian2002W/dsh-reveal-fix.git"
+    },
+    "homepage": "https://github.com/HeJian2002W/dsh-reveal-fix#readme",
+    "bugs": {
+      "url": "https://github.com/HeJian2002W/dsh-reveal-fix/issues"
+    },
+    "author": "HeJian2002W",
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# ============================================================================\n# dsh-reveal-fix —— DSH bundle patch\n# ============================================================================\n# 把本插件挂进 Web profile 的配置树。\n# 安装：dsh plugin --profile web add link:C:\\Users\\Admin\\.dsh\\local-plugins\\dsh-reveal-fix\n# ============================================================================\n\n- insert:\n    - id: dsh-reveal-fix\n      name: dsh-reveal-fix\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/HeJian2002W/dsh-reveal-fix.git",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/HeJian2002W/dsh-reveal-fix#readme",
+      "where": "package.json:13"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/HeJian2002W/dsh-reveal-fix/issues",
+      "where": "package.json:15"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-11T01:47:48Z",
+    "created_at": "2026-09-11T01:46:27Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-reveal-fix",
+      "text": "修复 DSH 在 Windows 上「在文件资源管理器中显示」失效的问题。**以用户插件形式实现，因此不受 dsh 升级影响。**"
+    },
+    {
+      "section": "症状",
+      "text": "点击交付卡片上的「在文件资源管理器中显示」时：\n\n- 接口返回 HTTP 204，界面提示「已请求在文件资源管理器中显示」\n- **但屏幕上什么都不出现** —— 没有窗口、没有任务栏闪烁、没有报错\n\nUI 报告成功，用户感知为零，且没有任何可供诊断的痕迹。"
+    },
+    {
+      "section": "根因（上游两个独立缺陷叠加）",
+      "text": "| # | 缺陷 | 后果 |\n|---|---|---|\n| **A** | `revealNativePath()` 把 `pathToFileURL().href`（百分号编码的 `file:` URL）交给 `explorer.exe /select,`，而它接受的是**文件系统路径** | Explorer 无法解析，**静默回退打开「桌面」**。空格 → `%20`，非 ASCII → `%E5%89%8D...` |\n| **B** | 共享 runner 硬编码 `windowsHide: true`，Node 将其转为 STARTUPINFO 的 `wShowWindow = SW_HIDE`，explorer.exe 把这个显示状态应用到它新建的窗口 | 窗口**被创建成隐藏**：`IsWindowVisible()` 返回 `false`，永不显示 |\n\n**为什么无法诊断**：Explorer 无论成败退出码恒为 1（上游将其视为\"已委派\"吞掉）；HTTP 路由恒返回 204；前端提示文案与成功时完全相同。三者叠加使故障完全静默。"
+    },
+    {
+      "section": "本插件的做法",
+      "text": "在 `sessionController` 上替换 `revealPath`：\n\n- 传**纯 Windows 路径**（单个 argv 元素，紧贴逗号）\n- `windowsHide: false`，让窗口真正显示\n- 非 Windows 平台回退到原实现\n- 保留上游约定：Explorer 退出码 1 不视为失败\n\n`sessionController.openWorkspacePath()` 内部是 `await this.revealPath(...)` **动态查找**，因此在实例上替换方法即可生效，**无需修改任何核心文件**。"
+    },
+    {
+      "section": "安装",
+      "text": "**从 GitHub 安装（推荐）：**\n\n```powershell\ndsh plugin --profile web add github:HeJian2002W/dsh-reveal-fix\n```\n\n**从本地目录安装（离线 / 自己改代码时）：**\n\n```powershell\ndsh plugin --profile web add link:C:\\Users\\Admin\\.dsh\\local-plugins\\dsh-reveal-fix\n```\n\n安装后**重启 dsh** 生效。\n\n卸载：\n\n```powershell\ndsh plugin --profile web remove dsh-reveal-fix\n```"
+    },
+    {
+      "section": "为什么不受升级影响",
+      "text": "- 插件源码位于 `~/.dsh/local-plugins/`，注册信息位于 `~/.dsh/profiles/web/`\n- 两者都在 **dsh 安装目录之外**；升级（temp 暂存 → 目录交换）不会触及\n- 与核心安装 `node_modules` 里的手工改动不同，升级后无需重新打补丁\n\n> 前提：上游若改变 `sessionController.revealPath` 的名字或语义，本插件需要同步更新。\n> 因此仍建议把缺陷提给上游（`@deepseek-ai/dsh-native-command`），长期方案是修在源头。"
+    },
+    {
+      "section": "验证",
+      "text": "判定标准不是「窗口计数增加」——`Shell.Application.Windows()` **会列出隐藏窗口**，计数无法区分可见与否。必须查 `IsWindowVisible`：\n\n```powershell\nAdd-Type -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool IsWindowVisible(IntPtr h);' -Name W -Namespace Q\n(New-Object -ComObject Shell.Application).Windows() |\n  ForEach-Object { \"{0,-6} {1}\" -f [Q.W]::IsWindowVisible([IntPtr]$_.HWND), $_.LocationURL }\n```\n\n修复前：目标目录窗口存在但 `visible=False`。\n修复后：`visible=True`。\n\n独立 A/B（同一命令，仅改一个变量）："
+    },
+    {
+      "section": "验证",
+      "text": "| 变量 | 结果 |\n|---|---|\n| `pathToFileURL().href` → `/select,` | 窗口落在 `Desktop` ❌ |\n| 纯路径 → `/select,` | 窗口落在目标目录 ✅ |\n| `windowsHide: true` | `IsWindowVisible = False` ❌ |\n| `windowsHide: false` | `IsWindowVisible = True` ✅ |"
+    },
+    {
+      "section": "已知残留（本插件不处理）",
+      "text": "两个缺陷都修好后，浏览器仍会在约 **1.7 秒**后把前台焦点抢回（即使服务端调用 Win32 `SetForegroundWindow` 强制置顶，同样在 1.7s 内被覆盖），窗口容易被压在浏览器后面。\n\n若要改善，可在 reveal 后延迟约 2s 再断言一次前台。**默认不启用**：这会引入「用户已切去做别的事、窗口突然跳出来抢焦点」的副作用，属产品行为取舍。"
+    }
+  ],
+  "skipped": []
+}

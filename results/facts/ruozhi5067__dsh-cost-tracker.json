@@ -1,0 +1,164 @@
+{
+  "repo": "ruozhi5067/dsh-cost-tracker",
+  "commit": "fa95d15429ac1dcd0f097eda39eacaef8934bd5d",
+  "extracted_at": "2026-11-12T03:58:47.502772+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 36332,
+    "lines_by_language": {
+      "JSON": 41,
+      "JavaScript": 665,
+      "Markdown": 99,
+      "Other": 29,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "src/index.mjs",
+      "widget/client.js",
+      "widget/host.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-cost-tracker",
+    "version": "0.1.2",
+    "description": "DSH 侧边栏任务花费统计：总花费、当前项目、token 明细与 DeepSeek 官方人民币单价，自动随官方定价页更新，进程重启后自动恢复。",
+    "type": "module",
+    "main": "./src/index.mjs",
+    "exports": {
+      ".": "./src/index.mjs",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "widget",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --check src/index.mjs && node -e \"const fs=require('node:fs'); for (const f of ['widget/host.js','widget/client.js']) { new Function(fs.readFileSync(f,'utf8')); } console.log('widget sources: syntax ok')\""
+    },
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "cost",
+      "pricing",
+      "token",
+      "deepseek"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/your-account/dsh-cost-tracker.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-cost-tracker bundle patch: one host row that auto-creates the dynamic\n# cost widget for every root session. Installed either by adding this package\n# to the profile's `dsh.profile.bundles` (its patch is applied automatically)\n# or by copying the insert block into `~/.dsh/profiles/<profile>/cordis.patch.yml`.\n- insert:\n    - id: cost-widget-auto\n      name: dsh-cost-tracker\n"
+    }
+  ],
+  "entries": [
+    "src/index.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/your-account/dsh-cost-tracker.git",
+      "where": "package.json:39"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "where": "widget/host.js:162"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+      "where": "widget/host.js:163"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-08-16T06:28:15Z",
+    "created_at": "2026-08-16T05:58:20Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/index.mjs",
+    "widget/client.js",
+    "widget/host.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-cost-tracker",
+      "text": "DSH（DeepSeek Harness）侧边栏任务花费统计插件：在侧边栏底部显示**总花费、当前项目花费、token 明细**，以及 **DeepSeek 官方人民币单价**（自动随官方定价页更新，进程重启后自动恢复）。"
+    },
+    {
+      "section": "功能",
+      "text": "- **侧边栏底部卡片**（位于 cordis 插件面板上方，独占一行）\n  - 折叠态：\n    ```\n    已花费：¥0.57 当前项目：¥0.30\n    输入命中：1.2k 输入未命中：3.4k 输出：5.6k\n    展开 ▸\n    ```\n  - 展开态：逐项目明细（显示**项目名称**、总花费、输入命中/未命中/输出 token 数），以及官方模型单价\n- **覆盖全部项目，无需逐个打开**：除了内存中的活跃会话，还增量读取持久化的会话日志（`sessionPersistence.readFrom`），因此侧边栏里未打开的其他项目也会自动显示花费，不需要点击切换项目\n- **官方人民币单价自动更新**：抓取 DeepSeek 官方中文定价页（`api-docs.deepseek.com/zh-cn/quick_start/pricing`）的「元」价格，启动时、每 12 小时、超过 6 小时未更新时自动刷新；↻ 可手动刷新；抓取失败时回退到内置人民币价格\n- **重启自动恢复**：作为宿主组合插件，每个根会话启动时自动重建侧边栏组件\n- **可在插件管理页管理**：宿主插件行出现在「设置 → 插件 → 全部」清单；动态组件在侧边栏 Cordis 插件面板中可批准/停止/移除"
+    },
+    {
+      "section": "工作原理",
+      "text": "组件由两层组成：\n\n1. **宿主插件 `cost-widget-auto`**（本包，`src/index.mjs`）：监听 `agent/created`，为每个根会话调用动态插件运行器的 `define()` + `run()`，自动创建/恢复侧边栏组件。浏览器端 UI 只能以动态插件形式运行，因此由这一行承担“持久化”职责。\n2. **动态组件「任务花费统计」**（`widget/host.js` + `widget/client.js`）：实际的费用统计与界面代码，随会话自动加载。\n\n费用计算直接使用会话日志中 provider 上报的 `TokenUsage`（输入命中=缓存命中输入、输入未命中=非缓存输入、输出=输出），按官方人民币单价折算，(turn:step) 去重、不重复计费。"
+    },
+    {
+      "section": "方式 A：作为 profile bundle（推荐）",
+      "text": "1. 安装包到 profile（在 profile 目录 `~/.dsh/profiles/<profile>/` 下）：\n\n```bash\n   cd ~/.dsh/profiles/<profile>\n   pnpm add dsh-cost-tracker\n   ```\n\n2. 将该包加入 profile 的 bundle 列表（`~/.dsh/profiles/<profile>/package.json` 的 `dsh.profile.bundles`）：\n\n```json\n   {\n     \"dsh\": {\n       \"profile\": {\n         \"bundles\": [\"@deepseek-ai/dsh-base\", \"...\", \"dsh-cost-tracker\"]\n\n其自带 `cordis.patch.yml` 会自动插入插件行。"
+    },
+    {
+      "section": "方式 B：用户补丁层（无需改 bundle）",
+      "text": "1. 安装包到 profile 的 node_modules（同上第一步）。\n2. 在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 中插入：\n\n```yaml\n   - insert:\n       - id: cost-widget-auto\n         name: dsh-cost-tracker\n   ```\n\n该补丁层**热加载**，无需重启即可生效。"
+    },
+    {
+      "section": "使用",
+      "text": "- 安装后，侧边栏底部（cordis 插件面板上方）出现花费卡片；点击卡片折叠/展开\n- 窄侧栏（56px 图标栏）下显示紧凑的 `花费 ¥x` 按钮，点击自动展开侧边栏\n- 展开后 ↻ 可手动刷新官方单价；每 5 秒自动刷新花费数据\n- 组件管理：侧边栏 Cordis 插件面板（批准/停止/移除）；宿主插件状态见「设置 → 插件 → 全部」"
+    },
+    {
+      "section": "卸载",
+      "text": "1. 删除 bundle 列表中的 `dsh-cost-tracker`，或删掉补丁中的 `insert` 块（热加载生效）\n2. 在 Cordis 插件面板中移除动态组件「任务花费统计」\n3. 可选：`pnpm remove dsh-cost-tracker`"
+    },
+    {
+      "section": "自定义",
+      "text": "- **修改组件界面/格式**：编辑 `widget/client.js`（界面）与 `widget/host.js`（统计与价格逻辑），保存后重启生效\n- **价格来源**：默认抓取官方中文定价页；仅英文页可用时按官方两版价格交叉推导的汇率折算\n- **模型适配**：内置价格表包含 `deepseek-v4-flash` / `deepseek-v4-pro`，官方页面结构变化后解析器会按表格结构自适应；若新增模型未命中，费用按 0 计并标记"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 浏览器端授权不跨进程：每次重启后首次加载动态组件时，需要在 Cordis 插件面板点击一次「允许」（这是 DSH 批准机制的设计，插件不绕过）\n- 仅对会话日志中带 `usage` 的模型调用计费；费用按官方单价估算，实际以官方账单为准\n- 峰值/谷值分时价仅展示（展开详情），费用计算使用官方主表价格"
+    },
+    {
+      "section": "隐私与安全",
+      "text": "- 所有数据在本机计算：从官方定价页只读取价格数字，不发送任何会话数据\n- 插件不收集、不上传任何个人或会话信息"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](./LICENSE)"
+    }
+  ],
+  "skipped": []
+}

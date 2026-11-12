@@ -1,0 +1,271 @@
+{
+  "repo": "JJJACKsong/sleep-not-permitted",
+  "commit": "17eb6c646f79bbe1ddf04e48e5630bfa9003d277",
+  "extracted_at": "2026-11-11T11:08:56.667373+00:00",
+  "tree": {
+    "files": 17,
+    "bytes": 103827,
+    "lines_by_language": {
+      "JSON": 51,
+      "JavaScript": 1500,
+      "Markdown": 413,
+      "Other": 24,
+      "Python": 59,
+      "YAML": 67
+    },
+    "outline": [
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "assets/generate-icon.py",
+      "assets/icon-180.png",
+      "assets/icon-512.png",
+      "cordis.patch.yml",
+      "lib/detect.js",
+      "lib/index.js",
+      "lib/language.js",
+      "lib/messages.js",
+      "package.json",
+      "test/detect.test.mjs",
+      "test/language.test.mjs",
+      "test/plugin.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-sleep-not-permitted",
+    "version": "0.4.1",
+    "description": "Forbid foreground waiting in DSH agents: sleep/wait/tail -f and blocking wait tools are rejected with a background-job retry, so the session never freezes. · 禁止 Agent 前台等待，会话不再被 sleep / wait_agent 冻住。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./detect": "./lib/detect.js",
+      "./messages": "./lib/messages.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --test test/detect.test.mjs test/plugin.test.mjs"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "agent",
+      "guard",
+      "sleep",
+      "background-jobs"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/JJJACKsong/sleep-not-permitted.git"
+    },
+    "homepage": "https://github.com/JJJACKsong/sleep-not-permitted#readme",
+    "bugs": {
+      "url": "https://github.com/JJJACKsong/sleep-not-permitted/issues"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-tools": "^0.1.5-rc.2 || ^0.2.1-rc.3"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# sleep-not-permitted 的 bundle patch。\n#\n# 安装后 plugin_manager 会把本包按真实包名写进 profile 的\n# `dsh.profile.bundles`，boot / 热重组时合并本 patch —— 也就是 insert 下面这一行。\n#\n# 行 id `sleep-not-permitted` 必须唯一：与 base / web-app 束的既有 id 不冲突。\n#\n# 配置含义见 README.md；想临时关掉整只守卫，把 enabled 改成 false 即可\n# （或在 profile 的 cordis.patch.yml 里用同 id 覆盖）。\n- insert:\n    - id: sleep-not-permitted\n      name: 'dsh-plugin-sleep-not-permitted'\n      config:\n        enabled: true\n        # 能起 shell 命令的工具都受管；run_in_background: true 的调用直接放行。\n        tools:\n          - bash\n          - pwsh\n          - terminal_send\n        # 阻塞等待型工具：一调用就是前台阻塞，不论参怎么给。\n        # wait_agent = Team/子智能体等待（UI 卡片「等待子智能体」）。\n        blockingTools:\n          - wait_agent\n        # 带 wait 开关的工具：只在 wait: true 时算阻塞等待。\n        blockingWaitFlagTools:\n          - job_output\n        # 前台阻塞等待预算：0 = 一律拒绝；>0 = 只拒绝超过该毫秒数的等待。\n        # 公开版默认 30 秒：放过短等待（团队协作常见），拦住几分钟的冻结。\n        # 想要绝对严格（一秒钟都不许等）就改成 0。\n        maxBlockingWaitMs: 30000\n        # 轮询门禁：同一条检查命令在窗口内反复出现就拒绝。\n        # 禁掉 sleep 之后，模型会用「check 一下、再 check 一下」代替等待——实测一个会话\n        # 10 分钟内把同一条命令跑了 28 次；这里把它变成硬拒绝，并教它包成后台作业。\n        antiPolling: true\n        pollRepeatThreshold: 3     # 同一条命令在窗口内允许出现的次数上限，再多就拒\n        pollWindowMs: 120000       # 统计窗口：2 分钟\n        # 交互式/需确认命令门禁：后台拿不到输入会静默挂住（不结算、不通知），\n        # 前台则直接卡住会话。这类命令先确认，再用非交互参数重启。\n        interactiveGuard: true\n        disabledInteractiveRules: []   # 按规则 id 关闭（id 见 README「规则」表）\n        # 文案语言：auto（默认，跟随系统语言；中文环境只出中文）/ both / zh / en。\n        # 判定顺序：DSH_LOCALE → LC_ALL/LC_MESSAGES/LANG → macOS 系统语言偏好 → Intl → 英文。\n        language: auto\n        # 事前预防：在系统提示里紧贴「后台作业」段落写同一条规则。\n        announceInPrompt: true\n        # 按规则 id 关掉个别检测（可用 id 见 README「规则」表）。\n        disabledRules: []\n        # 追加自定义规则：[{ id, pattern, label?, reason? }]，pattern 是正则字符串。\n        extraRules: []\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/detect.js",
+    "lib/messages.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_LOCALE",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:7"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/JJJACKsong/sleep-not-permitted.git",
+      "where": "package.json:36"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/JJJACKsong/sleep-not-permitted#readme",
+      "where": "package.json:38"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/JJJACKsong/sleep-not-permitted/issues",
+      "where": "package.json:40"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "test/detect.test.mjs:13"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "test/detect.test.mjs:68"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "test/detect.test.mjs:69"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "test/plugin.test.mjs:93"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-11-05T09:07:42Z",
+    "created_at": "2026-10-28T16:12:58Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/detect.js",
+    "lib/index.js",
+    "lib/language.js",
+    "lib/messages.js",
+    "package.json",
+    "test/detect.test.mjs",
+    "test/plugin.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<img src=\"assets/icon-180.png\" width=\"88\" alt=\"sleep-not-permitted icon\" align=\"right\">"
+    },
+    {
+      "section": "sleep-not-permitted",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugin that forbids\n**foreground waiting**. When an agent tries to run a command whose purpose is waiting\n(`sleep`, `wait`, `tail -f`, `watch`, `ping` without `-c`, infinite loops), or calls a blocking\nwait tool (`wait_agent`, `job_output` with `wait: true`), the call is rejected — and the rejection\nis a set of instructions: run it in the background (`run_in_background: true`), or end the turn and\nlet the completion notice wake you."
+    },
+    {
+      "section": "sleep-not-permitted",
+      "text": "Nothing is silently rewritten: DSH logs and shows tool arguments before dispatch, so a guard can\nonly refuse, not impersonate a different call. The plugin refuses, explains, and gets out of the way."
+    },
+    {
+      "section": "Why a plugin, and not AGENTS.md or a preset",
+      "text": "- **AGENTS.md is per-workspace.** You would have to write the rule into every workspace, and every\n  new workspace silently misses it.\n- **A preset is per-agent configuration.** Every composition needs its own copy, and the user has to\n  pick it.\n- **A host plugin is profile-level.** Install once and every workspace, session, and subagent is\n  covered. It can carry configuration, be upgraded, disabled, and removed."
+    },
+    {
+      "section": "Why it is needed",
+      "text": "A DSH session moves one step at a time: however long a foreground tool call runs, the session stops\nwith it. `bash({ command: \"sleep 60\" })` looks harmless but freezes the conversation for a minute,\nand a five-minute `wait_agent` freezes it for five. DSH has a safety net for slow *work* (a\nforeground command that exceeds its timeout is promoted to a background job), but that still burns\nthe timeout first — and waiting is not work at all.\n\nSo the plugin does two things:"
+    },
+    {
+      "section": "Why it is needed",
+      "text": "1. **Prevention** — a rule in the system prompt, next to the existing background-jobs section, so\n   the model picks the background form first;\n2. **Enforcement** — a synchronous `ctx.tools.guard()` denial when the foreground form is used\n   anyway, with the retry spelled out."
+    },
+    {
+      "section": "What gets blocked",
+      "text": "- **Waiting commands** in `bash` / `pwsh` / `terminal_send`: `sleep`, `wait`, `tail -f`, `watch`,\n  `ping` without `-c`, `yes`, infinite loops, log-follow modes — see the rule table below.\n- **Blocking wait tools**: `wait_agent` and `job_output` with `wait: true`, when the requested wait\n  exceeds the budget (default **30 seconds**).\n- **Polling**: running the same check command more than `pollRepeatThreshold` times within\n  `pollWindowMs` — the \"wait a little, check, wait a little, check\" substitute for sleeping. It is\n  refused with the same instruction: wrap the waiting itself in a background job.\n- **Commands that need human input or confirmation**: `sudo` without `-n`, `ssh` without\n  `-o BatchMode=yes`, login/key-generation flows (`npm login`, `gh auth login`, `ssh-keygen`, …),\n  interactive editors and pagers (`vim`, `less`, `top`, …), `docker run/exec -it`, `read -p`,\n  `rm/cp/mv -i`. They are refused in the foreground *and* in the background: a background job has\n  no stdin, so it would hang silently — never settling, never notifying."
+    },
+    {
+      "section": "What gets blocked",
+      "text": "If what you are waiting for has no DSH job handle (a remote host, an external service), be it a\ncommand or a poll: wrap the waiting itself in a background job — for example\n`ssh host 'until [ -f done ]; do sleep 5; done'` with `run_in_background: true` (sleep is allowed\ninside a background job) — then end the turn; that job's completion wakes the agent. This is the\ncorrect replacement for both `sleep` and polling when there is nothing local to await."
+    },
+    {
+      "section": "Behavior",
+      "text": "- A foreground wait is rejected with `Error: <reason>`; the reason contains the exact retry form.\n- A call that already has `run_in_background: true` passes — that is the shape this plugin wants.\n- Ordinary commands (`git status`, `npm test`, `curl`, `grep`, …) pass untouched.\n- `ask_user_question` is not a wait — it is you being asked — and is never blocked.\n- Non-blocking reads (`job_output` without `wait`, `list_agents`, `team_task_list`) pass."
+    },
+    {
+      "section": "Behavior",
+      "text": "The default budget (**30 s**) exists so short coordination waits keep working out of the box (DSH's\nown Agent Teams guidance has the Lead wait for teammates). Waits above the budget — the five-minute\n`wait_agent(timeout_ms: 300000)` case — are rejected. Set `maxBlockingWaitMs: 0` for strict mode:\nnot a single second of foreground waiting."
+    },
+    {
+      "section": "After a background job finishes",
+      "text": "A completion notice means the job **finished**, not that it succeeded. The notice carries the\nstatus (`completed` / `failed` / `killed`) plus the label; read the output and exit code with\n`job_output` before continuing, and diagnose a `failed`/`killed` job instead of retrying blindly."
+    },
+    {
+      "section": "After a background job finishes",
+      "text": "Background jobs have **no timeout of their own**. A job that dies mid-flight or hangs while waiting\nfor something that never happens never settles — and so never notifies. Bound it yourself: wrap the\ncommand in `timeout N`, keep a deadline in retry loops, or write a marker/report file at the end.\nFor cross-machine waits the same applies to the remote wait loop: give it a maximum wait and let it\nexit with a failure marker on timeout, so the local job always settles and always notifies."
+    },
+    {
+      "section": "After a background job finishes",
+      "text": "If the work needs a human decision in the middle, do not background it: confirm first\n(`ask_user_question`, or the DSH approval channel), then start it with non-interactive flags."
+    },
+    {
+      "section": "Rules",
+      "text": "| id | matches |\n|---|---|\n| `sleep` | `sleep N` in command position (`sudo sleep`, `timeout 30 sleep`, `do sleep`, `&& sleep`, …) |\n| `sleep-nested-shell` | nested shell payloads such as `bash -c \"sleep 10\"` |\n| `sleep-script` | `time.sleep(30)`, `python -c \"...sleep(5)\"` |\n| `wait` | the shell builtin `wait` |\n| `tail-follow` | `tail -f` / `tail -F` / `tail --follow` |\n| `watch` | `watch <cmd>` (re-runs forever) |\n| `ping-forever` | `ping` without `-c` |\n| `yes` | bare `yes` (endless output) |\n| `infinite-loop` | `while true` / `while :` / `until false` |\n| `follow-logs` | `docker/podman logs -f`, `journalctl -f`, `kubectl logs -f` |"
+    },
+    {
+      "section": "Rules",
+      "text": "Plain text inside quotes does not count (`echo \"sleep 30\"`, `grep 'sleep 30' file` pass);\nin multi-line scripts, command position is evaluated per line."
+    },
+    {
+      "section": "Configuration",
+      "text": "Override the bundle patch row from the profile's `cordis.patch.yml`, or edit the plugin's\n`cordis.patch.yml`:\n\n```yaml\n- id: sleep-not-permitted\n  name: 'dsh-plugin-sleep-not-permitted'\n  config:\n    enabled: true                 # false = turn the whole guard off\n\nInvalid configuration fails loud at mount time (unknown rule id, empty `tools`, invalid regex,\nnon-boolean switch, unknown `language`) — there is no \"installed but silently inactive\" state."
+    },
+    {
+      "section": "Message language",
+      "text": "`language: auto` (the default) follows the user's system language: it checks `DSH_LOCALE`,\n`LC_ALL` / `LC_MESSAGES` / `LANG`, then the macOS system language preference, then Node's `Intl`\ndefault, and falls back to English. A Chinese system gets Chinese-only messages and a\nChinese-only prompt section (roughly half the prompt cost); `both` emits both languages; `zh` /\n`en` pin one explicitly. Resolution happens once at mount."
+    },
+    {
+      "section": "Install / uninstall",
+      "text": "From npm (recommended):\n\n```bash\ndsh plugin --profile <profile> add dsh-plugin-sleep-not-permitted\n```\n\nDesktop profile (managed by the Electron app): install by npm package name\n`dsh-plugin-sleep-not-permitted` in the plugin manager, or from the Discover / market panel.\n\nPrebuilt tarball (no npm, no clone):\n\n```bash\ndsh plugin --profile <profile> add https://github.com/JJJACKsong/sleep-not-permitted/releases/download/v0.4.1/dsh-plugin-sleep-not-permitted-0.4.1.tgz\n```"
+    },
+    {
+      "section": "Install / uninstall",
+      "text": "From a local directory (offline or while editing):\n\n```bash\ngit clone https://github.com/JJJACKsong/sleep-not-permitted.git"
+    },
+    {
+      "section": "desktop: plugin_manager install_bundle with the absolute path of the cloned directory",
+      "text": "dsh plugin --profile <profile> add /path/to/sleep-not-permitted\n```\n\nUninstall:\n\n```bash\ndsh plugin --profile <profile> remove dsh-plugin-sleep-not-permitted"
+    },
+    {
+      "section": "desktop: plugin_manager remove_bundle dsh-plugin-sleep-not-permitted",
+      "text": "```\n\nDisable without uninstalling: set `enabled: false`, or toggle the `sleep-not-permitted` row in the\nplugin manager."
+    },
+    {
+      "section": "Tests",
+      "text": "```bash\nnode --test test/detect.test.mjs test/plugin.test.mjs\n```\n\n- `test/detect.test.mjs` — detector positives and negatives (command position, quotes, nested\n  payloads, false-positive protection);\n- `test/plugin.test.mjs` — a minimal ctx double checks deny/pass, defaults, strict mode, message\n  language, and fail-loud configuration."
+    },
+    {
+      "section": "Verify it works",
+      "text": "- Foreground `sleep 5` → rejected immediately with `Error: …`;\n- `wait_agent(timeout_ms: 300000)` → rejected (budget 30 s);\n- Background `sleep 5` (`run_in_background: true`) → returns a job id at once, notify on completion;\n- The system prompt contains the rule block (`announceInPrompt: true`)."
+    },
+    {
+      "section": "Compatibility",
+      "text": "Tested against DSH `0.1.5-rc.2` and `0.2.1-rc.3`. It relies on two host seams —\n`ctx.tools.guard()` and `ctx.systemPrompt.section()` — and fails loud at mount if they change."
+    },
+    {
+      "section": "Boundaries",
+      "text": "- **Does not guess \"might be slow\".** `npm install`, `cargo build` and other commands that make\n  progress still run in the foreground; the tool timeout promotes them to a background job\n  (default 120 s, capped at 600 s).\n- **Does not block work.** Long synchronous tasks such as `workflow` or `deliver_gate` are not\n  waits and are left alone.\n- **Does not rewrite arguments.** A denied call costs one retry round trip; the system-prompt rule\n  is there to keep that rare.\n- **Does not inspect script files.** How long `bash script.sh` sleeps inside cannot be judged\n  statically; the tool timeout is the backstop."
+    }
+  ],
+  "skipped": []
+}

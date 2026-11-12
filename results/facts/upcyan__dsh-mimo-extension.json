@@ -1,0 +1,728 @@
+{
+  "repo": "upcyan/dsh-mimo-extension",
+  "commit": "9c4ed57aca51d35f5a335e930891b8be3bbe02c6",
+  "extracted_at": "2026-11-12T09:48:55.259185+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 693641,
+    "lines_by_language": {
+      "JSON": 63,
+      "JavaScript": 11068,
+      "Markdown": 515,
+      "Other": 45,
+      "YAML": 77
+    },
+    "outline": [
+      ".github/workflows/checks.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "assets/screenshot-1-ring.png",
+      "assets/screenshot-2-popover.png",
+      "assets/screenshot-3-mobile.png",
+      "check-client.mjs",
+      "check.mjs",
+      "client.js",
+      "cordis.patch.yml",
+      "host.js",
+      "package.json",
+      "screenshots.json",
+      "undeclared-scan.mjs",
+      "verify-fix.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-mimo-extension",
+    "version": "1.1.21",
+    "private": false,
+    "type": "module",
+    "description": "mi logo + quota ring beside the model selector, plus a MiMo usage detail tab (billing type, plan quota, per-session attribution, cost estimate).",
+    "keywords": [
+      "dsh-mimo-extension",
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "mimo",
+      "xiaomi",
+      "usage",
+      "billing",
+      "quota"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/upcyan/dsh-mimo-extension.git"
+    },
+    "homepage": "https://github.com/upcyan/dsh-mimo-extension#readme",
+    "bugs": {
+      "url": "https://github.com/upcyan/dsh-mimo-extension/issues"
+    },
+    "main": "host.js",
+    "exports": {
+      ".": "./host.js",
+      "./host.js": "./host.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "host.js",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "screenshots.json",
+      "assets"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": false,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation",
+          "@deepseek-ai/dsh-client-locale"
+        ]
+      }
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-mimo-extension 组合包 patch 层：安装后自激活，无需手改 profile 配置。\n#\n# ┌─ 配置方式（推荐）───────────────────────────────────────────────┐\n# │ 以下所有项都可以在 GUI 里改：                                        │\n# │   设置 → 插件（或「MiMo 用量」标签页）→ MiMo 额度配置                 │\n# │ 界面保存的值写入 settings.yaml 的 dsh-mimo-extension 命名空间，           │\n# │ 优先级高于本文件的 config（本文件只作为组成基线/默认值）。              │\n# └────────────────────────────────────────────────────────────────┘\n#\n# 鉴权（官方接口优先，未配置自动回退本地估算）：\n#   官方 MiMo 控制台接口需要浏览器登录 Cookie（platform.xiaomimimo.com）。\n#   打开 https://platform.xiaomimimo.com/#/console/balance → 登录 →\n#   浏览器 DevTools → Network → 任一 /api/v1 请求 → 复制完整 Cookie 请求头，\n#   粘贴到下面 mimo.cookie（保持单行，需含 api-platform_serviceToken 与 userId）。\n#   Cookie 过期后胶囊会显示\"本地估算\"，重新复制即可恢复官方数据。\n#\n# 套餐总量：官方 tokenPlan/detail + tokenPlan/usage 优先；\n#   未配置 Cookie 或接口失败时，用 mimo.planTotalTokens 兜底估算剩余百分比。\n#\n# 计费类型（billingTypeFor，可用 billingTypeOverrides 覆盖）：\n#   1) billingTypeOverrides（provider/model 或 provider）最优先\n#   2) provider 的 API 地址 baseURL（读 llm-pi-ai.providers.<id>.baseURL）：\n#      token-plan-*.xiaomimimo.com → 套餐；api.xiaomimimo.com 等 → 按量\n#      （小米按量与套餐两条通道的地址不同，所以地址最直接）\n#   3) provider 名含 token-plan → 套餐\n#   4) provider 叫 mimo 但地址没读到 → 按官方 tokenPlan/detail 状态兜底\n#      （expired/none → 按量；active/unknown → 套餐）\n#   5) 其余 provider → 按量（pay-as-you-go）\n- insert:\n    - id: dsh-mimo-extension\n      name: dsh-mimo-extension\n      config:\n        mimo:\n          # 官方控制台 Cookie（留空则只用本地估算）\n          cookie: \"\"\n          # 也可把 Cookie 存进凭据（.credentials.yaml 的 refs），此处填引用名\n          cookieRef: MIMO_CONSOLE_COOKIE\n          # 本地兜底套餐总量（tokens/月），官方接口可用时被覆盖\n          planTotalTokens: 500000000\n          # 额度胶囊位置：header=标题行 | toolbar=输入框工具栏 | above=输入框上方 | hidden=不显示\n          pillPosition: header\n          # 输入框工具栏自动换行（插件多时防止工具图标挤占重叠）\n          wrapToolbar: true\n          # 计费类型覆盖：'token-plan' | 'payg'\n          billingTypeOverrides: {}\n          # provider/model 单价（元/百万 tokens）\n          pricing:\n            fallbackPrice:\n              input: 0\n              output: 0\n              cacheRead: 0\n              cacheWrite: 0\n"
+    }
+  ],
+  "entries": [
+    "host.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "CHECK_PROFILE",
+      "kind": "env",
+      "where": "check.mjs:28"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "check.mjs:29"
+    },
+    {
+      "name": "DSH_PROFILE_URL",
+      "kind": "env",
+      "where": "check.mjs:464"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "check.mjs:466"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "host.js:2020"
+    },
+    {
+      "name": "MIMO_API_URL",
+      "kind": "env",
+      "where": "host.js:2135"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "host.js:2184"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "host.js:2854"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "host.js:2855"
+    },
+    {
+      "name": "MIMO_API_URL",
+      "kind": "env",
+      "where": "host.js:3292"
+    },
+    {
+      "name": "MIMO_API_URL",
+      "kind": "env",
+      "where": "host.js:3336"
+    },
+    {
+      "name": "MIMO_COOKIE",
+      "kind": "env",
+      "where": "verify-fix.mjs:16"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "verify-fix.mjs:18"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "example.fnos.net",
+      "url": "https://example.fnos.net",
+      "where": "check.mjs:335"
+    },
+    {
+      "host": "192.168.1.9",
+      "url": "http://192.168.1.9:5666",
+      "where": "check.mjs:336"
+    },
+    {
+      "host": "example.fnos.net",
+      "url": "https://example.fnos.net",
+      "where": "check.mjs:337"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:13080",
+      "where": "check.mjs:338"
+    },
+    {
+      "host": "evil.example",
+      "url": "http://evil.example",
+      "where": "check.mjs:340"
+    },
+    {
+      "host": "evil.example",
+      "url": "http://evil.example",
+      "where": "check.mjs:341"
+    },
+    {
+      "host": "`",
+      "url": "http://`",
+      "where": "check.mjs:430"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "check.mjs:799"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "check.mjs:873"
+    },
+    {
+      "host": "token-plan-sgp.xiaomimimo.com",
+      "url": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "where": "check.mjs:874"
+    },
+    {
+      "host": "token-plan-ams.xiaomimimo.com",
+      "url": "https://token-plan-ams.xiaomimimo.com/v1",
+      "where": "check.mjs:875"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "check.mjs:876"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "check.mjs:1101"
+    },
+    {
+      "host": "token-plan-sgp.xiaomimimo.com",
+      "url": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "where": "check.mjs:1103"
+    },
+    {
+      "host": "token-plan-ams.xiaomimimo.com",
+      "url": "https://token-plan-ams.xiaomimimo.com/v1",
+      "where": "check.mjs:1105"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "check.mjs:1107"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "check.mjs:1111"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "check.mjs:1112"
+    },
+    {
+      "host": "api.openai.com",
+      "url": "https://api.openai.com/v1",
+      "where": "check.mjs:1113"
+    },
+    {
+      "host": "api.openai.com",
+      "url": "https://api.openai.com/v1",
+      "where": "check.mjs:1137"
+    },
+    {
+      "host": "api.openai.com",
+      "url": "https://api.openai.com/v1",
+      "where": "check.mjs:1154"
+    },
+    {
+      "host": "gateway.example.com",
+      "url": "https://gateway.example.com/v1",
+      "where": "check.mjs:1160"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "check.mjs:1163"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "check.mjs:1165"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "check.mjs:1167"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "check.mjs:1169"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3081`",
+      "where": "client.js:50"
+    },
+    {
+      "host": "account.xiaomi.com",
+      "url": "https://account.xiaomi.com/",
+      "where": "client.js:641"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/simple-icons/simple-icons/blob/develop/icons/xiaomi.svg",
+      "where": "client.js:1409"
+    },
+    {
+      "host": "account.xiaomi.com",
+      "url": "https://account.xiaomi.com/",
+      "where": "client.js:2180"
+    },
+    {
+      "host": "platform.xiaomimimo.com",
+      "url": "https://platform.xiaomimimo.com/console/balance",
+      "where": "client.js:3434"
+    },
+    {
+      "host": "platform.xiaomimimo.com",
+      "url": "https://platform.xiaomimimo.com/#/console/balance",
+      "where": "cordis.patch.yml:12"
+    },
+    {
+      "host": "platform.xiaomimimo.com",
+      "url": "https://platform.xiaomimimo.com/api/v1",
+      "where": "host.js:42"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "host.js:1830"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "host.js:1831"
+    },
+    {
+      "host": "token-plan-sgp.xiaomimimo.com",
+      "url": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "where": "host.js:1832"
+    },
+    {
+      "host": "token-plan-ams.xiaomimimo.com",
+      "url": "https://token-plan-ams.xiaomimimo.com/v1",
+      "where": "host.js:1833"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "host.js:1945"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "host.js:1946"
+    },
+    {
+      "host": "token-plan-sgp.xiaomimimo.com",
+      "url": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "where": "host.js:1947"
+    },
+    {
+      "host": "token-plan-ams.xiaomimimo.com",
+      "url": "https://token-plan-ams.xiaomimimo.com/v1",
+      "where": "host.js:1948"
+    },
+    {
+      "host": "sublime.fnos.net`），",
+      "url": "https://sublime.fnos.net`），",
+      "where": "host.js:2335"
+    },
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "host.js:3103"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/upcyan/dsh-mimo-extension.git",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/upcyan/dsh-mimo-extension#readme",
+      "where": "package.json:23"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/upcyan/dsh-mimo-extension/issues",
+      "where": "package.json:25"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "verify-fix.mjs:67"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "verify-fix.mjs:212"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "verify-fix.mjs:217"
+    },
+    {
+      "host": "api.xiaomimimo.com",
+      "url": "https://api.xiaomimimo.com/v1",
+      "where": "verify-fix.mjs:221"
+    },
+    {
+      "host": "token-plan-cn.xiaomimimo.com",
+      "url": "https://token-plan-cn.xiaomimimo.com/v1",
+      "where": "verify-fix.mjs:224"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 108,
+    "pushed_at": "2026-10-22T12:01:51Z",
+    "created_at": "2026-09-27T05:12:12Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-10-22T12:01:51Z",
+      "inactive_days": 20,
+      "commit_count": 108,
+      "checked_at": "2026-11-12T09:48:55.259185+00:00",
+      "signals": [
+        "list:pushed_at=2026-10-22T12:01:51Z",
+        "list:commits=108"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "host.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-mimo-extension",
+      "text": "DeepSeek Harness 插件，把小米 MiMo 的额度和用量放进对话界面：模型选择器旁的**额度环**，加一个 **MiMo 用量** 详情页。\n\n```sh\ndsh plugin --profile web add dsh-mimo-extension\n```\n\n| 额度环 | 点击弹出用量摘要 | 移动端（390px） |\n| --- | --- | --- |\n|  |  |  |"
+    },
+    {
+      "section": "功能",
+      "text": "| 入口 | 显示内容 |\n| --- | --- |\n| 额度环 | mi logo 嵌在环里，环画**套餐剩余百分比**。按量计费没有总量，只画空环，不画误导性的 0% 或 100% |\n| 点击额度环 | 用量摘要卡：计费类型、剩余额度或会话 tokens、本月已用百分比与**已用额度绝对值**（Credits）、套餐总量、请求次数、当前模型，底部进详情页 |\n| 详情页 | 当前模型、计费类型、本会话 MiMo 用量、今日与历史用量、费用估算、用量趋势与预测 |\n\n额度环的位置可以改（标题行 / 输入框工具栏 / 输入框上方 / 不显示），详情页底部能配 Cookie。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh"
+    },
+    {
+      "section": "从 GitHub 装",
+      "text": "dsh plugin --profile web add github:upcyan/dsh-mimo-extension"
+    },
+    {
+      "section": "或装 Release 里的预构建包",
+      "text": "dsh plugin --profile web add \\\n  https://github.com/upcyan/dsh-mimo-extension/releases/latest/download/dsh-mimo-extension.tgz\n```\n\n装完重启 `dsh web`，刷新浏览器。确认装到了正确位置：\n\n```sh\nP=\"$DSH_HOME/profiles/web\"\ngrep '\"dsh-mimo-extension\"' \"$P/package.json\"\ndsh --profile web --dump-config | grep -A2 mimo-extension    # 应打印 id: mimo-extension\n```\n\n两个环境注意事项，跟插件本身无关："
+    },
+    {
+      "section": "或装 Release 里的预构建包",
+      "text": "- **显式设置 `DSH_HOME`**。不设时 `dsh` 回退到 `~/.dsh`。在 root shell 里跑会装进 `/root/.dsh/profiles/web`，而不是应用实际使用的 `$DSH_HOME/profiles/web`，表现为\"装成功了但界面没变\"。\n- **可能要加 `--config.minimumReleaseAge=0`**。pnpm 11 默认做 24 小时\"最小发布年龄\"检查，lockfile 里有刚发布的包时 install 会在校验阶段被拦下。\n\nprofile 目录只读时，见文末的手动安装。"
+    },
+    {
+      "section": "Cookie",
+      "text": "填了 Cookie 才能读到官方额度。\n\n| 字段 | 作用 |\n| --- | --- |\n| MiMo 控制台 Cookie | 官方接口鉴权。留空表示保持不变；勾「清除已保存的 Cookie」可清掉 |\n| 本地兜底套餐总量 | 没配 Cookie 时，用来估算月度总量的 tokens 数 |\n| 额度胶囊位置 | 见下 |\n| 允许输入框工具栏自动换行 | 见下 |\n| 启用 MiMo 视觉路由 | 见下 |\n\n保存的值写进 `$DSH_HOME/settings.yaml` 的 `dsh-mimo-extension` 命名空间，优先级高于 `cordis.patch.yml` 里的 `config`（后者只作组成基线）。"
+    },
+    {
+      "section": "这个 Cookie 是给套餐用的",
+      "text": "同一个控制台 Cookie 打三个接口，**Token Plan 的数据依赖它**：\n\n| 接口 | 读什么 | 归属 |\n| --- | --- | --- |\n| `tokenPlan/detail` | 套餐码、周期、是否过期 | Token Plan |\n| `tokenPlan/usage` | 已用百分比、各项 items | Token Plan |\n| `balance` | 现金和赠金余额 | 按量 |\n\n套餐用户不填 Cookie，剩余百分比就读不到（两个 `tokenPlan/*` 都返回 401），只能退回本地估算。按量用户填了也只多一个 `balance`，按量本来就没有 `tokenPlan/usage`。\n\n实测（2026-09-27，有效 Cookie）：\n\n```sh\ncurl -H \"cookie: <你的 Cookie>\" https://platform.xiaomimimo.com/api/v1/tokenPlan/detail"
+    },
+    {
+      "section": "→ {\"code\":0,\"data\":{\"planCode\":\"lite:year\",\"currentPeriodEnd\":\"2027-09-04 23:59:59\",...}}",
+      "text": "curl -H \"cookie: <你的 Cookie>\" https://platform.xiaomimimo.com/api/v1/tokenPlan/usage"
+    },
+    {
+      "section": "→ {\"code\":0,\"data\":{\"monthUsage\":{\"percent\":0.1186,\"items\":[{\"name\":\"month_total_token\",...}]}}}",
+      "text": "```\n\nCookie 是几百字符的长串，输入框支持 Ctrl+V、右键粘贴，另有一个「粘贴」按钮走 `navigator.clipboard.readText()` 兜底（无权限或非安全上下文会提示手动粘贴）。输入框是 `type=\"text\"` 而非 `password`，粘贴不受浏览器对密码字段的限制，内容也能看见便于核对。\n\n获取步骤（表单里也有）：\n\n1. 登录 <https://platform.xiaomimimo.com>\n2. DevTools → Network → 任一 `/api/v1` 请求 → Headers → 复制完整 `Cookie` 请求头\n3. 确认含 `api-platform_serviceToken` 与 `userId`，整段粘进表单保存\n\n不用界面也行：写进 `$DSH_HOME/.credentials.yaml` 的 `refs.MIMO_CONSOLE_COOKIE`，或直接编辑 `cordis.patch.yml` 的 `mimo.cookie`。"
+    },
+    {
+      "section": "→ {\"code\":0,\"data\":{\"monthUsage\":{\"percent\":0.1186,\"items\":[{\"name\":\"month_total_token\",...}]}}}",
+      "text": "Cookie 只存本机 `settings.yaml`，不回传给浏览器。读取接口只返回「是否已配置 + 来源」，输入框也不回显明文。"
+    },
+    {
+      "section": "胶囊位置",
+      "text": "在「MiMo 用量」页底部的表单里选，保存即生效：\n\n| 取值 | 位置 | 说明 |\n| --- | --- | --- |\n| `header` | 标题行 | 与「对话 / 轨迹」同一行的右侧动作区 |\n| `toolbar`（默认） | 输入框工具栏 | 模型选择器旁，即 codebuddy 用量环的位置 |\n| `above` | 输入框上方 | 独占一行，最不挤占其它工具 |\n| `hidden` | 不显示 | 只留详情页 |\n\n点击环弹出的摘要卡，不管胶囊在哪个座位都用 `createPortal` 挂到 `document.body`，再按锚点位置和视口空间摆位：水平越界就左移、贴顶就翻到下方、`resize` 和滚动时重算、内容过高时内部滚动。祖先的 `overflow` 裁不到它，320px 窄屏和 800×360 横屏下都完整可见。"
+    },
+    {
+      "section": "工具栏自动换行",
+      "text": "插件多了以后，输入区的工具图标会互相挤压重叠。表单里的「允许输入框工具栏自动换行」（默认开）注入的样式只作用于**组内**（`_tools` / `_actions` / 左右槽位容器），让图标在本组内折行，不动整行。整行是否换行由产品原生样式决定；装了 `dsh-web-mobile-cyanmod` 时会被它覆盖成 `nowrap`，两者可以叠加。关掉立即恢复官方默认。"
+    },
+    {
+      "section": "视觉路由",
+      "text": "在「MiMo 用量」页底部勾选「启用 MiMo 视觉路由（图像输入）」。\n\n平台按模型的 `inputModalities` 拦图片附件，`dsh-api-session-controller` 会抛 `MODEL_DOES_NOT_SUPPORT_IMAGES`。这个值来自 `llm-pi-ai` 里每个模型的 `input` 字段。开启后插件把多模态模型的 `input` 写成 `[\"text\",\"image\"]`，图片就能发给它们。\n\n只对平台目录声明支持图像的模型生效（数据来自 pi-ai 的 `dist/providers/data/xiaomi*.json`）："
+    },
+    {
+      "section": "视觉路由",
+      "text": "| provider | 模型 | catalog 的 input | 本开关 |\n| --- | --- | --- | --- |\n| `xiaomi` / `xiaomi-token-plan-{cn,sgp,ams}` | `mimo-v2.5` | `[\"text\",\"image\"]` | 写入 |\n| 同上 | `mimo-v2.5-pro` | `[\"text\"]` | 不碰 |\n| `xiaomi` | `mimo-v2.5-pro-ultraspeed` | `[\"text\"]` | 不碰 |\n\n不给纯文本模型撑腰是有意的：硬声明图像支持会把失败从\"明确拒绝\"变成\"图片被上游静默丢弃\"，而后者用户以为发出去了。自建 provider（比如 `mimo`）也不在内置表里——它的模型清单由你自己声明，能力也该由你自己声明。"
+    },
+    {
+      "section": "视觉路由",
+      "text": "写入用 `settings.mutate(\"llm-pi-ai\", ops)` 整条替换 `models` 数组，只改目标模型的 `input`，不重写整个 provider。已经是 `[\"text\",\"image\"]` 就不写；关闭时去掉 `image` 并保留其它模态（空了补回 `[\"text\"]`）。启动时会再同步一次，因为开关可能比写入活得久（插件重装、配置被改）。\n\n写入失败会回显：`POST /settings` 回传 `visionChanged` / `visionError`，表单显示\"已开启：`<模型列表>`\"或失败原因，不会只报\"已保存\"。\n\n这是跨命名空间写入（改的是 `llm-pi-ai`）。平台 `settings.write()` 只校验命名空间已注册，不校验调用者归属，所以可行；但只读 provider 上会失败并报错。"
+    },
+    {
+      "section": "子选项：同时为纯文本模型提供视觉能力",
+      "text": "主开关下方还有一个「同时为纯文本模型提供视觉能力」，默认关，且主开关关时禁用。它额外给平台标为纯文本的小米模型声明图像输入：\n\n| provider | 模型 | catalog input |\n| --- | --- | --- |\n| `xiaomi` | `mimo-v2.5-pro`、`mimo-v2.5-pro-ultraspeed` | `[\"text\"]` |\n| `xiaomi-token-plan-{cn,sgp,ams}` | `mimo-v2.5-pro` | `[\"text\"]` |\n\n这是越权声明：上游可能拒绝，也可能静默丢图（你未必收到报错，比明确报错更麻烦）。确认这些模型实际能读图时再开。\n\n回收是精确的。两张模型清单（多模态 / 纯文本）各自决定自己去留，关掉子选项时只回收它加过的，不会删掉 catalog 本就给 `mimo-v2.5` 声明的 `image`——那归主开关管。"
+    },
+    {
+      "section": "只在用 MiMo 模型时显示",
+      "text": "额度环绑在 MiMo 通道上，所以只在当前模型属于 MiMo 时渲染。读会话投影 `modelSelection` 的 `next` / `lastUsed`，与 `dsh-codebuddy` 的 `codebuddyUsageVisible` 同一机制。\n\n判定以 **API 地址**为准，名字只作参考。平台内置 catalog 里的小米路由有两类命名：`xiaomi`（按量）和 `xiaomi-token-plan-cn` / `-sgp` / `-ams`（套餐），它们都不含 `mimo`；反过来，自建网关可以叫 `mimo-xxx` 却指向别家。所以：\n\n- 地址是 `xiaomimimo.com` 域名 → 是\n- 地址明确是别家 → 不是\n- 地址读不到 → 退回名字（provider 名含 `mimo` / `xiaomi*`，或模型名含 `mimo`）"
+    },
+    {
+      "section": "只在用 MiMo 模型时显示",
+      "text": "用别的 provider（比如 codebuddy）时整个环不渲染，免得\"明明没用 MiMo 却在报 MiMo 额度\"。这时候详情页会在模型卡下标注「当前模型属于 X，不是 MiMo，下面的套餐额度是 MiMo 账号级的」。读不到 provider 时保持显示，宁多显示也不因读取失败静默关掉功能。\n\n详情页可以设成「非 MiMo 时隐藏」：开启后不是 MiMo 就把整个 tab 收掉，切回 MiMo 自动恢复。默认关闭（一直显示）。"
+    },
+    {
+      "section": "会话用量按渠道归属",
+      "text": "一个会话可以换过模型，所以 `session.totalTokens` 不等于 MiMo 用量。实测某会话：\n\n```\nmimo/mimo-v2.6-flash          49,771,661 tokens / 367 calls\ncodebuddy/deepseek-v4.1-flash 89,081,411 tokens / 414 calls\n─────────────────────────────────────────────────────────\n总计                         138,853,072 tokens（其中 64% 不是 MiMo）\n\n插件按 `models[].provider` 只统计 MiMo 归属的部分，三种情形都有交代："
+    },
+    {
+      "section": "会话用量按渠道归属",
+      "text": "| 情形 | 显示 |\n| --- | --- |\n| 会话混用了多个渠道 | 汇总只算 MiMo；下方列出各非 MiMo 渠道并声明「不计入上方汇总」；费用标注「估算」（分渠道明细只有总量、没有输入输出拆分，按 token 占比折算） |\n| 本会话完全没用 MiMo | 提示「本会话尚未使用 MiMo，会话用量为 0 是正常的」，并说明下方套餐额度是账号级的、与会话无关 |\n| 无分渠道明细（老计数器或统计降级） | 标注「未细分渠道」，退回整体计数。不猜测，也不把数据抹成 0 |\n\n明细表给非 MiMo 行加「不计入 MiMo」标记并弱化，另加 `%` 列显示各渠道占比。\n\n早期版本用整会话的 input/output 乘 MiMo 单价算费用，会话换过模型时会把别的渠道的消耗也算进来，费用因此偏高。"
+    },
+    {
+      "section": "尺寸与外观",
+      "text": "额度环对齐 `dsh-codebuddy` 的用量环，两者并排时大小一致：\n\n| 项 | 值 | 对应 codebuddy |\n| --- | --- | --- |\n| 环直径 | `26` | `Progress type=\"circle\" width={26}` |\n| 环宽 | `3` | `strokeWidth={3}` |\n| 中心 logo | `12` | `CodeBuddyLogo size={12}` |\n| 环底圈 | `--dsw-alias-border-l3` | `orbitStroke` |\n| 环进度 | `--dsw-alias-label-tertiary` | `stroke` |\n| logo 底色 | `#ff6900`（小米品牌橙） | `variant=\"brand\"` 的写死色 |\n| 起点 | `rotate(-90)`，12 点方向顺时针 | Semi 默认 |\n\n尺寸不随窄屏或紧凑模式缩小，紧凑场景靠去掉内边距解决。配色用平台主题变量（`dsh-web-frontend` 定义），自动跟随主题。"
+    },
+    {
+      "section": "尺寸与外观",
+      "text": "logo 用固定品牌色而不是主题变量 `--dsw-alias-brand-primary`，因为本机主题把那变量定义成 `#0f1115`（近黑），环心会变成一团看不清的黑块。品牌 mark 保持品牌色，codebuddy 也这么干（它的 `CodeBuddyLogo` 在默认变体下写死 `#6C4DFF`，只有 `mono` 变体才用主题变量）。\n\ncodebuddy 用 `@douyinfe/semi-ui` 的 `Progress`，而 semi 不在平台 seed 表里（它自己打进了 6.5MB bundle）。本插件手写等价的 SVG 双圈，零依赖。mi logo 用 [simple-icons 的 xiaomi 路径](https://github.com/simple-icons/simple-icons/blob/develop/icons/xiaomi.svg)。"
+    },
+    {
+      "section": "移动端竖屏",
+      "text": "窄屏（<640px）自动切布局：\n\n- 详情页各卡片区从多列改单列堆叠，内边距与字号收窄\n- 按模型的表格外层可横向滚动，不撑破卡片\n- 用量柱状图降低柱高（60px → 46px）并允许横滚\n- 胶囊在窄屏隐藏文字，只留百分比或用量数值，避免挤压会话标题\n\n宽屏（≥640px）保持多列自适应。横竖屏切换和窗口拖动都会实时重排。"
+    },
+    {
+      "section": "数据来源",
+      "text": "**官方接口优先**（需 Cookie）：\n\n- `GET https://platform.xiaomimimo.com/api/v1/balance` — 余额 / 现金 / 赠金\n- `GET https://platform.xiaomimimo.com/api/v1/tokenPlan/detail` — planCode、currentPeriodEnd、expired\n- `GET https://platform.xiaomimimo.com/api/v1/tokenPlan/usage` — monthUsage{percent, items[{name, used, limit, percent}]}，percent 需 ×100\n- 鉴权：请求头带 `Cookie`（含 `api-platform_serviceToken` 与 `userId`）\n\n**本地估算兜底**（Cookie 没配或接口失败）："
+    },
+    {
+      "section": "数据来源",
+      "text": "- 聚合 `$DSH_HOME/token-usage/usage-*.jsonl` 的本月用量\n- 除以 `mimo.planTotalTokens`（默认 5 亿/月）得剩余百分比\n- 详情页顶部标注「本地估算（官方接口不可用）」\n\n**内置会话统计**（`token-usage/` 目录不存在时）："
+    },
+    {
+      "section": "数据来源",
+      "text": "- `token-usage/` 和 `ctx.tokenUsageCounter` 都由 `dsh-token-usage-counter` 提供。该插件没装进 profile 时目录根本不存在，旧行为是把 `ENOENT ... scandir '.../token-usage'` 当错误抛出来，而且「今日/本月 tokens」「当前会话用量」永远是 0。\n- 现在目录缺失按「暂无记录」处理（`local.ok=true, local.missing=true, local.note` 说明原因），并由 `createLocalUsageCounter()` 直接读会话事件（`assistant/message.data.usage`）自建统计填上数值，来源标 `local.source = \"session-events\"`。\n- 口径是**进程启动以来仍存活的会话**，重启归零。它只读不落盘；一旦 `dsh-token-usage-counter` 装回来并有数据，仍以它的落盘数据为准。\n- 去重靠事件 `seq`，`/session` 每 60 秒重复扫描不会把用量翻倍。"
+    },
+    {
+      "section": "计费类型判定",
+      "text": "顺序如下（`billingTypeFor()`）：\n\n1. `mimo.billingTypeOverrides`（`provider/model` 或 `provider`）—— 用户说了算\n2. **provider 的 API 地址**（从 `llm-pi-ai` 命名空间读）。小米两条通道的地址不同（pi-ai 官方目录 `providers/*.json` 实测）："
+    },
+    {
+      "section": "计费类型判定",
+      "text": "| 计费方式 | 目录里的 provider | baseURL |\n   | --- | --- | --- |\n   | 按量付费 | `xiaomi` | `https://api.xiaomimimo.com/v1` |\n   | Token Plan | `xiaomi-token-plan-cn` | `https://token-plan-cn.xiaomimimo.com/v1` |\n   | Token Plan | `xiaomi-token-plan-sgp` | `https://token-plan-sgp.xiaomimimo.com/v1` |\n   | Token Plan | `xiaomi-token-plan-ams` | `https://token-plan-ams.xiaomimimo.com/v1` |"
+    },
+    {
+      "section": "计费类型判定",
+      "text": "地址含 `token-plan` → 套餐；是 `xiaomimimo.com` 其余子域 → 按量；读不到（自建网关、命名空间缺失）→ 继续往下。\n3. provider 名含 `token-plan` → 套餐\n4. provider 是小米通道但地址没读到 → 用官方 `tokenPlan/detail` 反证（`summary.planStatus` 四态）：`expired`（已过期）或 `none`（官方明确无订阅）→ 按量；`active` / `unknown`（没配 Cookie、接口失败）→ 套餐\n5. 其余 provider → 按量\n\n想强制某条路由按量（或反过来），写 `billingTypeOverrides: { mimo: payg }`。\n\n单价按量模型用 `mimo.pricing.<provider/model>`（元/百万 tokens），没配则用 `fallbackPrice`。Token Plan 套餐内调用不额外收费。"
+    },
+    {
+      "section": "「当前模型」从哪读",
+      "text": "判定用的 `provider` / `model` 是**当前选中的**，不是最近一次请求用过的：\n\n| 优先级 | 来源 | 语义 |\n| --- | --- | --- |\n| 1 | `agent-default-model` 命名空间 | 用户此刻选的是什么（切模型立即写入，与 UI 同源） |\n| 2 | `session/event` 的 `request/header` | 最近一次真的发过请求用的是什么 |\n| 3 | 落盘计数器快照 | 历史 |\n| 4 | 内置统计快照 | 历史 |\n| 5 | 空 | 计费退化为 provider 命名约定 |\n\n第 1 级必须在第 2 级之前。早期只有 2~4 级，于是在 UI 里把模型切到 MiMo 但还没发消息时，仍按旧模型判定，显示\"按量付费\"而模型选择器已经是 MiMo。这个顺序是有语义的。"
+    },
+    {
+      "section": "数量单位",
+      "text": "小米 Token Plan 的额度单位是 **Credits**，不是 tokens，也不是人民币；按量付费才是人民币余额，两者不通用：\n\n- 订阅套餐时 `/api/v1/balance` 恒为 0，这是正常的，详情页会标注说明\n- 官方换算（每百万 token 消耗的 Credits）：\n\n| 模型 | 缓存命中 | 缓存未命中 | 输出 |\n  | --- | --- | --- | --- |\n  | mimo-v2.6-pro | 2.5 | 300 | 600 |\n  | `mimo-v2.6-flash` | 2 | 100 | 200 |\n  | mimo-v2.5-pro | 2.5 | 300 | 600 |\n  | mimo-v2.5 | 2 | 100 | 200 |\n\n- 闲时 0.8 倍：北京时间 00:00–08:00 只扣 80%\n- 用量到 50% / 90% / 100% 时官方发短信和邮件"
+    },
+    {
+      "section": "数量单位",
+      "text": "`tokenPlan/usage` 返回的 `percent` 是 **0~1 的比值**，要 ×100 才是百分比。实测 `used/limit = 4725102737/49200000000 = 0.096038`，接口回 `percent: 0.0960`；控制台前端的换算是 `Math.min(100, Math.max(0, 100 * e))`，所以官网显示 9.6%。本插件 `toPercent()` 用同一口径。早期版本直接当百分数显示，「本月已用」只有真实值的 1/100。"
+    },
+    {
+      "section": "排查「装了没生效」",
+      "text": "浏览器里看不到胶囊或详情页这类问题，服务端看不见。所以浏览器半边每走一个节点就往宿主 `POST /dsh-mimo-extension/ping` 报一次，从 `/summary` 的 `client` 字段读结果：\n\n```sh"
+    },
+    {
+      "section": "<dsh 地址> 换成你的 dsh web 地址（默认 http://127.0.0.1:<port>）",
+      "text": "curl -s \"<dsh 地址>/dsh-mimo-extension/summary\" \\\n  | python3 -c \"import json,sys;print(json.load(sys.stdin)['data']['client'])\"\n```\n\n| `client.stage` | 含义与下一步 |\n| --- | --- |\n| `null` | 浏览器没跑到新代码：硬刷新（Ctrl+Shift+R）。host.js 刚改过就先重启 `dsh web`（`/ping` 是 host 侧路由） |sh\ncurl -s \"<dsh 地址>/dsh-mimo-extension/summary\" \\\n  | python3 -c \"import json,sys;print(json.load(sys.stdin)['data']['clientLog'])\"\n```\n\n`path` 和 `clientLog` 是 host 侧字段，host.js 更新后要重启 `dsh web` 才有；旧 host 会直接丢掉多出来的字段，不报错。"
+    },
+    {
+      "section": "<dsh 地址> 换成你的 dsh web 地址（默认 http://127.0.0.1:<port>）",
+      "text": "`apply()` 里曾有一条严格相等的包名守卫（`entryName !== \"dsh-mimo-extension\" → return`）。宿主一旦用别名装载，整颗插件会静默消失（胶囊和详情页一起没，且没有日志）。现在只在名字明确属于别的插件时才跳过，并打 `console.warn` 加 `probe(\"skipped\")`；重复装载靠 `slots.entriesOfSlot` 兜底。"
+    },
+    {
+      "section": "从 dsh-mimo-usage 升级",
+      "text": "插件原名 `dsh-mimo-usage`，2026-09-27 改名为 `dsh-mimo-extension`，仓库和包名同步改了。\n\n配置不用手工搬。启动时会自动把旧命名空间 `dsh-mimo-usage` 里的用户配置（含 Cookie、套餐总量、胶囊位置、各开关）迁移到 `dsh-mimo-extension` 段。迁移单向、幂等（新段已有配置就不覆盖），且**不删除旧段**，留作回滚依据，确认无误后可自行清理。\n\n迁移只搬 `mimo` 子对象。旧段里手工加过其它字段的话需要自己处理。\n\nprofile 里的旧依赖（`file:dsh-mimo-usage-*.tgz`）不会自动消失，需要先 `dsh plugin remove dsh-mimo-usage` 再装新的。"
+    },
+    {
+      "section": "附：fnOS 网关部署",
+      "text": "只用 fnOS NAS 的读者需要看这一节，其它环境可以跳过（`3081`、`3080` 是 fnOS 应用分配的端口，不是 dsh 默认值）。\n\n插件宿主路由是 `/dsh-mimo-extension/*`，刻意不用 `/api/*`。DSH 核心对 `/api` 有一条 Host/Origin fence（`dsh-client-connection` 的 `isTrustedApiRequest`）：`Host` 必须是 loopback 或在 `--trusted-host` 里，**且 `Origin.host` 必须完全等于 `Host`**。经 fnOS 网关（`https://<NAS>:3080`）访问时 `Host` 被改写成 `127.0.0.1:3081`，而浏览器发的 `Origin` 是 `https://<NAS>:3080`，第二条永不成立，一律 403。非 `/api` 前缀没有这层 fence。"
+    },
+    {
+      "section": "附：fnOS 网关部署",
+      "text": "fnOS 网关把页面挂在 `/app/dsh-fnos/dsh/` 下，转发前剥掉前缀、改写 `<base href>`、并在 `<head>` 注入 `globalThis.__FNOS_GATEWAY_PREFIX__ = \"/app/dsh-fnos/dsh\"`。\n\n**`<base href>` 对以 `/` 开头的绝对路径无效。** 所以插件直接 `fetch(\"/dsh-mimo-extension/summary\")` 会打到无前缀路径，落到 core 的未注册路径上：POST 拿到 `dsh-host-frontend-static` fallback 的 405 空 body，GET 拿到 404。"
+    },
+    {
+      "section": "附：fnOS 网关部署",
+      "text": "平台只给官方客户端模块（`dsh-client-connection` / `dsh-api-gateway` / `dsh-client-hmr` / `dsh-client-file-upload` / `dsh-client-ui-deliverables` / `dsh-session-log-export`）用 `patch-dsh.mjs` 打前缀补丁，第三方插件必须自己处理。本插件的 `gatewayPath()`：\n\n```js\nfunction gatewayPath(path) {\n  let prefix = \"\";\n  try {\n    if (typeof globalThis !== \"undefined\" && typeof globalThis.__FNOS_GATEWAY_PREFIX__ === \"string\") {\n\n每次发送时求值，不是模块加载时——前缀由 HTML 内联脚本注入，而本脚本同为启动清单成员，执行顺序不保证。"
+    },
+    {
+      "section": "附：fnOS 网关部署",
+      "text": "| 环境 | `__FNOS_GATEWAY_PREFIX__` | 实际请求路径 |\n| --- | --- | --- |\n| 直连 `http://127.0.0.1:3081` | `undefined` | `/dsh-mimo-extension/summary` |\n| 经网关 `https://<NAS>:3080` | `/app/dsh-fnos/dsh` | `/app/dsh-fnos/dsh/dsh-mimo-extension/summary` |\n\n写插件时，任何自己的 HTTP 路由都套一层 `gatewayPath()`，否则只在直连时能用、经网关必挂。诊断通道尤其要注意：它正是用来排查\"装了没生效\"的，自己先被网关挡掉就白搭。"
+    },
+    {
+      "section": "端点一览",
+      "text": "| 端点 | 方法 | 用途 |\n| --- | --- | --- |\n| `/dsh-mimo-extension/summary` | GET | 额度与用量汇总（`?refresh=1` 绕过缓存） |\n| `/dsh-mimo-extension/session` | GET | 指定会话的 token 用量（`?id=<sessionId>`） |\n| `/dsh-mimo-extension/settings` | GET / POST | 读取 / 保存配置 |\n| `/dsh-mimo-extension/ping` | POST | 浏览器半自诊断回传，随 `/summary` 的 `client` 字段吐出 |"
+    },
+    {
+      "section": "结构",
+      "text": "- `host.js` — 宿主插件。注册 `/dsh-mimo-extension/*` 路由、读写设置、聚合统计；调官方接口，失败回退本地日志聚合。另注册 `/mimo` 斜杠命令和 `mimo_usage` 工具供模型查询。\n- `client.js` — 浏览器 bundle，走 `__ModuleLoader__` 工厂格式，只依赖平台共享的 react，无构建步骤。注册 `conversation.input.right`（或按配置换座位）的额度环，以及 `conversation.view` 槽位的详情页 tab。\n- `package.json` — 声明 `dsh.bundle` 与 `dsh.client`。\n- `cordis.patch.yml` — 自激活层，含默认配置与 Cookie 说明。"
+    },
+    {
+      "section": "更新频率",
+      "text": "- 胶囊挂载、切换会话、点击、页面从后台切回 → 立即刷新\n- 每 60 秒静默刷新一次\n- 空闲时没有其它轮询"
+    },
+    {
+      "section": "手动安装（profile 目录只读时）",
+      "text": "```sh"
+    },
+    {
+      "section": "1. 把包放进 profile",
+      "text": "cp -r dsh-mimo-extension \"$DSH_HOME/profiles/web/node_modules/dsh-mimo-extension\""
+    },
+    {
+      "section": "3. \"dsh.profile.bundles\" 末尾加 \"dsh-mimo-extension\"",
+      "text": "```\n\n本插件的 `cordis.patch.yml` 自带 `- insert` 行，装进 `node_modules` 并加入 `bundles` 后，`patchReload: live` 会在下次启动自动应用，不用手改 profile 的 `cordis.patch.yml`。"
+    },
+    {
+      "section": "测试",
+      "text": "```sh\nnode check.mjs          # 209 项：静态检查 + 单元回归\nnode check-client.mjs   # 187 项：mock ctx 离线跑 apply\nnode verify-fix.mjs     # 端到端，需真 Cookie\n```\n\n两个 `check` 脚本是纯 Node，不装任何依赖也能跑。CI 里没有 dsh，`check.mjs` 会把一项需要 schemastery 的检查标为跳过，不算失败。"
+    },
+    {
+      "section": "维护提示",
+      "text": "- 改 `client.js`：刷新页面即生效\n- 改 `host.js`：**热重载不生效**（Node ESM 缓存），必须重启 `dsh web`。`patchReload: live` 只管 patch 层，不动已加载模块的代码。"
+    },
+    {
+      "section": "计费口径",
+      "text": "- Token Plan 套餐：套餐内调用不额外扣费，只消耗套餐 token 配额；胶囊和详情页显示剩余百分比\n- 按量计费：按 provider/model 单价估算（元/百万 tokens），缓存命中按 `cacheRead` 单价\n- 估算值仅供参考，实际扣费以小米 MiMo 官方账单为准"
+    },
+    {
+      "section": "0.2.0-rc.2 升级适配（2026-09-30 排查记录）",
+      "text": "- **client 半**：`inject = [\"slots\",\"locale\"]`（两版核心都有）；console `[dsh-mimo-extension] client 已装载`\n  正常；`conversation.view` 注册形态与 0.2 官方一致\n  （`ctx.slots.register({name,id,order,locale,label}, Component)` + `slots.inject` 软依赖）。\n- **host 半**：`ctx.inject([\"webServer\"], …)` + `kind:\"prefix\"` 软依赖注册在 0.2 **仍工作**——\n  实测 `curl http://127.0.0.1:3081/dsh-mimo-extension/session → 200 {\"ok\":true,…}`。\n  这是\"profile 插件 HTTP 路由在 0.2 是否可用\"的正例证据（对照：proxy 的诊断路由 404 是它自身问题）。\n- **🔴 `GAP is not defined` 是历史残留日志，不是现行 bug**：那是 09-29「详情页空白」事故的\n  console 记录，出现在 **0.1.5 时段 bundle**（`index-BKQ_L1z6.js`，只存在于 previous-good）。\n  三重证据：① 现源码 `const GAP` 在工厂作用域（line 2328，之后所有使用点深度从未跌回定义前深度）\n  ② 升级前备份（09-30 08:03 backup）的 client.js 与当前 **md5 一致** ③ 注释本身记载了该修复。\n  再看到它直接按\"旧 tab 的累积日志\"处理，别重开排查。\n- **React #130 / #300、`assistant-step withdrew materialized target`**：0.2 时段用 playwright\n  遍历 5 个会话**未复现**；与官方 chat/tool/trajectory 的事件流错误同批出现，疑似官方 rc 噪声\n  或特定会话条件 → 留观，出现时先抓带行号栈再定位。\n- **旧设置未迁入**：`settings.yaml.imported` 的 `dsh-mimo-extension` 节（mimo.cookie /\n  planTotalTokens / pillPosition / wrapToolbar / visionRouting…，字段与现 schema 对齐）等待\n  **手动迁移**进 `profiles/web/cordis.patch.yml`——新存储条目是 `- id: mimo-extension\n  name: dsh-mimo-exte"
+    },
+    {
+      "section": "🔴 resume 报 `Unknown agent preset: dsh-mimo-mode`（09-30 升级事故，已恢复）",
+      "text": "> **⚠️ 本节是历史记录，其中的做法已全部失效 —— 勿照做。**\n> 本插件在 10-01 已**清空全部 preset 相关代码与模板**：`presets/mimo/` 目录\n> **不存在**、`mimoMode` 开关已移除。下文提到的「从 `presets/mimo/` 复制模板」\n> **找不到文件**。会话预设的列出／切换／安装-移除现由\n> [dsh-preset-integrator](../dsh-preset-integrator/README.md) 负责（见本节末尾更新）。\n> 保留原文只为记录当时的事故链与排查过程。\n\n**症状**：恢复旧会话报 `resume failed … RemoteError: Unknown agent preset: dsh-mimo-mode (gateway/internal)`。"
+    },
+    {
+      "section": "🔴 resume 报 `Unknown agent preset: dsh-mimo-mode`（09-30 升级事故，已恢复）",
+      "text": "**机制**：「MiMo 模式」预设是**文件目录**（`$DSH_HOME/.agent-presets/dsh-mimo-mode/`，\n模板在插件包 `presets/mimo/`），host 按**用户开关** `mimo.mimoMode === true` 在每次启动时\n安装（整目录重写）/关闭时删除。\n\n**事故链**：0.2 升级启动（16:05）时——迁移 config（含 `mimoMode: true`）尚未写入 patch\n（当日 17:4x 才手动迁移）+ 0.2 下 settings scope 链路异常 → `want=false` → 目录未装/被删\n→ 绑定该 preset 的旧会话 resume 失败。"
+    },
+    {
+      "section": "🔴 resume 报 `Unknown agent preset: dsh-mimo-mode`（09-30 升级事故，已恢复）",
+      "text": "**恢复**（历史做法，**已失效**）：当时从 `presets/mimo/` 模板复制两文件到\n`.agent-presets/dsh-mimo-mode/` 即可（与 glm 预设同构）。**重启 core 后**（迁移 config\n生效，`mimoMode: true`）插件会按幂等逻辑自动重装该目录——永久闭环，无需再手动。\n**现在不要照做**：模板目录与 `mimoMode` 开关均已移除（见本节开头提示）。"
+    },
+    {
+      "section": "🔴 resume 报 `Unknown agent preset: dsh-mimo-mode`（09-30 升级事故，已恢复）",
+      "text": "**⚠ 但目录恢复 ≠ 立即可见/可切**：preset 的**列出与切换层**由市场插件\n`@dsh-external/dsh-preset-switch` 驱动（`ctx.get('agentPresets')` 列出、\n`settings.update('agent-presets', {default})` 写默认、会话绑定的\n`agent-preset/selected` 事件也是它写的）——该插件 0.2.0-rc.2 因 peerDependencies\n（`dsh-commands/dsh-agent-presets/dsh-settings ^0.1.0-rc.6`）被 core 跳过，preset\n选择器里只剩官方 Standard/PTC（playwright 实证）。按\"市场插件不改、保持禁用等\n开发者适配\"方针处理；**它适配后，已恢复的目录与数据即刻生效**。"
+    },
+    {
+      "section": "🔴 resume 报 `Unknown agent preset: dsh-mimo-mode`（09-30 升级事故，已恢复）",
+      "text": "**（09-30 晚更新）preset-switch 已由本会话完成 0.2.0 适配并重启生效**：`/preset`\n可用清单已包含 `dsh-mimo-mode · MiMo 模式` 与 `glm · GLM 模式`（playwright 实证）。\n适配内容：peer 兼容 0.2.0-rc.2 + settings.register 守卫（0.2 未装配时降级）+\n**目录 preset 桥**（0.2 registry 不扫 `.agent-presets/` 目录，host 侧扫目录组装\n`{id,name,description,order,plugins:[服务行]}` definition 注册，`!!js` 表达式按平台\n求值）——详见 dsh-preset-switch/lib/index.js 尾部注释。**旧会话 resume 恢复。**"
+    },
+    {
+      "section": "🔴 resume 报 `Unknown agent preset: dsh-mimo-mode`（09-30 升级事故，已恢复）",
+      "text": "> **（10-01 更新）preset-switch 已由新插件 `dsh-preset-integrator` 取代**：\n> 会话预设的列出/切换/安装-移除机制整体迁到该插件，本插件（dsh-mimo-extension）\n> 已清空全部 preset 相关代码与模板（`presets/mimo/` 删除、`mimoMode` 开关移除、\n> patch 声明增删函数删除）。上文 09-30 的 preset-switch 记录保留为历史；\n> **现指路一律以 dsh-preset-integrator 为准**，本插件不再接入预设功能。"
+    },
+    {
+      "section": "0.2 设置通道适配（09-30 深夜完成）",
+      "text": "- host 新增 **`export const Config = buildMimoSettingsSchema(S)`**（静态导出，\n  schemastery 从插件自身位置上链解析）——0.2 设置系统从 `entry.fiber.runtime.Config`\n  读 schema（要求 toJSON），没有它 describe 静默跳过本 ns、自动生成设置页不出现、\n  旧配置迁移被拒。**这是\"设置不可写/配置丢失\"系列问题的 0.2 正解**。\n- 生效后：设置 → 插件 → dsh-mimo-extension 出现**自动生成的配置表单**\n  （`autoGenerate ?? true`），写入走 `remote.settings.mutate(ns, pathOps, revision)`。\n- `settings.register` 旧 API 在 0.2 已不可依赖（preset-switch 守卫同款），\n  相关链路（register/scope.get）失败会静默退化——**不得再依赖 scope.get 做\n  开关判定**，改读 patch config（`syncPresetDeclaration` 的模式）。"
+    }
+  ],
+  "skipped": []
+}

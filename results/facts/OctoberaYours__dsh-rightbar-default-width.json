@@ -1,0 +1,150 @@
+{
+  "repo": "OctoberaYours/dsh-rightbar-default-width",
+  "commit": "957c924b45c2eaa446ca1eb19a70bd6b030583d6",
+  "extracted_at": "2026-11-11T13:26:44.025418+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 14133,
+    "lines_by_language": {
+      "JSON": 36,
+      "JavaScript": 192,
+      "Markdown": 119,
+      "Other": 26,
+      "YAML": 8
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-rightbar-default-width",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "license": "MIT",
+    "description": "DSH Web 插件：把右侧栏的默认宽度从「半屏（视口的 45%）」改成一个更合理的比例，同时保留拖拽调宽的能力。DSH 本身不持久化右栏宽度（layout store 的 rightbar 初值是 null），所以每次刷新都回到 45%；本插件在右栏首次打开前把初值置为配置的比例，之后用户的拖拽照常生效，且拖过的宽度会被记住。",
+    "files": [
+      "lib/**/*.js",
+      "lib/**/*.mjs",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh": "^0.1.7-rc.2 || ^0.2.0-rc.1",
+      "@deepseek-ai/dsh-client-ui-layout": "^0.1.7-rc.2 || ^0.2.0-rc.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-layout"
+        ],
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# bundle 层：把本插件插入 profile 的装配树。\n#\n# 与 profile 的 `dsh.profile.bundles` 两处都要写 —— 只写一处会被静默启停\n# （`dsh plugin add` 会从 dependencies 重新推导 bundles）。\n- insert:\n    - id: dsh-rightbar-default-width\n      name: 'dsh-rightbar-default-width'\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-09-28T16:49:12Z",
+    "created_at": "2026-09-26T18:37:28Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "右侧栏默认宽度不是半屏，而且仍然可以拖",
+      "text": "把 DSH 右侧栏的默认宽度从「半屏（视口 45%）」改成可配置的比例（默认 **1/6**），\n**同时保留拖拽调宽的能力**，并记住你拖过的宽度。"
+    },
+    {
+      "section": "为什么需要这个东西",
+      "text": "DSH 的右栏宽度有两个坑，叠在一起：\n\n1. **默认是半屏**：`openRightbar` 里 `rightbar ??= 视口 × 0.45`\n   （`@deepseek-ai/dsh-client-ui-layout/lib/client.js:429`，`RIGHTBAR_DEFAULT_RATIO = .45`）\n2. **不持久化**：该包**全文没有 localStorage 写入**，所以每次刷新/重启都回到半屏，只能手拖一次\n\n于是「每次开面板都要拖一下」成了常规操作。"
+    },
+    {
+      "section": "为什么不能用 CSS 改",
+      "text": "宽度最终落在**内联样式**上：\n\n| 部位 | 位置 |\n| --- | --- |\n| 轨道（三列 grid） | `layout/client.js:318-321` `gridTemplateColumns` |\n| 面板（absolute 定宽） | `sidebar-right/client.js:5709-5710` `width` / `--dsh-sidebar-width` |\n\n按 CSS 层叠规则：\n- 普通样式表规则**打不过**内联声明 → 改不了宽度\n- 带 `!important` 的规则**能**改 → 但把拖拽写的新值也一并盖掉\n\n**结论：「默认窄」和「可以拖」用 CSS 无法兼得。**（这正是我上一版配置的处境：宽度锁死 320px，拖不动。）"
+    },
+    {
+      "section": "本插件怎么做的",
+      "text": "改的是 **state，不是渲染结果** —— 所以两者兼得。\n\n`ctx.layout` 是 `LayoutController` 实例，它的 `panels` 字段**就是** layout store 的 actions 对象：\n\n```\nlayout/client.js:595   new LayoutController(instance.actions, …)\nlayout/client.js:457   this.panels = panels\nrenderer/client.js:730 kit[\"actions\"] = store.actions   ← 拖拽用的也是这个\n```\n\n而这个 actions 里有 **`setRightbar`**（`layout/client.js:422`），拖拽走的是同一个\n（`layout/client.js:296` `actions.setRightbar(rightbarBase.current - dx)`）。\n\n所以："
+    },
+    {
+      "section": "本插件怎么做的",
+      "text": "1. **右栏首次打开之前**调用一次 `setRightbar(视口 × 1/6)` → `openRightbar` 里的\n   `??=` 成了空操作，**半屏默认值永远不会写入**\n2. 包装 `setRightbar`，把**用户拖拽**的宽度记进 `localStorage` → 下次启动优先用它\n3. 自己调用时置 `selfApplying` 标志，不把初始化误记成拖拽\n\n因为改的是 state，**拖拽完全不受影响**，两者不打架。"
+    },
+    {
+      "section": "安装",
+      "text": "```powershell"
+    },
+    {
+      "section": "1) 复制/克隆到任意目录，例如",
+      "text": "git clone https://github.com/OctoberaYours/dsh-rightbar-default-width C:\\Users\\<你>\\Code\\dsh-rightbar-default-width"
+    },
+    {
+      "section": "~/.dsh/profiles/<profile>/package.json",
+      "text": "```\n\n```jsonc\n{\n  \"dependencies\": {\n    \"dsh-rightbar-default-width\": \"link:C:/Users/<你>/Code/dsh-rightbar-default-width\"\n  },\n  \"dsh\": {\n    \"profile\": {\n      \"bundles\": [\n        // …\n        \"dsh-rightbar-default-width\"\n      ]\n    }\n  }\n}\n```\n\n```powershell"
+    },
+    {
+      "section": "3) link 安装要真 junction（bundle 解析会检查 node_modules/<name>/package.json）",
+      "text": "cd ~/.dsh/profiles/<profile>/node_modules\ncmd /c mklink /J dsh-rightbar-default-width C:\\Users\\<你>\\Code\\dsh-rightbar-default-width"
+    },
+    {
+      "section": "4) 客户端插件 → 刷新页面即可（host 半边是空的，不涉及重启）",
+      "text": "```"
+    },
+    {
+      "section": "配置",
+      "text": "改默认比例：在浏览器 DevTools 控制台执行，**下次启动生效**：\n\n```js\n__dshRightbarWidth.setRatio(1/5)   // 1/5 屏；想更窄写 1/8\n```\n\n其它便利口：\n\n```js\n__dshRightbarWidth.current()   // 当前记住的宽度（px），没记过则是 undefined\n__dshRightbarWidth.set(420)    // 立即改成 420px 并记住\n__dshRightbarWidth.forget()    // 忘掉拖拽宽度，回落到默认比例\n```\n\n想直接改死默认值：编辑 `lib/client.js` 的 `DEFAULT_RATIO`。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **只对 `layout` 服务存在的客户端生效**。找不到 `ctx.layout.panels.setRightbar`\n  时本插件**静默退出**，不报错、不影响其它功能 —— 因此 DSH 升级换掉这套 API 时\n  它是「失效」而不是「炸掉」。\n- 记住的是**像素值**，不是比例。换显示器/改窗口宽度后，若旧值超出新视口的\n  `clamp(300, 视口×0.7)` 范围，DSH 自己会把它夹回合法区间（这是它的行为）。\n- 若同一 page 内组件重挂（HMR），包装会在卸载时还原，不会链式叠加。\n- **不对其它 profile 生效**：每个 profile 各自装配，要在 `web` 也用就照样加一遍。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT — 见 `LICENSE`。"
+    }
+  ],
+  "skipped": []
+}

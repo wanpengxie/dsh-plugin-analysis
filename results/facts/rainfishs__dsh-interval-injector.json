@@ -1,0 +1,126 @@
+{
+  "repo": "rainfishs/dsh-interval-injector",
+  "commit": "03ac6b40a01a8d78ccbd902c4e97aca9134d80f5",
+  "extracted_at": "2026-11-12T03:27:59.449700+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 11255,
+    "lines_by_language": {
+      "JSON": 38,
+      "JavaScript": 131,
+      "Markdown": 64,
+      "Other": 32,
+      "YAML": 16
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "interval-injector",
+    "version": "0.2.0",
+    "description": "A generic periodic context injector for DSH/Cordis agents: re-inject a block of text into the conversation every N steps or N minutes.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "cordis",
+      "cordis-plugin",
+      "dsh-bundle",
+      "agent",
+      "context",
+      "injector"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch: installing this package selects one profile-wide row.\n#\n# No `config` here on purpose — the text to inject belongs to the deployment,\n# not to the package. Override the row from the profile's own cordis.patch.yml:\n#\n#   - id: interval-injector\n#     name: interval-injector\n#     config:\n#       everyNSteps: 1\n#       text: |\n#         ...\n#\n# `config` is replaced wholesale, so restate every field the row needs.\n- insert:\n    - id: interval-injector\n      name: 'interval-injector'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-11-02T18:15:53Z",
+    "created_at": "2026-09-12T14:08:32Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "interval-injector",
+      "text": "定期把一段文字注入對話歷史的通用注入器（DSH / Cordis agent plugin）。"
+    },
+    {
+      "section": "為什麼需要它",
+      "text": "system prompt 每輪都重送，但它永遠在整串對話的最前面；對話一長，指示就被後面的內容稀釋。\n\n這支外掛每隔 N 個步驟、或每隔 N 分鐘（哪個先到算哪個），把 `config.text` 當成一則 user-role 訊息插進對話中間——最靠近模型回答的位置。內容不綁用途，換 `text` 就是換用途。"
+    },
+    {
+      "section": "安裝（DSH 0.2 以上）",
+      "text": "```sh\ndsh plugin --profile web add github:rainfishs/dsh-interval-injector\n```\n\n`--profile` 後面換成你要掛的 profile 名。也可以直接在 GUI 的插件頁貼\n`https://github.com/rainfishs/dsh-interval-injector` 或本機的絕對路徑。\n\n本套件宣告 `dsh.bundle.patch`，安裝後是 profile 的一層組合包：\n`cordis.patch.yml` 會插一行 `interval-injector`，**所有 session 都會生效**。\n\n> 0.1 的舊用法是把它掛在 agent preset 的 row；0.2 起它自己就是組合包，\n> 安裝完就生效，不必再手改 preset。"
+    },
+    {
+      "section": "設定欄位",
+      "text": "插進來的 row 沒有任何 `config`，文字屬於部署而不屬於套件，\n所以在 profile 自己的 `cordis.patch.yml` 覆蓋同一行：\n\n```yaml\n- id: interval-injector\n  name: interval-injector\n  config:\n    everyNSteps: 20\n\n`config` 是**整塊取代**，不是深度合併 —— 覆蓋時要把需要的欄位全部寫出來。"
+    },
+    {
+      "section": "設定",
+      "text": "| 欄位 | 預設 | 說明 |\n| --- | --- | --- |\n| `text` | （必填） | 每次要注入的文字。空字串＝外掛不作用。 |\n| `everyNSteps` | `12` | 每隔幾個「進入步驟」注入一次。`0` = 關掉這個條件。 |\n| `refreshIntervalMs` | `600000` | 距上次注入超過幾毫秒就注入。`0` = 關掉這個條件。 |\n| `summary` | `定期注入` | 收合在對話列上的單行說明。 |\n\n`everyNSteps` 與 `refreshIntervalMs` 是「哪個先到就先注入一次」；兩個都設 `0` 等於關掉整支外掛。"
+    },
+    {
+      "section": "實作注意",
+      "text": "- 監聽 `agent/pre-step`（waterfall），`next()` 之後才把訊息接在尾端，並以 `{ prepend: true }` 註冊，排在最靠近模型回答的位置。\n- 空回合與被拒絕的回合都不注入，免得無中生有一個請求。\n- 每個 agent 各自用 `WeakMap` 計數，session 結束就回收；外掛停用時監聽隨 fiber 一起移除。\n- **零依賴**：訊息結構自行建立（`randomUUID` + 遞迴凍結），純 JS 即可執行，不需要 build。\n- 訊息 `source` 用自己的 kind：`{ kind: 'interval-injector', form: 'notice', summary }`（0.2 已沒有共通的 `plugin` kind）。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,628 @@
+{
+  "repo": "cbg33695/dsh-screen-reader",
+  "commit": "16334a8b829efd7a695fa04143d7a3a3eaa6acf0",
+  "extracted_at": "2026-11-11T18:12:26.482323+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 178185,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 1480,
+      "Markdown": 1137,
+      "Other": 833,
+      "YAML": 24
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/screen.js",
+      "lib/toolbox.js",
+      "package.json",
+      "scripts/capture.ps1",
+      "scripts/imageops.ps1",
+      "tools/build-lib.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-screen-reader",
+    "version": "0.3.5",
+    "description": "Give the agent eyes on the screen: capture the whole desktop, one window, or one region and hand the IMAGE ITSELF to the session model (no second model, no description layer), plus an exact local pixel diff that locates what actually changed between two images instead of asking a model to guess. Windows only.",
+    "type": "module",
+    "author": "cbg33695",
+    "license": "MIT",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/",
+      "scripts/",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "os": [
+      "win32"
+    ],
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "keywords": [
+      "deepseek",
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "vision",
+      "screen",
+      "screenshot",
+      "multimodal",
+      "pixel-diff",
+      "image-diff",
+      "cordis",
+      "windows"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/cbg33695/dsh-screen-reader.git"
+    },
+    "bugs": {
+      "url": "https://github.com/cbg33695/dsh-screen-reader/issues"
+    },
+    "homepage": "https://github.com/cbg33695/dsh-screen-reader#readme"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Profile-bundle patch layer for dsh-screen-reader.\n#\n# Installing this package as a profile bundle inserts ONE host row that loads the\n# package's single entry point (`lib/index.js`). Both halves — `see_screen` from\n# lib/screen.js and `see_diff` from lib/toolbox.js — install from that one entry, so\n# no preset switch is needed and BOTH tools are available to EVERY session in the\n# profile. That is the difference between this and installing as an agent preset:\n# a preset is chosen per session, a bundle is not.\n#\n# The row publishes no service; it only registers into the host `tools` registry, so\n# it needs no `isolate` realm even though it lives in a profile composition.\n#\n# The .ps1 helpers are located at RUNTIME by the module that uses them, trying the\n# sibling path first and then `../scripts/`. That is why this package does not need a\n# build step to rewrite those paths (0.2.0 shipped one that was never rewritten, and\n# every bundle install failed on its first capture).\n#\n# `config` is deliberately empty: the tunables are named constants at the top of\n# lib/screen.js and lib/toolbox.js. A config object is accepted but unused.\n\n- insert:\n    - id: screen-reader\n      name: dsh-screen-reader\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/build-lib.mjs:30"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/cbg33695/dsh-screen-reader.git",
+      "where": "package.json:48"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cbg33695/dsh-screen-reader/issues",
+      "where": "package.json:51"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cbg33695/dsh-screen-reader#readme",
+      "where": "package.json:53"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 13,
+    "pushed_at": "2026-09-30T09:21:44Z",
+    "created_at": "2026-09-11T12:25:54Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/screen.js",
+    "lib/toolbox.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-screen-reader",
+      "text": "> 给 agent 装上眼睛：**它自己看屏幕，而不是等你截图**。\n> 外加一个**精确的像素差分**——\"变了没有、变在哪\"由本地算，模型只回答\"变成了什么\"。\n>\n> **仅支持 Windows。** 依赖 PowerShell 5.1 的 `System.Drawing` 与 `PrintWindow`。\n\n---"
+    },
+    {
+      "section": "⚠️ 先读这一段：它的优势到底是什么",
+      "text": "**它不提升视觉能力。** 图像送进模型走的就是模型自带的那条 pipeline，被同一套归一化压到同样的\ntoken 栅格。插件看得和内置视觉**一样清楚**，不多一分。\n\n它真正多出来的，是模型**原理上拿不到**的两样东西——而这两样恰好决定了一个 agent 能不能自己干活：\n\n| 优势 | 为什么模型自带视觉拿不到 | 对自动化意味着什么 |\n|---|---|---|\n| **1. agent 自己长眼睛** | 模型只能读**已经存在的文件**。要让它看屏幕，本来只能你按 `Win+Shift+S`、保存、再拖进对话——每看一次就要你动一次手 | agent 能在**执行过程中自己看**：改完设置看一眼对不对、跑完脚本看一眼结果、卡住了看一眼界面上到底有什么。整条链路不需要人在场 |\n| **2. 精确的\"变了没有\"** | 问视觉模型\"这两张图哪里变了\"，它会**编造**看起来合理的差异——这是它明确不擅长的方向 | 判定\"变没变\"这件事从**概率**变成**确定**：本地算，精确、免费、还给边界框。模型被约束在\"解释已经证实变化了的区域\"上，没有编造的空间 |"
+    },
+    {
+      "section": "⚠️ 先读这一段：它的优势到底是什么",
+      "text": "一句话：**别的插件在替模型看图，这个插件在给 agent 装手和眼睛。**\n\n这也是它唯一值得存在的理由。如果你愿意每次自己截图再粘进来，那它对你价值不大——手动截图\n往往还更好，因为裁切边界是你定的。"
+    },
+    {
+      "section": "什么时候**不应该**用它",
+      "text": "| 你的需求 | 更合适的选择 |\n|---|---|\n| 我只是想精一张图问问题 | 用内置的 `read_image`，或 [`@liustack/modlens`](https://www.dsh.so/artifact/modlens/)（★3.9k、L5 通过、输出结构化 JSON）。**它在这件事上比本插件成熟，本插件不打算在这一点上竞争** |\n| 我要跨平台 | 本插件是 Windows 专属，做不到 |\n| 我要精确测量像素 | 用真正的测量工具。本插件是**描述器**，不是量具，实测尺寸误差可达 ±40% |\n| 我要\"帮我看界面哪里不对\"这种低对比度细节 | 这是它的**危险区**，见下方边界一节 |\n\n---"
+    },
+    {
+      "section": "目录",
+      "text": "- [它解决什么问题](#它解决什么问题)\n- [两个工具](#两个工具)\n- [图像是怎么送进模型的（这一段决定了用法）](#图像是怎么送进模型的这一段决定了用法)\n- [实测效果](#实测效果)\n- [边界：它做不到什么](#边界它做不到什么)\n- [安装](#安装)\n- [从 0.2 升到 0.3：破坏性变更](#从-02-升到-03破坏性变更)\n- [隐私](#隐私)\n- [设计说明](#设计说明)\n- [验证状态：哪些测过、哪些没测过](#验证状态哪些测过哪些没测过)\n- [已知问题与后续计划](#已知问题与后续计划)\n- [如何反馈](#如何反馈)\n- [许可](#许可)\n- [与其它插件的关系](#与其它插件的关系)\n\n---"
+    },
+    {
+      "section": "它解决什么问题",
+      "text": "模型没有眼睛在屏幕上。于是会发生这种事：\n\n- 你说\"我这个界面哪里不对\"，模型只能靠你的描述\n- 模型说\"你点一下那个按钮\"，它其实从没见过那个按钮\n- 你改完一个设置，模型不知道改成了什么\n- 你让 agent 渲染一张图/改一版 UI，**它无法验证自己刚做出来的东西对不对**\n\n前三条是\"看不见\"，第四条是\"看不见**而且**无法自我验证\"——后者才是自动化真正的瓶颈。\n\n这个插件给模型两样东西：\n\n1. **看得见**：抓屏幕（整屏 / 某个窗口 / 某个区域）→ **把图本身交给当前模型**，不经过第二个模型转述\n2. **验得了**：两张图之间**精确**定位变化区域 → 模型只解释\"变成了什么\"\n\n---"
+    },
+    {
+      "section": "看屏幕",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `see_screen` | 抓屏并**把图直接交给当前模型看**。`window` 只抓某个窗口，`region` 做归一化裁切（**这是唯一能买到细节的手段**，见下一节）。默认不调用第二个模型；`transcribe: true` 是给纯文本会话模型的兼容路径 |"
+    },
+    {
+      "section": "比两张图",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `see_diff` | 两张图的差异：**本地精确像素差分定位变化区域 → 只把变化区域交给模型解释**。模型从不需要判断\"有没有变\" |\n\n> **这里没有\"看一张图片文件\"的工具。** 原来有一个 `see_image`，但它只是内置 `read_image`\n> 的较差重复（多一层模型间转述）。模型自带视觉之后这件事交给内置工具，已删除。\n\n---"
+    },
+    {
+      "section": "图像是怎么送进模型的（这一段决定了用法）",
+      "text": "看屏幕的工具**不把图交给另一个模型转录，而是把图本身作为内容块返回**，由当前会话的模型直接看。\n这条路径已实测验证。\n\n而图像在 **provider 侧**会被强制归一化，这一点决定了所有用法：\n\n```\n14px patch 网格 · 每轴 3:1 下采样 · 单图上限 384 token\n```\n\n| 你截的范围 | 请求侧实际带宽 | 每屏幕像素 → 请求像素 |\n|---|---|---|\n| 全窗 1942×1030 | ≈ 950×504 | 0.49 |\n| 同一张缩到 1295×687 | ≈ 950×504 | 0.49 |\n| 裁切 675×387 | ≈ 879×504 | 1.30 |\n| **裁切 346×346（实测）** | **原样 346×346** | **1.00** |\n\n（后两行要区别看待：675×387 那行是**按源码常数推算**的，没实测；346×346 那行是**实测**的。）"
+    },
+    {
+      "section": "图像是怎么送进模型的（这一段决定了用法）",
+      "text": "归一化其实是**两段**，而第一段可以实测：harness 自己先把请求图限制在约 **64 万像素**——实测一张\n1920×1080 的截图，请求侧是 **1066×600**（= 639,600 px），provider 再把它压到 token 网格。\n**裁切之所以有效，是因为一块小图在第一段就被原样放过**，跳过了那次 0.555 的线性缩放。\n\n三件事因此是**必然**的，不是巧合：\n\n1. **全窗图下源图分辨率不影响准确度**——两张不同分辨率的图落到**同一个网格**\n2. **裁切是唯一能买到细节的手段**——实测有效细节密度约 **2 倍**（1.00 vs 0.49）\n3. **提高抓屏分辨率对准确度无用**——更大的源图只会被压缩得更狠\n\n**这条不是推算出来的，是测出来的。** 同一个侧栏区域，同一提示词：\n\n| 输入方式 | 读到的会话标题 |\n|---|---|\n| 全屏 1920×1080 | 杀**戳**尖塔模组制作 ✗ |\n| 裁切 346×346 | 杀**戮**尖塔模组制作 ✓ |"
+    },
+    {
+      "section": "图像是怎么送进模型的（这一段决定了用法）",
+      "text": "真值取自 `${DSH_HOME}/storages` 里的会话索引。全屏下 5 个标题 4 个一字不差、错 1 个字；\n**裁切后 0 错**。而全屏的失效模式恰好是**形近字**（戮/戳 右半边都是\"戈\"）——这正是 0.49\n采样率预测的结果。\n\n**所以推荐用法是：先用 `window` 锁定应用，再用 `region` 放大到你要看的地方。**\n\n---"
+    },
+    {
+      "section": "实测效果",
+      "text": "以下全部是在真实运行中测出来的，不是设计目标。"
+    },
+    {
+      "section": "视觉理解",
+      "text": "| 项目 | 结果 |\n|---|---|\n| 读柱状图数值（合成图，4 根柱） | **4/4 精确命中**（120 / 60 / 180 / 90），颜色、排序全对 |\n| 读 Blender 大纲视图的物体清单 | **4/4**（`Camera / Cube / Light / 球体`），与 headless Blender 取出的真值完全一致 |\n| 读标题栏中文路径 | 逐字命中，含中文文件名与路径 |\n| 判断哪个物体被选中 | **修复前 0/3，修复后 2/2** |\n| `LOCATION` 结构化位置输出 | **2/2 按要求吐出**，能被正则解析成 `region` |\n| 读侧栏会话标题（全屏 1920×1080） | 5 个标题 4 个逐字命中，**错 1 字**（`戮` → `戳`） |\n| 读同一区域（裁切 346×346） | **5/5 逐字命中**，全屏下多出来的空格也一并消失 |"
+    },
+    {
+      "section": "本地像素差分（这是插件里最可靠的一环）",
+      "text": "| 项目 | 结果 |\n|---|---|\n| 真实照片（1225×1254 JPEG）程序化加 2 处已知改动 | **恰好检测到 2 个区域，零误报** |\n| 位置准确性 | 边界框比真实改动大约 30–45 px（= padding 10 + 网格量化 + 膨胀 1 格） |\n| 同一张图自比 | 变化像素 0，正确报\"没有变化\" |\n| 合成校准图（4 处已知改动） | 4 个区域全部对上；其中\"底部黄条消失\"与\"红圆移到右下\"因膨胀被合并为 1 个区域（已知取舍） |"
+    },
+    {
+      "section": "成本",
+      "text": "**图像本身很便宜**：provider 把每张请求图归一到 **≤384 视觉 token**，不管原图多大。早先说的\n\"每次看图约 1000-1500 token\"**是错的**。\n\n**贵的是让模型把图\"读成文字\"**。走转录兼容路径时，那个模型每次会先产出大量推理 token\n（实测 788 ～ 6621 字）才输出正文。**所以默认路径根本不调用第二个模型**——图直接交给当前模型看。\n\n---"
+    },
+    {
+      "section": "边界：它做不到什么",
+      "text": "这一节是本文档最重要的部分。"
+    },
+    {
+      "section": "1. 它是描述器，不是量具",
+      "text": "实测：一条 **30 px** 高的色带被读成\"40–45 px\"，**误差约 40%**。\n\n- ✅ 可靠：谁比谁高、哪个被置灰、大致在左上还是右下\n- ❌ 不可靠：这两个元素差 8 px 吗、这个间距是 16 还是 12"
+    },
+    {
+      "section": "2. 低对比度差异是危险区",
+      "text": "反向验证有效（灰色 vs 高饱和蓝的\"禁用按钮\"判对不难），但真正的困难——两个相近的灰色、\n1 px 错位、微弱色差——正是它会漏掉、或者**更糟：自信地编一个**的地方。而\"帮我看界面哪里\n不对\"恰恰最需要这些。"
+    },
+    {
+      "section": "3. 形状语义是弱项",
+      "text": "实测案例：一个被编辑成\"尖顶小房子\"的立方体，在 Blender 视口里。\n\n- 模型看到了\"一个非标准形状\"、也说了\"说明该物体已被编辑过\"\n- 但它**始终称它为\"立方体\"**，从未把网格的编辑**归因**到物体上\n\n诚实补充：该机位下尖顶本来就不明显，所以这一次漏掉**部分可原谅**。但\"不会把网格编辑归因到\n物体\"这个模式，不止出现在这一个案例里。"
+    },
+    {
+      "section": "4. 分辨率**不是**准确度的杠杆，但**裁切是**",
+      "text": "同一张 Blender 全窗图，同一提示词、同一模型，只改分辨率：\n\n| 输入尺寸 | 选中物体 | 是否说明立方体未被选中 | 编辑痕迹 |\n|---|---|---|---|\n| 1942×1030（原生） | ✅ | 未明说 | 只说\"黑色三角形面\" |\n| 1295×687（缩小 44.5% 像素） | ✅ | ✅ 明确说\"未选中\" | ✅ 说\"非标准形状…已被编辑过\" |\n\n**缩小版反而更好。** 结论：provider 对输入做归一化，**全窗图下源图分辨率不影响准确度**。\n机制见上一节；同一个机制也解释了为什么**裁切有效**——实测有效细节密度约 2 倍。"
+    },
+    {
+      "section": "5. 只有一帧，没有时间与因果",
+      "text": "- ✅ 它能答：\"屏幕现在是什么\"\n- ❌ 它答不了：\"这个弹窗是不是因为我点了 X 才出现的\"\n\n滚动屏幕记忆（`screen_memory` / `screen_watch`）曾经是为了补这一块，**已在 0.3 删除**：\n实测没有真实用例，而每录一帧都会往附件库写一个文件。所以现在它确实**只看当下**。"
+    },
+    {
+      "section": "6. 附件库会增长，而且**没有任何清理手段**",
+      "text": "每次视觉调用都会往 `${DSH_HOME}/attachments` 写入一个内容寻址文件，**插件无法阻止**。\n\n**实测数字（2026-09-14，本机 web profile）：215 个文件 / 40.24 MB**，从 09-10 起按天累积\n9 → 25 → 83 → 87 → 13 个文件。构成：\n\n| 子树 | 内容 | 实测 |\n|---|---|---|\n| `v1/objects` | 归一化后的附件（会话历史里图像块引用的就是它） | 118 个 / 35.25 MB |\n| `v1/request-images` | 模型请求版缓存（按路由与像素预算生成） | 97 个 / 4.98 MB |\n| `v1/tmp` | 临时 | 0 |\n\n**为什么插件不能清理它——这不是\"没做\"，是做不到：**"
+    },
+    {
+      "section": "6. 附件库会增长，而且**没有任何清理手段**",
+      "text": "`attachments` 服务的自我描述是 **\"Immutable binary attachment service\"**，它的方法只有\n`validateImage` / `saveImage(s)` / `readImage` / `imageHostPath` / `readImageRequest`。\n**没有 delete、没有 prune、没有 gc。** 而且 `readImage` 会\"校验字节仍与记录的引用相符\"，\n所以绕过服务直接删文件，会让历史对话里的图片**读不出来**——那些引用是会话日志里持久化的。\n\n这不是本插件独有的问题：**任何**图片进入对话都会写这里——你自己粘贴的图、内置 `read_image`、\n`generate_image`。上表里 80 个 WEBP 就不是本插件写的（插件只存 PNG）。真正的修法在 DSH 层面\n（给这个不可变存储加保留策略），不在一个插件里。"
+    },
+    {
+      "section": "6. 附件库会增长，而且**没有任何清理手段**",
+      "text": "0.2.1 曾有一个 `vision_storage` 工具报告/清理这个目录，**0.3 已删除**。删除它没有拿走任何能力：\n它的\"清理\"是危险的那一半，而安全的清理从来就不存在。要看看它有多大，直接看那个目录即可。\n\n**唯一的、诚实的回收方式**：把 `${DSH_HOME}/attachments` 整个删掉——代价是**所有历史对话里的\n图片都不再显示**。这是一个明确的取舍，不是清理。"
+    },
+    {
+      "section": "7. 仅 Windows",
+      "text": "`scripts/capture.ps1` 与 `scripts/imageops.ps1` 依赖 PowerShell 5.1、`System.Drawing`、\n`PrintWindow`、`DwmGetWindowAttribute`。非 Windows 上会**如实报错**，不会假装成功。\n\n---"
+    },
+    {
+      "section": "方式一：作为 profile bundle（推荐，**已在真实实例上装过并验证组合**）",
+      "text": "```bash\ndsh plugin --profile <profile-name> add <包名或本地路径>"
+    },
+    {
+      "section": "dsh plugin --profile web add C:\\path\\to\\dsh-screen-reader",
+      "text": "```\n\n`dsh plugin` 把参数透传给 pnpm，然后**自动把所有声明了 `dsh.bundle.patch` 的依赖加入\n`dsh.profile.bundles` 层栈**——本包声明了它，所以不需要手工改配置。\nbash\ndsh --profile <profile-name> --dump-config"
+    },
+    {
+      "section": "name: dsh-screen-reader",
+      "text": "```\n\n然后重启 DSH，在任意会话里问它\"你现在有哪些和屏幕、图片相关的工具？\"——\n应当列出**两个**：`see_screen`、`see_diff`。\n\n**这一行用 `link:` 指向包目录**（pnpm 对本地目录依赖用的就是链接），所以**别把那个目录删了或\n移走**，否则 DSH 启动会找不到它。要卸载：`dsh plugin --profile <profile-name> remove dsh-screen-reader`。"
+    },
+    {
+      "section": "name: dsh-screen-reader",
+      "text": "> ⚠️ **0.2.0 的 bundle 是坏的，0.2.1 才修好。** 我代码审查时发现：`lib/screen.js` 与\n> `lib/toolbox.js` 原来用 `new URL('capture.ps1', import.meta.url)` 找 PowerShell 助手，\n> 可是发布包里 JS 在 `lib/`、助手在 `scripts/`，于是它去找那个不存在的 `lib/capture.ps1`。\n> 任何 bundle 安装都会在第一次抓屏时报\n> `The argument '.../lib/capture.ps1' to the -File parameter does not exist.`\n> 现在改成运行期同时适配两种布局（同一份源码在 preset 与发布包里都对），并且把这个检查写进了\n> 生成脚本的断言（`tools/build-lib.mjs`）。如果你装的是 0.2.0，请升级。"
+    },
+    {
+      "section": "方式二：作为 agent preset（**已验证可用**）",
+      "text": "把 `lib/` 与 `scripts/` 放进一个 preset 目录，配好 `agent.cordis.yml` 后，用该 preset 开一个会话。\npreset 的写法与相对路径解析规则见 DSH 文档。"
+    },
+    {
+      "section": "装完先自检",
+      "text": "> 你现在有哪些和屏幕、图片相关的工具？\n\n应当列出**两个**：`see_screen`、`see_diff`。\n\n- **看得到** → 装好了。接着调用一次 `see_screen` 抓张图，确认真的能返回图像\n- **看不到** → 插件没有被加载。改用另一种安装方式，或把 DSH 版本、profile 名、完整报错发到 issue\n\n---"
+    },
+    {
+      "section": "从 0.2 升到 0.3：破坏性变更",
+      "text": "**0.3 是一次大幅精简。工具从 8 个减到 2 个。**\n\n| 0.2 里的工具 | 0.3 | 原因 |\n|---|---|---|\n| `see_screen` | **保留** | 给 agent 装眼睛。这是插件的核心 |\n| `see_diff` | **保留** | 本地精确差分，模型做不到 |\n| `see_image` | **删除** | 内置 `read_image` 的较差重复 |\n| `screen_watch` | **删除** | 实测没有真实用例；每帧写一个附件文件 |\n| `screen_memory` | **删除** | 同上（时间维度已放弃） |\n| `vision_routes` | **删除** | 诊断件 |\n| `vision_selftest` | **删除** | 从未跑过；且只覆盖差分链，没覆盖 `see_screen` 链 |\n| `vision_storage` | **删除** | 诊断件 |\n\n**升级时要做什么：**"
+    },
+    {
+      "section": "从 0.2 升到 0.3：破坏性变更",
+      "text": "1. **如果你有 prompt 或自动化脚本里写了被删的工具名，改掉。** 调用已删工具会得到\"未知工具\"，\n   不会静默降级\n2. **`see_screen` 的插件声明变了**：`inject` 从 `['tools','timer']` 变成 `['tools']`。用 preset\n   方式安装且自己写过 `agent.cordis.yml` 的话不需要改——`inject` 在插件源码里，不在配置里\n3. **preset 行不用改**：两行插件仍然叫 `./plugin/screen.js` 与 `./plugin/toolbox.js`，\n   只是各自少注册了几个工具\n4. 老版本不会自动升级；插件是本地/包安装，没有自动更新通道\n\n**没变的：** 两个保留工具的参数、返回值、以及 `cordis.patch.yml` 的插入方式都没动。\n\n---"
+    },
+    {
+      "section": "隐私",
+      "text": "这一节必须说清楚，因为屏幕内容是最敏感的东西。\n\n1. **不抓屏就什么都不会发生。** 0.3 删掉了持续录制，所以没有任何后台抓屏。只有你（或 agent）\n   显式调用 `see_screen` 时才截一张\n2. **截图只交给当前会话的模型。** 它走的是你平时发图片的同一条通道，受同一套数据策略约束。\n   插件不会把图发给任何第三方\n3. **磁盘上插件自己只留一份图**：固定路径原地覆盖（`${DSH_HOME}/vision/screen.png`），\n   插件停止时删除\n4. **但附件库是另一回事**：每次视觉调用都会往 `${DSH_HOME}/attachments` 新增一个内容寻址\n   文件，**且没有任何清理手段**（实测 215 个文件 / 40.24 MB，见边界第 6 条）\n5. **`see_diff` 不抓屏**：它只读你指定路径的两张图片文件\n6. **建议**：在需要时调用、用完不必长期开着——反正它也不会自己抓屏了\n\n---"
+    },
+    {
+      "section": "为什么插件模块零依赖",
+      "text": "加载器的规则是相对 specifier 按 preset 目录解析，而裸包名按 harness 安装位置解析——本地\npreset 够不到 `@deepseek-ai/dsh-tools`。所以插件刻意不依赖任何包：工具定义不用 `defineTool(...)`，\n而是直接构造它产出的那个运行期结构；schema 用运行期 JSON Schema 原样书写。只 import\n`node:fs` / `node:url` 两个内置模块。\n\n**代价：失去 `defineTool` 的自动参数校验**，所以每个 `execute` 都自己做类型兜底。"
+    },
+    {
+      "section": "为什么要删掉那一半工具",
+      "text": "判据只有一条：**这件事模型自己能不能做？**\n\n- 能做的（看图、读图里的字）→ 删，交给内置能力\n- 做不到的（看屏幕、精确判定像素变化）→ 留\n\n按这条判据，`see_image` 是重复，三个诊断件不是能力，持续录制的价值没有被任何真实用例证明\n而代价是确定的（附件库无上限增长）。删除后插件从 8 个工具、约 78 KB 源码，缩到 2 个工具、\n约 54 KB。"
+    },
+    {
+      "section": "为什么差分在本地算",
+      "text": "视觉模型做细粒度找茬很差，而且会编造\"看起来合理\"的差异。像素级差分是精确的、免费的、还能\n给出变化区域的边界框。所以分工是：**本地算差异，模型只解释差异。**"
+    },
+    {
+      "section": "为什么 `see_screen` 要返回图而不是文字",
+      "text": "曾经它把图交给第二个模型转录成文字再交回来。那条路有三个问题：多一层转述误差、受那个模型的\n推理预算折磨（实测常常把全部预算花在推理上导致正文为空）、还要多付一次调用。现在直接把图作为\n内容块返回，由当前模型自己看。`transcribe: true` 保留为纯文本会话模型的兼容路径。"
+    },
+    {
+      "section": "为什么提示词把\"主体\"放在最前",
+      "text": "实测：如果提示词先要求逐字转录文字，模型会为了抄文字忽略画面内容。把\"先答主体、文字放最后\"\n写成顺序要求之后，判断选中物体的准确率从 0/3 变成 2/2。\n\n---"
+    },
+    {
+      "section": "验证状态：哪些测过、哪些没测过",
+      "text": "| 项目 | 状态 |\n|---|---|\n| 抓屏 / 窗口 / 区域裁切 / DPI 原生分辨率 | ✅ 独立验证（含失败路径与幂等性） |\n| 本地像素差分 | ✅ 独立验证（合成图 + 真实照片） |\n| 视觉提示词 | ✅ 实测（多轮） |\n| **工具把图像直接交给模型**（image 内容块） | ✅ 已实测（探针验证真的送达） |\n| `see_screen` 的转录兼容路径 | ✅ 实测（多轮，见成本一节） |\n| **bundle 方式安装** | ✅ **全链路已验证**（0.3.0）：`dsh plugin --profile web add <本地目录>` 成功；`--dump-config` 组合树含 `- id: screen-reader`；**重启后查运行中进程的 `Tool.listTools`，确实返回 `see_screen` 与 `see_diff`**——而且在一个**并未选择读屏 preset** 的会话里同样可见，证明它是宿主平面的、对所有对话生效；已安装产物的两个后端也各自真跑过一次（抓屏 576×54、差分 4 区域且输入图未被删除） |\n| **准确率的单一数字** | ⚠️ 只有一次**极小样本**的字符准确率（见下），**不构成基准** |\n| `screen_watch` / `screen_memory` 的实用价值 | ❌ **从未被任何真实用例证明**（这是 0.3 删除它们的直接理由） |\n| `vision_selftest` 的自动打分 | ❌ 从未跑过（已删除） |"
+    },
+    {
+      "section": "验证状态：哪些测过、哪些没测过",
+      "text": "**仍然没有\"准确率 92%\"这种基准数字。** 上面所有\"实测效果\"都是具体案例，不是基准。\n\n唯一一个勉强算\"数字\"的东西：一次 **5 条会话标题、共 50 个汉字**的对照测试里，全屏 1920×1080\n读错 **1 个字**，裁切 346×346 后读错 **0 个字**。样本太小，**不足以称为准确率**——它能说明的\n只有一件事：全屏下的失效模式是**形近字**，而裁切能修掉它。\n\n---"
+    },
+    {
+      "section": "已知问题与后续计划",
+      "text": "**0.3.2 改了什么（对纯文本会话模型从\"炸\"变成\"能用\"）：**\n\n- **`see_screen` 现在自己判断会话模型收不收图，收不了就自动转录。** 根因是 provider 在发送前会扫\n  `messages` 里有没有 image，只要模型没有声明 `inputModalities` 含 image 就\n  **直接抛 `LlmError`**（`dsh-llm-deepseek` L1602-1605）——**整个请求失败，模型连正文都看不到**。\n  而一台机器上配的模型可以有很多个，图像输入是少数派："
+    },
+    {
+      "section": "已知问题与后续计划",
+      "text": "| 路由 | 图像输入 |\n  |---|---|\n  | `deepseek-official/deepseek-v4-flash` | ❌ 纯文本 |\n  | `deepseek-official/deepseek-v4-pro` | ❌ 纯文本 |\n  | `deepseek-official/deepseek-v4-flash-vision-exp` | ✅ |\n  | `local-ollama/qwen3:1.7b` / `qwen3:0.6b` / `qwen3-4b-fast` | ❌ 纯文本 |"
+    },
+    {
+      "section": "已知问题与后续计划",
+      "text": "（上表是本机实测，6 个里只有 1 个收图。）所以在纯文本会话里，这个工具不是\"不好用\"，而是\n  **一调就把那一轮弄坏**，agent 于是学会了别碰它。现在它按 `agent.options` 里的\n  `{provider, model}`（经 `agents.currentInitiator()` 取得，已实测可用）去问\n  `llm.resolveModelInfo(...).inputModalities`，收不了图就自动走转录路径。\n- **顺手修了两个必然的 bug**：\n  1. **转录路径也会把图发出去**——附件在 `wantText` 分支**之前**就保存了，而 `render` 见到\n     `imageRef` 就加图像块。也就是说 `transcribe: true` 在纯文本模型上**从来没真正兼容过**。\n     现在转录路径不写附件、不返回 image 块。\n  2. **转录路径永远被判成失败**——`ok` 原本写作 `hasImage && ...`，而转录路径按设计没有\n     `imageRef`，于是 `ok=false`，render 第一分支直接报\"看图失败：no capture\"。一条本来能用的\n     路径被自己的成功判据废掉了。现在 `ok` 按**实际走的那条路**判定。\n- **判断不出会话模型时，按\"收不了\"处理。** 风险不对称：给收不了的模型发图会让整轮对话失败；\n  多走一次转录最坏只是这一次没有原图。\n- 结果里新增 `visionPath`（`image` / `transcribe`）、`sessionModel`、`note`，渲染行会明说\n  \"会话模型 X 不接受图像输入，已自动改走转录路径\"——**降级也要说得出来**。"
+    },
+    {
+      "section": "已知问题与后续计划",
+      "text": "- **`TARGET` 拆成 `SOURCE` / `SOURCESIZE` / `REGION`。** 原来 `capture.ps1` 输出的 `TARGET` 同时装着\n  \"抓了什么\"的描述**和**一个像 `1920x1080` 的尺寸串，而 `SIZE` 是成品的尺寸。于是报\n  `TARGET=virtual screen 1920x1080` 时，实际写出的文件可能是 `1190x486`——任何把这个字段当图幅读的\n  人（或模型）都会读到错的数。**这不是假想的**：另一个对话在做真实验收时正是这么被绊住的。\n  现在四行各自只表达一件事：`SOURCE`（纯描述，不含尺寸）、`SOURCESIZE`（抓取面）、\n  `REGION`（有裁切时才出现）、`SIZE`（成品，唯一描述产物的字段）。\n- `see_screen` 的输出字段随之从 `target` 改为 `source` + `sourceSize` + `region`，显示行也改成\n  可读的两段：`截图范围：virtual screen（区域 …）；源 1920x1080 → 成品 1190x486`。\n  **如果你的 prompt 或脚本里读了 `target`，要改。**\n- 顺带修了我自己在改这段时引入的一个 bug：`$rx` 是 `[double]`，而新代码以数字开头做 `+` 拼接，\n  PowerShell 会把 `+ ','` 当数值加法并抛 `Cannot convert value \",\" to type System.Double`。\n  改用 `-join`。原代码只是因为从字符串开头才侥幸没踩到。\n- 已验证：`SOURCE`/`SOURCESIZE`/`REGION`/`SIZE` 四种模式（整屏 / 整屏+区域 / 窗口 / 窗口+区域）\n  逐一核对，且 **`SIZE` 与 PNG 文件 IHDR 里的真实尺寸逐字节一致**。"
+    },
+    {
+      "section": "已知问题与后续计划",
+      "text": "- **`see_diff` 会删掉你的输入图（数据丢失，已修）**：`imageops.ps1` 的清理规则原来会删除输出目录里\n  **最旧的 N 个文件，不管是谁写的**。于是当你要比较的两张图恰好和裁切图在同一个目录时，清理在写完\n  裁切图之后运行、保护了裁切图、然后把你的 `a.png` / `b.png` 一起吃掉。这是静默的数据丢失，而且丢的\n  正是唯一无法重新生成的东西。现在清理**只删本工具自己产出的文件**（`diff*_A.png` / `diff*_B.png`），\n  并且每个调用点额外显式保护它收到的输入。已验证：输入保住，裁切图仍然不增长\n- **工具从 8 个减到 2 个**（判据见设计说明）。删除 `see_image`、`screen_watch`、`screen_memory`、\n  `vision_routes`、`vision_selftest`、`vision_storage`\n- 随之移除了变化指纹、限流闸门、滚动缓冲、`timer` 依赖、并发互斥——以及 `see_screen` 上一个\n  从来走不到的分支（它一直以 `force=true` 调用 `observe`，所以那些判断本就是死路）\n- `see_screen` 源码 50.3 KB → 35.1 KB；`toolbox` 27.5 KB → 19.1 KB\n- 破坏性变更清单见上一节"
+    },
+    {
+      "section": "已知问题与后续计划",
+      "text": "**0.2.1 修了什么：**\n\n- **发布包里的 ps1 路径是坏的（0.2.0 的 bundle 必然启动即失败）**：改用运行期双布局解析\n  （同一份源码在 preset 与发布包里都对），并把生成脚本 `tools/build-lib.mjs` 收进仓库、加上断言\n- **`capture.ps1 -Out` 的裸文件名会污染当前目录**：现在裸名字一律解析到 `${DSH_HOME}/vision/`\n  并自动补 `.png`；绝对路径行为不变\n- **文档更正**：裁切的细节增益从推算的\"2.7 倍\"下调为**实测约 2 倍**\n\n**后续计划：**"
+    },
+    {
+      "section": "已知问题与后续计划",
+      "text": "1. **跑一个真正的准确率基准** —— 这是当前最大的空缺。原来打算用 `vision_selftest` 做，但它\n   只覆盖了差分链、没覆盖 `see_screen` 链，而后者才是最需要数字的地方。所以它被删了，\n   基准要重新设计\n2. 用 `@deepseek-ai/dsh-tools` 的 `defineTool` 重写工具定义，拿回参数校验\n3. 把 `Config` schema 接上（现在可调参数是文件头常量）\n4. 修剪 `scripts/imageops.ps1` 里已无调用方的模式（`calib-draw` / `calib-bad` / `storage` /\n   `prune`），它们原本服务于已删除的工具\n5. 形状语义：尝试\"先定位主体 → 再局部放大\"的两段式，它已被证明对选中判断有效\n\n**已知的设计妥协：**"
+    },
+    {
+      "section": "已知问题与后续计划",
+      "text": "- `lib/screen.js` 与 `lib/toolbox.js` 之间有约 40 行重复的视觉路由与错误处理。原因见文件头\n  注释：加载器按 URL 缓存模块，用相对 import 会把两个插件的生命周期绑在一起\n- 差分边界框比真实变化大 30–45 px（可调 `-Padding` / `-Dilate` / `-GridW`）\n- 时间维度（滚动屏幕记忆）已被放弃。如果将来有真实用例，可以从 git 历史里找回\n  （`git show 98306ac5:lib/screen.js`）\n\n---"
+    },
+    {
+      "section": "如何反馈",
+      "text": "这个插件是**实验性**的，而且它自己承认了不少做不到的事。我最想要的反馈是\"**它在你这里错在哪**\"，\n不是赞美。\n\n发 issue 时请带上：\n\n1. **安装方式**（bundle / preset）与 `dsh --version`\n2. 你调用的工具与完整参数\n3. 完整的返回或报错（不要只贴一句\"不工作\"）\n4. 如果涉及看图：**最好把那张图也附上**。没有图我无法判断是插件的问题还是模型的问题\n\n---"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。见 `LICENSE`。\n\n---"
+    },
+    {
+      "section": "与其它插件的关系",
+      "text": "| 插件 | 定位 | 关系 |\n|---|---|---|\n| 内置 `read_image` | 读一张图片文件 | `see_image` 曾是它的重复实现，已在 0.3 删除 |\n| [`@liustack/modlens`](https://www.dsh.so/artifact/modlens/) | 看图问答、输出结构化 JSON（★3.9k、L5、Gold） | **在\"精一张图问问题\"上比本插件成熟**。本插件不打算在这一点上竞争 |\n| 本插件 | **给 agent 装眼睛 + 精确判定像素变化** | 独特之处是\"agent 自己看\"和\"本地精确差分\"，不是\"看图问答\" |"
+    },
+    {
+      "section": "dsh-screen-reader",
+      "text": "> Gives the agent eyes: **it looks at the screen itself, instead of waiting for you to take a\n> screenshot.** Plus an **exact pixel diff** — \"did it change, and where\" is computed locally,\n> and the model is only asked \"what did it become\".\n>\n> **Windows only.** Requires PowerShell 5.1 with `System.Drawing` and `PrintWindow`.\n\n---"
+    },
+    {
+      "section": "⚠️ Read this first: what the advantage actually is",
+      "text": "**It does not make vision better.** Images reach the model through the model's own pipeline and are\nsqueezed onto the same normalised token grid. The plugin sees exactly as clearly as built-in vision\ndoes — no more.\n\nWhat it adds are two things a model **cannot get on its own**, and those two happen to decide whether\nan agent can work by itself:"
+    },
+    {
+      "section": "⚠️ Read this first: what the advantage actually is",
+      "text": "| Advantage | Why built-in vision cannot do it | What it means for automation |\n|---|---|---|\n| **1. The agent grows eyes** | A model can only read **files that already exist**. To let it see the screen you had to press `Win+Shift+S`, save, and drag the file in — every single time | The agent can **look during its own work**: check a setting after changing it, check output after running a script, look at what an interface actually shows when stuck. No human in the loop |\n| **2. An exact \"did it change\"** | Ask a vision model \"what changed between these two images\" and it **fabricates** plausible differences — this is a thing it is demonstrably bad at | Deciding *whether* something changed goes from **probabilistic** to **certain**: computed locally, exact, free, with bounding boxes. The model is constrained to explain regions the diff already proved changed, so it has no room to invent |"
+    },
+    {
+      "section": "⚠️ Read this first: what the advantage actually is",
+      "text": "In one sentence: **other plugins look at images for the model; this one gives the agent hands and eyes.**\n\nThat is its only reason to exist. If you are happy to screenshot manually and paste, it is worth\nlittle to you — and a manual screenshot is often better, because you choose the crop."
+    },
+    {
+      "section": "When you should **not** use it",
+      "text": "| Your need | Better choice |\n|---|---|\n| I just want to ask about one image | The built-in `read_image`, or [`@liustack/modlens`](https://www.dsh.so/artifact/modlens/) (★3.9k, L5, Gold, structured JSON). **It is more mature at that job, and this plugin does not intend to compete there** |\n| I need cross-platform | Windows-only, cannot help |\n| I need to measure pixels precisely | Use a real measuring tool. This is a **describer**, not a gauge; measured size error reaches ±40% |\n| I want \"find what's wrong with my UI\" for low-contrast details | That is its **danger zone** — see Boundaries |"
+    },
+    {
+      "section": "When you should **not** use it",
+      "text": "---"
+    },
+    {
+      "section": "Contents",
+      "text": "- [What it solves](#what-it-solves)\n- [The two tools](#the-two-tools)\n- [How images reach the model (this decides how you use it)](#how-images-reach-the-model-this-decides-how-you-use-it)\n- [Measured effects](#measured-effects)\n- [Boundaries: what it cannot do](#boundaries-what-it-cannot-do)\n- [Install](#install)\n- [Upgrading 0.2 to 0.3: breaking changes](#upgrading-02-to-03-breaking-changes)\n- [Privacy](#privacy)\n- [Design notes](#design-notes)\n- [Verification status](#verification-status)\n- [Known issues and plans](#known-issues-and-plans)\n- [Reporting](#reporting)\n- [License](#license)\n- [Relation to other plugins](#relation-to-other-plugins)"
+    },
+    {
+      "section": "Contents",
+      "text": "---"
+    },
+    {
+      "section": "What it solves",
+      "text": "Models have no eyes on your screen. So this happens:\n\n- You say \"something looks wrong in my interface\" and the model can only work from your description\n- The model says \"click that button\" — it has never seen that button\n- You change a setting and the model does not know what it became\n- You have an agent render an image or restyle a UI and **it cannot verify what it just produced**"
+    },
+    {
+      "section": "What it solves",
+      "text": "The first three are \"cannot see\". The fourth is \"cannot see **and** cannot self-verify\" — and that is\nthe real bottleneck for automation.\n\nThe plugin gives the model two things:\n\n1. **Sight**: capture the screen (whole desktop / one window / one region) and **hand the image\n   itself to the current model**, with no second model transcribing it\n2. **Verification**: locate changes between two images **exactly**, and let the model explain only\n   \"what it became\"\n\n---"
+    },
+    {
+      "section": "Screen",
+      "text": "| Tool | Purpose |\n|---|---|\n| `see_screen` | Capture and **hand the image to the current model**. `window` limits it to one window; `region` does a normalized crop (**the only way to buy detail** — see the next section). No second model by default; `transcribe: true` is the compatibility path for text-only session models |"
+    },
+    {
+      "section": "Comparing two images",
+      "text": "| Tool | Purpose |\n|---|---|\n| `see_diff` | Two images: **an exact local pixel diff locates the changed regions, then the model explains only those**. The model is never asked whether anything changed |\n\n> **There is no \"look at one image file\" tool here.** There used to be `see_image`, but it was a\n> worse duplicate of the built-in `read_image` (it added a model-to-model transcription hop).\n> With built-in vision available, that job belongs to the built-in tool, so it was removed.\n\n---"
+    },
+    {
+      "section": "How images reach the model (this decides how you use it)",
+      "text": "The screen tool **does not hand the image to another model to transcribe; it returns the image\nitself as a content block** for the current session model to look at. This path is verified.\n\nOn the **provider side** every image is force-normalised, and that decides all usage:\n\n```\n14px patch grid · 3:1 downsample per axis · 384 tokens per image, capped\n```"
+    },
+    {
+      "section": "How images reach the model (this decides how you use it)",
+      "text": "| What you captured | What the request actually carried | Screen pixel → request pixel |\n|---|---|---|\n| Full window 1942×1030 | ≈ 950×504 | 0.49 |\n| The same, downscaled to 1295×687 | ≈ 950×504 | 0.49 |\n| A crop of 675×387 | ≈ 879×504 | 1.30 |\n| **A crop of 346×346 (measured)** | **346×346, untouched** | **1.00** |\n\n(The 675×387 row is *derived from source constants*, not measured. The 346×346 row is measured.)"
+    },
+    {
+      "section": "How images reach the model (this decides how you use it)",
+      "text": "Normalisation actually happens in **two stages**, and the first one is measurable: the harness itself\ncaps the request at roughly **640,000 pixels** — a 1920×1080 screenshot went out as **1066×600**\n(639,600 px) — and the provider then squeezes that onto its token grid. **Cropping works because a\nsmall crop is passed through untouched by that first stage**, skipping the 0.555 linear downscale.\n\nThree consequences are therefore **necessary, not coincidental**:"
+    },
+    {
+      "section": "How images reach the model (this decides how you use it)",
+      "text": "1. **Source resolution does not affect accuracy at full-window scale** — two different resolutions\n   land on the *same* grid\n2. **Cropping is the only way to buy detail** — measured at roughly **2×** the effective detail density\n3. **Raising capture resolution buys no accuracy** — a larger source is simply compressed harder\n\n**This part is measured, not derived.** Same sidebar region, same prompt:"
+    },
+    {
+      "section": "How images reach the model (this decides how you use it)",
+      "text": "| Input | Session title as read |\n|---|---|\n| Full screen 1920×1080 | 杀**戳**尖塔模组制作 ✗ |\n| Crop 346×346 | 杀**戮**尖塔模组制作 ✓ |\n\nGround truth came from the session index under `${DSH_HOME}/storages`. At full screen, 4 of 5 titles\nwere character-exact and **1 was wrong**; after cropping, **none were wrong**. The full-screen failure\nmode was exactly **visually similar characters** (戮/戳 share the same right-hand radical) — precisely\nwhat a 0.49 sampling rate predicts."
+    },
+    {
+      "section": "How images reach the model (this decides how you use it)",
+      "text": "**So the intended usage is: pin the application with `window`, then zoom with `region`.**\n\n---"
+    },
+    {
+      "section": "Measured effects",
+      "text": "Everything below was measured on real runs, not designed."
+    },
+    {
+      "section": "Vision",
+      "text": "| Item | Result |\n|---|---|\n| Reading bar-chart values (synthetic, 4 bars) | **4/4 exact** (120 / 60 / 180 / 90), colours and ordering correct |\n| Reading a Blender Outliner list | **4/4** (`Camera / Cube / Light / 球体`), matching headless-Blender ground truth |\n| Reading a Chinese path from a title bar | Character-exact |\n| Judging which object is selected | **0/3 before a prompt fix, 2/2 after** |\n| `LOCATION` structured output | **2/2 emitted as required**, parseable into a `region` |\n| Reading sidebar session titles (full screen 1920×1080) | 4 of 5 titles character-exact, **1 character wrong** (`戮` → `戳`) |\n| Reading the same region (crop 346×346) | **5/5 character-exact**, and spurious spaces disappeared |"
+    },
+    {
+      "section": "Local pixel diff (the most reliable part)",
+      "text": "| Item | Result |\n|---|---|\n| Real photo (1225×1254 JPEG) with 2 programmatic edits | **Exactly 2 regions detected, zero false positives** |\n| Positional accuracy | Bounding boxes ~30–45 px larger than the true edits (= padding 10 + grid quantisation + dilation 1) |\n| An image compared with itself | 0 changed pixels, correctly reported as \"no change\" |\n| Synthetic calibration image (4 known edits) | All 4 regions matched; two of them were merged into one region by dilation (known trade-off) |"
+    },
+    {
+      "section": "Cost",
+      "text": "**Images are cheap**: the provider normalises every request image to **≤384 vision tokens** regardless\nof source size. The earlier claim of \"about 1000-1500 tokens per look\" **was wrong**.\n\n**What is expensive is having a model turn an image into text.** On the transcription compatibility\npath, that model first spends a large reasoning budget (measured 788–6621 chars) before emitting any\nprose. **That is why the default path calls no second model** — the image goes straight to the current\nmodel."
+    },
+    {
+      "section": "Cost",
+      "text": "---"
+    },
+    {
+      "section": "Boundaries: what it cannot do",
+      "text": "This is the most important section in this document."
+    },
+    {
+      "section": "1. It is a describer, not a gauge",
+      "text": "Measured: a **30 px** tall colour band was read as \"40–45 px\" — **about 40% error**.\n\n- ✅ Reliable: which is taller, which is greyed out, roughly upper-left or lower-right\n- ❌ Unreliable: is the gap 8 px, is this spacing 16 or 12"
+    },
+    {
+      "section": "2. Low-contrast differences are the danger zone",
+      "text": "Reverse validation works (grey vs saturated blue \"disabled button\" is easy), but the genuinely hard\ncases — two similar greys, a 1 px offset, a faint colour shift — are exactly where it misses, or\n**worse: confidently invents one**. And \"tell me what's wrong with my UI\" needs precisely those."
+    },
+    {
+      "section": "3. Shape semantics are a weak spot",
+      "text": "Measured case: a cube edited into a \"pointed little house\" in a Blender viewport.\n\n- The model saw \"a non-standard shape\" and said \"this object has been edited\"\n- But it **kept calling it a cube** and never **attributed** the mesh edit to the object\n\nHonest caveat: at that camera angle the point was genuinely subtle, so missing it is **partly\nforgivable**. But the pattern — not attributing a mesh edit to the object — appears beyond this one case."
+    },
+    {
+      "section": "4. Resolution is NOT the accuracy lever, but cropping IS",
+      "text": "Same Blender window, same prompt, same model — only the resolution changed:\n\n| Input size | Selected object | Says the cube is unselected | Edit evidence |\n|---|---|---|---|\n| 1942×1030 (native) | ✅ | not stated | only \"black triangular face\" |\n| 1295×687 (44.5% fewer pixels) | ✅ | ✅ explicitly \"not selected\" | ✅ \"non-standard shape… has been edited\" |"
+    },
+    {
+      "section": "4. Resolution is NOT the accuracy lever, but cropping IS",
+      "text": "**The downscaled one scored better.** Conclusion: the provider normalises its input, so at\nfull-window scale the source resolution does not affect accuracy. The mechanism is in the previous\nsection, and the same mechanism explains why **cropping works** — measured at roughly 2× the\neffective detail density."
+    },
+    {
+      "section": "5. One frame only — no time, no causality",
+      "text": "- ✅ It can answer: \"what is on the screen right now\"\n- ❌ It cannot answer: \"did this dialog appear because I clicked X\"\n\nRolling screen memory (`screen_memory` / `screen_watch`) existed to cover this and was **removed in\n0.3**: no real use case ever demonstrated its value, while every recorded frame wrote a file into the\nattachment store. So today it genuinely **sees only the present**."
+    },
+    {
+      "section": "6. The attachment store grows, and there is **no cleanup mechanism at all**",
+      "text": "Every vision call writes a content-addressed file into `${DSH_HOME}/attachments`, and **the plugin\ncannot prevent it**.\n\n**Measured (2026-09-14, this machine's web profile): 215 files / 40.24 MB**, accumulating 9 → 25 → 83\n→ 87 → 13 files per day since 09-10. Its composition:"
+    },
+    {
+      "section": "6. The attachment store grows, and there is **no cleanup mechanism at all**",
+      "text": "| Subtree | Contents | Measured |\n|---|---|---|\n| `v1/objects` | normalized attachments — what image blocks in session history reference | 118 files / 35.25 MB |\n| `v1/request-images` | model-request variant cache (per route and pixel budget) | 97 files / 4.98 MB |\n| `v1/tmp` | temporary | 0 |\n\n**Why the plugin cannot clean it up — this is not \"was not done\", it is not possible:**"
+    },
+    {
+      "section": "6. The attachment store grows, and there is **no cleanup mechanism at all**",
+      "text": "The `attachments` service describes itself as an **\"Immutable binary attachment service\"**, and its\nmethods are only `validateImage` / `saveImage(s)` / `readImage` / `imageHostPath` /\n`readImageRequest`. **There is no delete, no prune, no gc.** And `readImage` verifies that the bytes\nstill match the recorded reference, so deleting files behind the service's back makes images in past\nconversations **unreadable** — those references are persisted in the session log."
+    },
+    {
+      "section": "6. The attachment store grows, and there is **no cleanup mechanism at all**",
+      "text": "This is not specific to this plugin: **any** image entering a conversation writes here — ones you\npaste yourself, the built-in `read_image`, `generate_image`. The 80 WEBP files in the table above are\nnot from this plugin (it stores PNG only). The real fix belongs at the DSH level (a retention policy\nfor that immutable store), not inside one plugin."
+    },
+    {
+      "section": "6. The attachment store grows, and there is **no cleanup mechanism at all**",
+      "text": "0.2.1 had a `vision_storage` tool that reported and optionally pruned that directory; **0.3 removed\nit**. Removing it took away no capability: its \"prune\" was the dangerous half, and a safe prune never\nexisted. To see how big it is, just look at the directory.\n\n**The only honest way to reclaim the space**: delete `${DSH_HOME}/attachments` outright — at the cost\nof images in **every** past conversation no longer rendering. That is a trade-off, not a cleanup."
+    },
+    {
+      "section": "7. Windows only",
+      "text": "`scripts/capture.ps1` and `scripts/imageops.ps1` depend on PowerShell 5.1, `System.Drawing`,\n`PrintWindow` and `DwmGetWindowAttribute`. On other platforms they **fail honestly** rather than\npretending to succeed.\n\n---"
+    },
+    {
+      "section": "Option 1 — as a profile bundle (recommended, **installed on a real instance and composition-verified**)",
+      "text": "```bash\ndsh plugin --profile <profile-name> add <package-or-local-path>"
+    },
+    {
+      "section": "dsh plugin --profile web add C:\\path\\to\\dsh-screen-reader",
+      "text": "```\n\n`dsh plugin` forwards its arguments to pnpm and then **automatically appends every dependency that\ndeclares `dsh.bundle.patch` to the `dsh.profile.bundles` layer stack** — this package declares it, so\nno manual configuration is needed.bash\ndsh --profile <profile-name> --dump-config"
+    },
+    {
+      "section": "name: dsh-screen-reader",
+      "text": "```\n\nThen restart DSH and ask any session \"which tools do you have related to screens and images?\" — it\nshould list **two**: `see_screen` and `see_diff`.\n\n**The row is a `link:` to the package directory** (that is what pnpm does for local directory\ndependencies), so **do not delete or move that directory** — DSH would fail to find it at startup. To\nuninstall: `dsh plugin --profile <profile-name> remove dsh-screen-reader`."
+    },
+    {
+      "section": "name: dsh-screen-reader",
+      "text": "> ⚠️ **The 0.2.0 bundle was broken; 0.2.1 fixes it.** Reviewing the code, I found that `lib/screen.js`\n> and `lib/toolbox.js` located their PowerShell helpers with `new URL('capture.ps1', import.meta.url)`\n> — but in the package the JS lives in `lib/` while the helpers live in `scripts/`, so they looked for\n> a `lib/capture.ps1` that does not exist. Any bundle install failed on the first capture with\n> `The argument '.../lib/capture.ps1' to the -File parameter does not exist.`\n> The runtime now handles both layouts (the same source is correct as a preset and as a package), and\n> that check is now an assertion in the generator (`tools/build-lib.mjs`). If you installed 0.2.0,\n> please upgrade.\n> **To be explicit:** what is verified is the install and the composed tree. The tool list inside a\n> restarted session is still unconfirmed — that needs a process restart, which I did not perform\n> mid-session."
+    },
+    {
+      "section": "Option 2 — as an agent preset (**verified working**)",
+      "text": "Put `lib/` and `scripts/` into a preset directory, wire up `agent.cordis.yml`, and open a session on\nthat preset. See the DSH docs for preset syntax and relative-path resolution."
+    },
+    {
+      "section": "Self-check after installing",
+      "text": "> Which tools do you have related to screens and images?\n\nYou should see **two**: `see_screen`, `see_diff`.\n\n- **They appear** → installed. Then actually call `see_screen` once to confirm it really returns an image\n- **They do not** → the plugin was not loaded. Try the other install method, or file an issue with your\n  DSH version, profile name and the full error\n\n---"
+    },
+    {
+      "section": "Upgrading 0.2 to 0.3: breaking changes",
+      "text": "| Tool in 0.2 | In 0.3 | Why |\n|---|---|---|\n| `see_screen` | **kept** | Gives the agent eyes. This is the core |\n| `see_diff` | **kept** | Exact local diff; a model cannot do it |\n| `see_image` | **removed** | A worse duplicate of the built-in `read_image` |\n| `screen_watch` | **removed** | No real use case; wrote one attachment file per frame |\n| `screen_memory` | **removed** | Same (the time dimension is abandoned) |\n| `vision_routes` | **removed** | Diagnostic |\n| `vision_selftest` | **removed** | Never ran; covered only the diff chain, never `see_screen` |\n| `vision_storage` | **removed** | Diagnostic |"
+    },
+    {
+      "section": "Upgrading 0.2 to 0.3: breaking changes",
+      "text": "1. **If a prompt or script of yours names a removed tool, change it.** Calling a removed tool returns\n   \"unknown tool\"; it does not silently degrade\n2. **`see_screen`'s plugin declaration changed**: `inject` went from `['tools','timer']` to\n   `['tools']`. If you install as a preset and wrote your own `agent.cordis.yml`, you do not need to\n   change anything — `inject` lives in the plugin source, not in configuration\n3. **Preset rows need no change**: the two plugin rows are still `./plugin/screen.js` and\n   `./plugin/toolbox.js`; they simply register fewer tools\n4. Old versions do not auto-upgrade; the plugin is a local/package install with no update channel"
+    },
+    {
+      "section": "Upgrading 0.2 to 0.3: breaking changes",
+      "text": "**Unchanged:** the parameters and return values of the two kept tools, and how `cordis.patch.yml`\ninserts the row.\n\n---"
+    },
+    {
+      "section": "Privacy",
+      "text": "This section matters, because screen contents are the most sensitive thing here."
+    },
+    {
+      "section": "Privacy",
+      "text": "1. **Nothing happens unless something captures.** 0.3 removed continuous recording, so there is no\n   background capture at all. A screenshot is taken only when you (or the agent) explicitly call\n   `see_screen`\n2. **The screenshot goes only to the current session's model.** It travels the same channel as images\n   you paste yourself, under the same data policy. The plugin sends nothing to any third party\n3. **On disk the plugin keeps one image**: a fixed path overwritten in place\n   (`${DSH_HOME}/vision/screen.png`), deleted when the plugin stops\n4. **But the attachment store is a separate matter**: every vision call adds a content-addressed file\n   under `${DSH_HOME}/attachments` and **nothing can clean it up** (measured 215 files / 40.24 MB; see\n   boundary 6)\n5. **`see_diff` never captures the screen**: it only reads the two image files you point it at\n6. **Suggestion**: call it when needed; there is no longer any reason to leave it \"on\", because it no\n   longer captures anything by itself"
+    },
+    {
+      "section": "Privacy",
+      "text": "---"
+    },
+    {
+      "section": "Why the plugin modules have zero dependencies",
+      "text": "The loader resolves relative specifiers against the preset directory and bare package names against\nthe harness install — a local preset cannot reach `@deepseek-ai/dsh-tools`. So the plugin deliberately\ndepends on nothing: instead of `defineTool(...)` it constructs the runtime shape that helper produces,\nand writes raw JSON Schema (which is why every schema spells out `required`). It imports only\n`node:fs` and `node:url`."
+    },
+    {
+      "section": "Why the plugin modules have zero dependencies",
+      "text": "**Cost: no automatic parameter validation from `defineTool`**, so every `execute` does its own type\ncoercion."
+    },
+    {
+      "section": "Why half the tools were deleted",
+      "text": "The only criterion was: **can the model already do this itself?**\n\n- It can (look at an image, read text in an image) → delete, use the built-in capability\n- It cannot (see the screen, decide exactly which pixels changed) → keep\n\nBy that criterion `see_image` was duplication, the three diagnostics were not capabilities, and\ncontinuous recording had no demonstrated value against a certain cost (unbounded attachment growth).\nThe plugin went from 8 tools and ~78 KB of source to 2 tools and ~54 KB."
+    },
+    {
+      "section": "Why the diff is computed locally",
+      "text": "Vision models are poor at fine-grained change spotting and will invent \"plausible\" differences. A\npixel diff is exact, free, and yields bounding boxes. So the split is: **compute the diff locally,\nlet the model only explain it.**"
+    },
+    {
+      "section": "Why `see_screen` returns the image instead of text",
+      "text": "It used to hand the capture to a second model to transcribe. That path had three problems: an extra\nlayer of transcription error, subjection to that model's reasoning budget (which routinely consumed\nthe entire budget and left the prose empty), and a second billed call. Now the image is returned as a\ncontent block for the current model to look at. `transcribe: true` remains for text-only session models."
+    },
+    {
+      "section": "Why the prompt puts \"subject\" first",
+      "text": "Measured: if the prompt asks for verbatim text first, the model transcribes text and ignores the\npicture. After making \"answer the subject first, text last\" an ordering requirement, judging the\nselected object went from 0/3 to 2/2.\n\n---"
+    },
+    {
+      "section": "Verification status",
+      "text": "| Item | Status |\n|---|---|\n| Screen / window / region capture, DPI-native resolution | ✅ verified standalone (including failure paths and idempotence) |\n| Local pixel diff | ✅ verified standalone (synthetic + real photo) |\n| Vision prompt | ✅ measured over several rounds |\n| **Tools hand the image to the model** (image content block) | ✅ measured (a probe confirmed real delivery) |\n| `see_screen`'s transcription compatibility path | ✅ measured over several rounds (see Cost) |\n| **Bundle install** | ✅ **verified end to end** (0.3.0): `dsh plugin --profile web add <local dir>` succeeded; `--dump-config` shows `- id: screen-reader` in the composed tree; after a restart, querying `Tool.listTools` on the running process returns **`see_screen` and `see_diff`** — and they are visible in a session that did **not** select the screen preset, proving the row is host-plane and reaches every conversation. Both backends of the installed artifact were also exercised for real (capture 576×54; diff 4 regions with the input images surviving) |\n| **A single accuracy number** | ⚠️ only one **tiny-sample** character accuracy (below); **not a benchmark** |\n| Practical value of `screen_watch` / `screen_"
+    },
+    {
+      "section": "Verification status",
+      "text": "**There is still no \"92% accurate\" benchmark figure here.** Every item under \"Measured effects\" is a\nconcrete case, not a benchmark.\n\nThe closest thing to a number: in one comparison over **5 session titles / 50 Chinese characters**,\nfull-screen 1920×1080 got **1 character wrong**, and a 346×346 crop got **0 wrong**. That sample is\nfar too small to call an accuracy rate — all it shows is that the full-screen failure mode is\n**visually similar characters**, and that cropping fixes it.\n\n---"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "- **`see_screen` now decides for itself whether the session model accepts images, and transcribes\n  automatically when it does not.** The root cause: before sending, the provider scans `messages` for\n  an image, and if the model does not declare `image` in `inputModalities` it **throws `LlmError`\n  outright** (`dsh-llm-deepseek` L1602-1605) — **the whole request fails and the model never sees even\n  the text**. And image input is the minority of what a machine may have configured:"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "| Route | Image input |\n  |---|---|\n  | `deepseek-official/deepseek-v4-flash` | ❌ text only |\n  | `deepseek-official/deepseek-v4-pro` | ❌ text only |\n  | `deepseek-official/deepseek-v4-flash-vision-exp` | ✅ |\n  | `local-ollama/qwen3:1.7b` / `qwen3:0.6b` / `qwen3-4b-fast` | ❌ text only |"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "(Measured on one machine: 1 of 6 routes accepts images.) So in a text-only session this tool is not\n  merely unhelpful — **calling it once wrecks that turn**, and the agent learns to leave it alone. It\n  now reads `{provider, model}` from `agent.options` (via `agents.currentInitiator()`, verified\n  working) and asks `llm.resolveModelInfo(...).inputModalities`; when images are not accepted it takes\n  the transcription path.\n- **Two certain bugs fixed along the way:**\n  1. **The transcription path still sent the image** — the attachment was saved *before* the\n     `wantText` branch, and `render` adds an image block whenever `imageRef` is present. So\n     `transcribe: true` **never actually worked** on a text-only model. The transcription path now\n     writes no attachment and returns no image block.\n  2. **The transcription path always judged itself a failure** — `ok` was written as\n     `hasImage && ...`, and that path has no `imageRef` by design, so `ok=false` and `render` took its\n     first branch: \"看图失败：no capture\". A working path was disabled by its own success test. `ok`\n     is now decided by **which path actually ran**.\n- **When the session model cannot be determined, it is "
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "**What 0.3.1 changed (the capture output contract) — this is a breaking field rename:**"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "- **`TARGET` split into `SOURCE` / `SOURCESIZE` / `REGION`.** `capture.ps1` used to emit a `TARGET`\n  that carried both a description of *what was captured* **and** a size-looking string like\n  `1920x1080`, while `SIZE` held the artifact's dimensions. So `TARGET=virtual screen 1920x1080`\n  could accompany a written file of `1190x486` — anything reading that field as an image size read\n  the wrong number. **This is not hypothetical**: another session tripped over exactly that during a\n  real acceptance test. Now each of the four lines says one thing: `SOURCE` (words only, no\n  dimensions), `SOURCESIZE` (the captured surface), `REGION` (present only when a crop was used),\n  `SIZE` (the artifact — the only field describing the output).\n- `see_screen`'s output fields follow: `target` became `source` + `sourceSize` + `region`, and the\n  rendered line now separates the two sizes: `截图范围：virtual screen（区域 …）；源 1920x1080 → 成品 1190x486`.\n  **If a prompt or script of yours reads `target`, change it.**\n- Also fixed a bug I introduced while making that change: `$rx` is a `[double]`, and an expression\n  *starting* with a double makes PowerShell treat `+ ','` as numeric addition, throwing\n  `Cann"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "- **`see_diff` deleted your input images (data loss; fixed)**: `imageops.ps1`'s retention rule\n  deleted the N oldest files in the output directory **no matter who wrote them**. So when the two\n  images you wanted to compare happened to live in the same folder as the crop files, retention ran\n  after writing, protected this run's crops, and then ate your `a.png` / `b.png`. Silent data loss of\n  exactly the thing that cannot be regenerated. Retention now deletes **only files this tool itself\n  produced** (`diff*_A.png` / `diff*_B.png`), and every call site additionally protects the explicit\n  inputs it was handed. Verified: inputs survive, and the crops still stop growing\n- **Tool count 8 → 2** (criterion in Design notes). Removed `see_image`, `screen_watch`,\n  `screen_memory`, `vision_routes`, `vision_selftest`, `vision_storage`\n- Removed with them: the change fingerprint, rate-limit gate, rolling buffer, the `timer` dependency,\n  concurrency mutex — and a branch in `see_screen` that could never be reached (it always called\n  `observe` with `force=true`, so those checks were dead code)\n- `see_screen` source 50.3 KB → 35.1 KB; `toolbox` 27.5 KB → 19.1 KB\n- Breaking-change list in th"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "- **The published ps1 paths were broken (0.2.0's bundle could never work)**: now resolved at runtime\n  for both layouts (the same source is correct as a preset and as a package), with the generator\n  `tools/build-lib.mjs` committed to the repo and asserting it\n- **`capture.ps1 -Out` with a bare name polluted the current directory**: bare names now resolve into\n  `${DSH_HOME}/vision/` and get a `.png` extension; absolute paths unchanged\n- **Documentation correction**: crop detail density revised down from a derived \"2.7×\" to a\n  **measured ~2×**"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "1. **Produce a real accuracy benchmark** — the biggest remaining gap. It was going to be\n   `vision_selftest`, but that covered only the diff chain and never `see_screen`, which is where a\n   number is most needed. So it was removed and the benchmark needs redesigning\n2. Rewrite the tool definitions with `@deepseek-ai/dsh-tools`' `defineTool` to get parameter validation back\n3. Wire up the `Config` schema (tunables are file-header constants today)\n4. Trim the now-unreferenced modes in `scripts/imageops.ps1` (`calib-draw` / `calib-bad` / `storage` /\n   `prune`), which existed for removed tools\n5. Shape semantics: try a two-pass \"locate the subject, then zoom into it\", already proven to help\n   selection accuracy"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "- About 40 lines of duplicated vision-routing and error handling between `lib/screen.js` and\n  `lib/toolbox.js`. The reason is in the file headers: the loader caches modules by URL, and a\n  relative import would tie the two plugins' lifetimes together\n- Diff bounding boxes are 30–45 px larger than the true change (tunable via `-Padding` / `-Dilate` /\n  `-GridW`)\n- The time dimension (rolling screen memory) has been abandoned. If a real use case appears, it can be\n  recovered from git history (`git show 98306ac5:lib/screen.js`)"
+    },
+    {
+      "section": "Known issues and plans",
+      "text": "---"
+    },
+    {
+      "section": "Reporting",
+      "text": "This plugin is **experimental** and admits to plenty it cannot do. The feedback I want most is\n\"**here is where it got it wrong for you**\", not praise.\n\nPlease include:\n\n1. **Install method** (bundle / preset) and `dsh --version`\n2. The tool you called and its full arguments\n3. The complete return value or error (not just \"it doesn't work\")\n4. If an image is involved: **attach that image.** Without it I cannot tell whether the fault is the\n   plugin or the model\n\n---"
+    },
+    {
+      "section": "License",
+      "text": "MIT. See `LICENSE`.\n\n---"
+    },
+    {
+      "section": "Relation to other plugins",
+      "text": "| Plugin | Focus | Relation |\n|---|---|---|\n| Built-in `read_image` | Read one image file | `see_image` was a duplicate of it; removed in 0.3 |\n| [`@liustack/modlens`](https://www.dsh.so/artifact/modlens/) | Image Q&A with structured JSON (★3.9k, L5, Gold) | **More mature at \"ask about one image\"**. This plugin does not intend to compete there |\n| This plugin | **Eyes for the agent + exact pixel-change detection** | Its distinct value is \"the agent looks by itself\" and \"an exact local diff\", not image Q&A |"
+    }
+  ],
+  "skipped": []
+}

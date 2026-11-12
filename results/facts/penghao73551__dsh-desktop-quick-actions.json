@@ -1,0 +1,183 @@
+{
+  "repo": "penghao73551/dsh-desktop-quick-actions",
+  "commit": "2e6d2aec2e802e2775f024a561ac0b096c5f34a4",
+  "extracted_at": "2026-11-12T02:37:01.464661+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 40504,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 636,
+      "Markdown": 212,
+      "Other": 173,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "index.mjs",
+      "lib/client.js",
+      "lib/relaunch.ps1",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-desktop-quick-actions",
+    "version": "1.1.0",
+    "description": "Two round buttons at the DSH desktop sidebar foot: restart the app without a console window ever appearing, and open the DeepSeek top-up page in your browser.",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "desktop",
+      "restart",
+      "sidebar",
+      "quick-actions"
+    ],
+    "type": "module",
+    "main": "index.mjs",
+    "exports": {
+      ".": "./index.mjs",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.mjs",
+      "lib/client.js",
+      "lib/relaunch.ps1",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "os": [
+      "win32"
+    ],
+    "publishConfig": {
+      "access": "public"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-desktop-quick-actions bundle layer: mounts the plugin's host routes\n# (/dsh-quick-actions/info|restart|open) and its client half.\n- insert:\n    - id: desktop-quick-actions\n      name: 'dsh-desktop-quick-actions'"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "platform.deepseek.com",
+      "url": "https://platform.deepseek.com/top_up",
+      "where": "index.mjs:27"
+    },
+    {
+      "host": "platform.deepseek.com",
+      "url": "https://platform.deepseek.com/top_up",
+      "where": "lib/client.js:12"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-30T10:14:06Z",
+    "created_at": "2026-10-30T10:09:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.mjs",
+    "lib/client.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-desktop-quick-actions",
+      "text": "Two round buttons at the foot of the DSH desktop sidebar:\n\n- **Restart** — closes the app and starts it again, **without a console window ever appearing**.\n- **Top up** — opens the DeepSeek top-up page in your system browser.\n\nWindows only (the restart helper leans on WMI). The top-up button works anywhere the desktop\napp runs.\n\n---"
+    },
+    {
+      "section": "Why another restart button",
+      "text": "The obvious version of this plugin is four lines: `spawn('taskkill', ...)` then\n`spawn(exe)`. It fails in a way that is hard to guess from the code.\n\nA console-subsystem child created through WMI gets a console of its own. On Windows 11 the\nsystem hands every new console to **Windows Terminal**, which is a separate process that\nignores `SW_HIDE` and `-WindowStyle Hidden`. So:"
+    },
+    {
+      "section": "Why another restart button",
+      "text": "1. A black terminal window appears.\n2. You close it, because why would you keep it.\n3. Closing it sends `CTRL_CLOSE_EVENT` to everything attached to that console —\n   **including the app that was started as its child**.\n\nThe app dies a few seconds after it came back. Nothing in the log says why, because nothing\ncrashed: the window manager did exactly what it was told."
+    },
+    {
+      "section": "Why another restart button",
+      "text": "Measured on Windows 11 with DSH desktop 0.2.1-rc series. Before the fix: every\nrestart painted a `WindowsTerminal.exe` window. After: `Get-Process WindowsTerminal` returns\nnothing, and the relaunch log shows the whole path."
+    },
+    {
+      "section": "What the fix does",
+      "text": "| Layer | Mechanism | Why |\n|---|---|---|\n| Launcher | `Invoke-CimMethod Win32_Process Create` → **`wscript.exe`** running a generated `.vbs` with `WScript.Shell.Run cmd, 0, False` | `wscript.exe` is a GUI-subsystem program: it never allocates a console to begin with. No console, nothing for Terminal to take over. |\n| App start | `Invoke-CimMethod Win32_Process Create` for the app itself | The new process is owned by `WmiPrvSE.exe` and inherits no console, so no later window closing can reach it. |"
+    },
+    {
+      "section": "What the fix does",
+      "text": "`Start-Process` remains as a fallback if WMI is unavailable."
+    },
+    {
+      "section": "The port is read, never assumed",
+      "text": "The desktop host binds a **fresh port on every launch**. A hardcoded port number is wrong by\nthe second restart. The host half reads `req.headers.host` — the request that triggered the\nrestart already knows the port — and passes it to the helper as `-Port`. When it cannot be\ndetermined, the helper skips the port checks and waits on the process instead."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile desktop add dsh-desktop-quick-actions\n```\n\nRestart the app once by hand. After that, the button works."
+    },
+    {
+      "section": "Routes",
+      "text": "| Method | Path | Purpose |\n|---|---|---|\n| `GET` | `/dsh-quick-actions/info` | Diagnostics: app pid, exe path, helper present, top-up URL, detected port, platform |\n| `POST` | `/dsh-quick-actions/restart` | Start the detached helper |\n| `POST` | `/dsh-quick-actions/open` | Open an `https://` URL in the default browser |\n| `POST` | `/dsh-quick-actions/rendered` | Client reports where it painted (layout probe) |\n\n`/open` accepts **only `https://`** — no `file:`, no `javascript:`, no bare paths."
+    },
+    {
+      "section": "Safety",
+      "text": "- The helper reads the target pid's `ExecutablePath` first and **aborts** if it does not match\n  the executable it is about to start. It never kills a process that merely inherited the pid.\n- The original command line is preserved, so custom flags such as `--user-data-dir` survive a restart.\n- `NODE_OPTIONS` is stripped from the child environment so the relaunched app does not inherit\n  an injected loader.\n- Every step appends to `~/.dsh/desktop-quick-actions.log`. If a restart fails, that file says\n  which step refused and why."
+    },
+    {
+      "section": "Verify a restart",
+      "text": "```powershell"
+    },
+    {
+      "section": "after clicking the button",
+      "text": "Get-Content \"$env:USERPROFILE\\.dsh\\desktop-quick-actions.log\" -Tail 20\nGet-Process WindowsTerminal -ErrorAction SilentlyContinue   # expect no output\n```\n\nA healthy run looks like:\n\n```\nrelaunch: helper start: pid=41828 exe=<install>\\DeepSeek Harness.exe port=54264\nrelaunch: stopping app process\nrelaunch: starting app via WMI: \"<install>\\DeepSeek Harness.exe\" ...\nrelaunch: wmi start ok: new pid=39380\nrelaunch: app is up again; done\n```"
+    },
+    {
+      "section": "Compatibility",
+      "text": "- DSH desktop `0.2.1-rc.*` and later. Needs the `webServer` service, which the desktop host\n  provides; in a plain `dsh web` profile the routes are skipped and the plugin logs why.\n- Windows 10/11 for the restart half. Node 20+.\n- Nothing throws at import time — a failed loader entry makes the desktop app show its\n  recovery dialog, so every step is guarded and logged."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```bash\ndsh plugin --profile desktop remove dsh-desktop-quick-actions\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT."
+    }
+  ],
+  "skipped": []
+}

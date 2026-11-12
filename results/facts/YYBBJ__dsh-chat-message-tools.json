@@ -1,0 +1,140 @@
+{
+  "repo": "YYBBJ/dsh-chat-message-tools",
+  "commit": "a93ba99c9b1a08f02494fd6c8081b72c6381d28b",
+  "extracted_at": "2026-11-11T16:15:51.875949+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 108315,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 2466,
+      "Markdown": 37,
+      "Other": 21,
+      "YAML": 6
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "host.mjs",
+      "package.json",
+      "tests/host.mjs",
+      "tests/smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-chat-message-tools",
+    "version": "0.1.1",
+    "description": "Delete a message (and everything after it), edit and resend, or permanently delete a whole conversation from the DSH chat page.",
+    "type": "module",
+    "main": "host.mjs",
+    "exports": {
+      ".": "./host.mjs",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "host.mjs",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "conversation"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": ">=22.19"
+    },
+    "scripts": {
+      "test": "node tests/host.mjs && node tests/smoke.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-api-session-controller",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-conversation",
+          "@deepseek-ai/dsh-client-ui-chat",
+          "@deepseek-ai/dsh-client-ui-primitives"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-chat-message-tools bundle: adds the plugin's Host half entry.\n# All behaviour lives in the Client half (./client.js); the Host half is an\n# empty Cordis plugin that only exists so the Web plugin table can find us.\n- insert:\n    - id: dsh-chat-message-tools\n      name: dsh-chat-message-tools\n"
+    }
+  ],
+  "entries": [
+    "host.mjs",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "host.mjs:32"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tests/host.mjs:10"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "${host",
+      "url": "http://${host",
+      "where": "host.mjs:144"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-19T05:55:44Z",
+    "created_at": "2026-10-19T05:39:25Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "host.mjs",
+    "package.json",
+    "tests/host.mjs",
+    "tests/smoke.mjs"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "**功能：**\n\n这是一个 DSH Web 插件，把「改一条消息」「截断一段对话」「彻底删掉整个对话」「找回归档的对话」这四件事做成对话页里点得着的按钮，而不是让你去翻配置文件或手动删磁盘。单条消息的操作都在**当前对话里原地完成**：改完原地重发，归档后对话标题和侧栏位置不变；整条对话的删除是**真删磁盘文件**，不是只从列表里隐藏。\n\n安装：\n\n```\ndsh plugin add github:YYBBJ/dsh-chat-message-tools\n```\n\n注：安装完成之后重启DSH\n\n**它会删除什么（只有这些）**\n\n```\n<DSH_HOME>/sessions/<cwdKey>/<sessionId>/                         整个会话目录（session.v4.jsonl.zstd 等）\n<DSH_HOME>/storages/session_projcache/sessions/<sessionId>.json   投影缓存\n```"
+    },
+    {
+      "section": "Introduction",
+      "text": "另外会写一个待删清单 `<DSH_HOME>/storages/chat-message-tools/pending-deletes.json`（记录哪次删除被占用、下次启动重试）。\n\n**怎么保证不越界**\n\n- session id 必须匹配 `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`；\n- 每个候选路径都要求 `basename === sessionId`、父目录正好是 `<DSH_HOME>/sessions/<某个 cwdKey>` 或投影缓存目录，任何拼接都逃不出 `<DSH_HOME>`；\n- 删除前一定先 `archiveSession(id, { stopActivity: true })` 停止该会话的活动，再进行文件操作；\n- 删除动作在 UI 里永远走一个显式确认框，按钮写「永久删除」；单条消息的「归档此条及之后」不物理删除任何东西。\n\n**网络面**"
+    },
+    {
+      "section": "Introduction",
+      "text": "- Host 半边只注册 `POST /plugins/dsh-chat-message-tools/session/delete`，请求体只接受 `{ sessionId }`（≤8KB）；\n- 处理前校验来源：必须是回环地址、`Host` 必须是 `127.0.0.1`/`localhost`/`[::1]`、`Origin`（若有）必须与 `Host` 同源，否则 403；\n- 没有遥测、没有外发请求、不下载也不执行任何远程代码。\n\n**不可逆的部分**\n\n整条会话的物理删除**不可恢复**（这正是设计意图）。删除失败时会回滚、不会留下半删状态；日志被 agent 占用时会先隐藏、下次启动再清理。"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,120 @@
+{
+  "repo": "lyc0110/dsh-loop-guard",
+  "commit": "6c35f79bfe67e79e8ba929d940f09e7a9d5599b2",
+  "extracted_at": "2026-11-12T00:40:21.627946+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 26484,
+    "lines_by_language": {
+      "JSON": 33,
+      "JavaScript": 476,
+      "Markdown": 72,
+      "Other": 25,
+      "YAML": 33
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-loop-guard",
+    "version": "0.1.0",
+    "description": "DSH llm/stream guard: detects reasoning or text output that degenerates into a periodic repetition loop and aborts the request instead of streaming until the user gives up.",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.js",
+    "license": "MIT",
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "llm",
+      "loop",
+      "guard"
+    ],
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch: inserts this plugin into a profile's layer stack.\n- insert:\n    - id: loop-guard\n      name: 'dsh-loop-guard'\n      config:\n        # 空数组 = 对所有 provider / model 生效\n        providers: []\n        models: []\n        # 判定用的「末尾指纹」长度：太短会误伤正常重复措辞，太长会漏检长周期循环\n        probeChars: 96\n        # 回看窗口：指纹必须在这个窗口内重复 minOccurrences 次\n        regionChars: 3072\n        # 触发所需重复次数（含指纹自身）\n        minOccurrences: 5\n        # 单次请求累计输出多少字符之后才开始检测，避免开头就误杀\n        minTotalChars: 2048\n        # 每累计多少字符做一次判定\n        checkEveryChars: 128\n        # 绝对上限（字符），0 = 关闭；与重复检测并行的兜底刹车\n        maxTotalChars: 0\n        # 行级塌缩检测：最近 lineWindow 条「有内容的行」里，不同行不超过 maxUniqueLines 就判退化\n        lineWindow: 400\n        maxUniqueLines: 40\n        # 短于此长度的行（空行、单个括号）不计入行统计\n        lineMinChars: 2\n        # 每新增多少行做一次判定\n        lineCheckEvery: 20\n        # 命中后的动作：throw（抛出错误，由 agent-loop 归入 error finish）| end（静默结束流）\n        onDetect: 'throw'\n        # true = 只记日志不掐断（用于校准，建议首次安装时先开）\n        dryRun: false\n        # 非空则把命中记录追加写入该 jsonl 文件\n        logFile: ''\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-21T05:31:17Z",
+    "created_at": "2026-10-21T05:14:15Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-loop-guard",
+      "text": "在 `llm/stream` 上装一道刹车：模型把思考（或正文）退化成重复循环时，立刻中断本次请求，而不是一直吐到用户手动放弃。"
+    },
+    {
+      "section": "为什么要它",
+      "text": "一次真实会话（DeepSeek flash 档模型，经第三方兼容网关接入）里的两次卡死：\n\n| 位置 | reasoning 产出 | 耗时 | 结局 |\n|---|---|---|---|\n| turn 56 step 2 | 26,021 字符 / 8,604 行 | 32 s | 用户中断 |\n| turn 57 step 1 | 82,524 字符 / 28,512 行 | 96 s | 用户中断 |\n\nturn 57 那一轮的行内容里只有 47 种不同行，约 87% 是 `写。` / `执行。` / `**写 pwsh**。` / `好，执行。` 这类无内容标记。它全程只发生在 `reasoning-delta` 里，正文与工具调用都是 0，因此：\n\n- `repeat-tool-reminder` 只看「同名工具 + 相同参数」，永不触发；\n- `maxTokens` 是 50,000 且有巨大余额，不会命中；\n- `agent-loop` 不做流内重复检测。\n\n唯一的刹车是用户点中断。这个插件补上这一环。"
+    },
+    {
+      "section": "两道检测器",
+      "text": "1. **行级塌缩（主力）**：按行切开增量，维护最近 `lineWindow` 条「有内容的行」。窗口塞满后，若不同行的种类数 ≤ `maxUniqueLines`，判定塌缩。本次故障几百行内就会撞线。\n2. **字符周期重复**：把末尾 `probeChars` 个字符当指纹，在最近 `regionChars` 字符里数它出现几次，达到 `minOccurrences` 判定退化。用于抓没有换行的循环。\n3. **绝对上限**（默认关）：单次请求累计输出超过 `maxTotalChars` 字符直接掐断。\n\n空行与 trim 后长度 < `lineMinChars` 的行（单个 `}` 之类）不计入行统计，避免代码文件被误判。"
+    },
+    {
+      "section": "命中之后",
+      "text": "抛出一个 `code: 'repetition-loop'` 的错误（`onDetect: 'throw'`，默认）。agent-loop 本来就有「流中途出错」的完整清理路径（网络断流天天发生），会把它收成 `error finish`；`code` 用自定义值可以避免落进 `llm-retry` 的可重试码表，免得在同一个退化点上反复重试烧 token。\n\n`onDetect: 'end'` 则静默结束流（不伪造 `block-end` / `finish`）。"
+    },
+    {
+      "section": "配置",
+      "text": "| 键 | 默认 | 含义 |\n|---|---|---|\n| `providers` / `models` | `[]` | 空 = 全部；非空则只对列出的生效 |\n| `lineWindow` | `400` | 行级检测窗口（行数） |\n| `maxUniqueLines` | `40` | 窗口内不同行数上限 |\n| `lineMinChars` | `2` | 短于它的行不计入 |\n| `lineCheckEvery` | `20` | 每新增多少行判一次 |\n| `probeChars` | `96` | 指纹长度 |\n| `regionChars` | `3072` | 回看窗口 |\n| `minOccurrences` | `5` | 指纹重复几次算退化 |\n| `minTotalChars` | `2048` | 累计输出超过这个量才开始字符检测 |\n| `checkEveryChars` | `128` | 每累计多少字符判一次 |\n| `maxTotalChars` | `0` | 绝对上限，0 = 关 |\n| `onDetect` | `'throw'` | `throw` \\| `end` |\n| `dryRun` | `false` | `true` = 只记日志不掐断（校准用） |\n| `logFile` | `''` | 非空则把命中追加写进该文件 |"
+    },
+    {
+      "section": "验证",
+      "text": "`node lib/index.js` 跑内置用例（含「长清单 / 长代码样文本不得误杀」）。\n\n用原始会话数据离线回放（回放脚本依赖该会话归档，不随包发布）：\n\n- seq 1670（82,524 字符 / 96 s）：**2,304 字符处掐断**，占全长 2.8%，≈2.7 s 生成量。\n- seq 1662（26,021 字符 / 32 s）：4,736 字符处掐断，≈5.5 s。\n- 同一会话另外 327 个正常块（reasoning + 正文，共 588,930 字符）：**0 误杀**。\n- 把 5 个正常块各自放大到 20 万字符：仍 0 误杀。"
+    },
+    {
+      "section": "安装 / 回滚",
+      "text": "```\nplugin_manager set_plugin  target=dsh-loop-guard  enabled=false\n```\n\n改动只在 `llm/stream` 一条水位线上，且每次请求独立状态，禁用后立即恢复原样。"
+    }
+  ],
+  "skipped": []
+}

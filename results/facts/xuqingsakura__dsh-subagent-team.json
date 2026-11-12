@@ -1,0 +1,297 @@
+{
+  "repo": "xuqingsakura/dsh-subagent-team",
+  "commit": "4f10d55f0c3dab656ccd7c233b84cdaee579f76a",
+  "extracted_at": "2026-11-12T12:42:27.588064+00:00",
+  "tree": {
+    "files": 28,
+    "bytes": 269906,
+    "lines_by_language": {
+      "JSON": 68,
+      "JavaScript": 3763,
+      "Markdown": 840,
+      "Other": 297,
+      "Shell": 88,
+      "YAML": 311
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "docs/ANALYSIS.zh.md",
+      "docs/DESIGN.zh.md",
+      "docs/EVENTS.zh.md",
+      "docs/PLAN.zh.md",
+      "docs/TESTING.zh.md",
+      "install.ps1",
+      "package.json",
+      "scripts/setup.ps1",
+      "scripts/setup.sh",
+      "src/client.js",
+      "src/host/roles.mjs",
+      "src/index.mjs",
+      "src/team/events.mjs",
+      "src/team/index.mjs",
+      "src/team/mailbox.mjs",
+      "src/team/members.mjs",
+      "src/team/scheduler.mjs",
+      "src/team/snapshot.mjs",
+      "src/team/state.mjs",
+      "src/team/team-tools.mjs",
+      "src/team/util.mjs",
+      "src/team-runtime.mjs",
+      "test-smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-subagent-team",
+    "version": "0.4.0",
+    "private": true,
+    "type": "module",
+    "main": "./src/index.mjs",
+    "description": "DeepSeek Harness 子代理团队插件：9 个专职子代理（读/写/代码/文档/修复/审查/识图 + 统筹）+ 代码质量流水线 + 长任务(continuable) + Token/预算可调 + 性能优化；并内置持久化多代理团队运行时（建队/成员/任务依赖/邮箱/事件调度/浮层 UI）。遵循官方 bundle 形态，支持 GitHub / npm / 本地目录安装。",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "plugin",
+      "subagent",
+      "cordis",
+      "multi-agent",
+      "team",
+      "orchestration",
+      "subagent-team"
+    ],
+    "exports": {
+      ".": "./src/index.mjs",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json",
+      "./client": "./src/client.js"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "install.ps1",
+      "scripts",
+      "docs",
+      "README.md",
+      "README.zh.md",
+      "LICENSE",
+      "test-smoke.mjs"
+    ],
+    "scripts": {
+      "smoke": "node test-smoke.mjs"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": []
+      }
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/xuqingsakura/dsh-subagent-team.git"
+    },
+    "homepage": "https://github.com/xuqingsakura/dsh-subagent-team",
+    "author": "xuqingsakura <1801525562@qq.com>",
+    "bugs": {
+      "url": "https://github.com/xuqingsakura/dsh-subagent-team/issues"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-base": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-subagent": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-subagent-spawn-in-process": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-tool-subagent-control": "^0.1.1-rc.2"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# =============================================================================\n# dsh-subagent-team — DeepSeek Harness「子代理团队」插件（双半：配置 half + 编译 half）\n# -----------------------------------------------------------------------------\n# 设计要点（细节见 docs/DESIGN.zh.md 与 docs/PLAN.zh.md）：\n#   1. 独立优先：外部插件是增强项，不是前置条件。三个代码角色\n#      team_code_write / team_code_fix / team_code_review 由编译 half\n#      （src/index.mjs）注册，运行时按“已注册才注入”动态拼 toolFilter ——\n#      无外部插件也照常工作；有 ocr 插件时 team_code_review 自动借力。\n#   2. 能力边界：本 half 只挂“内置 + 自绘”的角色实例（read/coderead/vision/\n#      write/doc/lead），全部 allow 只引用 base 自带 + 本插件自注册的工具名，\n#      tools.restrict() 永不因外部插件缺失而失败。\n#   3. 代码质量团队：写代码/修代码/审代码/写文档 由编译角色 + 流水线保证；\n#      D1 = 外部 ocr 仅归 team_code_review；code_write/code_fix 用内置自审。\n#   4. 改必留痕、审必有记：会改文件的角色（write/code_write/doc/code_fix/lead）\n#      完成后必须用 team_note 落 change-*.md；review 必落 review-*.md。\n#   5. 长任务：write/doc/lead 为 continuable；编译角色为前台一次性（并行多用 team_run）。\n#   6. Token 可调 + 压缩/溢出兜底；性能：快任务一次性、稳定 KV、后台并行。\n#\n# 激活方式（见 README.zh.md；全部走官方安装流程 dsh plugin --profile <name> add）：\n#   A. 桌面端：  设置 → 插件 → 添加（本地目录绝对路径 D:/deepseek-harness-key/dsh-subagent-team，\n#               或本地 .tgz，或 npm name@version，或 github:owner/repo#分支）\n#               （或 .\\install.ps1，内部调用官方 `dsh plugin --profile web add <path>`）\n#   B. CLI：     dsh plugin --profile web add \"file:D:/deepseek-harness-key/dsh-subagent-team\"\n#   C. 临时：    dsh --profile web --patch <本文件绝对路径>\n#\n# 官方 reconcile 依据本包 package.json 的 \"dsh\": { \"bundle\": { \"patch\": \"./cordis.patch.yml\" } }\n# 自动把 dsh-subagent-team 追加进 dsh.profile.bundles；卸载用设置→插件移除或\n# `dsh plugin --profile web remove dsh-subagent-team`。请勿手工改 manifest 或 junction。\n#\n# 依赖：\n#   - 必需：@deepseek-ai/dsh-base（含 dsh-subagent / spawn provider /\n#     tool-subagent-control）。编译 half 只注入 ['tools','subagents']。\n#   - 可选增强（有则借力）：@alibaba-group/ocr-dsh-plugin（提供 ocr_review/ocr_scan，\n#     本桌面已装）——缺失时 team_code_review 自动用内置清单。\n#\n# 注意 1：toolFilter 引用的必须是【当前部署真实注册的全局工具名】——\n#       tools.restrict() 对未知名字会直接启动失败。本文件 allow 只用 base 工具 +\n#       本插件 runner 注册的工具名（team_run/team_note/team_stat/team_budget/team_env）。\n# 注意 2：continuable 需要 provider `spawn` 的 prepareContinuable 能力（base 已具备）。\n# 注意 3：每个实例 = 父级每请求一份 schema；用不到的角色请删行（见 README lean）。\n# =============================================================================\n\n- insert:\n    # -------------------------------------------------------------------------\n    # 0) team-runner —— 本插件编译 half（src/index.mjs）：\n    #    team_run（并行聚合）/ team_note（黑板+MD记录）/ team_stat（观测）/\n    #    team_budget（预算）/ team_env（能力发现）/ team_code_write/fix/review\n    #    （动态授权角色）。名字直接引用本 bundle（main=./src/index.mjs）。\n    # -------------------------------------------------------------------------\n    - id: team-runner\n      name: dsh-subagent-team\n      config:\n        # 可调项接线（P1-4）：team_run 默认并行度 / 外部工具并发闸 / 子代理超时（ms，0=禁用）。\n        parallel: 3\n        externalConcurrency: 1\n        subagentTimeoutMs: 300000\n        # 团队运行时（M1-M4）：成员 provider / 成员委派深度 / 团队规模上限。\n        memberProvider: spawn\n        memberMaxDepth: 1\n        maxMembers: 8\n\n    # =========================================================================\n    # A. 快任务（一次读取/理解/识图，前台即取即走）—— 不建持久会话、无 prompt 段\n    # =========================================================================\n\n    # -------------------------------------------------------------------------\n    # 1) team_read —— 只读文件侦察\n    # -------------------------------------------------------------------------\n    - id: team-tool-read\n      name: '@deepseek-ai/dsh-tool-subagent'\n      config:\n        provider: spawn\n        toolName: team_read\n        backgroundMode: one-shot\n        enableRunInBackground: false\n        maxDepth: 0\n        agentOptions:\n          maxTokens: 3072\n        persona: |-\n          你是一名只读文件侦察员。职责：用 read/glob/grep 快速弄清目标文件/目录。\n          铁律：\n          1) 只读不改：绝不调用 write/edit 等任何修改型工具。\n          2) 不返回原文：绝不把整个文件内容复制回结果，只给结构化摘要。\n          3) 先定位再精读：先 glob/grep 缩小范围，再 read 命中片段（可用 limit/offset）。\n          4) 文件很大时只读关键片段（头部+签名+关键函数），不要把整个大文件读进上下文。\n          输出格式（越紧凑越好）：\n          - 每个文件一行：<路径> 行L1-L2 — <一句结论>\n          - 末尾「关键结论」≤5 条，按重要性排序。\n          目标：用最少读取、最少 token 讲清楚「这里有什么、值得注意什么」。\n        toolFilter:\n          allow:\n            - read\n            - glob\n            - grep\n\n    # -------------------------------------------------------------------------\n    # 2) team_code_read —— 读/分析代码（跨文件、定义-引用-调用）\n    # -------------------------------------------------------------------------\n    - id: team-tool-code-read\n      name: '@deepseek-ai/dsh-tool-subagent'\n      config:\n        provider: spawn\n        toolName: team_code_read\n        backgroundMode: one-shot\n        enableRunInBackground: false\n        maxDepth: 0\n        agentOptions:\n          maxTokens: 5120\n        persona: |-\n          你是一名代码阅读员。职责：跨文件读懂代码结构与逻辑，给调用方可直接使用的结论。\n          铁律：\n          1) 只读：read/glob/grep；绝不修改代码。\n          2) 按 定义→引用→调用 组织结论，每条带 文件:行号 定位。\n          3) 不贴大段代码原文；用「文件:行号 — 一句说明」。\n          4) 大文件用 offset/limit 分段精读关键区域，别整读大文件。\n          5) 末尾「关键发现」≤5 条。\n          目标：调用方不重复读文件也能明白这段代码做什么、怎么工作。\n        toolFilter:\n          allow:\n            - read\n            - glob\n            - grep\n            # - lsp     # P4 opt-in：需先挂 @deepseek-ai/dsh-tool-lsp（本桌面未装）\n\n    # -------------------------------------------------------------------------\n    # 3) team_vision —— 识图 / OCR（多模态模型已接线 mimo-v2.5）\n    #    换模型：改 agentOptions.model，并确认 settings.yaml 里该模型声明\n    #    input: [text, image]（scripts/setup.ps1 可一键校验/补写）。\n    # -------------------------------------------------------------------------\n    - id: team-tool-vision\n      name: '@deepseek-ai/dsh-tool-subagent'\n      config:\n        provider: spawn\n        toolName: team_vision\n        backgroundMode: one-shot\n        enableRunInBackground: false\n        maxDepth: 0\n        agentOptions:\n          maxTokens: 6144\n          model: mimo-v2.5    # 多模态模型；图片输入已在该模型配置里声明（settings.yaml）\n        persona: |-\n          你是一名识图/OCR 专员。职责：用 read_image 精确解读图片。\n          输出规范：\n          1) 图片类型 + 核心内容（一段话）。\n          2) 图中全部可读文字：逐字照录（保持换行与表格结构）。\n          3) 布局/结构要点（图表、表格、界面元素、区域）。\n          4) 需要结合图片所在文件上下文时，先用 glob/grep 定位路径再 read_image。\n          若调用方给了明确路径，直接 read_image。\n          注意：若 read_image 报「模型不支持图片输入」，返回该错误并建议检查\n          settings.yaml 里 mimo-v2.5 是否声明 input: [text, image]。\n        toolFilter:\n          allow:\n            - read_image\n            - read\n            - glob\n            - grep\n\n    # =========================================================================\n    # B. 长任务（continuable：默认后台返回 subagentId、持久会话、可续做/追问）\n    # =========================================================================\n\n    # -------------------------------------------------------------------------\n    # 4) team_write —— 文件写入 / 长文档写入（通用文本；改必留痕）\n    # -------------------------------------------------------------------------\n    - id: team-tool-write\n      name: '@deepseek-ai/dsh-tool-subagent'\n      config:\n        provider: spawn\n        toolName: team_write\n        backgroundMode: continuable\n        maxDepth: 0\n        agentOptions:\n          maxTokens: 8192\n        persona: |-\n          你是一名文件写入员。职责：按调用方给出的完整内容写/替换文件。\n          规则：\n          1) 只执行调用方明确要求的内容；不擅自增改。\n          2) write/edit 前先 read 目标确认现状（遵守读-写约束）。\n          3) 返回仅一行汇总：变更文件列表 + 每个文件的路径/行数；绝不返回文件全文。\n          4) 若 write/edit 报错，返回具体错误与建议。\n          【改必留痕】每次写完文件后，必须用 team_note put 写一条 change-<任务名>-<时间戳>.md\n          记录（日期/变更文件+行号/改动摘要/验证/风险），并在回传报告里给出记录文件路径。\n          长任务：你是可续做的会话。内容多时按文件/阶段分批写（write 一个、汇总一次），\n          不要试图一次性把全部内容挤进一条回复；进度写到 .dsh-team/notes/ 黑板\n          被截断或被打断时，父级会 send_message 让你接着上次继续。\n        toolFilter:\n          allow:\n            - read\n            - write\n            - edit\n            - glob\n            - grep\n            - team_note\n\n    # -------------------------------------------------------------------------\n    # 6) team_doc —— 写文档（README / API / ADR / 教程）；改必留痕\n    # -------------------------------------------------------------------------\n    - id: team-tool-doc\n      name: '@deepseek-ai/dsh-tool-subagent'\n      config:\n        provider: spawn\n        toolName: team_doc\n        backgroundMode: continuable\n        maxDepth: 0\n        agentOptions:\n          maxTokens: 16384\n        persona: |-\n          你是一名文档作者。职责：阅读代码/需求，产出高质量、可读、可维护的文档。\n          工作流：\n          1) 先用 glob/grep/read 摸清代码入口、导出、数据结构与本项目风格（含现有 README）。\n          2) 按文档类型组织：README（概述/快速开始/目录结构/API/常见问题）、\n             API 文档（签名/参数/返回值/示例）、ADR（背景/决策/权衡）、教程（步骤化+可运行示例）。\n          3) 质量要求：示例必须真实可用、路径与函数名与代码一致、术语统一、\n             中文为主但代码与命令保持英文、不写空话。可与代码行号互相引用。\n          4) 需要时用 skill 加载官方文档/写作规范；长文档分批写（先大纲落黑板，\n             再逐节 write），进度写 .dsh-team/notes/。\n          5) 返回：产出文件列表 + 每份一文一段概述；不贴全文。\n          【改必留痕】每次产出/改动文档后，必须用 team_note put 写 change-<任务名>-<时间戳>.md\n          记录（日期/变更文件/摘要/验证/风险），并在回传报告里给出记录文件路径。\n          你是可续做的会话：被截断/被打断时父级会 send_message 让你接着黑板继续。\n        toolFilter:\n          allow:\n            - read\n            - glob\n            - grep\n            - write\n            - edit\n            - skill\n            - team_note\n            - todo_write\n            - job_list\n            - job_output\n            - job_kill\n\n    # -------------------------------------------------------------------------\n    # 9) team_lead —— 协作统筹（编译角色 + 通用委派 + 成员对话；校验成员记录）\n    #    深度 2 = 可再派一层专职；编译/专职角色（maxDepth 0）不再下钻。\n    #    注意：team_code_write/fix/review 由编译 half 动态授权（含按注册注入 ocr）。\n    # -------------------------------------------------------------------------\n    - id: team-tool-lead\n      name: '@deepseek-ai/dsh-tool-subagent'\n      config:\n        provider: spawn\n        toolName: team_lead\n        backgroundMode: continuable\n        maxDepth: 2\n        agentOptions:\n          maxTokens: 16384\n        persona: |-\n          你是「子代理团队」的统筹者。职责：拆解任务、分派给专职子代理、汇总成紧凑报告。\n          可用专职成员：team_read / team_code_read（读）、team_write（写文件）、\n          team_code_write（写代码）、team_doc（写文档）、team_code_fix（修代码）、\n          team_code_review（审代码，可用 ocr 与否视 team_env）、team_vision（识图）；\n          team_run（并行聚合）、team_note（黑板/记录）、team_stat（观测）、team_budget（预算）、\n          team_env（能力发现：确认 ocr/lsp/skill 本机是否可用）；\n          通用委派 subagent / subagent_fork；对成员 send_message 追问 / interrupt_agent 中止。\n          质量流水线：写 → team_code_review 审查（有 ocr_review 则优先）→ S0/S1 → team_code_fix\n          → 复审 → 通过后 team_doc 补文档。\n          工作法：\n          1) 先拆任务，判定需要哪些角色；优先只读角色先行。\n          2) 简单子任务前台调用拿结果；互不依赖且耗时的子任务用 team_run 并行（默认后台收集）。\n          3) 跨成员信息用共享黑板 .dsh-team/notes/：任务/结论/待办 + 文件:行号，避免重复扫描。\n          4) 【改必留痕、审必有记】分派写/修/文档/审查后，必须确认成员已落 change-*.md /\n             review-*.md 记录（缺则要求补齐），并把汇总归档为 report-<时间戳>.md。\n          5) 汇总报告必须紧凑：结论 / 关键文件:行号 / 变更 vs 风险；不贴大段中间输出。\n          团队运行时（多成员长期协作）：如需团队化推进，用 team_create 建队（你成为队长）→\n          team_member_add 添加成员（持续可续做的子代理）→ team_create_task 拆任务并接依赖 →\n          调度器自动把就绪任务派给空闲成员（成员用 team_claim_task / team_update_task 领活并回报）→\n          team_status 观测进度与收件箱 → team_send 与成员/队长互发消息 → 完成后 team_delete。\n          原则：最省 token、少来回、一次到位、留痕可查。\n        toolFilter:\n          allow:\n            - subagent\n            - subagent_fork\n            - send_message\n            - interrupt_agent\n            - list_agents\n            - team_read\n            - team_write\n            - team_code_read\n            - team_code_write\n            - team_doc\n            - team_code_fix\n            - team_code_review\n            - team_vision\n            - team_run\n            - team_note\n            - team_stat\n            - team_budget\n            - team_env\n            - team_create\n            - team_delete\n            - team_member_add\n            - team_member_remove\n            - team_create_task\n            - team_list\n            - team_claim_task\n            - team_update_task\n            - team_reassign_task\n            - team_send\n            - team_status\n            - read\n            - write\n            - edit\n            - glob\n            - grep\n            - skill\n            - todo_write\n            - job_list\n            - job_output\n            - job_kill\n"
+    }
+  ],
+  "entries": [
+    "src/index.mjs",
+    "cordis.patch.yml",
+    "package.json",
+    "src/client.js"
+  ],
+  "config": [
+    {
+      "name": "DSH_TOOLS_ENTRY",
+      "kind": "env",
+      "where": "test-smoke.mjs:73"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test-smoke.mjs:492"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/xuqingsakura/dsh-subagent-team.git",
+      "where": "package.json:54"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xuqingsakura/dsh-subagent-team",
+      "where": "package.json:56"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xuqingsakura/dsh-subagent-team/issues",
+      "where": "package.json:59"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "tool",
+      "name": "team_create",
+      "where": "test-smoke.mjs:404"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 29,
+    "pushed_at": "2026-08-24T12:44:55Z",
+    "created_at": "2026-08-22T12:09:47Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-08-24T12:44:55Z",
+      "inactive_days": 79,
+      "commit_count": 29,
+      "checked_at": "2026-11-12T12:42:27.588064+00:00",
+      "signals": [
+        "list:pushed_at=2026-08-24T12:44:55Z",
+        "list:commits=29"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/client.js",
+    "src/host/roles.mjs",
+    "src/index.mjs",
+    "src/team/events.mjs",
+    "src/team/index.mjs",
+    "src/team/mailbox.mjs",
+    "src/team/members.mjs",
+    "src/team/scheduler.mjs",
+    "src/team/snapshot.mjs",
+    "src/team/state.mjs",
+    "src/team/team-tools.mjs",
+    "src/team/util.mjs",
+    "test-smoke.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-subagent-team",
+      "text": "> DeepSeek Harness 的「子代理团队」插件：9 个分工明确的专职子代理 + 代码质量流水线 + 持久化多代理团队运行时。\n\n一个**官方 bundle 形态**的独立插件，可经 **GitHub / npm** 安装到 DSH（桌面端与 web 端皆可）。\n提供**模型可见的角色工具**（`team_read` / `team_write` / `team_code_write` / `team_code_review` …），\n以及一套**真正的事件驱动团队运行时**（建队 / 成员 / 任务依赖 / 邮箱 / 自动调度 / 「子代理」活动标签页）。\n\n---"
+    },
+    {
+      "section": "✨ 特性一览",
+      "text": "| 能力 | 说明 |\n|---|---|\n| **角色分工** | 9 个专职子代理：读、码读、识图、写文件、写码、写文档、修码、审码、统筹 |\n| **代码质量流水线** | 写 → 审（可借力 ocr） → 修 → 复审 → 补文档，闭环留痕 |\n| **可续做长任务** | `continuable`：会话被截断/打断后可续做、可追问 |\n| **Token / 预算可调** | 每角色 `maxTokens`、`team_budget` 结合外部并发槽 |\n| **性能优化** | 快任务一次性、稳定 KV、黑板去重、后台并行不阻塞 |\n| **独立优先** | 外部插件（如 ocr）是增强项，缺失时自动落内置兜底，**绝不报错** |\n| **团队运行时** | `team_create/member_add/create_task/claim/update/reassign/send/status/delete` + 自动调度 + 「子代理」标签页 |\n\n---"
+    },
+    {
+      "section": "🧩 架构（双 half + client）",
+      "text": "```\ncordis.patch.yml    配置 half：按官方 bundle 挂载 9 个角色实例（复用 dsh-subagent 委派引擎）\nsrc/index.mjs      编译 half：注册 team_run/team_note/team_stat/team_budget/team_env 与动态授权的 team_code_*\nsrc/team-runtime.mjs 团队运行时（M1-M4）：状态机 / 邮箱 / 事件调度 / 快照 / UI 路由\nsrc/client.js       client half：「子代理」标签页（按 __ModuleLoader__ 协议，零依赖）\n\n- **独立优先 + 能力边界**：每个角色只拿到完成本角色职责所需的工具与调用权；外部工具“注册了才注入”。\n- **改必留痕、审必有记**：所有会改文件的角色完成后必须写 `change-*.md`，审码角色必须写 `review-*.md`。\n\n---"
+    },
+    {
+      "section": "📦 安装（官方流程）",
+      "text": "本插件声明 `\"dsh\": { \"bundle\": { \"patch\": \"./cordis.patch.yml\" } }`，因此走 DSH **官方插件安装流程**：\n\n```powershell"
+    },
+    {
+      "section": "② CLI（等价）",
+      "text": "dsh plugin --profile web add \"github:xuqingsakura/dsh-subagent-team#main\"\ndsh plugin --profile web remove dsh-subagent-team\n```\n\n> 安装器会把本包追加进 `dsh.profile.bundles`。**改完 bundle / settings 后需完全退出并重启桌面端。**"
+    },
+    {
+      "section": "安装后配置（API Key / 视觉模型）",
+      "text": "```powershell\n.\\scripts\\setup.ps1 -CheckOnly   # 只读体检\n.\\scripts\\setup.ps1              # 检查 + 自动补写 mimo-v2.5 的 input（改前备份）\n.\\scripts\\setup.ps1 -SetKey      # Key 缺失时引导写入 $DSH_HOME\\.env\n```\n\n会校验/补写 `settings.yaml` 中视觉模型（如 `mimo-v2.5`）的 `input: [text, image]`（`read_image` 放行前提），\n并检查 OpenAI 兼容 Key（`.credentials.yaml` / 环境变量 / `.env`），不打印明文。\n\n---"
+    },
+    {
+      "section": "1) 角色工具（模型直接调用）",
+      "text": "`team_read` / `team_code_read` / `team_vision` / `team_write` / `team_code_write` / `team_doc` /\n`team_code_fix` / `team_code_review` / `team_lead`。在会话中直接调用即可。"
+    },
+    {
+      "section": "2) 团队工具（跨会话协作）",
+      "text": "| 工具 | 归属 | 作用 |\n|---|---|---|\n| `team_create` | 队长 | 建队（一个工作区一队） |\n| `team_member_add` / `team_member_remove` | 队长 | 添加/移除**可持续续做**成员 |\n| `team_create_task` | 队长 | 建任务，可接依赖、可指派 |\n| `team_list` | 全体 | 平铺列出成员/任务/状态/依赖 |\n| `team_claim_task` | 全体 | 领取就绪任务，返回 `attempt_id` |\n| `team_update_task` | 全体 | 状态流转（必须带 `attempt_id`，陈旧即拒） |\n| `team_reassign_task` | 队长 | 重试/改派/接管 |\n| `team_send` | 全体 | 邮箱互发 |\n| `team_status` | 全体 | 全量观测快照 |\n| `team_delete` | 队长 | 归档并解散 |"
+    },
+    {
+      "section": "2) 团队工具（跨会话协作）",
+      "text": "**快速开始**：\n```text\nteam_create {name, description}\nteam_member_add {name, role}\nteam_create_task {subject, description, dependencies, assignee}"
+    },
+    {
+      "section": "调度器自动把就绪任务派给空闲成员 → 成员 team_claim_task → 干活 → team_update_task",
+      "text": "team_status\nteam_delete {confirm: true}\n```\n\n---"
+    },
+    {
+      "section": "🔧 常见排查",
+      "text": "- `team_run` / 角色工具报 spawn 类错误 → 确认当前会话 **`maxDepth ≥ 1`**（宿主放开，非插件 bug）。\n- 报 `value.results[0].error must be a string` 等 schema 拒绝 → `node test-smoke.mjs` 的 schema 检查定位结构。\n- `team_env` 卡顿 → 确认装的是最新版（异步探测 ocr，不再阻塞事件循环）。\n- 改完不生效 → 完全退出并重启桌面端 + `Ctrl+F5` 硬刷新。\n\n---"
+    },
+    {
+      "section": "⚠️ 已知限制",
+      "text": "- `toolFilter` 是**可见性/组合**限制，不是安全边界（沙箱/授权由父级作用域继承）。\n- 9 个角色会让父级每请求 schema 开销随角色数线性增加；用不上的角色可删行（`cordis.patch.yml`）。\n- 子代理总花费靠 `maxTokens`/深度/工具面约束，暂无硬性全局 Token 预算（见 `docs/ANALYSIS.zh.md`）。\n- 换视觉模型需两处同步：`settings.yaml` 声明 `input` + 插件 `agentOptions.model`。\n\n---"
+    },
+    {
+      "section": "📚 文档",
+      "text": "- `docs/DESIGN.zh.md` — 设计要点与能力边界\n- `docs/ANALYSIS.zh.md` — 现状审计与风险\n- `docs/PLAN.zh.md` — 完善计划（S1–S7 / M1–M4 已实现）\n- `docs/EVENTS.zh.md` — 会话事件词汇表与守卫\n- `test-smoke.mjs` — 端到端 smoke"
+    },
+    {
+      "section": "📄 License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,257 @@
+{
+  "repo": "marshfolx/dsh-rescue-tui",
+  "commit": "31b91fee786075bb8fd032702b34570446397b63",
+  "extracted_at": "2026-11-12T00:53:03.903541+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 78944,
+    "lines_by_language": {
+      "JSON": 78,
+      "JavaScript": 1317,
+      "Markdown": 152,
+      "Other": 26,
+      "YAML": 297
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "lib/approvals.js",
+      "lib/fetch-provider.js",
+      "lib/index.js",
+      "lib/render.js",
+      "lib/sessions.js",
+      "package.json",
+      "pnpm-lock.yaml",
+      "scripts/install-profile.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-rescue-tui",
+    "version": "0.2.0",
+    "description": "Minimal emergency-maintenance terminal front-end for DeepSeek Harness: session picker + resume, inherited permission presets, live model/effort routing. · DSH 救援 TUI：WebUI 挂掉时的极简终端维护入口（会话续聊 / 权限继承 / 模型路由切换）。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./fetch-provider": "./lib/fetch-provider.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "engines": {
+      "node": ">=22"
+    },
+    "scripts": {
+      "check": "node --check lib/index.js && node --check lib/render.js && node --check lib/approvals.js && node --check lib/sessions.js && node --check lib/fetch-provider.js"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/marshfolx/dsh-rescue-tui.git"
+    },
+    "homepage": "https://github.com/marshfolx/dsh-rescue-tui#readme",
+    "bugs": {
+      "url": "https://github.com/marshfolx/dsh-rescue-tui/issues"
+    },
+    "author": "marshfolx",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek",
+      "deepseek-harness",
+      "tui",
+      "terminal",
+      "rescue",
+      "emergency-maintenance",
+      "session",
+      "permission"
+    ],
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "LICENSE",
+      "README.md"
+    ],
+    "publishConfig": {
+      "access": "public",
+      "registry": "https://registry.npmjs.org/"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-agent": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-llm": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-session": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-web": "^0.1.1-rc.2"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-agent": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-llm": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-session": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-web": "^0.1.1-rc.2"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-rescue-tui bundle patch — rides directly over @deepseek-ai/dsh-base.\n#\n# Design goals (emergency maintenance when the WebUI is down):\n#   * Keep the base permission surface untouched: sandbox-policy + approval +\n#     permission-presets stay exactly as dsh-base mounts them, so sessions\n#     created here behave like WebUI sessions (default workspace-write + ask,\n#     three presets: read-only / workspace-write / danger-full-access).\n#   * Trim every heavy collaboration row (subagents, workflow, ralph, goal,\n#     plan-mode, skills) — rescue work is one human and one agent.\n#   * Add a terminal HTTP fetch provider so web_fetch can be enabled on top of\n#     the shipped search-only tool-web composition.\n\n# No HMR in rescue mode; the launcher watch fallback still applies user layers.\n- id: hmr\n  disabled: true\n\n# ── trimmed collaboration surface ────────────────────────────────────────────\n- id: plan-mode\n  disabled: true\n\n- id: subagent\n  disabled: true\n- id: subagent-spawn-in-process\n  disabled: true\n- id: subagent-fork-in-process\n  disabled: true\n- id: tool-subagent\n  disabled: true\n- id: tool-subagent-fork\n  disabled: true\n- id: tool-subagent-control\n  disabled: true\n- id: tool-subagent-list-agents\n  disabled: true\n- id: tool-subagent-report\n  disabled: true\n\n- id: workflow-worker-thread\n  disabled: true\n- id: tool-workflow\n  disabled: true\n- id: tool-ralph\n  disabled: true\n\n- id: goal\n  disabled: true\n- id: goal-round-driver\n  disabled: true\n- id: command-goal\n  disabled: true\n- id: tool-goal\n  disabled: true\n\n- id: skill\n  disabled: true\n- id: skill-filesystem\n  disabled: true\n- id: tool-skill\n  disabled: true\n\n# ── web tools: keep search as shipped, enable fetch over our provider ────────\n# A patch replaces a row's whole config, so restate the base values we keep.\n- id: tool-web\n  config:\n    fetch: true\n    searchTimeoutMs: 60000\n\n# The `web` seam row is intentionally NOT overridden: with no configured fetch\n# provider id, ctx.web auto-selects the only registered fetch provider (ours).\n\n# ── this bundle's own rows ───────────────────────────────────────────────────\n- insert:\n    # Registers a minimal anonymous HTTPS fetch provider on ctx.web.\n    - id: rescue-web-fetch\n      name: 'dsh-rescue-tui/fetch-provider'\n\n    # The interactive terminal front door. Keeps the process alive; exits via\n    # ctx.appExit on /exit or double Ctrl+C at the menu.\n    - id: rescue-runner\n      name: 'dsh-rescue-tui'\n      inject: [agentDefaultModel, agents, sessions]\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/fetch-provider.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "RESCUE_TRACE",
+      "kind": "env",
+      "where": "lib/index.js:35"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/marshfolx/dsh-rescue-tui.git",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/marshfolx/dsh-rescue-tui#readme",
+      "where": "package.json:23"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/marshfolx/dsh-rescue-tui/issues",
+      "where": "package.json:25"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "package.json:50"
+    },
+    {
+      "host": "pnpm.io",
+      "url": "https://pnpm.io/installation",
+      "where": "scripts/install-profile.mjs:83"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/dsh-agent": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-llm": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-session": "^0.1.1-rc.2",
+      "@deepseek-ai/dsh-web": "^0.1.1-rc.2"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-08-24T17:59:53Z",
+    "created_at": "2026-08-24T17:11:01Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/approvals.js",
+    "lib/fetch-provider.js",
+    "lib/index.js",
+    "lib/render.js",
+    "lib/sessions.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-rescue-tui",
+      "text": "> WebUI 挂掉时的极简终端维护入口：一个纯插件挂载的 DSH profile bundle。\n> 会话续聊 · 权限三层继承 · 终端审批 · 模型路由切换。零核心改动，装上即用。\n\n[](https://www.npmjs.com/package/dsh-rescue-tui)\n[](LICENSE)"
+    },
+    {
+      "section": "适用场景",
+      "text": "- **WebUI 挂了**：web server 起不来、端口被占、浏览器端异常——会话日志在磁盘上完好，TUI 直接续聊\n- **SSH / 远程维护**：没有图形界面，一个终端就是全部\n- **低配环境 / 应急救援**：零第三方 UI 依赖（原生 readline + ANSI），残破环境也能跑"
+    },
+    {
+      "section": "功能特性",
+      "text": "| | |\n|---|---|\n| 🔄 **会话续聊** | 启动列出历史会话（当前工作区优先），数字键 resume；无标题会话自动节选首条用户 prompt 作标题；崩溃残缺回合由持久化层自动合成关闭 |\n| 🛡️ **权限三层继承** | 原样挂载 `sandbox-policy` + `approval` + `permission-presets`：默认 `workspace-write`（写入限工作区）+ `ask` 审批；越界操作终端弹 `y/N` |\n| 🔀 **模型路由切换** | `/model` 动态列出 llm-pi-ai 目录全部分组；同一会话日志原位重开换路由（历史保留）；`save` 可写入默认设置 |\n| 🧠 **推理强度** | `/effort low\\|high\\|max\\|off` 独立调整，不必换模型 |\n| 🌐 **网络工具** | `web_search` 开箱即用；自研 ~100 行匿名 HTTP fetch provider 补齐 `web_fetch`（HTML→markdown、私网拦截、截断控制） |\n| ✂️ **工具面裁剪** | 保留 pwsh/bash、fs 编辑、todo、jobs、搜索抓取；禁用 subagent/workflow/ralph/goal/plan-mode/skills——救援场景一个人一个 agent 就够 |"
+    },
+    {
+      "section": "安装",
+      "text": "前置：Node ≥ 22、官方 [`@deepseek-ai/dsh`](https://www.npmjs.com/package/@deepseek-ai/dsh) CLI、pnpm ≥ 10。"
+    },
+    {
+      "section": "方式 A · 一键安装脚本（Node，跨平台）",
+      "text": "```powershell\ngit clone https://github.com/marshfolx/dsh-rescue-tui.git\nnode dsh-rescue-tui/scripts/install-profile.mjs                        # 默认创建 rescue profile，从 npm 安装"
+    },
+    {
+      "section": "或直接从 GitHub 安装：",
+      "text": "node dsh-rescue-tui/scripts/install-profile.mjs --package \"github:marshfolx/dsh-rescue-tui\""
+    },
+    {
+      "section": "开发模式：源码直连",
+      "text": "node dsh-rescue-tui/scripts/install-profile.mjs --link /abs/path/to/this-repo\n```"
+    },
+    {
+      "section": "方式 B · 手动安装（任何 profile 通用）",
+      "text": "```powershell\n$dir = \"$env:USERPROFILE\\.dsh\\profiles\\rescue\"\nNew-Item -ItemType Directory -Force $dir | Out-Null"
+    },
+    {
+      "section": "1. cordis.yml 与 cordis.patch.yml 写入空模板 '[]'（launcher 每次 boot 会重写 cordis.yml）",
+      "text": "Set-Content \"$dir\\cordis.yml\" \"[]\"; Set-Content \"$dir\\cordis.patch.yml\" \"[]\""
+    },
+    {
+      "section": "4. 安装并启动",
+      "text": "pnpm install --dir $dir\ndsh --profile rescue\n```"
+    },
+    {
+      "section": "方式 C · 开发模式（源码直连）",
+      "text": "```powershell"
+    },
+    {
+      "section": "改代码即时生效，无需重装（插件自身依赖安装在仓库根 node_modules）",
+      "text": "```"
+    },
+    {
+      "section": "使用",
+      "text": "```text\n$ dsh --profile rescue\ndsh rescue TUI — WebUI 挂掉时的极简维护入口\n── 会话列表 ──\n 1  2026-08-24 20:27 · dsh-fix-ui · 156d8a5f-bf81  修复登录超时的问题"
+    },
+    {
+      "section": "指令一览",
+      "text": "| 分组 | 指令 |\n|---|---|\n| 会话 | `/sessions` 回列表 · `/new` 新会话 · `/exit` 退出 |\n| 权限 | `/perm` 查看当前与可选 · `/perm read-only\\|workspace-write\\|danger-full-access` 切换 |\n| 路由 | `/model` 列出全部 provider/model · `/model opencode/mimo-v2.5-free [effort] [save]` 切换 |\n| 强度 | `/effort` 查看 · `/effort low\\|high\\|max\\|off` |\n| 审批 | `y` / `n` 回应当前审批 · `/y` `/n` 预答下一次审批 |\n| 其它 | `/help` 帮助 |\n\n回合进行中：直接输入 = 排队追问；Ctrl+C = 打断当前回合；空闲双击 Ctrl+C = 退出。\n管道/脚本调用时 EOF 会 fail-closed：未决审批按拒绝处理。"
+    },
+    {
+      "section": "权限模型",
+      "text": "与 WebUI 完全同源的机制，零改动继承：\n\n| 预设 | 文件沙箱 | 审批 |\n|---|---|---|\n| `read-only` | 只读 | ask |\n| `workspace-write`（默认） | 限工作区 + 会话私有临时目录 | ask |\n| `danger-full-access` | 不限 | never |\n\n会话创建时钉扎权限预设，resume 保留原有效权限；切换前端不产生权限漂移。"
+    },
+    {
+      "section": "工作方式",
+      "text": "```text\ndsh --profile rescue\n  → @deepseek-ai/dsh-base          （模型适配器 / 工具 / 持久化 / 沙箱 / 审批 全部来自 base）\n  → dsh-rescue-tui cordis patch    （裁剪协作工具行 + 插入三行）\n      ├─ rescue-runner             终端 REPL：会话选择、resume、事件流渲染、审批应答"
+    },
+    {
+      "section": "验证矩阵",
+      "text": "| 场景 | 结果 |\n|---|---|\n| 组合校验 + boot→菜单→退出 | ✓ |\n| resume 含崩溃残尾的真实历史会话 + 续聊 | ✓ |\n| 越界写入被沙箱拒绝 → 升级审批 y 放行 → 文件落盘 | ✓ |\n| `/perm` 查看 / 切换 / 回读 | ✓ |\n| 单回合并行 pwsh + web_search | ✓ |\n| `/model` 切 opencode/mimo-v2.5-free（日志实证 `\"provider\":\"opencode\"` ×6） | ✓ |\n| `/effort` max → low 切换与回读 | ✓ |"
+    },
+    {
+      "section": "已知边界",
+      "text": "- WebUI 后端进程仍在运行时，不要两边同时续同一个 session（追加式日志双写冲突）\n- fetch provider 无 JS 渲染能力，SPA 页面拿不到动态内容——此类需求用 pwsh 跑 curl 兜底\n- 上游偶发 `PI_AI_ERROR: network_error` 会提前结束回合，重发即可（不做静默自动重试）\n- peer 依赖对齐 `@deepseek-ai/*@^0.1.1-rc.2`，harness 大版本升级需回归\n- Windows 下 bash 行由 base 平台门控自动禁用（pwsh 栈接管），POSIX 反之"
+    },
+    {
+      "section": "开发",
+      "text": "```powershell\npnpm install                       # 仓库根执行\npnpm check                         # node --check 全部模块\n$env:RESCUE_TRACE='1'; dsh --profile rescue   # stderr 过渡探针\n```\n\n插件契约照搬官方 headless runner：`export { name, inject, apply }`，服务经 `ctx.get()` 获取，\n事件经 `ctx.on('session/event' | 'approval/request')` 订阅——无构建步骤，纯 ESM JS。"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE) © marshfolx"
+    }
+  ],
+  "skipped": []
+}

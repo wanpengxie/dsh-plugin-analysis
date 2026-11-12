@@ -1,0 +1,911 @@
+{
+  "repo": "gambn/dsh-dual-proxy",
+  "commit": "e967f0a19a1b68f184d43ec1061892c0829c26bd",
+  "extracted_at": "2026-11-11T20:26:51.179803+00:00",
+  "tree": {
+    "files": 42,
+    "bytes": 215423,
+    "lines_by_language": {
+      "JSON": 116,
+      "JavaScript": 4673,
+      "Markdown": 484,
+      "Other": 42,
+      "YAML": 60
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "SECURITY.md",
+      "bin/claude-dual-proxy.js",
+      "bin/dsh-dual-proxy.js",
+      "contrib/dsh-dual-proxy.service",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "src/adapters/dsh.js",
+      "src/core.js",
+      "src/engines.js",
+      "src/fetch-route.js",
+      "src/gateways.js",
+      "src/index.js",
+      "src/paths.js",
+      "src/pref.js",
+      "src/restart.js",
+      "src/retry-policy.js",
+      "src/server.js",
+      "test/claude-launcher.test.js",
+      "test/cli.test.js",
+      "test/config-surface.test.js",
+      "test/connect.test.js",
+      "test/engines.test.js",
+      "test/fetch-route.test.js",
+      "test/gateways.test.js",
+      "test/health.test.js",
+      "test/helpers.js",
+      "test/http.test.js",
+      "test/lifecycle.test.js",
+      "test/package.test.js",
+      "test/paths.test.js",
+      "test/pref.test.js",
+      "test/restart.test.js",
+      "test/retry-policy.test.js",
+      "test/server.test.js",
+      "test/tls.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-dual-proxy",
+    "version": "0.7.2",
+    "description": "Agent gateway manager: picks a working gateway among proxies and direct, verifies the model channel, and switches online; DSH plugin plus standalone CLI.",
+    "license": "MIT",
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "deepseek-harness",
+      "http-proxy",
+      "failover",
+      "undici"
+    ],
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./core": "./src/core.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/gambn/dsh-dual-proxy.git"
+    },
+    "homepage": "https://github.com/gambn/dsh-dual-proxy#readme",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "bin": {
+      "dsh-dual-proxy": "bin/dsh-dual-proxy.js",
+      "claude-dual-proxy": "bin/claude-dual-proxy.js"
+    },
+    "scripts": {
+      "test": "node --test test/*.test.js",
+      "start": "node bin/dsh-dual-proxy.js"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.5",
+      "undici": "8.12.3"
+    },
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "files": [
+      "bin",
+      "src",
+      "contrib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "SECURITY.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "author": "Gambn",
+    "bugs": {
+      "url": "https://github.com/gambn/dsh-dual-proxy/issues"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-dual-proxy —— DSH bundle patch.\n# 插入一个 loader 条目；配置字段与 src/index.js 的 Config 对齐，\n# 在 dsh ≥ 0.1.7 上会以「设置 → 插件」里的表单呈现（volatile 字段）。\n- insert:\n    - id: dsh-dual-proxy\n      name: 'dsh-dual-proxy'\n      config:\n        listenHost: '127.0.0.1'\n        listenPort: 7898\n        # EADDRINUSE 时按端口 +1 重试的个数；默认 0 保持固定入口\n        portFallback: 0\n        upstreamHost: '127.0.0.1'\n        upstreamPort: 7897\n        # 第一个候选的完整 URL（可含 user:pass）；非空时覆盖 upstreamHost/upstreamPort\n        upstreamUrl: ''\n        # 额外候选网关（host:port，逗号分隔）；启动环境里的 HTTP(S)_PROXY 也会自动加入\n        gateways: ''\n        # 把宿主进程的 fetch（模型请求）引到本代理上\n        routeHostFetch: true\n        # 用真实请求验证“到模型端点”的通道；401/403 也算通\n        healthUrl: 'https://api.deepseek.com'\n        healthIntervalMs: 60000\n        # 已知路径（缓存/首选）的超时：它挂了要快点换\n        fastFailTimeoutMs: 2000\n        # 失败网关的冷却时长；冷却期间排到最后\n        cooldownMs: 30000\n        # 默认 false：POST/PATCH 在连接建立后失败不再换路重放，回 502 说明可能已送达\n        retryNonIdempotentAfterSend: false\n        # 带 Idempotency-Key 时允许发送后重放；默认关闭，且不验证上游是否真的去重\n        retryNonIdempotentWithIdempotencyKey: false\n        attemptTimeoutMs: 5000\n        # 普通 HTTP 等响应头的上限（响应体开始流之后不再计时）\n        responseTimeoutMs: 60000\n        prefTtlMs: 60000\n        verifyTls: true\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "bin/dsh-dual-proxy.js",
+    "bin/claude-dual-proxy.js",
+    "src/core.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "LISTEN_PORT",
+      "kind": "env",
+      "where": "bin/claude-dual-proxy.js:68"
+    },
+    {
+      "name": "CLAUDE_BIN",
+      "kind": "env",
+      "where": "bin/claude-dual-proxy.js:96"
+    },
+    {
+      "name": "HTTPS_PROXY",
+      "kind": "env",
+      "where": "test/claude-launcher.test.js:74"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "cordis.patch.yml:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/gambn/dsh-dual-proxy.git",
+      "where": "package.json:24"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/gambn/dsh-dual-proxy#readme",
+      "where": "package.json:26"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/gambn/dsh-dual-proxy/issues",
+      "where": "package.json:60"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "src/adapters/dsh.js:35"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "src/adapters/dsh.js:73"
+    },
+    {
+      "host": "host",
+      "url": "http://host:port`",
+      "where": "src/gateways.js:29"
+    },
+    {
+      "host": "`",
+      "url": "https://`",
+      "where": "src/gateways.js:30"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:12334",
+      "where": "test/claude-launcher.test.js:52"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7896",
+      "where": "test/claude-launcher.test.js:55"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7896",
+      "where": "test/claude-launcher.test.js:58"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7896",
+      "where": "test/claude-launcher.test.js:60"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7896",
+      "where": "test/claude-launcher.test.js:61"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/claude-launcher.test.js:78"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/cli.test.js:71"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/cli.test.js:73"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://alice:secret@127.0.0.1:8080",
+      "where": "test/cli.test.js:79"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://alice:secret@127.0.0.1:8080",
+      "where": "test/cli.test.js:80"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/cli.test.js:82"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/cli.test.js:91"
+    },
+    {
+      "host": "not",
+      "url": "http://alice:secret@not",
+      "where": "test/cli.test.js:99"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/cli.test.js:104"
+    },
+    {
+      "host": "not",
+      "url": "http://alice:secret@not",
+      "where": "test/cli.test.js:105"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/cli.test.js:115"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://alice:secret@127.0.0.1:8080",
+      "where": "test/cli.test.js:132"
+    },
+    {
+      "host": "health.local",
+      "url": "http://alice:secret@health.local:8080/path?token=abc",
+      "where": "test/cli.test.js:134"
+    },
+    {
+      "host": "health.local",
+      "url": "http://health.local:8080/path",
+      "where": "test/cli.test.js:147"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:9"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:12"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:18"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:28"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:30"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:43"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:45"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:46"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:49"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/fetch-route.test.js:50"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:12334",
+      "where": "test/gateways.test.js:16"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://alice:secret@127.0.0.1:8080",
+      "where": "test/gateways.test.js:18"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://u%40ser:p%3Ass@127.0.0.1:8080",
+      "where": "test/gateways.test.js:26"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://u%ZZ:p@127.0.0.1:8080",
+      "where": "test/gateways.test.js:31"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://proxy.local:8443/",
+      "where": "test/gateways.test.js:35"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:12334",
+      "where": "test/gateways.test.js:47"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7898",
+      "where": "test/gateways.test.js:57"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://alice:secret@127.0.0.1:7897",
+      "where": "test/gateways.test.js:67"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://second:two@127.0.0.1:7897",
+      "where": "test/gateways.test.js:77"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/gateways.test.js:91"
+    },
+    {
+      "host": "127.0.0.2",
+      "url": "http://alice:secret@127.0.0.2:8888",
+      "where": "test/gateways.test.js:107"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/gateways.test.js:118"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://u%ZZ:p@127.0.0.1:8080",
+      "where": "test/gateways.test.js:118"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897",
+      "where": "test/gateways.test.js:141"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://alice:secret@127.0.0.1:8080",
+      "where": "test/gateways.test.js:149"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/gateways.test.js:150"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/health.test.js:12"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/health.test.js:42"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/health.test.js:64"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/health.test.js:95"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/health.test.js:126"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:15"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:31"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:47"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:67"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:91"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:97"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:125"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:145"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:169"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:194"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:242"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:259"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:281"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:298"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:317"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:335"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:355"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/patch",
+      "where": "test/http.test.js:371"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:393"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:416"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:437"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:454"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:471"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/get",
+      "where": "test/http.test.js:494"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:515"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:540"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:556"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:574"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:591"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/x",
+      "where": "test/http.test.js:610"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:628"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:630"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:660"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:683"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:706"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:725"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:741"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:772"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://alice:secret@127.0.0.1",
+      "where": "test/http.test.js:792"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:798"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:815"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:844"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:869"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:897"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/http.test.js:924"
+    },
+    {
+      "host": "proxy.local",
+      "url": "https://alice:secret@proxy.local:8443",
+      "where": "test/lifecycle.test.js:142"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://alice:secret@127.0.0.1",
+      "where": "test/lifecycle.test.js:159"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/lifecycle.test.js:163"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/server.test.js:75"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.5",
+      "undici": "8.12.3"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 18,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 16,
+    "pushed_at": "2026-11-04T12:18:41Z",
+    "created_at": "2026-11-02T12:05:37Z"
+  },
+  "runtime_files": [
+    "bin/claude-dual-proxy.js",
+    "bin/dsh-dual-proxy.js",
+    "cordis.patch.yml",
+    "package.json",
+    "src/adapters/dsh.js",
+    "src/core.js",
+    "src/engines.js",
+    "src/fetch-route.js",
+    "src/gateways.js",
+    "src/index.js",
+    "src/paths.js",
+    "src/pref.js",
+    "src/restart.js",
+    "src/retry-policy.js",
+    "src/server.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-dual-proxy",
+      "text": "[中文](README.md) · [English](README.en.md)\n\n[](https://github.com/gambn/dsh-dual-proxy/actions/workflows/ci.yml) [](https://www.npmjs.com/package/dsh-dual-proxy)\n\n**Agent 的网关管理插件：在多个网关之间在线自动切换，让模型请求不再被一条不稳的路卡死。**\n\n它把「agent 到模型端点的网络路径」当成可管理的资源：在配置的上游、额外指定的代理、启动环境里的代理和直连之间自动选一条能通的；运行中用真实请求持续验证，失败立刻切到下一条——不需要重启宿主，也不需要改客户端配置。"
+    },
+    {
+      "section": "快速开始",
+      "text": "```bash"
+    },
+    {
+      "section": "DSH 插件（npm）",
+      "text": "dsh plugin --profile web add dsh-dual-proxy"
+    },
+    {
+      "section": "独立 CLI",
+      "text": "npm install -g dsh-dual-proxy\n```\n\n要求 Node.js ≥ 22.19.0；DSH 插件还要求 dsh ≥ 0.1.7。插件安装后确认 `dsh.profile.bundles` 含 `dsh-dual-proxy`，再重启 `dsh web`；细节见下文。\n\n从源码安装（可选）：bash\ngit clone https://github.com/gambn/dsh-dual-proxy.git\ncd dsh-dual-proxy\nnpm install\ndsh plugin --profile web add \"$PWD\"\n```\n\n两种形态，同一份核心：\n\n- **DSH 插件**（推荐）：随 DSH 启停，配置在「设置 → 插件」里改，可把宿主自身的模型请求接进来；\n- **独立进程**：手动跑 CLI，或挂 systemd 用户服务，非 DSH 宿主的 agent 与脚本也能直接用。"
+    },
+    {
+      "section": "它解决什么",
+      "text": "上游代理并不稳定：同一个代理可能对 A 站通、对 B 站不通，也可能整段时间全挂；本机同时装着两个代理时，哪个能用还会变。只认一条路的客户端在这种时候会成片失败，而在死路上重试只是拖延。\n\n这一层把候选路都握在手里，按 host 选：\n\n```\n客户端 → 127.0.0.1:7898\n           ├── 网关 A（TLS 探测通过）→ 上游代理\n           ├── 网关 B（TLS 探测通过）→ 上游代理\n           └── 都探测失败 → 直连\n\n健康检查用一个真实请求把同一组候选走一遍，谁先给出 <500 的响应，谁就成为全局首选。"
+    },
+    {
+      "section": "行为",
+      "text": "- 候选网关 = `upstreamHost:upstreamPort`（或 `upstreamUrl`）+ `gateways` + 启动环境的 `HTTP(S)_PROXY`/`ALL_PROXY`，去重并排除自身监听端口，最后补 `direct`。\n- **上游代理认证**：`upstreamUrl`、`gateways` 或环境变量里的 HTTP 代理 URL 可带 `user:pass`；连接代理时会带 `Proxy-Authorization: Basic`。0.7.0 只支持 `http://` 上游代理：`upstreamUrl` 传 `https://` 会报错；额外候选（`gateways`、`--gateway`、`GATEWAY`、启动环境代理）里的 `https://` 或非法值会给脱敏 warning 后跳过。Basic 只是 base64，不是加密，只建议回环或受信任网络。\n- **CONNECT（HTTPS）**：443 上先对候选做 TLS 握手探测，通过的才用来开隧道；失败换下一条。\n- **普通 HTTP**：请求体先缓冲（上限 8 MB），按同一顺序换路重放；建连用 `attemptTimeoutMs`（已知路径用 `fastFailTimeoutMs`），等响应头用 `responseTimeoutMs`，响应体开始流之后不再计时。\n- **幂等键重放**：打开 `retryNonIdempotentWithIdempotencyKey` 后，非幂等请求只有在带非空 `Idempotency-Key`/`X-Idempotency-Key` 时才允许发送后重放；代理不验证上游是否真的去重。\n- **重放策略（仅普通 HTTP，CONNECT 隧道不重放）**：到网关/目标的 TCP 连接还没建立就失败时，任何方法都重放；连接建立后失败时，只重放幂等方法（`GET`/`HEAD`/`OPTIONS`/`TRACE`/`PUT`/`DELETE`）。`POST`/`PATCH` 等默认停止并回 502，响应体是 `non-idempotent request may have been delivered; not replayed`；需要旧行为时打开 `retryNonIdempotentAfterSend`。\n- **已知路径的快失败只覆盖建连阶段**：缓存或健康首选的那条网关，TCP 连不上时 2 秒内换路；如果它连上了却迟迟不回响应头，仍要等满 `responseTimeoutMs`（默认 60 秒）。\n- **健康检查**：每 `healthIntervalMs` 用 `GET healthUrl` 验证一次通道，`<500` 就算通（401/403 说明端点活着）；通过者设为全局首选，全部失败则清掉首选、下次"
+    },
+    {
+      "section": "作为 DSH 插件",
+      "text": "```bash"
+    },
+    {
+      "section": "已发布到 npm 后",
+      "text": "dsh plugin --profile web add dsh-dual-proxy"
+    },
+    {
+      "section": "本地 / link 安装",
+      "text": "cd /path/to/dsh-dual-proxy && npm install   # 链接安装不会把依赖装进项目目录\ndsh plugin --profile web add /path/to/dsh-dual-proxy\n```\n\n运行要求 Node.js ≥ 22.19.0（`undici` 8 的要求）；版本不满足时 CLI 会直接报错退出，插件加载也会给出明确错误。插件形态需要 dsh ≥ 0.1.7（设置页的 volatile 表单从该版本开始提供）。\n\n确认 `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里包含 `dsh-dual-proxy`（插件包里带 `cordis.patch.yml`，加进 bundles 才会被组合），然后重启 `dsh web`。启用后在「设置 → 插件」里可以看到并修改：bash\nsystemctl --user disable --now dsh-dual-proxy 2>/dev/null\n```"
+    },
+    {
+      "section": "作为独立进程",
+      "text": "```bash\nnode bin/dsh-dual-proxy.js --listen-port 7898 --upstream-port 7897 \\\n  --gateway 127.0.0.1:12334 --health-url https://api.deepseek.com\n```"
+    },
+    {
+      "section": "作为独立进程",
+      "text": "| 参数 | 默认 | 说明 |\n| :--- | :--- | :--- |\n| `--listen-host` | `127.0.0.1` | 监听地址 |\n| `--listen-port` | `7898` | 监听端口 |\n| `--port-fallback` | `0` | `EADDRINUSE` 时按端口 +1 重试的个数 |\n| `--print-config` | — | 打印最终生效配置后退出（别名 `--dry-run`） |\n| `--upstream-host` | `127.0.0.1` | 第一个候选网关 |\n| `--upstream-port` | `7897` | 第一个候选网关的端口 |\n| `--upstream-url` | — | 第一个候选的完整 URL，可含 `user:pass`；非空时覆盖 host/port |\n| `--gateway` | — | 额外候选网关，可重复 |\n| `--health-url` | 空 | 通道验证地址 |\n| `--health-interval-ms` | `60000` | 健康检查间隔，`0` 关闭 |\n| `--fast-fail-ms` | `2000` | 已知路径的建连超时 |\n| `--cooldown-ms` | `30000` | 失败网关的冷却时长 |\n| `--timeout-ms` | `5000` | 每次尝试/探测超时 |\n| `--response-timeout-ms` | `60000` | 普通 HTTP 等响应头的上限 |\n| `--pref-ttl-ms` | `60000` | 每 host 偏好缓存 TTL |\n| `--no-verify-tls` | 关 | 跳过 443 的 TLS 探测 |\n| `--retry-non-idempotent-after-send` | 关 | 连接建立后失败时也重放 `POST`/`PATCH` |\n| `--retry-non-idempotent-with-idempotency-key` | 关 | 带 `Idempotency-Key` 时允许发送后重放 |"
+    },
+    {
+      "section": "作为独立进程",
+      "text": "环境变量同名（`LISTEN_HOST`、`LISTEN_PORT`、`PORT_FALLBACK`、`UPSTREAM_HOST`、`UPSTREAM_PORT`、`UPSTREAM_URL`、`GATEWAY`、`HEALTH_URL`、`HEALTH_INTERVAL_MS`、`FAST_FAIL_MS`、`COOLDOWN_MS`、`ATTEMPT_TIMEOUT_MS`、`RESPONSE_TIMEOUT_MS`、`PREF_TTL_MS`、`VERIFY_TLS=0`、`RETRY_NON_IDEMPOTENT_AFTER_SEND=1`、`RETRY_NON_IDEMPOTENT_WITH_IDEMPOTENCY_KEY=1`）。\n\nsystemd 用户服务模板在 `contrib/`。"
+    },
+    {
+      "section": "配合 Claude Code",
+      "text": "Claude Code 是原生二进制，不能像 DSH 那样把 `fetch` 引到进程内；适配方式是用启动器包一层：代理在启动器进程里监听，再把代理环境变量指向它并启动 `claude`。\n\n```bash"
+    },
+    {
+      "section": "默认监听 7896；`--` 之后原样交给 claude",
+      "text": "claude-dual-proxy --listen-port 7896 --gateway 127.0.0.1:12334 -- --resume\n```\n\n启动器会：按与独立进程相同的方式解析候选网关；端口默认 7896，`EADDRINUSE` 时默认向后找 10 个端口并把实际端口交给子进程；给子进程设置 `HTTP_PROXY`/`HTTPS_PROXY`（大小写各一份）和 `ALL_PROXY`，并替换掉启动环境里 socks 的 `ALL_PROXY`；把回环地址并入 `NO_PROXY`；`claude` 退出时关闭代理。子进程的 `ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN` 等变量保持不变。"
+    },
+    {
+      "section": "默认监听 7896；`--` 之后原样交给 claude",
+      "text": "宿主适配层与核心的边界：包入口（`src/index.js`）仍是 DSH 插件，实现在 `src/adapters/dsh.js`；宿主无关的核心通过 `dsh-dual-proxy/core` 导出（`createDispatcher`、`resolveUpstream`、`collectGateways` 等），其他宿主可以只依赖这一层。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnpm test\n```\n\n测试面向仓库或源码快照；首次先在源码目录 `npm install`，再 `npm test`。npm 包不含 `test/`，安装后不能直接跑这套用例。"
+    },
+    {
+      "section": "测试",
+      "text": "用例覆盖：HTTP 直连回退、经假代理转发、多个网关时跳过不通的、两条都不通返回 502、黑洞网关按超时换路、请求与响应两个方向的逐跳标头过滤、上游中途断开不带崩进程、CONNECT 直连隧道与经假代理隧道、CONNECT 200 同包早期数据、IPv6 字面量、缓存网关卡住时快失败换路、失败网关冷却后不再先撞、关闭时强制断开在途隧道、网关解析与去重（含自身端口排除与自环防护）、健康检查的选择与失败、健康循环记住首选、失败踢一次健康检查、健康检查重入锁、偏好缓存上限、CLI 参数校验与退出码、端口退避与 EADDRINUSE 诊断、socks 告警去重、`--print-config`、插件生命周期（启动/重启/双 context）、自签证书的 TLS 探测、非幂等重放策略（send 前后边界、方法分类、开关、日志与冷却）、上游代理认证（CONNECT/HTTP/健康检查、407）、带幂等键的发送后重放（开关/键存在性/日志）、以及 `fetch` 路由的安装/替换/回滚与回环绕过。"
+    },
+    {
+      "section": "排障",
+      "text": "- **端口没有监听者，listen 仍报 EADDRINUSE**：先看 `ss -tan | grep :7898`。同一端口上由别的进程建立过的短连接会留下 TIME-WAIT；如果它建立时没带 `SO_REUSEADDR`，后来者即使带 Node 的 `reuseAddress` 也绑不上。换端口，或用 `--port-fallback` 自动退避；日志会打印实际监听端口。DSH 插件默认 `0`，保持 7898 这个已知入口；CLI 和 `claude-dual-proxy` 可显式开启。\n- **启动日志出现 `socks ... skipped`**：上游只支持 `http://` 代理，`ALL_PROXY=socks://...` 会被跳过，这是预期行为。"
+    },
+    {
+      "section": "边界",
+      "text": "- 只处理 HTTP/1.1 的 `CONNECT` 与普通 HTTP；不做透明代理、不接管 UDP。\n- 普通 HTTP 请求在网关连上后要等满 `responseTimeoutMs`（默认 60 秒）才判定响应头超时；0.7.0 不缩短这个等待，幂等键只改变超时后的重放决策。\n- CONNECT 隧道建立后代理只转发字节，TLS 端到端；隧道内失败无法换路，要覆盖只能做 MITM 解密，和本项目“不拦截”的定位冲突。\n- 不校验证书，不缓存内容，不做鉴权。默认只绑回环；把 `listenHost` 改成非回环地址会在启动时告警——那等于开放一个无鉴权代理，风险自负。\n- 上游代理认证只支持 `http://` 的 Basic；不支持 `https://` 上游代理（TLS-to-proxy）。Basic 只适合回环或受信任网络，远程代理的凭证保护不在本项目范围内。\n- 只负责「到不到得了」，不负责「信不信得过」——证书校验仍是客户端的责任。\n- 健康检查只发一个无凭证 `GET`，判据是「有没有 <500 的响应」，不代表凭证或模型权限有效。\n- **不保证「至多一次」**：默认 `retryNonIdempotentAfterSend: false` 时，`POST`/`PATCH` 在连接建立后失败会直接 502（可能已送达、未重放），幂等方法仍会重放；打开该开关会恢复发送后重放，代价是可能重复执行。客户端 SDK 对 5xx 的自动重试不受代理控制，对计费或写入敏感的调用仍应在上游使用幂等键。"
+    },
+    {
+      "section": "反馈",
+      "text": "问题、建议与使用疑问走 GitHub Issues：<https://github.com/gambn/dsh-dual-proxy/issues>。请勿在 Issue 里粘贴 token、密钥或完整请求内容；安全问题见 [SECURITY.md](SECURITY.md)。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-dual-proxy",
+      "text": "[English](README.en.md) · [中文](README.md)\n\n[](https://github.com/gambn/dsh-dual-proxy/actions/workflows/ci.yml) [](https://www.npmjs.com/package/dsh-dual-proxy)\n\n**A gateway manager for agents: switch between multiple gateways online, so model requests are never stuck on one flaky path.**"
+    },
+    {
+      "section": "dsh-dual-proxy",
+      "text": "It treats the network path from an agent to the model endpoint as a managed resource: it picks whichever configured upstream, extra proxy, launch-environment proxy, or direct connection can reach the target, keeps verifying that channel with real requests, and switches on failure — without restarting the host or touching client configuration."
+    },
+    {
+      "section": "Quick start",
+      "text": "```bash"
+    },
+    {
+      "section": "DSH plugin (npm)",
+      "text": "dsh plugin --profile web add dsh-dual-proxy"
+    },
+    {
+      "section": "Standalone CLI",
+      "text": "npm install -g dsh-dual-proxy\n```\n\nRequires Node.js ≥ 22.19.0; the DSH plugin also requires dsh ≥ 0.1.7. After installing the plugin, confirm `dsh.profile.bundles` lists `dsh-dual-proxy`, then restart `dsh web`; see below for details.\n\nInstall from source (optional):bash\ngit clone https://github.com/gambn/dsh-dual-proxy.git\ncd dsh-dual-proxy\nnpm install\ndsh plugin --profile web add \"$PWD\"\n```\n\nTwo shapes, one core:"
+    },
+    {
+      "section": "Standalone CLI",
+      "text": "- **DSH plugin** (recommended): starts and stops with DSH, configured under Settings → Plugins, and can route the host's own model requests through this proxy.\n- **Standalone process**: run the CLI, or install it as a systemd user service; non-DSH agents and scripts can use it directly."
+    },
+    {
+      "section": "What it solves",
+      "text": "Upstream proxies are not reliable: the same proxy may reach site A but not site B, or be down for a while entirely. When two proxies are installed on one machine, which one works can change from hour to hour. A client that only knows one path fails in bursts, and retrying on a dead path only adds delay.\n\nThis layer keeps all candidate paths in hand and chooses per host:"
+    },
+    {
+      "section": "What it solves",
+      "text": "```\nclient → 127.0.0.1:7898\n           ├── gateway A (TLS probe passes) → upstream proxy\n           ├── gateway B (TLS probe passes) → upstream proxy\n           └── all probes fail → direct\n\nThe health check runs the same candidate list with a real request; the first one that returns a response below 500 becomes the global favourite."
+    },
+    {
+      "section": "Behaviour",
+      "text": "- Candidate gateways = `upstreamHost:upstreamPort` (or `upstreamUrl`) + `gateways` + `HTTP(S)_PROXY`/`ALL_PROXY` from the launch environment, deduplicated, excluding the proxy's own listen port, with `direct` appended last.\n- **Upstream proxy authentication**: `upstreamUrl`, `gateways`, or a proxy URL in the launch environment may carry `user:pass`; proxy connections then send `Proxy-Authorization: Basic`. 0.7.0 supports only `http://` upstream proxies: `upstreamUrl` with `https://` is an error; extra candidates (`gateways`, `--gateway`, `GATEWAY`, launch-environment proxies) with `https://` or invalid values are skipped with a redacted warning. Basic is base64, not encryption; use it only on loopback or trusted networks.\n- **CONNECT (HTTPS)**: on 443, each candidate gets a TLS handshake probe; only a candidate that passes is used to open the tunnel. On failure, the next one is tried.\n- **Plain HTTP**: the request body is buffered first (8 MB limit), and the request is replayed along the same candidate order. Connect uses `attemptTimeoutMs` (`fastFailTimeoutMs` for a known path), waiting for response headers uses `responseTimeoutMs`; the timer stops once the response body starts st"
+    },
+    {
+      "section": "As a DSH plugin",
+      "text": "```bash"
+    },
+    {
+      "section": "after the npm release",
+      "text": "dsh plugin --profile web add dsh-dual-proxy"
+    },
+    {
+      "section": "local / link install",
+      "text": "cd /path/to/dsh-dual-proxy && npm install   # a link install does not install dependencies into the project\ndsh plugin --profile web add /path/to/dsh-dual-proxy\n```\n\nRequires Node.js ≥ 22.19.0 (required by `undici` 8). On older versions the CLI exits with a clear error and plugin loading fails with a readable message. The plugin requires dsh ≥ 0.1.7 (the volatile settings form starts there)."
+    },
+    {
+      "section": "local / link install",
+      "text": "Confirm that `~/.dsh/profiles/web/package.json` lists `dsh-dual-proxy` under `dsh.profile.bundles` (the package ships `cordis.patch.yml`, and a bundle is composed only when listed), then restart `dsh web`. Once enabled, the following fields are editable under Settings → Plugins:bash\nsystemctl --user disable --now dsh-dual-proxy 2>/dev/null\n```"
+    },
+    {
+      "section": "As a standalone process",
+      "text": "```bash\nnode bin/dsh-dual-proxy.js --listen-port 7898 --upstream-port 7897 \\\n  --gateway 127.0.0.1:12334 --health-url https://api.deepseek.com\n```"
+    },
+    {
+      "section": "As a standalone process",
+      "text": "| Flag | Default | Description |\n| :--- | :--- | :--- |\n| `--listen-host` | `127.0.0.1` | Listen address |\n| `--listen-port` | `7898` | Listen port |\n| `--port-fallback` | `0` | On `EADDRINUSE`, try port+1 up to this many times |\n| `--print-config` | — | Print the effective config and exit (alias `--dry-run`) |\n| `--upstream-host` | `127.0.0.1` | First candidate gateway |\n| `--upstream-port` | `7897` | Port of the first candidate |\n| `--upstream-url` | — | Full URL of the first candidate, may include `user:pass`; overrides host/port |\n| `--gateway` | — | Extra candidate, repeatable |\n| `--health-url` | empty | Channel check URL |\n| `--health-interval-ms` | `60000` | Health-check interval, `0` disables |\n| `--fast-fail-ms` | `2000` | Connect timeout for a known path |\n| `--cooldown-ms` | `30000` | Cooldown for a failed gateway |\n| `--timeout-ms` | `5000` | Per-attempt/per-probe timeout |\n| `--response-timeout-ms` | `60000` | Upper bound for response headers |\n| `--pref-ttl-ms` | `60000` | Per-host preference TTL |\n| `--no-verify-tls` | off | Skip the TLS probe on 443 |\n| `--retry-non-idempotent-after-send` | off | Also replay `POST`/`PATCH` after the connection was established |\n| `"
+    },
+    {
+      "section": "As a standalone process",
+      "text": "Environment variables use the same names (`LISTEN_HOST`, `LISTEN_PORT`, `PORT_FALLBACK`, `UPSTREAM_HOST`, `UPSTREAM_PORT`, `UPSTREAM_URL`, `GATEWAY`, `HEALTH_URL`, `HEALTH_INTERVAL_MS`, `FAST_FAIL_MS`, `COOLDOWN_MS`, `ATTEMPT_TIMEOUT_MS`, `RESPONSE_TIMEOUT_MS`, `PREF_TTL_MS`, `VERIFY_TLS=0`, `RETRY_NON_IDEMPOTENT_AFTER_SEND=1`, `RETRY_NON_IDEMPOTENT_WITH_IDEMPOTENCY_KEY=1`).\n\nA systemd user-service template lives in `contrib/`."
+    },
+    {
+      "section": "With Claude Code",
+      "text": "Claude Code is a native binary, so the DSH trick of routing the host's `fetch` inside the process does not apply. The launcher wraps it instead: the proxy listens inside the launcher process, which then points the proxy environment variables at it before starting `claude`.\n\n```bash"
+    },
+    {
+      "section": "listens on 7896 by default; everything after `--` goes to claude",
+      "text": "The launcher resolves candidate gateways exactly like the standalone process, listens on 7896 by default, steps forward up to 10 ports on `EADDRINUSE` and gives the child the actual port, sets `HTTP_PROXY`/`HTTPS_PROXY` (both cases) and `ALL_PROXY`, replaces a socks `ALL_PROXY` inherited from the launch environment, adds loopback addresses to `NO_PROXY`, and closes the proxy when `claude` exits. `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and other child variables are left untouched."
+    },
+    {
+      "section": "listens on 7896 by default; everything after `--` goes to claude",
+      "text": "Host adapters and core: the package entry (`src/index.js`) is still the DSH plugin, implemented in `src/adapters/dsh.js`; host-neutral core is exported as `dsh-dual-proxy/core` (`createDispatcher`, `resolveUpstream`, `collectGateways`, ...) so other hosts can depend on that layer alone."
+    },
+    {
+      "section": "Tests",
+      "text": "```bash\nnpm test\n```\n\nThe suite runs from the repository or the source archive; run `npm install` once in the source directory before `npm test`. The npm package does not include `test/`, so it cannot be run from an installed package."
+    },
+    {
+      "section": "Tests",
+      "text": "The suite covers: HTTP direct fallback, forwarding through a fake proxy, skipping a dead gateway among several, 502 when every path fails, timeout-based failover from a black-hole gateway, hop-by-hop header filtering in both directions, upstream disconnects mid-response without crashing, CONNECT direct tunnels and fake-proxy tunnels, early data arriving with the CONNECT 200, IPv6 literals, fast-fail when a cached gateway stalls, cooldown after a failure, forced tunnel teardown on shutdown, gateway parsing/deduplication (including self-exclusion and self-loop protection), health-check selection and failure, the health loop remembering the favourite, failure kicking a health check, the health-check reentrancy lock, the preference-cache cap, CLI validation and exit codes, port fallback and EADDRINUSE diagnostics, socks-warning deduplication, `--print-config`, plugin lifecycle (start/restart/two contexts), self-signed TLS probing, the non-idempotent replay policy (send boundary, method classes, switch, logs and cooldown), upstream proxy authentication (CONNECT/HTTP/health, 407), the idempotency-key replay switch (presence checks and logs), and `fetch` route installation/replacement/rol"
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "- **Nothing is listening, yet listen reports EADDRINUSE**: check `ss -tan | grep :7898`. Short-lived connections created by another process leave TIME-WAIT sockets; if they were created without `SO_REUSEADDR`, a later binder cannot reuse the port even with Node's `reuseAddress`. Use another port or `--port-fallback`; the log prints the actual port. The DSH plugin defaults to `0` to keep the known 7898 entry point; the CLI and `claude-dual-proxy` can opt in.\n- **`socks ... skipped` at startup**: upstreams are HTTP-only; a `socks://` `ALL_PROXY` is skipped by design."
+    },
+    {
+      "section": "Boundaries",
+      "text": "- Only HTTP/1.1 `CONNECT` and plain HTTP; no transparent proxying and no UDP.\n- A plain HTTP request waits up to `responseTimeoutMs` (60 seconds by default) for response headers after the gateway connection is established; 0.7.0 does not shorten that wait, and the idempotency key only changes the replay decision after the timeout.\n- Once a CONNECT tunnel is established the proxy only forwards bytes and TLS is end-to-end; an in-tunnel failure cannot be failed over. Covering it would require MITM decryption, which conflicts with this project's no-interception design.\n- Certificates are not verified, contents are not cached, and there is no authentication. It binds to loopback by default; changing `listenHost` to a non-loopback address logs a warning at startup — that turns it into an unauthenticated proxy, at your own risk.\n- Upstream proxy authentication is HTTP Basic only; `https://` upstream proxies (TLS-to-proxy) are not supported. Basic is suitable only on loopback or trusted networks; protecting credentials to a remote proxy is outside this project's scope.\n- It only answers \"can I get there\", not \"can I trust it\" — certificate validation remains the client's responsibility.\n- "
+    },
+    {
+      "section": "Feedback",
+      "text": "Use GitHub Issues for questions, bugs, and suggestions: <https://github.com/gambn/dsh-dual-proxy/issues>. Do not paste tokens, keys, or full request contents into an issue; see [SECURITY.md](SECURITY.md) for security reports."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

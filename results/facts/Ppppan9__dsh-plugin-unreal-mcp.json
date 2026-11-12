@@ -1,0 +1,507 @@
+{
+  "repo": "Ppppan9/dsh-plugin-unreal-mcp",
+  "commit": "20743d1eb6a028d36fa0149065f9f354c0073f7a",
+  "extracted_at": "2026-11-11T13:56:23.049047+00:00",
+  "tree": {
+    "files": 28,
+    "bytes": 383569,
+    "lines_by_language": {
+      "JSON": 65,
+      "JavaScript": 3480,
+      "Markdown": 3180,
+      "Other": 107,
+      "Python": 226,
+      "Shell": 632,
+      "YAML": 44
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "LICENSE-Epic-Games-MIT.txt",
+      "NOTICE.md",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/REPORT.md",
+      "docs/SPEC.md",
+      "docs/VERIFICATION.md",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "skills/create-toolset/SKILL.md",
+      "skills/unreal-mcp/SKILL.md",
+      "skills/unreal-skill/SKILL.md",
+      "tests/SELFCHECK.md",
+      "tests/integration.test.mjs",
+      "tests/mock-unreal-mcp.mjs",
+      "tests/plugin-unit.test.mjs",
+      "tests/run-all.sh",
+      "tests/verify-real-ue.sh",
+      "tests/wire-contract.test.mjs",
+      "tools/semanticsearch-shim.py",
+      "tools/setup-semanticsearch.sh"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-unreal-mcp",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "Drive a live Unreal Editor from DeepSeek Harness via Unreal's built-in ModelContextProtocol MCP server. Reverse-engineered from Epic's official Claude Code plugin.",
+    "license": "MIT",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./index.js": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./icon.svg": "./icon.svg",
+      "./skills/*": "./skills/*",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/*.json",
+      "skills/**",
+      "LICENSE-Epic-Games-MIT.txt",
+      "NOTICE.md"
+    ],
+    "icon": "./icon.svg",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "unreal",
+      "unreal-engine",
+      "mcp",
+      "modelcontextprotocol",
+      "ai-tools"
+    ],
+    "engines": {
+      "node": ">=22"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Ppppan9/dsh-plugin-unreal-mcp.git"
+    },
+    "bugs": {
+      "url": "https://github.com/Ppppan9/dsh-plugin-unreal-mcp/issues"
+    },
+    "homepage": "https://github.com/Ppppan9/dsh-plugin-unreal-mcp#readme"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plugin-unreal-mcp bundle patch —— 往 profile 的 entry list 顶部追加两行。\n#\n# 两行各管一件事，互不依赖：\n#   1. unreal-mcp-client：官方的 @deepseek-ai/dsh-mcp-client，直连 Unreal 编辑器进程内的\n#      ModelContextProtocol HTTP/SSE server。**不写任何代理 / 桥接程序**：\n#      dsh-mcp-client 底层是官方 @modelcontextprotocol/client 的 StreamableHTTPClientTransport，\n#      它已经正确处理 UE 的 session 头、tools/call 返回 text/event-stream、以及不提供 GET SSE 流\n#      这些线路怪癖（实测 initialize → tools/list → tools/call 全通）。\n#      （Epic 那个 unreal_mcp_proxy 是给只认 stdio 的宿主用的；DSH 不需要。）\n#   2. unreal-mcp：本 bundle 自己的 Host 插件，注册 3 个 bundled skill，\n#      并按 session cwd 探测 UE 工程往 system prompt 追加一句上下文。\n#\n# 注意：这里的 `name` 字段由 loader 解析，走 DSH 的双锚点解析，因此\n# `@deepseek-ai/dsh-mcp-client` 能正常加载；但插件文件内部的 ESM import 不享受\n# 这套解析（profile 的 node_modules 里没有 DSH 安装目录），所以 index.js 零第三方 import。\n#\n# 端口：默认 8000（UE 的默认值）。若编辑器用 `ModelContextProtocol.StartServer <port>`\n# 或 `-ModelContextProtocolPort=<port>` 换了端口，设置环境变量 UNREAL_MCP_PORT 即可。\n\n- insert:\n    - id: unreal-mcp-client\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: unreal\n        transport: streamable-http\n        # 允许用 UNREAL_MCP_PORT 覆盖；不设时回落 8000（UE 侧默认端口）。\n        url: !!js 'process.env.UNREAL_MCP_PORT ? \"http://127.0.0.1:\" + process.env.UNREAL_MCP_PORT + \"/mcp\" : \"http://127.0.0.1:8000/mcp\"'\n        # UE 的 tools/call 会阻塞到 game thread 执行完毕（重编译、资产导入可达几十秒到几分钟），\n        # 所以超时给足 5 分钟，避免把「慢」误判成「死」。\n        toolCallTimeoutMs: 300000\n        # 编辑器没开时不要拦启动。默认值也是 false，这里显式写出来表明是刻意选择。\n        failOnStartupError: false\n        reconnect:\n          enabled: true\n          # 编辑器重启 / 端口暂不可用是常态：首次延迟 1s，上限 30s 退避。\n          initialDelayMs: 1000\n          maxDelayMs: 30000\n          # 默认 10 次重试后就会注销工具并要求 reload；对「开着 DSH 再开编辑器」\n          # 这个日常节奏来说太短，调到 100000（≈ 30s 退避下约 34 天，视作无限重试）。\n          maxAttempts: 100000\n\n    - id: unreal-mcp\n      name: 'dsh-plugin-unreal-mcp'\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "UNREAL_MCP_PORT",
+      "kind": "env",
+      "where": "cordis.patch.yml:27"
+    },
+    {
+      "name": "UNREAL_MCP_PORT",
+      "kind": "env",
+      "where": "tests/integration.test.mjs:822"
+    },
+    {
+      "name": "UNREAL_MCP_PORT",
+      "kind": "env",
+      "where": "tests/integration.test.mjs:823"
+    },
+    {
+      "name": "UNREAL_MCP_PORT",
+      "kind": "env",
+      "where": "tests/integration.test.mjs:824"
+    },
+    {
+      "name": "UNREAL_MCP_PORT",
+      "kind": "env",
+      "where": "tests/integration.test.mjs:828"
+    },
+    {
+      "name": "UNREAL_MCP_PORT",
+      "kind": "env",
+      "where": "tests/integration.test.mjs:829"
+    },
+    {
+      "name": "MOCK_LOG",
+      "kind": "env",
+      "where": "tests/mock-unreal-mcp.mjs:48"
+    },
+    {
+      "name": "MOCK_GET_SSE",
+      "kind": "env",
+      "where": "tests/mock-unreal-mcp.mjs:59"
+    },
+    {
+      "name": "MOCK_CALL_DELAY_MS",
+      "kind": "env",
+      "where": "tests/mock-unreal-mcp.mjs:60"
+    },
+    {
+      "name": "MCP_URL",
+      "kind": "env",
+      "where": "tests/verify-real-ue.sh:80"
+    },
+    {
+      "name": "ASAR",
+      "kind": "env",
+      "where": "tests/verify-real-ue.sh:157"
+    },
+    {
+      "name": "PROFILE_PLUGIN",
+      "kind": "env",
+      "where": "tests/verify-real-ue.sh:175"
+    },
+    {
+      "name": "MCP_URL",
+      "kind": "env",
+      "where": "tests/verify-real-ue.sh:192"
+    },
+    {
+      "name": "SHIM_UPSTREAM_BASE",
+      "kind": "env",
+      "where": "tools/semanticsearch-shim.py:62"
+    },
+    {
+      "name": "SHIM_EMBED_URL",
+      "kind": "env",
+      "where": "tools/semanticsearch-shim.py:63"
+    },
+    {
+      "name": "SHIM_UPSTREAM_KEY",
+      "kind": "env",
+      "where": "tools/semanticsearch-shim.py:64"
+    },
+    {
+      "name": "SHIM_EMBED_MODEL",
+      "kind": "env",
+      "where": "tools/semanticsearch-shim.py:65"
+    },
+    {
+      "name": "SHIM_PORT",
+      "kind": "env",
+      "where": "tools/semanticsearch-shim.py:66"
+    },
+    {
+      "name": "SHIM_LOG",
+      "kind": "env",
+      "where": "tools/semanticsearch-shim.py:67"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "cordis.patch.yml:27"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ppppan9/dsh-plugin-unreal-mcp.git",
+      "where": "package.json:47"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ppppan9/dsh-plugin-unreal-mcp/issues",
+      "where": "package.json:50"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ppppan9/dsh-plugin-unreal-mcp#readme",
+      "where": "package.json:52"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${deadPort",
+      "where": "tests/integration.test.mjs:792"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "tests/integration.test.mjs:832"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8123/mcp",
+      "where": "tests/integration.test.mjs:833"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9001/mcp",
+      "where": "tests/integration.test.mjs:834"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${freePort",
+      "where": "tests/integration.test.mjs:855"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "tests/mock-unreal-mcp.mjs:33"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${actual",
+      "where": "tests/mock-unreal-mcp.mjs:507"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${actual",
+      "where": "tests/mock-unreal-mcp.mjs:508"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8000/mcp",
+      "where": "tests/verify-real-ue.sh:29"
+    },
+    {
+      "host": "evil.example.com",
+      "url": "https://evil.example.com",
+      "where": "tests/wire-contract.test.mjs:616"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "tools/semanticsearch-shim.py:43"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8766/v1/embeddings",
+      "where": "tools/semanticsearch-shim.py:45"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8765/v1",
+      "where": "tools/semanticsearch-shim.py:49"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8765/v1",
+      "where": "tools/semanticsearch-shim.py:52"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "tools/semanticsearch-shim.py:62"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8766/v1/embeddings",
+      "where": "tools/semanticsearch-shim.py:63"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "tools/setup-semanticsearch.sh:11"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8765/v1",
+      "where": "tools/setup-semanticsearch.sh:16"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8765/v1",
+      "where": "tools/setup-semanticsearch.sh:19"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/${GGUF_NAME",
+      "where": "tools/setup-semanticsearch.sh:32"
+    },
+    {
+      "host": "brew.sh）",
+      "url": "https://brew.sh）",
+      "where": "tools/setup-semanticsearch.sh:42"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$EMBED_PORT/health",
+      "where": "tools/setup-semanticsearch.sh:67"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$EMBED_PORT/health",
+      "where": "tools/setup-semanticsearch.sh:70"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "tools/setup-semanticsearch.sh:79"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$EMBED_PORT/v1/embeddings",
+      "where": "tools/setup-semanticsearch.sh:82"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$SHIM_PORT/v1/models",
+      "where": "tools/setup-semanticsearch.sh:86"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$SHIM_PORT/v1",
+      "where": "tools/setup-semanticsearch.sh:95"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$SHIM_PORT/v1",
+      "where": "tools/setup-semanticsearch.sh:98"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$SHIM_PORT/v1",
+      "where": "tools/setup-semanticsearch.sh:108"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:$SHIM_PORT/v1",
+      "where": "tools/setup-semanticsearch.sh:110"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 7,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-10-20T15:25:32Z",
+    "created_at": "2026-10-20T05:12:45Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-unreal-mcp",
+      "text": "> 让 **DeepSeek Harness（DSH）** 直接驱动 **Unreal Editor 5.8+**。\n> 通过逆向分析 Epic 官方为 Claude Code 发布的 Unreal MCP 插件制作而成。\n\n[](LICENSE)\n[](https://github.com/deepseek-ai/deepseek-harness)\n[](https://www.unrealengine.com/)\n[](https://www.npmjs.com/package/rea-agents)\n\n[English](#english) | 中文\n\n---"
+    },
+    {
+      "section": "这是什么",
+      "text": "一个 **DSH bundle 插件**，装上之后 DSH 里的 agent 就能直接操控运行中的 Unreal Editor：\n摆放 actor、改材质参数、搭 Blueprint / UMG / Niagara、跑 Live Coding 编译、执行自动化测试。\n\n**引擎侧不需要写任何代码** —— 用的是 UE 5.8 自带的官方 `ModelContextProtocol` 插件（随引擎分发，闭源）。\n本仓库只是它的**客户端 + 使用契约**。\n\n---"
+    },
+    {
+      "section": "来源说明（重要）",
+      "text": "本项目**逆向自 Epic Games 官方为 Claude Code 发布的插件**\n`unreal-engine-skills-for-claude-code`（MIT，commit `a6aa73a`）。\n\n- **分析工具**：[REA](https://www.npmjs.com/package/rea-agents)（reverse-engineer-anything）6.4.0\n- **分析对象**：Epic 官方 Claude Code 插件的完整源码树（995 行文本 + 84 行 bash hook），\n  [github.com/EpicGames/unreal-engine-skills-for-claude-code-plugin](https://github.com/EpicGames/unreal-engine-skills-for-claude-code-plugin)\n- **完整逆向报告**：[`docs/REPORT.md`](docs/REPORT.md)\n  —— 含引擎侧 MCP 协议细节、真机实测数据、与第三方报告的差异对照"
+    },
+    {
+      "section": "来源说明（重要）",
+      "text": "本仓库是**对 DSH 的原生等价实现**，不是 Claude Code 插件的移植壳子：\n\n| Epic 原版做法 | 本项目做法 |\n|---|---|\n| Claude Code 的 `SessionStart` bash hook 注入项目上下文 | DSH 的 `systemPrompt.section()` 动态 section |\n| 用 `.mcp.json` 静态配置 MCP 连接 | DSH 的 `cordis.patch.yml` 复用官方 `dsh-mcp-client` |\n| 需要 `unreal_mcp_proxy`（stdio→HTTP 桥） | **不需要**（DSH 原生支持 Streamable HTTP） |\n| Skill 文本按 Claude Code 语境写 | Skill 文本按 DSH 语境重写（工具名带 `mcp__unreal__` 前缀） |\n\n引擎侧的 `ModelContextProtocol` 插件归 Epic Games，闭源、随引擎分发，**本仓库不含其任何代码**。\n\n---"
+    },
+    {
+      "section": "1. 引擎侧（UE 5.8+）",
+      "text": "在工程的 `.uproject` 里启用两个插件（缺一不可）：\n\n```json\n{\n  \"FileVersion\": 3,\n  \"Plugins\": [\n    { \"Name\": \"ModelContextProtocol\", \"Enabled\": true },\n\n> `ModelContextProtocol` 是 server；`AllToolsets` 是**默认关闭**的工具集聚合器，\n> 不开它 server 能起来但**一个工具都没有**。\n\n让编辑器启动时自动开 MCP server，写入\n`<Project>/Saved/Config/MacEditor/EditorPerProjectUserSettings.ini`：\n\n```ini\n[/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]\nbAutoStartServer=True\n```\n\n或者每次在编辑器控制台执行 `ModelContextProtocol.StartServer`。"
+    },
+    {
+      "section": "2. DSH 侧",
+      "text": "```bash"
+    },
+    {
+      "section": "本地安装",
+      "text": "dsh plugin --profile <你的 profile> add \"link:/绝对路径/dsh-plugin-unreal-mcp\""
+    },
+    {
+      "section": "或者发布到 npm 后",
+      "text": "dsh plugin --profile <你的 profile> add dsh-plugin-unreal-mcp\n```\n\n`add` 会自动完成依赖安装和 bundle 选择，**不需要手工编辑 profile 配置**。\n安装后**开一个新会话**即可。\nbash\ndsh --profile <你的 profile> --dump-config | grep -A6 unreal-mcp"
+    },
+    {
+      "section": "应出现 id: unreal-mcp-client 和 id: unreal-mcp 两行",
+      "text": "```\n\n端口不是默认 8000 的话，设 `UNREAL_MCP_PORT` 环境变量：\n\n```bash\nexport UNREAL_MCP_PORT=8123   # 然后启动 DSH\n```\n\n---"
+    },
+    {
+      "section": "用法",
+      "text": "UE 默认开启 **Tool Search 模式**，所以 `tools/list` 里**只有 3 个元工具**，\n几百个真工具靠 `call_tool` 在服务端派发：\n\n| DSH 工具名 | 作用 |\n|---|---|\n| `mcp__unreal__list_toolsets` | 列出所有 toolset（返回**全限定名** + 描述） |\n| `mcp__unreal__describe_toolset` | 读某个 toolset 的工具 schema |\n| `mcp__unreal__call_tool` | 派发：`{toolset_name, tool_name, arguments}` |\n\n三步契约是**必需品**：**发现 → 描述 → 派发**。"
+    },
+    {
+      "section": "真机实测的几个坑",
+      "text": "| 坑 | 正确做法 |\n|---|---|\n| `list_toolsets` 返回的是 **Markdown 列表**，不是 JSON | 不要 `JSON.parse`，按 `/^- ([^:\\n]+): /` 解析 |\n| `describe_toolset` 的 `tools[].name` 是全限定名 | `call_tool` 的 `tool_name` 要**剥掉 `<toolset_name>.` 前缀** |\n| `TOptional` 参数省略报错 | **显式传 `null`** |\n| 属性名猜错会让整次调用失败 | 先 `ObjectTools.list_properties` 拿真实属性名 |\n| `ObjectTools` 的 `returnValue` 是**双层 JSON** | 要 parse 两次 |\n\n更多细节见 `skills/unreal-mcp/SKILL.md`（agent 会自动加载它）。"
+    },
+    {
+      "section": "三个 skill",
+      "text": "| skill | 用途 |\n|---|---|\n| `unreal-mcp` | 主要入口：在活的编辑器里查/改东西 |\n| `create-toolset` | 给自己项目新增 toolset（C++ / Python） |\n| `unreal-skill` | 写项目级 Agent Skill |\n\n---"
+    },
+    {
+      "section": "验证状态",
+      "text": "| 项 | 状态 |\n|---|---|\n| 真机 Unreal Editor 5.8 / macOS | ✅ 已验证 |\n| MCP 线路契约（session 头、3 元工具） | ✅ |\n| 真实只读调用 | ✅ `get_current_level`、`find_actors` |\n| 真实写操作 | ✅ 创建/删除 actor、改属性 |\n| 真实截图 | ✅ `CaptureViewport` |\n| ActorTools | ✅ 变换读写、标签、组件列表、look_at |\n| BlueprintTools | ✅ 创建蓝图、变量、函数+参数、DSL 节点图、编译、回读 |\n| Blueprint DSL | ✅ `bind` / `if` / `for` / `fn` 可用；`switch` 不生成节点（已记录边界） |\n| 蓝图 PIE 运行 | ✅ DSL 生成的图在 PIE 中真跑，日志 + 位置采样双重验证 |\n| MaterialTools | ✅ 创建材质、加表达式、列表达式、重编译 |\n| MaterialInstanceTools | ✅ 创建材质实例、参数读写 |\n| UMGToolSet | ✅ 创建 Widget BP、加 TextBlock、控件树、编译 |\n| SequencerTools | ✅ 创建 LevelSequence、播放范围、root folder、TransformTrack、binding/track/section/标记帧/选择/复制粘贴 |\n| ProgrammaticToolset | ✅ Python 沙箱编排多工具；沙箱边界（白名单 6 模块、禁 `unreal`）已验证 |\n| Niagara | ✅ 创建 System、全量读取栈/发射器/模块/渲染器、读写用户变量与栈数据、增删模块/渲染器/发射器 |\n| PCGToolset | ✅ 建图、查结构/Schema、读节点与 pin、连/断边、改节点参数与注释 |\n| Sequencer 全家 | ✅ 8 个 Sequencer/ControlRig toolset 共 319 个工具逐个验证（相机相关除外，见下） |\n| UMGToolSet | ✅ 创建 Widget BP、控件树增删改、编译、事件绑定、变量切换 |\n| MaterialTools 进阶 | ✅ 表达式增删连断、参数组增删改、输出连接、布局 |\n| DataTable / CurveTable / StringTable / DataAsset | ✅ 建资产 + 增删改查行 + schema 读写 |\n| 830 个工具全量扫描 | ✅ **830/830 可派发，FAIL = 0**；OK 433 / 契约验证 382 / 环境限制 9 / 有意未调 6 |\n|"
+    },
+    {
+      "section": "验证状态",
+      "text": "一键复跑：\n\n```bash\ncd tests\n./run-all.sh            # 不需要 UE，mock 套件\n./verify-real-ue.sh     # 需要 UE 编辑器正在运行\n```"
+    },
+    {
+      "section": "验证状态",
+      "text": "**未验证**：Windows / Linux 平台、UE 5.5–5.7、8 个因环境限制不可用的工具\n（GameFeatures 本工程无 GFP、Niagara `ApplyStackIssueFix` 无可修复项、\nUMG `SetNamedSlotContent` 需 `INamedSlotInterface`、Sequencer Outliner 2 个需面板 view model、\nSequencer `link_anim_sequence` 需 `MovieSceneSequence` 对象）——每个都有可复现的原文错误，\n清单见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md) §6.7。\nSemanticSearch 原本也在这张表里，现已用 `tools/setup-semanticsearch.sh` 跑通（§6.10）。"
+    },
+    {
+      "section": "验证状态",
+      "text": "完整逐工具结论（830/830）见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)；\n逆向推导过程见 [`docs/REPORT.md`](docs/REPORT.md)。\n\n---"
+    },
+    {
+      "section": "已知限制",
+      "text": "**编辑器重启后需要手动重建连接。**\n\n关掉编辑器再打开，DSH 里的 UE 工具会报\n`Bad Request: no valid session ID provided`。根因：编辑器关闭时端口消失，\n但 MCP 客户端收不到断线信号（无长连接可断 → `onclose` 不触发），不会自动重连。\n\n**恢复**：Web 侧边栏 **Plugins** → `Unreal Engine MCP` → **关掉再打开**。\n秒级，不需要重启 DSH。\n\n这与「DSH 先启动、编辑器后启动」不同 —— 后者是正常首连，会自动接上。\n\n---"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\n├── index.js                 Host 插件：skill provider + UE 工程探测\n├── cordis.patch.yml         MCP 连接配置 + 本插件行\n├── package.json             DSH bundle 清单\n├── icon.svg\n\n---"
+    },
+    {
+      "section": "安全边界",
+      "text": "| 面 | 事实 |\n|---|---|\n| 绑定 | 只绑 `127.0.0.1`，拒绝非 loopback `Origin` |\n| 认证 | **无认证层**。同机同用户任意进程都能连 |\n| 暴露 | Epic 明确「不适合暴露到本机之外」 |\n| 破坏性 | 工具直接改 live UObject 状态，可能改/移/删 VCS 跟踪资产 |\n\n**红线**：别在共享机器开这个 server；批量资产操作前后各 commit 一次。\n\n---"
+    },
+    {
+      "section": "许可",
+      "text": "- 本仓库的 `index.js`、`tests/`、`docs/` 为原创，MIT\n- `skills/` 下的三个 skill 派生自 **Epic Games** 的 MIT 许可插件\n  [`unreal-engine-skills-for-claude-code-plugin`](https://github.com/EpicGames/unreal-engine-skills-for-claude-code-plugin)，\n  原始文本见 [`LICENSE-Epic-Games-MIT.txt`](LICENSE-Epic-Games-MIT.txt)，\n  改动清单见 [`NOTICE.md`](NOTICE.md)\n\n---\n\n<a id=\"english\"></a>"
+    },
+    {
+      "section": "English",
+      "text": "A **DeepSeek Harness bundle** that lets DSH agents drive a live **Unreal Editor 5.8+**.\n\n**Reverse-engineered from** Epic Games' official Claude Code plugin\n[`unreal-engine-skills-for-claude-code`](https://github.com/EpicGames/unreal-engine-skills-for-claude-code-plugin) (MIT, `a6aa73a`) using\n[REA](https://www.npmjs.com/package/rea-agents) 6.4.0. Full reverse-engineering report:\n[`docs/REPORT.md`](docs/REPORT.md)."
+    },
+    {
+      "section": "Install",
+      "text": "Engine side (`.uproject`):\n\n```json\n{ \"Name\": \"ModelContextProtocol\", \"Enabled\": true },\n{ \"Name\": \"AllToolsets\", \"Enabled\": true }\n```\n\nAuto-start the server via `Saved/Config/MacEditor/EditorPerProjectUserSettings.ini`:\n\n```ini\n[/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]\nbAutoStartServer=True\n```\n\nDSH side:\n\n```bash\ndsh plugin --profile <profile> add \"link:/absolute/path/to/dsh-plugin-unreal-mcp\"\n```"
+    },
+    {
+      "section": "Usage",
+      "text": "UE defaults to Tool Search mode, so only three meta-tools are exposed:\n`mcp__unreal__list_toolsets`, `mcp__unreal__describe_toolset`, `mcp__unreal__call_tool`.\nReal tools are dispatched server-side through `call_tool`.\n\nGotchas (verified on a real engine):"
+    },
+    {
+      "section": "Usage",
+      "text": "- `list_toolsets` returns **Markdown**, not JSON — don't `JSON.parse` it\n- `call_tool`'s `tool_name` needs the `<toolset_name>.` prefix **stripped**\n- `TOptional` params must be passed as explicit `null`\n- One wrong property name fails the whole `get_properties` call — use `list_properties` first\n- `ObjectTools` returns are **double-encoded** JSON — parse twice"
+    },
+    {
+      "section": "Known limitation",
+      "text": "Restarting the editor breaks the MCP session. Tools will fail with\n`Bad Request: no valid session ID provided`. Fix: toggle the\n`Unreal Engine MCP` plugin off and on in the DSH Plugins page."
+    },
+    {
+      "section": "License",
+      "text": "MIT. `skills/` derives from Epic Games' MIT-licensed plugin — see\n[`NOTICE.md`](NOTICE.md)."
+    }
+  ],
+  "skipped": []
+}

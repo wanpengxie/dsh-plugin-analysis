@@ -1,0 +1,213 @@
+{
+  "repo": "leinaldo/dsh-routines",
+  "commit": "53626f40ba2e5784b71ca648dd605ed3be963f7b",
+  "extracted_at": "2026-11-11T23:15:33.309290+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 129403,
+    "lines_by_language": {
+      "JSON": 128,
+      "JavaScript": 2256,
+      "Markdown": 668,
+      "Other": 30,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "assets/icon.svg",
+      "cordis.patch.yml",
+      "docs/claude-local-scheduled-tasks.md",
+      "docs/dsh-plugin-api.md",
+      "lib/client.js",
+      "lib/cron.js",
+      "lib/index.js",
+      "market/index.json",
+      "package.json",
+      "scripts/build-index.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-routines",
+    "version": "0.3.1",
+    "description": "给 DSH 补一套 Claude 风格的定时任务：到点新开对话跑一轮，运行会话不进左侧列表。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "docs",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "scheduled-tasks",
+      "cron",
+      "routines",
+      "automation"
+    ],
+    "author": "leinaldo",
+    "license": "MIT",
+    "homepage": "https://github.com/leinaldo/dsh-routines#readme",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/leinaldo/dsh-routines.git"
+    },
+    "engines": {
+      "dsh": ">=0.2.1-rc.5"
+    },
+    "scripts": {
+      "index": "node scripts/build-index.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [],
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 把定时任务插件挂进配置树：宿主侧加载 lib/index.js，dsh.client 让网页加载 ./client。\n- insert:\n    - id: dsh-routines\n      name: dsh-routines\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:64"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "lib/index.js:896"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leinaldo/dsh-routines#readme",
+      "where": "market/index.json:48"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leinaldo/dsh-routines",
+      "where": "market/index.json:50"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leinaldo/dsh-routines#readme",
+      "where": "package.json:29"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leinaldo/dsh-routines.git",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leinaldo/dsh-routines",
+      "where": "scripts/build-index.mjs:52"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leinaldo/dsh-routines",
+      "where": "scripts/build-index.mjs:66"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-11-04T06:51:45Z",
+    "created_at": "2026-11-04T05:11:24Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/cron.js",
+    "lib/index.js",
+    "package.json",
+    "scripts/build-index.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-routines",
+      "text": "照 Claude 桌面 App 本地定时任务（Routines / CCD scheduled tasks）的语义，给 DSH 补一套「到点新开对话跑一轮」的定时任务。"
+    },
+    {
+      "section": "与内置「自动化任务」的区别",
+      "text": "内置 `@deepseek-ai/dsh-schedule` 是排期提醒：到点把一条消息投回**任务绑定的会话**，用那个会话的历史继续干活，回执只表示「消息进了收件箱」，不表示模型执行完成，也没有暂停和手动运行。\n\n本插件是任务运行器，行为对齐 Claude：\n\n- 每个任务只存一条指令（`prompt`），就是每次运行要发的用户消息，没有额外文件。\n- 到点**新建一个会话**，把指令作为这一轮唯一的用户消息发过去；每次运行互不共享上下文，所以指令必须自包含。\n- 一轮结束（`turn/end`）后记录状态、耗时、步数、token，可回看并跳转到那次运行的会话。\n- 支持「立即运行」「停用/启用」「一次性」，一次性跑完自动停用。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\n~/.dsh/routines/\n  scheduled-tasks.json          # 任务索引：名称、描述、指令、调度、运行记录\n```\n\n一个 JSON 文件就是全部状态。旧版本写在 `<taskId>/SKILL.md` 的正文，在读取索引时会自动搬进 `prompt` 并删掉目录。"
+    },
+    {
+      "section": "调度语义",
+      "text": "| 能力 | 说明 |\n|---|---|\n| cron | 五字段，本地时区；支持 `*`、`a`、`a-b`、`a-b/n`、列表、月份/星期英文缩写 |\n| 一次性 | ISO 时间点，未来才允许；跑完自动停用；超过 7 天未跑的到点任务直接停用 |\n| 仅手动 | cron 与一次性都不填，只保留在列表里，点「立即运行」 |\n| 心跳 | 启动立即扫一次，之后每 60 秒扫一次 |\n| 补跑 | 错过时在 `max(创建时间, 7 天前, 启用时刻)` 之后找最近一个槽补跑一次；迟到超过 2 分钟标记为 `missed` |\n| 抖动 | cron 任务的派发延迟 = `sha256(taskId) % (min(10, 相邻间隔-1) * 60)` 秒，同一任务恒定 |\n| 重试 | 建会话或投递失败时按 5/15/30 分钟重试，最多三次；模型回合失败不重试 |\n| 并发 | 同一任务同时只跑一次 |"
+    },
+    {
+      "section": "运行语义",
+      "text": "1. `ctx.sessionController.create({ cwd })` 新建会话，工作目录取任务的，否则取最近会话的。\n2. `resolveAgent` 后把标题改成「任务名 · 月-日 时:分」；会话 id 记进隐藏名单，之后从左侧列表过滤掉。\n3. 订阅 `session/event`，投递指令，等 `turn/end`：\n   - `reason.kind === \"completed\"` 记成功，其余（`error`、`blocked`、`aborted`、`timeout` 等）记失败并保留原因。\n   - 45 分钟没结束按超时失败处理。\n4. 运行记录写进索引，每任务保留最近 50 条。\n5. 任务由对话里的工具创建、且开着通知时，跑完向创建它的那个会话发一条完成/失败消息；面板建的任务没有创建会话，不发。"
+    },
+    {
+      "section": "使用",
+      "text": "侧边栏「定时任务」页：\n\n- 「新建」填名称、描述、指令、调度方式、工作目录。\n- 卡片上「立即运行」不改排期，只推 `lastRunAt`；「停用」只停自动派发（Claude 同款：停用后手动运行也会被拒绝）。\n- 「运行记录」展开后每条都有状态、时间、耗时、token、摘要与「查看会话」，点进去就是那次运行的会话。\n- 运行会话不出现在左侧列表，只在「运行记录」里进入（Claude 的历史记录同款）。"
+    },
+    {
+      "section": "从插件市场",
+      "text": "1. 打开**插件 → 发现 → 添加索引源**，填 `https://leinaldo.github.io/dsh-routines/market/index.json`。\n2. 在列表里找到**定时任务**，点**安装**。\n3. 重启 DSH，左侧栏出现「定时任务」。"
+    },
+    {
+      "section": "本地开发",
+      "text": "1. 把本目录放到 `~/.dsh/plugins/dsh-routines`。\n2. 在 `~/.dsh/profiles/desktop/package.json` 的 `dependencies` 加 `\"dsh-routines\": \"file:/Users/leinaldo/.dsh/plugins/dsh-routines\"`。\n3. 在同一个文件的 `dsh.profile.bundles` 末尾加 `\"dsh-routines\"`。\n4. 在 profile 目录执行 `pnpm install`，然后重启 DSH。\n\n宿主代码在启动时加载，改完必须重启才生效；客户端面板随页面刷新重载。"
+    },
+    {
+      "section": "发布索引",
+      "text": "索引是 `market/index.json`（插件市场格式 1），由 GitHub Pages 提供。改了代码后：\n\n```bash\ngit add -A && git commit -m \"feat: ...\"\nnode scripts/build-index.mjs HEAD   # 把版本固定到这次提交\ngit add market/index.json && git commit -m \"chore: 更新索引\"\ngit push\n\n索引里每个版本都固定到 40 位 commit，不重新生成的话市场装到的还是旧代码。"
+    },
+    {
+      "section": "模型工具",
+      "text": "安装后模型能直接建任务，不必先开面板：\n\n| 工具 | 作用 |\n|---|---|\n| `routine_create` | 建任务：`name`、`prompt` 必填，`cron_expression` / `fire_at` / `cwd` / `notify_on_completion` 可选 |\n| `routine_list` | 列出所有任务、下次运行时间与指令 |\n| `routine_update` | 只改传入的字段；`enabled:false` 停用 |\n| `routine_delete` | 删任务连同运行记录 |\n| `routine_run` | 立即跑一次，不改排期 |\n\n工具描述里写明了与内置 `schedule_*` 的区别：`schedule_create` 是把提醒投回绑定会话，本插件的任务是**每次新开一个对话**。所以对话里说「每天 12 点帮我总结 AI 资讯」，模型会按描述在两者里选；想稳定走本插件，点名「用定时任务建」或直接说「每次新开对话跑」。"
+    },
+    {
+      "section": "接口",
+      "text": "| 方法 | 路径 | 说明 |\n| --- | --- | --- |\n| GET | `/dsh-routines/tasks` | 任务列表视图（含下次运行、最近一次状态、运行中标记） |\n| GET | `/dsh-routines/task?id=` | 单个任务（含 `prompt`）与全部运行记录 |\n| GET | `/dsh-routines/defaults` | 默认工作目录 |\n| POST | `/dsh-routines/tasks/create` | `{name, description?, prompt, cronExpression?|fireAt?, cwd?, notifyOnCompletion?}` |\n| POST | `/dsh-routines/tasks/update` | 同上字段 + `id`，另支持 `enabled`、`disableJitter` |\n| POST | `/dsh-routines/tasks/delete` | `{id}`，任务文件与运行记录一起删 |\n| POST | `/dsh-routines/tasks/run` | `{id}`，立即运行（不改排期） |"
+    },
+    {
+      "section": "与 Claude 的已知差距",
+      "text": "- 没有费用（Claude 的 `costUsd` 来自 CLI 结果事件）；DSH 宿主只暴露 token，不暴露价格。\n- 工具名与 Claude 的 `create_scheduled_task` 不同（叫 `routine_create`），因为内置 `schedule_*` 已经占住了语义位置。\n- 没有无人值守审批策略：运行时仍按会话默认权限，需要审批时会停在审批卡上，直到超时记失败。\n- 没有系统通知，只有发给创建会话的完成消息与面板状态。\n- 任务停用期间不补跑；重新启用时把补跑下界推到启用时刻（与 Claude 的 `missedRunScanFloor` 一致）。"
+    },
+    {
+      "section": "实现要点",
+      "text": "- 索引读写是同步的，Node 单线程下天然串行，避免两个请求同时改同一文件。\n- 抖动用 `sha256(taskId)` 前四字节取模，保证同一任务的派发延迟稳定。\n- 运行会话的隐藏只能做在网页端：宿主没有隐藏字段（`sessionController.create` 不接受 `origin`），归档又会禁止模型步骤。所以客户端包装 `ctx.sessions.list.getSnapshot`，按索引里的隐藏名单过滤快照，不影响 `openSession`。代价是名单更新依赖这份网页端代码，宿主改列表实现时要跟着改。\n- `fire()` 在派发时先推进 `lastScheduledFor`，崩溃后不会重复派发同一槽（Claude 的 `markPendingDispatch` 同理）。\n- 存储根目录只取 `DSH_HOME` 或 `~/.dsh`，不读 `ctx.baseDir`：GUI 启动时它是宿主进程的工作目录（常见为 `/`），与用户配置目录无关，用它会导致面板永远读到空索引。"
+    }
+  ],
+  "skipped": []
+}

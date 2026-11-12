@@ -1,0 +1,1052 @@
+{
+  "repo": "ptb-xiaou/dsh-api3d",
+  "commit": "42db7f21d140b6d7bdc578b823689572f6cf634f",
+  "extracted_at": "2026-11-12T02:52:11.419932+00:00",
+  "tree": {
+    "files": 32,
+    "bytes": 671929,
+    "lines_by_language": {
+      "JSON": 79,
+      "JavaScript": 7866,
+      "Markdown": 874,
+      "Other": 62,
+      "YAML": 321
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "NOTICE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/wizard-step1-key.png",
+      "docs/wizard-step2-caps.png",
+      "docs/wizard-step2-models.png",
+      "docs/wizard-step3-done.png",
+      "lib/client.js",
+      "lib/direct-fetch.js",
+      "lib/index.js",
+      "lib/route.js",
+      "lib/self-update.js",
+      "lib/site.js",
+      "package.json",
+      "scripts/probe-models.mjs",
+      "test/claim.test.mjs",
+      "test/client-bundle.test.mjs",
+      "test/direct-transport.test.mjs",
+      "test/fence.test.mjs",
+      "test/harness.mjs",
+      "test/integration.test.mjs",
+      "test/models.test.mjs",
+      "test/route.test.mjs",
+      "test/silent-retry.test.mjs",
+      "test/tool-schema.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-api3d",
+    "version": "0.2.8",
+    "description": "把 API3D（api3d.cn）AI API 网关接成 DSH 的一条模型路由：基础地址、API Key 与出站兼容开关都在设置页。API3D (api3d.cn) as a single DeepSeek Harness model route.",
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin",
+      "cordis",
+      "api3d",
+      "relay",
+      "openai-compatible"
+    ],
+    "license": "MIT",
+    "author": "ptb-xiaou",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ptb-xiaou/dsh-api3d.git"
+    },
+    "homepage": "https://github.com/ptb-xiaou/dsh-api3d#readme",
+    "bugs": {
+      "url": "https://github.com/ptb-xiaou/dsh-api3d/issues"
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./site": "./lib/site.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-api-gateway",
+          "@deepseek-ai/dsh-api-remotes",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-plugin-manager"
+        ],
+        "platform": "web"
+      }
+    },
+    "files": [
+      "lib/",
+      "cordis.patch.yml",
+      "LICENSE",
+      "NOTICE",
+      "README.md",
+      "README.en.md",
+      "docs/"
+    ],
+    "scripts": {
+      "probe-models": "node scripts/probe-models.mjs",
+      "test": "node --test \"test/*.test.mjs\""
+    },
+    "engines": {
+      "node": ">=22"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*",
+      "@deepseek-ai/schemastery": "*"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      },
+      "@deepseek-ai/schemastery": {
+        "optional": true
+      }
+    },
+    "devDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.4",
+      "js-yaml": "4.1.0",
+      "react": "18.3.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-api3d —— 把 API3D（api3d.cn）接成一个 pi-ai provider 路由\n#\n# 本文件是「组合包补丁层」，由 package.json 的 dsh.bundle.patch 指向，叠在\n# dsh-base / dsh-web-app 之上应用。\n#\n#   dsh plugin --profile <profile> add dsh-api3d\n#\n# ── 这里为什么**没有** llm-pi-ai 路由声明 ───────────────────────────────────\n# 路由骨架（displayName / 凭据引用 / 协议 / compat）与模型能力模板在\n# lib/route.js；模型目录来自设置里导入的那份，由宿主半在运行时装进 llm-pi-ai。\n# 不在这里声明，有两个都绕不过的理由：\n#\n# 1. pi-ai 把「零模型的自定义路由」判为配置错误：\n#        resolves no models; the installed catalog does not describe this route,\n#        so its models must be listed in configuration\n#    而本插件的目录只可能来自向导里的站点查询，安装那一刻必然是空的。声明一条带\n#    模型的路由 = 还没导入就显示模型；声明一条不带模型的路由 = 启动即报配置错误。\n# 2. profile 自己的补丁层在所有 bundle 层之后应用，且 loader 是把补丁的 `config`\n#    赋值在组合结果之上（只有一层深）—— 任何自带 provider 的 profile 都会把整个\n#    `providers` 字典替换掉。所以路由必须在**每一次解析**时被装回去，而不是在这里\n#    声明一次。\n#\n# 效果：装完插件、还没走向导导入模型时，模型选择器里没有任何 api3d 模型；导入后路由\n# 立刻出现，不用重启。\n#\n# ── 哨兵地址 ────────────────────────────────────────────────────────────\n# 路由的 baseURL 是 `https://upstream.api3d.invalid/v1`（RFC 2606 保留域）：适配器\n# 逐请求解析 baseURL，但读不到本插件的设置命名空间，所以围栏在出站时把它改写为设置\n# 里的真实地址。围栏没装上时请求会以 DNS 失败大声报错，而不是静默打到别的服务器。\n#\n# 这么绕是为了让「换地址」变成设置页里的一次写入：常量写死的话，换机房就得改文件、\n# 重装、重启。\n#\n# ── 凭据 ────────────────────────────────────────────────────────────────\n# apiKeyEnv 是**凭据引用**，逐请求解析；密钥存在 $DSH_HOME/.credentials.yaml 或\n# 环境变量里，永远不进本文件（本文件会进版本库）。向导的「API Key」输入框写的就是\n# 这条引用。\n#\n# ⚠️ 不要把密钥挪进 headers：那个 dict 会被适配器的 describe() 原样返回，并被\n#    Models 设置页渲染出来。\n#\n# ── 模型能力 ────────────────────────────────────────────────────────────\n# 站点几乎不报能力字段（api3d.cn 的 /v1/models 只有 id 与 display_name），所以\n# lib/route.js 的 MODEL_TEMPLATE 只是**兜底**：上下文窗口、最大输出、输入模态、\n# 思考档位都能在向导第 2 步逐条改。核实站点到底在售什么：\n#\n#     npm run probe-models            # 用 API3D_API_KEY 打 GET {baseURL}/models\n#\n# 2026-10-20 实测：站点只返回 `deepseek-v4.1-flash`；`deepseek-v4.1-flash-1017`\n# 属于**另一个分组**（福利组），用主 key 请求会得到 404 model_not_found。分组不同\n# = 凭据不同 = 应当是另一条 provider 路由，不能塞进同一条路由的模型列表里。\n\n# 插件行本身：一个按包名引用的裸插件条目。\n# id 同时是 loader entry id 与设置命名空间，客户端半按同一个字面量注册设置卡。\n- insert:\n    - id: api3d\n      name: 'dsh-api3d'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/site.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/self-update.js:41"
+    },
+    {
+      "name": "ComSpec",
+      "kind": "env",
+      "where": "lib/self-update.js:173"
+    },
+    {
+      "name": "DSHW_PNPM_BIN",
+      "kind": "env",
+      "where": "lib/self-update.js:228"
+    },
+    {
+      "name": "APPDATA",
+      "kind": "env",
+      "where": "lib/self-update.js:274"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "lib/self-update.js:277"
+    },
+    {
+      "name": "ProgramFiles",
+      "kind": "env",
+      "where": "lib/self-update.js:280"
+    },
+    {
+      "name": "ComSpec",
+      "kind": "env",
+      "where": "lib/self-update.js:345"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/probe-models.mjs:45"
+    },
+    {
+      "name": "API3D_API_KEY",
+      "kind": "env",
+      "where": "lib/route.js:35-39"
+    },
+    {
+      "name": "baseURL",
+      "kind": "setting",
+      "where": "lib/index.js:71-75"
+    },
+    {
+      "name": "apiKeyEnv",
+      "kind": "setting",
+      "where": "lib/index.js:81-85"
+    },
+    {
+      "name": "directMode",
+      "kind": "setting",
+      "where": "lib/index.js:102-106"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/ci.yml:36"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:59"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/dsh-api3d/${VERSION",
+      "where": ".github/workflows/publish.yml:109"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:121"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${GITHUB_REPOSITORY",
+      "where": ".github/workflows/publish.yml:160"
+    },
+    {
+      "host": "upstream.api3d.invalid",
+      "url": "https://upstream.api3d.invalid/v1`（RFC",
+      "where": "cordis.patch.yml:27"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1。填在路由上的只是一个哨兵主机名，本字段在出站时把它改写掉。",
+      "where": "lib/client.js:23"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "lib/client.js:24"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "lib/client.js:164"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "lib/client.js:165"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "lib/client.js:1255"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn",
+      "where": "lib/client.js:1830"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "lib/index.js:74"
+    },
+    {
+      "host": "upstream.api3d.invalid",
+      "url": "https://upstream.api3d.invalid/v1",
+      "where": "lib/route.js:40"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "lib/self-update.js:436"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "lib/self-update.js:603"
+    },
+    {
+      "host": "cdn.jsdelivr.net",
+      "url": "https://cdn.jsdelivr.net/npm/",
+      "where": "lib/self-update.js:604"
+    },
+    {
+      "host": "unpkg.com",
+      "url": "https://unpkg.com/",
+      "where": "lib/self-update.js:605"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "lib/self-update.js:606"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "lib/site.js:44"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ptb-xiaou/dsh-api3d.git",
+      "where": "package.json:17"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ptb-xiaou/dsh-api3d#readme",
+      "where": "package.json:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ptb-xiaou/dsh-api3d/issues",
+      "where": "package.json:21"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "scripts/probe-models.mjs:15"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn",
+      "where": "test/client-bundle.test.mjs:302"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/direct-transport.test.mjs:26"
+    },
+    {
+      "host": "elsewhere.example",
+      "url": "https://elsewhere.example/",
+      "where": "test/direct-transport.test.mjs:93"
+    },
+    {
+      "host": "elsewhere.example",
+      "url": "https://elsewhere.example/",
+      "where": "test/direct-transport.test.mjs:99"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7890",
+      "where": "test/direct-transport.test.mjs:245"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7890",
+      "where": "test/direct-transport.test.mjs:246"
+    },
+    {
+      "host": "upstream.api3d.invalid",
+      "url": "https://upstream.api3d.invalid/v1/chat/completions",
+      "where": "test/fence.test.mjs:11"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/fence.test.mjs:14"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1/chat/completions",
+      "where": "test/fence.test.mjs:18"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/api/v1",
+      "where": "test/fence.test.mjs:26"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/api/v1/chat/completions",
+      "where": "test/fence.test.mjs:28"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com",
+      "where": "test/fence.test.mjs:34"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1/chat/completions",
+      "where": "test/fence.test.mjs:36"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/",
+      "where": "test/fence.test.mjs:38"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1/chat/completions",
+      "where": "test/fence.test.mjs:40"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/v1/",
+      "where": "test/fence.test.mjs:45"
+    },
+    {
+      "host": "upstream.api3d.invalid",
+      "url": "https://upstream.api3d.invalid/v1/models",
+      "where": "test/fence.test.mjs:46"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/v1/models",
+      "where": "test/fence.test.mjs:47"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/fence.test.mjs:52"
+    },
+    {
+      "host": "other.example.org",
+      "url": "https://other.example.org/anything",
+      "where": "test/fence.test.mjs:53"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "test/fence.test.mjs:64"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1/chat/completions",
+      "where": "test/fence.test.mjs:66"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/fence.test.mjs:88"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1/chat/completions",
+      "where": "test/fence.test.mjs:89"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/fence.test.mjs:99"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/fence.test.mjs:107"
+    },
+    {
+      "host": "a.example.com",
+      "url": "https://a.example.com/v1",
+      "where": "test/fence.test.mjs:115"
+    },
+    {
+      "host": "a.example.com",
+      "url": "https://a.example.com/v1/chat/completions",
+      "where": "test/fence.test.mjs:117"
+    },
+    {
+      "host": "b.example.com",
+      "url": "https://b.example.com/api/v1",
+      "where": "test/fence.test.mjs:119"
+    },
+    {
+      "host": "b.example.com",
+      "url": "https://b.example.com/api/v1/chat/completions",
+      "where": "test/fence.test.mjs:122"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/fence.test.mjs:127"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1/chat/completions",
+      "where": "test/fence.test.mjs:129"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1/chat/completions",
+      "where": "test/fence.test.mjs:133"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/integration.test.mjs:37"
+    },
+    {
+      "host": "${sentinel",
+      "url": "https://${SENTINEL",
+      "where": "test/integration.test.mjs:56"
+    },
+    {
+      "host": "${sentinel",
+      "url": "https://${SENTINEL",
+      "where": "test/integration.test.mjs:86"
+    },
+    {
+      "host": "other.example",
+      "url": "https://other.example/v1/chat/completions",
+      "where": "test/integration.test.mjs:96"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/v1",
+      "where": "test/integration.test.mjs:105"
+    },
+    {
+      "host": "${sentinel",
+      "url": "https://${SENTINEL",
+      "where": "test/integration.test.mjs:108"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/v1",
+      "where": "test/integration.test.mjs:120"
+    },
+    {
+      "host": "${sentinel",
+      "url": "https://${SENTINEL",
+      "where": "test/integration.test.mjs:123"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/v1",
+      "where": "test/integration.test.mjs:133"
+    },
+    {
+      "host": "${sentinel",
+      "url": "https://${SENTINEL",
+      "where": "test/integration.test.mjs:136"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/v1",
+      "where": "test/integration.test.mjs:146"
+    },
+    {
+      "host": "${sentinel",
+      "url": "https://${SENTINEL",
+      "where": "test/integration.test.mjs:149"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1",
+      "where": "test/models.test.mjs:352"
+    },
+    {
+      "host": "api3d.cn",
+      "url": "https://api3d.cn/v1/models",
+      "where": "test/models.test.mjs:355"
+    },
+    {
+      "host": "relay.example.com",
+      "url": "https://relay.example.com/api/v1///",
+      "where": "test/models.test.mjs:369"
+    },
+    {
+      "host": "relay.example.com",
+      "url": "https://relay.example.com/api/v1/models",
+      "where": "test/models.test.mjs:371"
+    },
+    {
+      "host": "relay.example.com",
+      "url": "https://relay.example.com/api/v1",
+      "where": "test/models.test.mjs:372"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1/api/api3d.models",
+      "where": "test/models.test.mjs:566"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1/api/api3d.apply",
+      "where": "test/models.test.mjs:578"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1/api/api3d.keys",
+      "where": "test/models.test.mjs:590"
+    },
+    {
+      "host": "upstream.api3d.invalid",
+      "url": "https://upstream.api3d.invalid/v1/chat/completions",
+      "where": "test/silent-retry.test.mjs:11"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:24"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:33"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:45"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:54"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:62"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:70"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:78"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:86"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:94"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:106"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:118"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/silent-retry.test.mjs:126"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/tool-schema.test.mjs:94"
+    },
+    {
+      "host": "upstream.api3d.invalid",
+      "url": "https://upstream.api3d.invalid/v1/chat/completions",
+      "where": "test/tool-schema.test.mjs:95"
+    },
+    {
+      "host": "api.example.com",
+      "url": "https://api.example.com/v1",
+      "where": "test/tool-schema.test.mjs:102"
+    },
+    {
+      "host": "upstream.api3d.invalid",
+      "url": "https://upstream.api3d.invalid/v1/chat/completions",
+      "where": "test/tool-schema.test.mjs:103"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.4",
+      "js-yaml": "4.1.0",
+      "react": "18.3.1"
+    }
+  },
+  "quality_raw": {
+    "test_files": 10,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 24,
+    "pushed_at": "2026-10-22T04:06:16Z",
+    "created_at": "2026-10-21T03:43:50Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/direct-fetch.js",
+    "lib/index.js",
+    "lib/route.js",
+    "lib/self-update.js",
+    "lib/site.js",
+    "package.json",
+    "scripts/probe-models.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-api3d",
+      "text": "[](https://www.npmjs.com/package/dsh-api3d)\n[](https://github.com/ptb-xiaou/dsh-api3d/blob/main/LICENSE)\n\n**中文** · [English](README.en.md)\n\n> 📦 开源仓库：[ptb-xiaou/dsh-api3d](https://github.com/ptb-xiaou/dsh-api3d) ｜ npm：[dsh-api3d@0.2.8](https://www.npmjs.com/package/dsh-api3d) ｜ [Release v0.2.8](https://github.com/ptb-xiaou/dsh-api3d/releases/tag/v0.2.8) ｜ MIT（衍生说明见 [NOTICE](NOTICE)）"
+    },
+    {
+      "section": "dsh-api3d",
+      "text": "把 **API3D（[api3d.cn](https://api3d.cn)）** 这条中转站接成 DeepSeek Harness 里的\n一条 pi-ai 路由，基础地址、API Key、出站兼容开关都在「插件」设置页里填，不用改文件、\n不用重装。站点地址已经写在 `lib/site.js` 里，装上就是零配置可用。\n\n**升级不用卸载重装**（0.2.8 起）：插件页 → 本组合包详情页里，「卸载」左边会多一个\n**「升级到 x.y.z」** 按钮（有新版本时才可点）：点它 → 二次确认 → 进度 → 「已升级到 x.y.z\n· 重启 DSH 之后生效」。宿主半用包管理器把 npm 上更新的版本装进当前 profile；开发目录 /\n`link:` 安装会显示为不可点（附原因）。\n（0.2.7 发布了这条路，但客户端半区漏了槽位注册，真机上没有按钮；0.2.8 补上注册，并加了一条\n断言把「注册项必须存在」钉在测试里。）"
+    },
+    {
+      "section": "dsh-api3d",
+      "text": "这是一个**骨架**：核心链路（路由存活 + 出站围栏 + 凭据写入 + 设置卡 + 密钥/模型向导）\n已经完整可跑，余额 / 用量 / 计费 / 健康探测四项留了明确的接缝，等着填。\n\n装好后侧边栏「插件」下面会多一行 **API3D**：点进去填一次密钥、勾选站点上的模型，\n就能直接用。详见「密钥与模型向导」。"
+    },
+    {
+      "section": "设计取舍",
+      "text": "- **不自研 `LlmAdapter`。** 自研一个 provider 适配器意味着复刻 harness ↔ pi-ai 的整个\n  转换层（官方那个约 1000 行：Context 组装、StreamChunk 翻译、replay 状态、\n  上下文溢出判定）。单站场景不值这个价。所以路由仍然**由官方适配器执行**，只是不写死在\n  补丁层里：宿主半在解析期把一条 `llm-pi-ai.providers.api3d` 装进正在运行的配置。\n- **不声明「空路由」。** pi-ai 拒绝一条解析不出任何模型的自定义路由（配置校验会报\n  *resolves no models; the installed catalog does not describe this route*）。\n  所以**没导入任何模型时，本插件一条 provider 都不声明**：设置里不会多出 API3D 条目，\n  模型选择器里也没有 API3D 分组。向导导入之后路由才出现，选择器立刻跟上，不用重启。\n- **运行时装配有两个坑，插件就是为它们存在的**（见下）。"
+    },
+    {
+      "section": "坑一：profile 补丁层会把整条路由挤掉",
+      "text": "profile 自己的 `llm-pi-ai.providers` 补丁在**每个 bundle 层之后**应用，而 loader 的\n合并是「一层深」的：补丁里的 `config` 是**赋值**而不是深合并，所以整个 `providers`\n字典会被替换。任何自带 provider 的 profile（随包发行的 `desktop` profile 就是）\n都会丢掉本插件声明的路由。\n\n装路由的时机就挂在解析期：`ctx.on('internal/config', …, { global: true })` 里把带着\n**导入目录**的路由补回去，再通过 `ctx.get('loader')` 找到 `llm-pi-ai` 条目、\n`entry.update({ config })` 写回（启动时也会试写一次）。没有导入目录时这一步整个跳过 ——\n既不装路由，也不去动别人同名的那条。\n\n> 为什么不能只写一次：宿主 profile 的 watcher 会在启动后几秒重读补丁文件，\n> 把一次性写入回滚。必须每次解析都补。"
+    },
+    {
+      "section": "坑一：profile 补丁层会把整条路由挤掉",
+      "text": "补回去的时候用的是**「本插件自己那条说了算」**的写法（`replace`）：解析出的 `providers`\n里已经有 `api3d` 时，只要它与要写的路由完全一致就跳过（值没变就不写，免得自己触发自己\n的解析风暴），否则整条替换。这里有个很容易踩的坑：`internal/config` 监听器的**第一个参数\n是宿主解析出来的 `llm-pi-ai` 配置，不是本插件的设置** —— 两者曾经同名，结果每次解析都拿\n模板里的默认目录把导入的那份盖回去，表现就是「模型导入了，但选择器里永远只有一条」。\n现在两个参数名分开写，要装的路由一律由插件设置算出（`routeValue`），不再因为\n「同名路由已存在」而提前返回。"
+    },
+    {
+      "section": "坑二：baseURL 由适配器逐请求解析，但它读不到本插件的设置",
+      "text": "两个命名空间。所以路由的 `baseURL` 指向一台**刻意不存在**的主机\n（`upstream.api3d.invalid`，RFC 2606 保留顶级域），围栏在出站时把它改写为设置里的\n真实地址。\n\n这么绕的好处是「换机房」变成设置页里的一次写入；坏处是**围栏必须在请求路径上**，\n包括每一台真实端点 —— 否则 DNS 直接失败（这是刻意的大声失败，比静默打到某台真实\n服务器好）。\n\n顺带，围栏还承担了中转站常见的出站兼容："
+    },
+    {
+      "section": "坑二：baseURL 由适配器逐请求解析，但它读不到本插件的设置",
+      "text": "| 出站兼容 | 为什么需要 |\n| --- | --- |\n| 改写 baseURL | 见上 |\n| 可选替换 `User-Agent` | 有些站点按 UA 认证，而适配器会剥掉与它归属头冲突的 profile header |\n| 可选直连（绕过进程代理） | 站点 WAF 常把数据中心出口 IP 判成挑战，回 200 HTML 而不是 SSE |\n| 可选补 `required: []` | 站点转发到严格上游时，缺 `required` 的工具 schema 会被拒 |\n| 可选静默重试 | 站点多通道转发，个别通道把本可重试的请求判成 400 |\n| 402 额度错误加提示 | 站点用 402 + 被错标成 `text/event-stream` 的 JSON 报额度耗尽 |"
+    },
+    {
+      "section": "目录",
+      "text": "| 路径 | 作用 |\n| --- | --- |\n| `lib/site.js` | **身份常量唯一来源**：包名、行 id、provider 名、哨兵主机、默认凭据引用名。换站点先改这里 |\n| `cordis.patch.yml` | 组合包补丁层：**只插入插件行**（`- insert:`）。路由不在这里声明，见「设计取舍」 |\n| `lib/index.js` | 宿主半：围栏、路由存活、配额注解、设置命名空间 |\n| `lib/client.js` | 浏览器半：设置卡（基础地址、API Key、兼容开关、预留的运维行）、侧边栏入口、密钥/模型向导 |\n| `lib/route.js` | **手写**：`ROUTE`（路由骨架，**不含 `models`**）与 `MODEL_TEMPLATE`（向导每行的能力初值） |\n| `lib/direct-fetch.js` | 直连传输（`node:http`/`node:https`，绕开进程代理） |\n| `scripts/probe-models.mjs` | 用真实 key 打一次 `GET {baseURL}/models`，与**设置里已导入的目录**做 diff |\n| `test/` | 135 项断言，见下 |"
+    },
+    {
+      "section": "安装与分发",
+      "text": "| 方式 | 命令 | 说明 |\n| --- | --- | --- |\n| **npm** | `dsh plugin --profile web add dsh-api3d` | 已发布 **`dsh-api3d@0.2.8`**；查询顺序：profile 配置的 registry → `registry.npmmirror.com` |\n| **GitHub 直装** | `dsh plugin --profile web add github:ptb-xiaou/dsh-api3d` | 仓库里 `lib/` 就是成品，没有构建步骤，装完即用 |\n| **tarball** | `dsh plugin --profile web add https://registry.npmjs.org/dsh-api3d/-/dsh-api3d-0.2.8.tgz` | 也接受本地绝对路径的 `.tgz`；GitHub Releases 可以放同一份 tgz |\n| **本地路径** | `dsh plugin --profile web add E:\\path\\to\\dsh-api3d` | 开发用；建议装进隔离实例，别装进正在用的主实例 |"
+    },
+    {
+      "section": "安装与分发",
+      "text": "装完**重启 DSH**：插件行是 boot graph 的一部分，热载不生效。\n\n三个实测事实（在干净隔离实例上走真实安装路径验过两遍：一次是 `npm pack` 产出的\ntarball，一次是 npm 渠道的 `add dsh-api3d`；两次的启动日志都打出\n`api3d: 路由 api3d → …`）："
+    },
+    {
+      "section": "安装与分发",
+      "text": "1. `add` 会自动把 `dsh-api3d` 追加进该 profile `package.json` 的\n   `dsh.profile.bundles`，不用手工编辑；`dependencies` 一并写入。\n2. 装好的包是 `profiles/<profile>/node_modules/dsh-api3d` 下的**真实目录**，而且\n   **它自己不需要 `node_modules`**：宿主半的 `import '@deepseek-ai/schemastery'`\n   由 profile 内的解析层路由到应用自带的那一份。只有本地开发（插件在 profiles 目录\n   之外）才需要自己软链宿主依赖，见「开发」。\n3. 浏览器半同样被认出来：实例返回的 HTML 里模块清单含 `dsh-api3d`\n   （`url: plugins/??dsh-api3d/client.js&rev=…`，带 `inject` 列表）。刚装好、还没导入\n   模型时启动日志打出的是 `api3d: 尚未导入模型 → 暂不声明 api3d 路由`，导入之后变成\n   `api3d: 路由 api3d → https://api3d.cn/v1，模型目录 N 个（从站点导入）：…`。"
+    },
+    {
+      "section": "安装与分发",
+      "text": "关于**版本兼容闸门**：插件管理器会检查 `peerDependencies` 里以 `@deepseek-ai/dsh`\n开头的条目是否满足当前 DSH 版本，不满足就拒绝安装（除非在 profile 的\n`compatibility.json` 里按精确版本开豁免）。本包只声明\n`@deepseek-ai/cordis` / `@deepseek-ai/schemastery`，不在闸门范围内，所以不会卡住安装；\n代价是本包**不做运行时版本自检** —— DSH 大版本升级后如果插件报错，请开 issue。\n\n> **安全提醒**：本包的宿主半在 DSH 进程内运行，**不受工作区沙箱限制**，并且会拿到\n> API Key。装之前请读 `lib/index.js`。"
+    },
+    {
+      "section": "发布（维护者）",
+      "text": "`lib/`（含手写的 `lib/client.js` 与 `lib/route.js`）是**提交进版本库的成品**，\n所以 `github:` 直装不需要任何构建步骤。"
+    },
+    {
+      "section": "发布（维护者）",
+      "text": "- **npm**：已发布 **`dsh-api3d@0.2.8`**（官方 registry 的 `latest`）；`npm pack` 核对打包 16 个文件\n  —— `lib/` 6 个（0.2.7 新增 `lib/self-update.js`）+ `cordis.patch.yml` +\n  `README.md` + `README.en.md` + `LICENSE` + `NOTICE` + `package.json` + `docs/` 4 张向导截图；\n  `test/`、`scripts/` 由 `files` 白名单挡在外面\n  （`docs/` 从 0.2.1 起进白名单 —— 否则 npm 页面上的 README 截图是断图）。\n  实测（0.2.8）：`dist.shasum` = `ab6fff74bed147ab01ca0b251f2c4a10a924e008`，registry 记录\n  `fileCount` 16 / `unpackedSize` 541794；tarball 346608 字节（346.6 kB 打包 / 541.8 kB 解开），\n  与本地 `npm pack` 的 SHA-1 完全一致。\n  发版用能直接发布的 token；若账号被要求走暂存发布，`npm publish` 会报\n  `E_STAGE_REQUIRED`，此时改用 `npx npm@11 stage publish` + `stage approve`（后者需要 2FA）。\n  若 npm 上名字被占用，改成带 scope 的名字，并把本文档里的命令同步改掉。\n- **发完必须核对**，而且要绕过两层缓存：本机全局 npmrc 把 registry 指到了\n  `registry.npmmirror.com`（镜像同步慢且不全，曾经在 0.2.1 早已上线时 `npm view` 还报\n  `latest: 0.1.1`），而即使加了 `--registry=https://registry.npmjs.org/`，npm 自己也会缓存\n  响应（0.2.3 发布 5 分钟后 `npm view` 仍报 0.2.2）。可靠做法是直接抓 packument JSON：\n  `Invoke-RestMethod https://registry.npmjs.org/dsh-api3d`，看 `versions`、`dist-tags` 与每条\n  `dist.shasum`；再用 `https://registry.npmjs.org/dsh-api3d/-/dsh-api3d-<版本>.tgz` 下载并核对\n  SHA-1。另外 `npm publish` 打印 `+ dsh-api3d@x.y.z` 只代表**已受理**（"
+    },
+    {
+      "section": "密钥与模型向导",
+      "text": "装好后**不用先记字段**：侧边栏「插件」下面会多一行 **API3D**，点进去就是向导\n（面板第一次打开、且还没导入模型时会自动弹出）：\n\n1. 填站点密钥（基础地址已预填 `https://api3d.cn/v1`），点「确认并查询模型」。\n   还没有密钥的话，输入框下方有一条「还没有 API Key？前往 api3d.cn 获取」，\n   点它在系统浏览器里打开站点注册页（宿主按外链处理，不会在应用内嵌窗口里跑）。\n2. 宿主半拿这把 key 去 `GET {baseURL}/models`，把站点实际在售的模型列出来。\n3. 勾选要用的模型，点「导入所选模型」。"
+    },
+    {
+      "section": "密钥与模型向导",
+      "text": "密钥框不会把整串藏起来：失焦时显示成 `api3d-…cdef`（首尾可见、中段打码），点进输入框\n才显示完整值。填过一次之后，框右侧的下拉按钮会列出**最近用过的 5 把密钥**（最新的在最前，\n列表里同样只显示打码形式），选一条就能直接用它去查询，不用重新粘贴；旁边的「清空历史」\n把它删掉。历史记在 `$DSH_HOME/.credentials.yaml` 的 `<apiKeyEnv>_HISTORY`\n（默认 `API3D_API_KEY_HISTORY`）里，与密钥本身同处一个文件。\n\n**下拉里的密钥是宿主代取的。** DSH 的凭据服务是单向的：`describe` 只回答「某个引用名配没配」，\n没有任何读路径会把值交给页面（这也是 DSH 的既定设计）。所以这条列表由宿主半从凭据库读出、\n只把 `api3d-…cdef` 这样的**打码标签**发给浏览器；选中时浏览器只回一个序号\n（`POST /api/api3d.keys` 拿清单、`keyIndex` 随查询/导入请求回传），真实值全程不出宿主进程。\n「清除历史」也只是让宿主 `unset` 那条派生引用。"
+    },
+    {
+      "section": "密钥与模型向导",
+      "text": "**第 2 步列出的不只是名字。** 每行都带一条能力摘要（形如\n`输入 文本 · 上下文 1,000,000 · 最大输出 384,000 · 5 档推理`），行尾的「调整能力」可以\n逐条展开修改：\n\n| 控件 | 落到路由描述符的字段 | 初值 |\n| --- | --- | --- |\n| 输入：文本 / 图像 | `input` | 只勾「文本」 |\n| 上下文 | `contextWindow` | 能力模板的初值（1,000,000） |\n| 最大输出 | `maxTokens` | 同上（384,000） |\n| 推理档位：关闭 / minimal / low / medium / high / xhigh / max | `reasoningEfforts` | 能力模板那 6 档（`off` = 提供 Off 但不发该字段） |\n\n每行的能力**互相独立**：改一行不影响其它行，也不改能力模板（`lib/route.js` 的\n`MODEL_TEMPLATE`）。数字留空表示「用模板里的值」。"
+    },
+    {
+      "section": "密钥与模型向导",
+      "text": "要注意的是：`api3d.cn` 的 `/v1/models` 只回 `id` 与 `display_name`，不报输入模态、上下文\n窗口或推理档位，所以这里的初值是本插件的内置默认，**不是站点声明的值**。勾「图像」或加档位\n之前先确认站点真的支持，否则请求会被上游拒绝。合法词汇表由 DSH 的 `dsh-llm-pi-ai` 适配器\n定义：模态只有 `text` / `image`，档位只有 `off` / `minimal` / `low` / `medium` / `high` /\n`xhigh` / `max`；勾成别的会在执行时被适配器拒掉。站点**真报了的**能力字段（`input` /\n`input_modalities` / `context_window` / `max_input_tokens` / `limit.context` /\n`max_output_tokens` / `top_provider.max_completion_tokens` 等常见写法）会被直接采用，\n站点没报的才回落默认 —— 「没说」与「说了不支持」是两件事，不会互相冒充。"
+    },
+    {
+      "section": "密钥与模型向导",
+      "text": "导入时做三件事：密钥写进 `$DSH_HOME/.credentials.yaml`、勾选的目录（连同各自的能力）写进\n本插件设置 `models`、再由宿主把目录装成 `llm-pi-ai` 路由。模型选择器立刻能看到它们，\n不用重启 —— 第一次导入之前，设置与选择器里都没有 API3D 这一项。\n\n`/api/api3d.apply` 把目录放在**请求体**里（而不是回头去读插件设置），所以即使那一刻设置\n还没重新解析，装回去的也一定是刚勾选的那份；解析期钩子随后会用设置里的同一份目录覆盖\n任何同名的 `api3d` 路由（本插件自己那条说了算）。\n\n补丁层里**完全没有** `- id: llm-pi-ai` 条目也能导入：条目缺失、或它的形态不是键值对时，\n宿主半把它当作一份空配置，从零建出 `providers.api3d` 写回去 —— 不会再出现「配置不可合并」\n这类拒绝。（0.2.5 之前这里会报错，等于要求用户先手写一条 `llm-pi-ai` 声明才用得了向导。）"
+    },
+    {
+      "section": "密钥与模型向导",
+      "text": "为什么查询要绕到宿主：`api3d.cn` 的 `/v1/models` 不返回任何 `access-control-*`\n头，浏览器直接请求会被跨域预检挡成 403。向导背后的两条宿主路由是：\n\n| 路由 | 方法 | 作用 |\n| --- | --- | --- |\n| `/api/api3d.models` | POST `{apiKey, baseURL?}` | 宿主侧查站点模型目录，返回归一后的目录（站点真报了的输入模态/上下文/最大输出/推理档位一并带上）与一组 `defaults`（向导每行的初值） |\n| `/api/api3d.apply` | POST `{models?}` | 把请求体里的目录（缺省则用设置里已导入的那份）装回 `llm-pi-ai` 路由；补丁层没有 `llm-pi-ai` 条目时也会从零建出并写入 |\n\n两条都注册在 `connection.fetch` 的精确路由表上，所以自动带 DSH 的 Host/Origin\n围栏与浏览器会话鉴权；未授权的请求到不了处理函数。"
+    },
+    {
+      "section": "密钥与模型向导",
+      "text": "设置卡里的字段仍然可用（等价入口）。向导只是把「填密钥 + 挑模型」这两步自动化；\n出站兼容开关（UA、直连、schema 补全、静默重试、配额提示）仍在设置卡上。\n\n这条链路已在隔离开发实例里用真实密钥跑通（填 key → 查询 → 勾选 → 导入），\n\n| 第 1 步：填密钥 | 第 2 步：勾选模型 | 导入完成 |\n| --- | --- | --- |\n|  |  |  |\n\n第 2 步展开「调整能力」后（同样是真站点、真密钥跑出来的，这行改了输入模态、上下文与最大输出）：\n\n导入后重启开发实例，日志从 `尚未导入模型 → 暂不声明 api3d 路由` 变成\n`模型目录 N 个（从站点导入）：…`，证明目录确实落了盘并被重新读回。不重启时由\n`/api/api3d.apply` 当场把路由装好，选择器也已经能看到 —— 两条路都真机验过。"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认 | 说明 |\n| --- | --- | --- |\n| 基础地址 `baseURL` | `https://api3d.cn/v1` | 站点地址，默认已填好。**显式清空不是「用默认」，是围栏不改写、请求打到哨兵主机并 DNS 失败** |\n| 凭据引用名 `apiKeyEnv` | `API3D_API_KEY` | 密钥存放位置的**键名**，不是密钥。要与 `lib/route.js` 里的 `apiKeyEnv` 一致 |\n| API Key | — | 单独一个按钮写入 `~/.dsh/.credentials.yaml`。单向写入，没有任何读路径会把它取回来 |\n| 导入的模型目录 `models` | 空 = 不声明路由 | 向导写入的 JSON 目录，**不用手填**。留空时「设置 → 模型」与模型选择器里都不会有 API3D；清空后需重启一次才撤下已经装上的路由 |\n| User-Agent | 空 | 留空保留 harness 归属头（推荐）。只有站点明确要求某个值时才填 |\n| 直连策略 `directMode` | `auto` | `auto` = 只有进程真的设了代理变量才直连；`always` / `never` 用于排查 |\n| 补工具 schema | 开 | 出站工具 schema 的对象节点补 `required: []` |\n| 静默重试 `silentRetry` | 关 | 站点以上游瞬时错误拒绝时在插件内部重发。默认关：静默掩盖真正的 400 会把可见错误换成一个令人困惑的空回合 |\n| 重试次数 `silentRetryAttempts` | 3 | 含首次，1–10 |\n| 配额提示 `quotaHint` | 空 | 附加到 402 额度耗尽错误后的说明文字。留空关闭 |"
+    },
+    {
+      "section": "配置",
+      "text": "`claimRoute`（默认开）与 `announce`（默认开）不是设置卡字段，在 `cordis.patch.yml`\n或 profile 的 patch 里改。"
+    },
+    {
+      "section": "换成别的站点要改的地方",
+      "text": "（本站 API3D 的地址与模型都已经填好，下面只在需要换站点 / 换线路时看。）\n\n模型清单**不在代码里**：它来自向导导入的那份目录（存在插件设置 `models`）。站点在售的\n模型、以及每条的能力（输入模态 / 上下文 / 最大输出 / 推理档位）都由向导写入，\n`lib/route.js` 的 `MODEL_TEMPLATE` 只是向导每行的初值。\n\n2026-10-20 实测：`GET https://api3d.cn/v1/models` 返回 `deepseek-v4.1-flash`。\n**api3d.cn 上的 `deepseek-v4.1-flash-1017` 属于福利分组，要另一把 key**\n（`SUB2API_ONLINE_WELFARE_KEY`）；用主 key 请求它会得到 `404 model_not_found`。\n分组不同 = 凭据不同 = 应该是另一条 provider 路由，不能并进同一条路由的模型列表 ——\n所以向导只列这把 key 真正能用的模型。\n\n想核对「站点现在到底有哪些模型」，别凭厂商名猜："
+    },
+    {
+      "section": "换成别的站点要改的地方",
+      "text": "```bash\nnpm run probe-models                      # 用 $API3D_API_KEY 打 GET {baseURL}/models\nnpm run probe-models -- --ref SUB2API_API_KEY   # 或者从凭据库里取某条引用\nnpm run probe-models -- --profile desktop       # 指定读哪个 profile 里已导入的目录\n```\n\n脚本做一次只读 GET，把站点自报的 id 与**设置里已导入的目录**做 diff，并打印还差哪些。\n要改目录就走向导（侧边栏 API3D → 重新选择模型），不用手改文件。"
+    },
+    {
+      "section": "换成别的站点要改的地方",
+      "text": "1. **模型目录** —— 走向导导入，落到插件设置 `models`，每条的能力一并写入。路由由宿主半\n   在解析期装配，`lib/route.js` 的 `ROUTE` 只留与站点无关的骨架（provider 名、哨兵地址、\n   `apiKeyEnv`、`api`、`defaultInput`、`compat`）。\n2. **`reasoningEfforts` 的拼写** —— 键是选择器提供的档位，值是实际发出的\n   `reasoning_effort`。向导按 `MODEL_TEMPLATE` 铺 6 档，`off` = 提供 Off 且不发送该字段。\n   有些站点要求显式 `none` 且拒绝 `off`，在向导里逐条改。\n3. **`lib/site.js`** —— 只有在你想改哨兵主机 / 默认凭据引用名 / provider 名时才需要。\n   改完 `npm test` 即可（`route.test.mjs` 会核对它与 `lib/route.js` 是否一致）。"
+    },
+    {
+      "section": "预留的接缝：余额 / 用量 / 计费 / 健康探测",
+      "text": "设置卡上已经有四行占位：**余额 / 用量 / 计费 / 健康探测**，目前渲染「未接入」。\n\n接缝的粒度是**行**而不是数字：`OPS_ROWS` 定义有哪几行，取值全部走 `opValue`。\n填真数据时只动 `opValue` 一处，不动布局。\n\n两条实现路径："
+    },
+    {
+      "section": "预留的接缝：余额 / 用量 / 计费 / 健康探测",
+      "text": "- **纯管控面（推荐先做）** —— 如果你有 `GET /api/user/balance` 这类接口，做一个纯管控\n  面插件即可：`Config` + `slots.register` 卡片 + 宿主侧一个 fetch 轮询。不需要注册\n  provider，也不需要碰 `globalThis.fetch`。\n- **Remote 服务** —— 需要在浏览器半按需查询时，宿主半继承\n  `@deepseek-ai/dsh-typert-protocol` 的 `TypertRemoteService`\n  （`super(ctx, serviceKey, { namespace })` + `@Remote` 装饰方法），浏览器半\n  自己 `ctx.remote.$mount(…)`。约束较硬：描述符的 codec 必须是\n  `mode: 'strict'`（否则 `$mount` 直接抛），宿主方法的参数必须是朴素标识符、\n  `signal` 只能放最后。本机没装 `@deepseek-ai/dsh-typert-generator`，所以描述符\n  要手写 —— 这也是本骨架先不做它的原因。"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\nnpm run probe-models  # 核对站点实际提供的 id 与已导入目录的差异\nnpm test              # node --test \"test/*.test.mjs\"（135 项）\n```\n\n依赖是**软链到宿主 `node_modules`** 的（`@deepseek-ai/schemastery` / `js-yaml` /\n`react`），因为 harness 包必须是宿主的**同一份实例**（`instanceof` 安全），不能从\nregistry 装真拷贝。`@deepseek-ai/cordis` 与 `@deepseek-ai/schemastery` 声明为\n可选 peer。\n\n测试覆盖："
+    },
+    {
+      "section": "开发",
+      "text": "| 文件 | 覆盖 |\n| --- | --- |\n| `route.test.mjs` | 补丁层不再声明路由、`ROUTE` 不带 `models`、`MODEL_TEMPLATE` 的词汇表、钩子的「补 / 换 / 无目录就不动」语义 |\n| `fence.test.mjs` | 围栏：改写、白名单、非目标请求原样透传、清理时只还原本插件装的 fetch |\n| `tool-schema.test.mjs` | `required: []` 补齐与 `strict: true` 跳过 |\n| `silent-retry.test.mjs` | 瞬时失败判定、退避、次数上限 |\n| `claim.test.mjs` | `entry.update` 写回；同名路由的三种归属（本插件 / 别人 / 缺失）；**导入目录压过别处那条同名路由**；**没有导入目录时一条路由都不声明**；值没变就不写 |\n| `direct-transport.test.mjs` | 直连传输打真实 loopback 替身：header 保真、不跟随重定向、abort 切断连接 |\n| `integration.test.mjs` | **端到端**：围栏 + 直连传输真的把请求送到一台 TCP 服务器；402 额度注解的边界 |\n| `client-bundle.test.mjs` | 浏览器半装载契约：两半的设置命名空间必须逐字相等、六个槽位（含侧边栏入口与 `shell.overlay` 向导）、字典、向导第一步「前往 api3d.cn 获取」外链的地址与 `target`/`rel`、密钥框打码只藏中间（`maskKey`）、**选中历史条目也算「有密钥可用」**（`hasKeySource` —— 真机故障回归）、三条宿主路由字面量防漂移、**表单控制器以原型方法提供时不能丢 `this`**（真机崩溃回归） |\n| `models.test.mjs` | 向导的宿主半：目录归一（含站点上报的能力字段与「没说就不编造」的边界、能力字段往返）、`discoverModels` 失败分类与 `defaults`、逐模型落能力覆盖（不改模板）、`applyImportedModels` 写回、两条 `/api/api3d.*` 路由的注册与鉴权边界 |"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **单站。** 只支持一个基础地址。多站请用通用网关 provider 类插件。\n- **模型目录只来自向导导入。** 目录存在插件设置 `models` 里（落进 profile 补丁层，重启仍\n  生效），每条可以带自己的 `input` / `contextWindow` / `maxTokens` / `reasoningEfforts`。\n  **没导入就一条路由都不声明** —— pi-ai 不允许空模型路由，所以刚装好时选择器里没有\n  API3D；清空设置后要重启一次才撤下已装上的路由。适配器自带的自动发现仍然不用 ——\n  它去哨兵主机发现必然失败，见「坑二」。\n- **能力初值来自本插件的能力模板，不是站点声明。** `api3d.cn` 的 `/v1/models` 不报能力，\n  所以向导里看到的上下文窗口、最大输出与推理档位都来自 `MODEL_TEMPLATE`，需要按站点实际\n  能力逐条改；勾错了由上游拒绝。\n- **密钥由向导代写。** 向导把这把 key 写进 `$DSH_HOME/.credentials.yaml` 的\n  `API3D_API_KEY`；也可以手动在设置卡或「设置 → 模型 → API3D」里填，两条路等价。\n  已配置后卡片上才出现「清除密钥」。\n- **密钥与历史在磁盘上都是明文。** 密钥框失焦时显示成 `api3d-…cdef` 只是**界面上的**打码，\n  `$DSH_HOME/.credentials.yaml` 里存的仍是明文（和 DSH 里其它密钥一样）；最近 5 把历史\n  密钥也在同一文件里（`<apiKeyEnv>_HISTORY`），点向导里的「清空历史」才会删掉。\n  但明文只在宿主进程与这个文件之间流动：浏览器拿到的永远只是打码标签与一个序号，\n  密钥值本身不会被页面读到（凭据 Remote 单向）。\n- **余额 / 用量 / 计费 / 健康探测未接入。** 接缝已就位，见上。\n- **`directMode: never` 在站点 WAF 拦截数据中心出口时会失败**，这是预期行为。"
+    },
+    {
+      "section": "出处与许可",
+      "text": "MIT。衍生自 [aqiu817/dsh-llm-agentrouter](https://github.com/aqiu817/dsh-llm-agentrouter)\n（MIT，Copyright (c) 2026 aqiu817）—— 围栏、路由自愈、静默重试、直连传输与设置卡的\n骨架来自该项目，已按单站场景重构并补充了凭据写入与运维接缝。`LICENSE` 保持标准 MIT\n全文（含原始版权声明），衍生与参考实现的说明单独放在 `NOTICE` 里 —— 这样 GitHub 的\n许可证识别能正常标出 MIT，而归属信息也不会丢。\n\n参考实现 [Luck9Star/dsh-gateway-provider](https://github.com/Luck9Star/dsh-gateway-provider)\n（MIT，Copyright (c) 2026 Luck9Star）提供了「运行时注册 provider 路由」的路线，本骨架\n走的也是运行时装配（按需装、没导入就不装），理由见开头。"
+    },
+    {
+      "section": "dsh-api3d",
+      "text": "[](https://www.npmjs.com/package/dsh-api3d)\n[](https://github.com/ptb-xiaou/dsh-api3d/blob/main/LICENSE)\n\n[中文](README.md) · **English**\n\n> 📦 Repository: [ptb-xiaou/dsh-api3d](https://github.com/ptb-xiaou/dsh-api3d) ｜ npm: [dsh-api3d@0.2.8](https://www.npmjs.com/package/dsh-api3d) ｜ [Release v0.2.8](https://github.com/ptb-xiaou/dsh-api3d/releases/tag/v0.2.8) ｜ MIT (derivation notes in [NOTICE](NOTICE))"
+    },
+    {
+      "section": "dsh-api3d",
+      "text": "Wires the **API3D ([api3d.cn](https://api3d.cn))** relay into DeepSeek Harness as one\npi-ai route. The base URL, the API key and the outbound-compatibility switches all live\non the plugin's settings card — no file editing, no reinstall. The site address is already\nbaked into `lib/site.js`, so it works out of the box."
+    },
+    {
+      "section": "dsh-api3d",
+      "text": "**No uninstall/reinstall to upgrade** (since 0.2.8): on the Plugins page, the bundle detail\npage gets an **\"Upgrade to x.y.z\"** button next to \"Uninstall\" (clickable only when a newer\nversion exists): click → confirm → progress → \"Upgraded to x.y.z · restart DSH to apply\".\nThe host half installs the newer npm version into the current profile with the package\nmanager; a development directory / `link:` install shows the button disabled with a reason."
+    },
+    {
+      "section": "dsh-api3d",
+      "text": "This is a **skeleton**: the core path (route survival + outbound fence + credential write +\nsettings card + key/model wizard) is complete and runnable. The four ops rows — balance /\nusage / billing / health probe — have explicit seams waiting to be filled.\n\nOnce installed, a new **API3D** row appears in the sidebar right below **Plugins**: enter\nyour key once, tick the models the site serves, and you are done. See\n[the key and model wizard](#key-and-model-wizard)."
+    },
+    {
+      "section": "Design tradeoffs",
+      "text": "In one sentence: **the protocol, the model catalog and the reasoning tiers are\nconfiguration, not code; the plugin exists only to make the relay actually accept the\nrequest.**"
+    },
+    {
+      "section": "Design tradeoffs",
+      "text": "- **No custom `LlmAdapter`.** Writing a provider adapter means reimplementing the whole\n  harness ↔ pi-ai translation layer (the official one is ~1000 lines: context assembly,\n  StreamChunk translation, replay state, context-overflow detection). Not worth it for a\n  single site. So the route is still **executed by the official adapter** — it is simply not\n  hard-coded in the patch layer: the host half installs one `llm-pi-ai.providers.api3d` into\n  the config that is being resolved.\n- **No \"empty route\" declaration.** pi-ai rejects a custom route that resolves to no models\n  at all (validation reports *resolves no models; the installed catalog does not describe\n  this route*). So **while nothing has been imported, this plugin declares no provider at\n  all**: no API3D entry appears under Settings → Models, and no API3D group appears in the\n  model picker. The route shows up once the wizard imports a catalog, and the picker follows\n  immediately — no restart.\n- **Runtime assembly has two traps, and this plugin exists for them** (below)."
+    },
+    {
+      "section": "Trap 1: the profile patch layer replaces the whole route",
+      "text": "A profile's own `llm-pi-ai.providers` patch is applied **after every bundle layer**, and the\nloader merges one level deep: the patch's `config` is an **assignment**, not a deep merge,\nso the entire `providers` dictionary is replaced. Any profile that ships its own provider\n(the `desktop` profile that DSH itself distributes does) loses the route this plugin\ndeclares."
+    },
+    {
+      "section": "Trap 1: the profile patch layer replaces the whole route",
+      "text": "The host half cannot observe when that happens, so it hooks the resolution:\n`ctx.on('internal/config', …, { global: true })` puts the route carrying the **imported\ncatalog** back, then `ctx.get('loader')` finds the `llm-pi-ai` entry and\n`entry.update({ config })` writes it home (there is also one attempt at startup). With no\nimported catalog that whole step is skipped — no route is installed and nobody else's\nsame-name route is touched."
+    },
+    {
+      "section": "Trap 1: the profile patch layer replaces the whole route",
+      "text": "> Why not write it once: the host profile's watcher re-reads the patch file seconds after\n> startup and rolls a one-shot write back. It has to be re-applied on every resolution."
+    },
+    {
+      "section": "Trap 1: the profile patch layer replaces the whole route",
+      "text": "When it puts the route back it uses **\"this plugin's own declaration wins\"** semantics\n(`replace`): if the resolved `providers` already contains `api3d`, the hook skips the write\nwhen the value is identical (no needless write, which would otherwise trigger a resolution\nstorm of its own) and replaces the whole route otherwise. There is an easy trap here: the\n**first argument of an `internal/config` listener is the host's resolved `llm-pi-ai` config,\nnot this plugin's settings** — the two were once named the same, so every resolution stamped\nthe template's default catalog back over the imported one, which showed up as \"the models are\nimported but the selector only ever offers one\". The parameter names are now distinct, the\nroute to install is always computed from the plugin's settings (`routeValue`), and the claim\npath no longer returns early just because a same-name route already exists."
+    },
+    {
+      "section": "Trap 2: baseURL is resolved per request, but the adapter cannot see this plugin's settings",
+      "text": "Two namespaces. So the route's `baseURL` points at a host that deliberately does not exist\n(`upstream.api3d.invalid`, an RFC 2606 reserved TLD), and the fence rewrites it to the real\naddress from settings on the way out."
+    },
+    {
+      "section": "Trap 2: baseURL is resolved per request, but the adapter cannot see this plugin's settings",
+      "text": "The upside of that detour is that \"switch data centre\" becomes one write on the settings\ncard. The downside is that **the fence must be on the request path** for every real\nendpoint — otherwise DNS fails loudly (deliberately loud: much better than silently\nhitting some real server).\n\nThe fence also carries the outbound compatibility a relay usually needs:"
+    },
+    {
+      "section": "Trap 2: baseURL is resolved per request, but the adapter cannot see this plugin's settings",
+      "text": "| Outbound compatibility | Why it is needed |\n| --- | --- |\n| rewrite baseURL | see above |\n| optional `User-Agent` replacement | some sites authenticate by UA, while the adapter strips profile headers that conflict with its own attribution header |\n| optional direct connection (bypass the process proxy) | site WAFs commonly challenge data-centre egress IPs and answer with 200 HTML instead of SSE |\n| optional `required: []` fill-in | when the site forwards to a strict upstream, tool schemas without `required` are rejected |\n| optional silent retry | relays forward across multiple channels, and some channels turn a retryable request into a 400 |\n| 402 quota hint | sites report exhausted quota with 402 plus a JSON body mislabelled `text/event-stream` |"
+    },
+    {
+      "section": "Layout",
+      "text": "| Path | Purpose |\n| --- | --- |\n| `lib/site.js` | **single source of identity constants**: package name, row id, provider name, sentinel host, default credential reference. Change this first when moving to another site |\n| `cordis.patch.yml` | bundle patch layer: **inserts the plugin row only** (`- insert:`). The route is not declared here — see \"Design tradeoffs\" |\n| `lib/index.js` | host half: fence, route survival, quota annotation, settings namespace |\n| `lib/client.js` | browser half: settings card (base URL, API key, compatibility switches, reserved ops rows), sidebar entry, key/model wizard |\n| `lib/route.js` | **hand-written**: `ROUTE` (route skeleton, **no `models`**) and `MODEL_TEMPLATE` (the wizard's per-row capability initial values) |\n| `lib/direct-fetch.js` | direct transport (`node:http`/`node:https`, bypassing the process proxy) |\n| `scripts/probe-models.mjs` | one real `GET {baseURL}/models` with a real key, diffed against the catalog **already imported into settings** |\n| `test/` | 135 assertions, see below |"
+    },
+    {
+      "section": "Install and distribution",
+      "text": "| Route | Command | Notes |\n| --- | --- | --- |\n| **npm** | `dsh plugin --profile web add dsh-api3d` | published as **`dsh-api3d@0.2.8`**; lookup order: the registry configured in the profile, then `registry.npmmirror.com` |\n| **GitHub** | `dsh plugin --profile web add github:ptb-xiaou/dsh-api3d` | `lib/` in the repo is the built artifact — there is no build step, so it runs as installed |\n| **tarball** | `dsh plugin --profile web add https://registry.npmjs.org/dsh-api3d/-/dsh-api3d-0.2.8.tgz` | an absolute local `.tgz` path works too; a GitHub Release can carry the same tgz |\n| **local path** | `dsh plugin --profile web add E:\\path\\to\\dsh-api3d` | for development; install into an isolated instance, not into the one you are working in |"
+    },
+    {
+      "section": "Install and distribution",
+      "text": "**Restart DSH afterwards**: the plugin row is part of the boot graph, so hot reload does\nnot pick it up.\n\nThree facts verified on clean isolated instances through the real install path, twice over —\nonce with the tarball produced by `npm pack`, once through the npm channel (`add dsh-api3d`;\nboth boots printed the plugin's own `api3d: …` startup line):"
+    },
+    {
+      "section": "Install and distribution",
+      "text": "1. `add` appends `dsh-api3d` to that profile's `package.json`\n   `dsh.profile.bundles` by itself — no hand-editing — and writes `dependencies` too.\n2. The installed package is a **real directory** at\n   `profiles/<profile>/node_modules/dsh-api3d`, and **it needs no `node_modules` of its\n   own**: the host half's `import '@deepseek-ai/schemastery'` is routed by the profile's\n   resolution layer to the copy the app ships. Only local development (plugin outside the\n   profiles tree) needs host dependencies linked by hand — see\n   [Development](#development).\n3. The browser half is picked up as well: the HTML the instance serves lists `dsh-api3d`\n   in its module manifest (`url: plugins/??dsh-api3d/client.js&rev=…`, with an `inject`\n   list). Right after installing, before anything is imported, the startup log prints\n   `api3d: 尚未导入模型 → 暂不声明 api3d 路由`; after an import it prints\n   `api3d: 路由 api3d → https://api3d.cn/v1，模型目录 N 个（从站点导入）：…`."
+    },
+    {
+      "section": "Install and distribution",
+      "text": "About the **version compatibility gate**: the plugin manager checks every\n`peerDependencies` entry whose name starts with `@deepseek-ai/dsh` against the running DSH\nversion and refuses the install when it does not match (unless an exact-version exemption\nis granted in the profile's `compatibility.json`). This package only declares\n`@deepseek-ai/cordis` / `@deepseek-ai/schemastery`, which the gate does not look at, so it\nnever blocks an install — at the cost of **no runtime version assertion**: if a major DSH\nupgrade breaks the plugin, please open an issue."
+    },
+    {
+      "section": "Install and distribution",
+      "text": "> **Security note**: this package's host half runs inside the DSH process, is **not\n> confined by the workspace sandbox**, and does receive your API key. Read `lib/index.js`\n> before installing."
+    },
+    {
+      "section": "Releasing (maintainers)",
+      "text": "`lib/` (including the hand-written `lib/client.js` and `lib/route.js`) is a\n**committed artifact**, which is why `github:` installs need no build step."
+    },
+    {
+      "section": "Releasing (maintainers)",
+      "text": "- **npm**: published as **`dsh-api3d@0.2.8`** (`latest` on the official registry); `npm pack` was\n  checked to contain exactly 16 files — 6 under `lib/` (0.2.7 adds `lib/self-update.js`) plus\n  `cordis.patch.yml`, `README.md`, `README.en.md`, `LICENSE`, `NOTICE`, `package.json` and the\n  four wizard screenshots under `docs/`;\n  `test/` and `scripts/` are kept out by the\n  `files` allowlist (`docs/` joined it in 0.2.1 — otherwise the README screenshots are\n  broken on the npm page). Measured for 0.2.8: `dist.shasum` = `ab6fff74bed147ab01ca0b251f2c4a10a924e008`,\n  registry `fileCount` 16 / `unpackedSize` 541794; the tarball is 346608 bytes (346.6 kB packed /\n  541.8 kB unpacked) and SHA-1-identical to the local `npm pack` output. Release with a\n  token that may publish directly; if the account is required to stage publishes,\n  `npm publish` fails with `E_STAGE_REQUIRED` and you need\n  `npx npm@11 stage publish` plus `stage approve` (the approval needs 2FA). If the name is\n  taken on npm, switch to a scoped name and update the commands in this document.\n- **Always verify after publishing**, and bypass both caches: the machine's global npmrc\n  points its registry at `registry.npmmirror"
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "After installing you do **not** have to know any field names first: a new **API3D** row\nappears under **Plugins** in the sidebar; clicking it opens the wizard (it pops up\nautomatically the first time the panel is opened and no models have been imported yet):"
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "1. Enter the site key (the base URL is pre-filled with `https://api3d.cn/v1`) and click\n   **确认并查询模型** (\"confirm and query models\"). If you do not have a key yet, the line\n   **\"还没有 API Key？前往 api3d.cn 获取\"** under the input opens the site's signup page in\n   your system browser (the host treats it as an external link; it does not run an embedded\n   window).\n2. The host half takes that key to `GET {baseURL}/models` and lists the models the site\n   actually serves.\n3. Tick the ones you want and click **导入所选模型** (\"import selected models\")."
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "The key field never hides the whole value: while it is not focused it reads `api3d-…cdef`\n(first and last characters visible, the middle masked), and focusing it shows the full string.\nOnce you have used a key, the dropdown button on the right lists the **last five keys** (newest\nfirst, also masked) — pick one and it is used for the query directly, with no need to paste it\nagain; the adjacent **清空历史** (\"clear history\") action removes them. The history is stored next\nto the key itself, in `$DSH_HOME/.credentials.yaml` under `<apiKeyEnv>_HISTORY` (by default\n`API3D_API_KEY_HISTORY`)."
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "**The dropdown is served by the host.** DSH's credential service is one-way: `describe` only\nanswers whether a given reference is configured, and no read path ever hands a value to the page\n(that is deliberate in DSH). So the host half reads the list out of the credential store and sends\nonly masked labels such as `api3d-…cdef` to the browser; picking one sends back just an index\n(`POST /api/api3d.keys` returns the list, and a `keyIndex` travels with the query/import requests).\nThe plaintext value never leaves the host process. **Clear history** is likewise just the host\ncalling `unset` on that derived reference."
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "**Step 2 lists more than names.** Every row carries a capability summary (shaped like\n`输入 文本 · 上下文 1,000,000 · 最大输出 384,000 · 5 档推理`), and the **调整能力** (\"adjust\ncapabilities\") button at the end of the row expands a per-model editor:"
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "| Control | Field it writes into the route descriptor | Initial value |\n| --- | --- | --- |\n| Input: 文本 / 图像 (text / image) | `input` | `text` only |\n| Context (上下文) | `contextWindow` | the capability template's value (1,000,000) |\n| Max output (最大输出) | `maxTokens` | same source (384,000) |\n| Reasoning levels: 关闭 / minimal / low / medium / high / xhigh / max | `reasoningEfforts` | the capability template's six levels (`off` = offer Off but send nothing) |"
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "Capabilities are **per row**: editing one row leaves the others alone and never mutates the\ncapability template (`MODEL_TEMPLATE` in `lib/route.js`). Leaving a number box empty means\n\"use the template's value\"."
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "One caveat matters here: `api3d.cn`'s `/v1/models` returns only `id` and `display_name` — no\ninput modalities, no context window, no reasoning levels. So the initial values come from\nthis plugin's capability template (`MODEL_TEMPLATE`), **not from anything the site declared**. Confirm the site\nreally supports image input or an extra level before ticking it, or the upstream will reject\nthe request. The legal vocabulary is defined by DSH's `dsh-llm-pi-ai` adapter: modalities are\nonly `text` / `image`, levels are only `off` / `minimal` / `low` / `medium` / `high` /\n`xhigh` / `max`, and anything else is rejected at execution time. Capability fields the site\n**does** report (`input`, `input_modalities`, `context_window`, `max_input_tokens`,\n`limit.context`, `max_output_tokens`, `top_provider.max_completion_tokens`, and similar\nspellings) are adopted as-is; only what the site stays silent about falls back to the\ndefaults — \"did not say\" and \"said it does not support\" are different things and never\nimpersonate each other."
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "Import does three things: writes the key into `$DSH_HOME/.credentials.yaml`, writes the\nticked catalog (each entry with its own capabilities) into this plugin's `models` setting,\nand has the host install that catalog as the `llm-pi-ai` route. The model picker sees them\nimmediately, with no restart — before the first import neither Settings → Models nor the\npicker has an API3D entry at all."
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "`/api/api3d.apply` takes the catalog in its **request body** instead of re-reading the plugin\nsetting, so even if that setting has not been re-resolved yet, what gets installed is exactly\nwhat was just ticked; the resolution-time hook then overwrites any same-name `api3d` route\nwith the same catalog from settings (this plugin's own version wins)."
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "Import also works when the patch layer has **no** `- id: llm-pi-ai` entry at all: when the entry\nis missing, or its shape is not a mapping, the host half treats it as an empty base and builds\n`providers.api3d` from scratch — no more \"configuration cannot be merged\" style refusals.\n(Before 0.2.5 this was rejected, which effectively required users to hand-write an `llm-pi-ai`\ndeclaration before the wizard was usable.)"
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "Why the query goes through the host: `api3d.cn`'s `/v1/models` returns no\n`access-control-*` headers at all, so a direct browser request is blocked by the\ncross-origin preflight with a 403. The two host routes behind the wizard are:"
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "| Route | Method | Purpose |\n| --- | --- | --- |\n| `/api/api3d.models` | POST `{apiKey, baseURL?}` | query the site's model catalog host-side; returns the normalized catalog (including any input modalities / context / max output / reasoning levels the site really reports) plus a set of `defaults` (the seed for each wizard row) |\n| `/api/api3d.apply` | POST `{models?}` | install the catalog from the request body (or, when absent, the one already stored in settings) back into the `llm-pi-ai` route; builds that entry from scratch when the patch layer has none |"
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "Both are registered on `connection.fetch`'s exact-route table, so they automatically carry\nDSH's Host/Origin fence and browser session authentication; unauthorized requests never\nreach the handlers.\n\nThe fields on the settings card still work (an equivalent entry point). The wizard just\nautomates \"enter the key + pick the models\"; the outbound compatibility switches (UA,\ndirect connection, schema fill-in, silent retry, quota hint) stay on the settings card."
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "This path has been run end to end in an isolated development instance with a real key\n(enter key → query → tick → import):\n\n| Step 1: enter the key | Step 2: tick models | Import done |\n| --- | --- | --- |\n|  |  |  |\n\nStep 2 with **调整能力** expanded (again from a real site with a real key; this row had its\ninput modalities, context window and max output edited):"
+    },
+    {
+      "section": "Key and model wizard",
+      "text": "After importing, restarting the development instance changes the log line from\n`尚未导入模型 → 暂不声明 api3d 路由` to `模型目录 N 个（从站点导入）：…`, which proves the\ncatalog really was persisted and read back. Without a restart, `/api/api3d.apply` installs\nthe route on the spot and the picker already shows it — both paths were verified on a real\ninstance."
+    },
+    {
+      "section": "Configuration",
+      "text": "After installing, find the plugin on the **Plugins** page and fill in its settings card:"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Notes |\n| --- | --- | --- |\n| base URL `baseURL` | `https://api3d.cn/v1` | the site address, already filled in. **Clearing it explicitly is not \"use the default\": the fence stops rewriting, requests hit the sentinel host and DNS fails** |\n| credential reference `apiKeyEnv` | `API3D_API_KEY` | the **key name** of where the secret is stored, not the secret. Must match `apiKeyEnv` in `lib/route.js` |\n| API key | — | a separate button writes it into `~/.dsh/.credentials.yaml`. Write-only; no read path ever fetches it back |\n| imported catalog `models` | empty = no route declared | the JSON catalog written by the wizard, **not meant to be typed by hand**. While empty, neither Settings → Models nor the model picker has an API3D entry; clearing it needs one restart to withdraw an already installed route |\n| User-Agent | empty | empty keeps the harness attribution header (recommended). Fill it only when the site explicitly demands a value |\n| direct policy `directMode` | `auto` | `auto` = connect directly only when the process really has proxy variables set; `always` / `never` are for troubleshooting |\n| fill tool schema | on | adds `required: []` to object nodes of out"
+    },
+    {
+      "section": "Configuration",
+      "text": "`claimRoute` (default on) and `announce` (default on) are not settings-card fields; change\nthem in `cordis.patch.yml` or in a profile patch."
+    },
+    {
+      "section": "Moving to another site",
+      "text": "(API3D's address and capabilities are already filled in; read this only when switching site or\nchannel.)\n\nThe catalog is **not in the code**: it comes from what the wizard imported (stored in the\nplugin's `models` setting). The models the site serves, and each one's capabilities (input\nmodalities / context / max output / reasoning levels), are written by the wizard;\n`MODEL_TEMPLATE` in `lib/route.js` only provides each row's initial values."
+    },
+    {
+      "section": "Moving to another site",
+      "text": "Measured on 2026-10-20: `GET https://api3d.cn/v1/models` returns `deepseek-v4.1-flash`.\n**`deepseek-v4.1-flash-1017` on api3d.cn belongs to a welfare group and needs a different\nkey** (`SUB2API_ONLINE_WELFARE_KEY`); asking for it with the main key returns\n`404 model_not_found`. A different group means different credentials, which should be a\nseparate provider route — it must not be merged into the same route's model list, which is\nwhy the wizard only lists the models this key can actually use."
+    },
+    {
+      "section": "Moving to another site",
+      "text": "Verify before editing the catalog, and do not guess from the vendor name:\n\n```bash\nnpm run probe-models                      # GET {baseURL}/models with $API3D_API_KEY\nnpm run probe-models -- --ref SUB2API_API_KEY   # or take a reference from the credential store\nnpm run probe-models -- --profile desktop       # pick which profile's imported catalog to read\n```"
+    },
+    {
+      "section": "Moving to another site",
+      "text": "The script performs one read-only GET, diffs the site's self-reported ids against the catalog\n**already imported into settings**, and prints what is missing. To change the catalog, use the\nwizard (sidebar API3D → re-pick models) — no file editing."
+    },
+    {
+      "section": "Moving to another site",
+      "text": "1. **The model catalog** — import it through the wizard; it lands in the plugin's `models`\n   setting, capabilities included. The route is assembled by the host half at resolution\n   time, and `ROUTE` in `lib/route.js` keeps only site-independent scaffolding (provider name,\n   sentinel host, `apiKeyEnv`, `api`, `defaultInput`, `compat`).\n2. **The spelling of `reasoningEfforts`** — the key is the tier offered by the picker, the\n   value is the `reasoning_effort` actually sent. The wizard lays out six levels from\n   `MODEL_TEMPLATE`; `off` = offer Off and send nothing. Some sites demand an explicit `none`\n   and reject `off`; adjust per model in the wizard.\n3. **`lib/site.js`** — only needed if you want to change the sentinel host, the default\n   credential reference or the provider name. Afterwards just run `npm test`\n   (`route.test.mjs` checks it against `lib/route.js`)."
+    },
+    {
+      "section": "Reserved seams: balance / usage / billing / health probe",
+      "text": "The settings card already has four placeholder rows: **balance / usage / billing / health\nprobe**, currently rendering \"not wired\".\n\nThe seam's granularity is the **row**, not the number: `OPS_ROWS` defines which rows exist,\nand all values go through `opValue`. Wiring real data touches `opValue` only, never the\nlayout.\n\nTwo implementation routes:"
+    },
+    {
+      "section": "Reserved seams: balance / usage / billing / health probe",
+      "text": "- **Management-plane only (do this first)** — if you have something like\n  `GET /api/user/balance`, write a plain management-plane plugin: `Config` +\n  `slots.register` card + one host-side polling fetch. No provider registration and no\n  touching `globalThis.fetch`.\n- **Remote service** — when the browser half needs on-demand queries, the host half extends\n  `@deepseek-ai/dsh-typert-protocol`'s `TypertRemoteService`\n  (`super(ctx, serviceKey, { namespace })` + `@Remote` decorated methods) and the browser\n  half calls `ctx.remote.$mount(…)` itself. The constraints are strict: the descriptor's\n  codec must be `mode: 'strict'` (otherwise `$mount` throws), host method parameters must be\n  plain identifiers, and `signal` may only come last. `@deepseek-ai/dsh-typert-generator` is\n  not installed on this machine, so descriptors have to be hand-written — which is why this\n  skeleton does not do it yet."
+    },
+    {
+      "section": "Development",
+      "text": "```bash\nnpm run probe-models  # diff the site's real ids against the imported catalog\nnpm test              # node --test \"test/*.test.mjs\" (135 assertions)\n```"
+    },
+    {
+      "section": "Development",
+      "text": "Dependencies are **junction-linked to the host's `node_modules`**\n(`@deepseek-ai/schemastery` / `js-yaml` / `react`), because harness packages must be the\nhost's **same instance** (`instanceof` safety) and cannot be installed as a real copy from\nthe registry. `@deepseek-ai/cordis` and `@deepseek-ai/schemastery` are declared as optional\npeers.\n\nTest coverage:"
+    },
+    {
+      "section": "Development",
+      "text": "| File | Coverage |\n| --- | --- |\n| `route.test.mjs` | the patch layer no longer declares a route, `ROUTE` carries no `models`, the `MODEL_TEMPLATE` vocabulary, and the hook's fill / replace / leave-alone-when-empty semantics |\n| `fence.test.mjs` | fence: rewriting, allowlist, pass-through of non-target requests, cleanup restoring only this plugin's fetch |\n| `tool-schema.test.mjs` | `required: []` fill-in and skipping `strict: true` |\n| `silent-retry.test.mjs` | transient-failure classification, backoff, attempt ceiling |\n| `claim.test.mjs` | `entry.update` write-back; the three owners of a same-name route (ours / someone else's / missing); **an imported catalog overriding a same-name route declared elsewhere**; **no route declared at all while nothing is imported**; no write when the value is unchanged |\n| `direct-transport.test.mjs` | direct transport against a real loopback stand-in: header fidelity, no redirect following, abort tearing down the connection |\n| `integration.test.mjs` | **end to end**: fence + direct transport really deliver the request to a TCP server; the boundaries of 402 quota annotation |\n| `client-bundle.test.mjs` | browser-half loading contract: both halve"
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **Single site.** Only one base URL is supported. For several sites use a generic gateway\n  provider plugin.\n- **The model catalog comes only from the wizard.** It lives in the plugin's `models` setting\n  (and therefore in the profile patch layer, so it survives a restart), and each entry may\n  carry its own `input` / `contextWindow` / `maxTokens` / `reasoningEfforts`. **While nothing\n  is imported no route is declared at all** — pi-ai does not allow a model-less route — so a\n  freshly installed plugin shows no API3D in the picker; clearing the setting needs one\n  restart to withdraw an already installed route. The adapter's own automatic discovery is\n  still unused — it would discover against the sentinel host and fail; see trap 2.\n- **Capability initial values come from this plugin's template, not the site's declarations.**\n  `api3d.cn`'s `/v1/models` reports no capabilities, so the context window, max output and\n  reasoning levels shown in the wizard come from `MODEL_TEMPLATE` and must be adjusted per\n  model to match what the site really does; ticking something the site does not support is\n  rejected upstream.\n- **The key is written by the wizard.** The wizard writes it into `"
+    },
+    {
+      "section": "Origin and license",
+      "text": "MIT. Derived from [aqiu817/dsh-llm-agentrouter](https://github.com/aqiu817/dsh-llm-agentrouter)\n(MIT, Copyright (c) 2026 aqiu817) — the fence, route self-healing, silent retry, direct\ntransport and settings-card skeleton come from that project, restructured for the\nsingle-site case with credential writing and the ops seams added. `LICENSE` stays the\nstandard MIT text (including the original copyright notice) while the derivation and\nreference-implementation notes live in `NOTICE` — that way GitHub's license detection\nstill reports MIT without dropping the attribution."
+    },
+    {
+      "section": "Origin and license",
+      "text": "The reference implementation [Luck9Star/dsh-gateway-provider](https://github.com/Luck9Star/dsh-gateway-provider)\n(MIT, Copyright (c) 2026 Luck9Star) provided the \"register a provider route at runtime\"\nroute; this skeleton assembles its route at runtime too (installed on demand, nothing\ndeclared while empty), for the reasons at the top."
+    }
+  ],
+  "skipped": []
+}

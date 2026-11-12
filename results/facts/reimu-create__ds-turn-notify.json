@@ -1,0 +1,136 @@
+{
+  "repo": "reimu-create/ds-turn-notify",
+  "commit": "5951d4d350df483435f1b72d24081961d50c1620",
+  "extracted_at": "2026-11-12T03:38:44.797745+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 77336,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 1554,
+      "Markdown": 170,
+      "Other": 57,
+      "YAML": 30
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/notify.ps1",
+      "mac/.gitattributes",
+      "mac/.gitignore",
+      "mac/README.md",
+      "mac/cordis.patch.yml",
+      "mac/lib/client.js",
+      "mac/lib/index.js",
+      "mac/package.json",
+      "mac/test/harness.mjs",
+      "package.json",
+      "test/harness.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "ds-turn-notify",
+    "version": "0.1.0",
+    "description": "DSH 会话完成或索要权限时后台提醒 + 提示音（Windows）",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: ds-turn-notify\n      name: ds-turn-notify\n      config:\n        enabled: true\n        sound: true\n        soundPath: ''\n        toast: true\n        onlyMainSession: true\n        debounceMs: 800\n        turnDone: true\n        approval: true\n        title: 'DSH 提醒'\n        notifyOnlyWhenHidden: true\n        showTitle: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-08-14T11:37:37Z",
+    "created_at": "2026-08-14T11:32:18Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "ds-turn-notify（含 Windows 版与 macOS 版）",
+      "text": "DSH（DeepSeek Harness）Web 会话的背景提醒插件，两个独立插件共存于本仓库：\n\n| 插件 | 目录 | 平台 | 视觉提醒 | 提示音 |\n| --- | --- | --- | --- | --- |\n| **ds-turn-notify**（Windows 版） | 仓库根目录 | Windows | `powershell.exe` → BurntToast / NotifyIcon 气泡 | `notify.ps1` → SoundPlayer / Beep |\n| **ds-turn-notify-mac**（macOS 版） | [`mac/`](mac/) | macOS | `/usr/bin/osascript` → 通知中心 | `/usr/bin/afplay` |\n\n两个插件功能一一对应，仅通知通道不同，各自独立安装、独立配置：\n\n1. **回合完成**（主会话 `turn/end`）——提醒一次；\n2. **索要权限**（`approval/asked`）——立即提醒（文案含工具名）。"
+    },
+    {
+      "section": "ds-turn-notify（含 Windows 版与 macOS 版）",
+      "text": "默认只提醒主会话；子会话（subagent / fork / workflow，`header.origin === 'subagent'`）不提醒。"
+    },
+    {
+      "section": "功能",
+      "text": "- 零第三方依赖：只用 Node 内置模块 + 系统自带命令；`child_process.spawn` fire-and-forget（`stdio: 'ignore'`、`unref()`），不阻塞 agent turn。\n- **仅页面在后台时提醒**（`notifyOnlyWhenHidden`）：浏览器 client 半检测页面可见性（`document.hidden` / 失焦）并经同源路由上报 host，所有 DSH 页面都不可见时才提醒；盯着页面时安静。\n- **提醒文案携带当前会话标题**（`showTitle`）：`「标题」第 N 回合完成` / `「标题」会话请求权限：工具名`；无标题自动回退。\n- 防抖：同一会话同一类事件在 `debounceMs` 内合并为一次；`approval/asked` 与 `turn/end` 分开计时。\n- 任何提醒失败均不影响会话本身（仅 `logger.warn`）。"
+    },
+    {
+      "section": "配置项（各插件 `cordis.patch.yml` → `config`）",
+      "text": "| 键 | 类型 | 默认 | 说明 |\n| --- | --- | --- | --- |\n| `enabled` | bool | `true` | 插件总开关 |\n| `sound` | bool | `true` | 是否播放提示音 |\n| `soundPath` | string | `''` | 自定义音频路径（Win: wav；Mac: afplay 支持 aiff/m4a/mp3 等） |\n| `toast` | bool | `true` | 是否发送视觉提醒 |\n| `onlyMainSession` | bool | `true` | 只提醒主会话 |\n| `debounceMs` | number | `800` | 同类事件防抖间隔（毫秒） |\n| `turnDone` | bool | `true` | 是否在回合完成时提醒 |\n| `approval` | bool | `true` | 是否在请求权限时提醒 |\n| `notifyOnlyWhenHidden` | bool | `true` | 仅所有 DSH 页面都不可见时提醒 |\n| `showTitle` | bool | `true` | 提醒文案是否携带会话标题前缀 |\n| `title` | string | `DSH 提醒` | 提醒标题 |"
+    },
+    {
+      "section": "安装",
+      "text": "Windows 版（仓库根目录）：\n\n```bash\ngit clone https://github.com/237229953-create/ds-turn-notify.git\ncd ds-turn-notify\ndsh plugin --profile web add .\n```\n\nmacOS 版（`mac/` 子目录）：\n\n```bash\ngit clone https://github.com/237229953-create/ds-turn-notify.git\ncd ds-turn-notify/mac\ndsh plugin --profile web add .\n```\n\n安装后重启 dsh（`dsh web`）生效。"
+    },
+    {
+      "section": "macOS 通知权限",
+      "text": "首次触发提醒时，macOS 可能弹出「终端/iTerm 想发送通知」的授权提示——请允许，否则 `osascript display notification` 不会显示。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\nds-turn-notify/\n├── package.json        # Windows 版 bundle 元数据\n├── cordis.patch.yml    # Windows 版挂载层\n├── lib/                # Windows 版主体(index.js / notify.ps1 / client.js)"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnode test/harness.mjs       # Windows 版\nnode mac/test/harness.mjs   # macOS 版\n```"
+    },
+    {
+      "section": "版本",
+      "text": "- Windows 版：0.1.0\n- macOS 版：0.1.0"
+    }
+  ],
+  "skipped": []
+}

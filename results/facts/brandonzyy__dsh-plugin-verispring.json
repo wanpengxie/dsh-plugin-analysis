@@ -1,0 +1,671 @@
+{
+  "repo": "brandonzyy/dsh-plugin-verispring",
+  "commit": "2c957fa422284a85f25e8b09cc48ee3ea22006c6",
+  "extracted_at": "2026-11-11T18:01:30.047046+00:00",
+  "tree": {
+    "files": 84,
+    "bytes": 1118325,
+    "lines_by_language": {
+      "JSON": 98,
+      "JavaScript": 12440,
+      "Markdown": 581,
+      "Other": 57,
+      "Python": 12542,
+      "YAML": 544
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "README.zh.md",
+      "client.js",
+      "cordis.patch.yml",
+      "gates/codestyle-gate.js",
+      "gates/dispatch-gate.js",
+      "gates/host-watchdog-child.js",
+      "gates/idle-compact.js",
+      "gates/leader-guard.js",
+      "gates/leader-scope.js",
+      "gates/manon-bridge.js",
+      "gates/memory-guard.js",
+      "gates/monitor-log.js",
+      "gates/package.json",
+      "gates/scout-relay.js",
+      "gates/session-evictor.js",
+      "gates/tool-surface.js",
+      "gates/verispring-config.js",
+      "icon.svg",
+      "locale/en.json",
+      "locale/zh.json",
+      "manon/codeindex/README.md",
+      "manon/codeindex/__init__.py",
+      "manon/codeindex/config.py",
+      "manon/codeindex/detector.py",
+      "manon/codeindex/parser.py",
+      "manon/codeindex/parser_installer.py",
+      "manon/codeindex/scanner.py",
+      "manon/core/__init__.py",
+      "manon/core/script_classifier.py",
+      "manon/manon-kg",
+      "manon/matrixone_graph/__init__.py",
+      "manon/matrixone_graph/cli.py",
+      "manon/matrixone_graph/embed.py",
+      "manon/matrixone_graph/health.py",
+      "manon/matrixone_graph/merge_dynamic.py",
+      "manon/matrixone_graph/pipeline.py",
+      "manon/matrixone_graph/resolve_runtime.py",
+      "manon/matrixone_graph/store.py",
+      "manon/matrixone_graph/tracer.py",
+      "manon/requirements.txt",
+      "package.json",
+      "pnpm-lock.yaml",
+      "scripts/smoke-test.mjs",
+      "scripts/test-dispatch-gate.mjs",
+      "scripts/test-host-watchdog.mjs",
+      "scripts/test-idle-compact.mjs",
+      "scripts/test-leader-guard.mjs",
+      "scripts/test-memory-guard.mjs",
+      "scripts/test-scout-relay.mjs",
+      "scripts/test-session-evictor.mjs",
+      "scripts/test-tool-surface.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-verispring",
+    "description": "Verispring 三角色会话架构 + 本地知识图谱 manon，大幅度优化主会话上下文，大幅节省顶级模型API费用。",
+    "version": "1.4.0",
+    "type": "module",
+    "icon": "./icon.svg",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "bundle",
+      "plugin",
+      "agent",
+      "subagent",
+      "gates",
+      "three-role",
+      "verispring"
+    ],
+    "main": "./gates/dispatch-gate.js",
+    "scripts": {
+      "smoke": "node scripts/smoke-test.mjs",
+      "test": "node scripts/test-dispatch-gate.mjs && node scripts/test-leader-guard.mjs && node scripts/test-scout-relay.mjs && node scripts/test-memory-guard.mjs && node scripts/test-host-watchdog.mjs && node scripts/test-session-evictor.mjs && node ..."
+    },
+    "exports": {
+      ".": "./gates/dispatch-gate.js",
+      "./dispatch-gate": "./gates/dispatch-gate.js",
+      "./codestyle-gate": "./gates/codestyle-gate.js",
+      "./leader-scope": "./gates/leader-scope.js",
+      "./manon-bridge": "./gates/manon-bridge.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json",
+      "./client": "./client.js"
+    },
+    "files": [
+      "icon.svg",
+      "locale/*.json",
+      "cordis.patch.yml",
+      "gates/*.js",
+      "gates/package.json",
+      "manon/manon-kg",
+      "manon/requirements.txt",
+      "manon/matrixone_graph",
+      "manon/codeindex",
+      "manon/core",
+      "!**/__pycache__",
+      "client.js"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-plugin-manager",
+          "@deepseek-ai/dsh-client-ui-primitives",
+          "@deepseek-ai/dsh-client-ui-renderer"
+        ],
+        "platform": "web"
+      }
+    },
+    "publishConfig": {
+      "access": "public",
+      "registry": "https://registry.npmjs.org/"
+    },
+    "engines": {
+      "dsh": ">=0.2.0-rc.2 <0.2.2-0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "4.0.4 || ~4.0.5-alpha.1"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/brandonzyy/dsh-plugin-verispring.git"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.5-alpha.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-verispring-architecture —— 三角色会话架构（领导 / 测绘智能体 / 执行智能体）\n# 主会话与子代理分别覆盖各自 preset 的 compaction-basic：主会话 400k→40k，子代理 600k→60k\n# （上下文窗口 1M 的 40% / 60% 触发；maxTokens 是摘要输出上限）。\n# 两条策略都复用 DSH 的 token meter、工具结果剪枝、结构化摘要与溢出恢复。\n# 子代理挂 verispring-subagent preset：DSH 0.2.1-rc.1 要求 spawn 通过 agentPreset 选择独立\n# Agent Preset；dispatch-gate 与 tool-subagent 均显式指定该 preset。\n# 本组合包一个 patch 文件做两件事：\n#   1) 子代理工具默认路由使用执行智能体配置（continuable 后台、maxDepth 1 不派孙代理）；\n#   2) insert 代码级门禁插件（gates/ 目录，含 host 内存看门狗与空闲会话卸载器）。\n# 代码级兜底在 dispatch-gate：即便调用显式指定其它 provider/model 也会被忽略，路由按\n# 角色从面板配置（verispring.json）强制注入。两个 preset 的 tool-subagent 都关闭\n# modelSelectionSettings：开启时 subagent 工具注册进每个 agent 自己的层，dispatch-gate 的\n# 路由包装无法同层遮蔽，领导面 restrict 也点不到它。\n# 逃生开关：CASEOS_SCOUT=0 关闭领导分工条款；CASEOS_MEM_GUARD=0 关闭内存看门狗；\n# 各门禁拒绝信息均含可满足的解锁步骤。\n# 换网关：在配置面板分别选择测绘智能体与执行智能体的渠道、模型、思考强度。\n- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      verispring:\n        displayName: Verispring\n        apiKeyEnv: VERISPRING_API_KEY\n        api: anthropic-messages\n        baseURL: https://api.verispring.cn\n        reasoning: high\n        # 网关 STREAMING_TIMEOUT=300s 与 pi-ai 默认看门狗同为 300s，叠一起容易误杀长流。\n        # 调到 600s（网关侧同步放到 900s），让看门狗只兜真正挂死的流。\n        streamIdleTimeoutMs: 600000\n        models:\n          - id: claude-opus-5-5\n            name: Claude Opus 5.5\n            contextWindow: 1000000\n            maxTokens: 128000\n            compat:\n              forceAdaptiveThinking: true\n            reasoningEfforts:\n              low: low\n              medium: medium\n              high: high\n              xhigh: xhigh\n              max: max\n          # 派遣路由用的 flash 必须显式声明 reasoningEfforts 与 forceAdaptiveThinking，\n          # 否则 pi-ai 拒发 effort（UNSUPPORTED_REASONING_EFFORT）。\n          - id: deepseek-flash\n            name: deepseek-flash\n            contextWindow: 1000000\n            maxTokens: 256000\n            input:\n              - text\n              - image\n            reasoningEfforts:\n              off: off\n              low: low\n              high: high\n              max: max\n            compat:\n              forceAdaptiveThinking: true\n- id: llm-deepseek\n  name: '@deepseek-ai/dsh-llm-deepseek-api-key'\n  config:\n    models:\n      - id: deepseek-flash\n        name: deepseek-flash\n        contextWindow: 1000000\n        inputModalities:\n          - text\n          - image\n        systemPromptUpdate: in-history\n        toolUpdate: addition-only\n      - id: deepseek-v4-pro\n        name: deepseek-v4-pro\n        description: Stronger agentic coding, knowledge, and difficult reasoning; suited to complex or quality-critical tasks at higher cost.\n        contextWindow: 1000000\n\n- id: preset-standard\n  name: '@deepseek-ai/dsh-agent-preset'\n  config:\n    id: standard\n    order: 1\n    plugins:\n      - id: persona\n        name: '@deepseek-ai/dsh-persona'\n        config:\n          prefix: You are a coding agent powered by the {{model}} model.\n      - id: agent-instructions\n        name: '@deepseek-ai/dsh-agent-instructions'\n        config:\n          maxBytes: 65536\n      - id: tool-bash\n        name: '@deepseek-ai/dsh-tool-bash'\n        disabled: !!js process.platform === 'win32'\n      - id: tool-pwsh\n        name: '@deepseek-ai/dsh-tool-pwsh'\n        disabled: !!js process.platform !== 'win32'\n      - id: tool-fs\n        name: '@deepseek-ai/dsh-tool-fs'\n      - id: tool-fs-search\n        name: '@deepseek-ai/dsh-tool-fs-search'\n        config:\n          sampleOverCapGlobResults: false\n      - id: tool-jobs\n        name: '@deepseek-ai/dsh-tool-jobs'\n      - id: skill-filesystem\n        name: '@deepseek-ai/dsh-skill-filesystem'\n      - id: tool-skill\n        name: '@deepseek-ai/dsh-tool-skill'\n      - id: command-goal\n        name: '@deepseek-ai/dsh-command-goal'\n      - id: tool-goal\n        name: '@deepseek-ai/dsh-tool-goal'\n      - id: planning\n        name: cordis:group\n        group: true\n        isolate:\n          planMode: true\n        config:\n          - id: plan-mode\n            name: '@deepseek-ai/dsh-plan-mode'\n            config:\n              section: >\n                You are in plan mode. Stay in plan mode until exit_plan_mode\n                succeeds or the user switches the session mode. Imperative\n                language to implement changes means plan the implementation, not\n                execute it. A user's conversational agreement — including an\n                answer confirming something you asked — approves nothing and\n                does not end plan mode; fold the confirmed decision into the\n                plan and submit it through exit_plan_mode.\n\n\n                Explore first. Use non-mutating reads, searches, static\n                analysis, and checks to ground the plan in the actual\n                repository. Do not edit or write files, change configuration,\n                run formatters or code generation that rewrites tracked files,\n                commit, or otherwise carry out the plan. Prefer existing\n                functions and patterns over new machinery.\n\n\n                The tool catalog stays the same across modes for request-cache\n                stability. These plan-mode rules override any later tool\n                description or guidance that suggests using mutation tools;\n                those tools remain listed to keep the tool catalog unchanged. Do\n                not use todo_write to track this planning phase: it tracks\n                implementation after an approved plan, while the plan itself\n                belongs in exit_plan_mode.\n\n\n                Resolve discoverable facts by inspection. Use ask_user_question\n                only for user-owned choices or material ambiguity that\n                inspection cannot answer. Do not ask the user where code lives\n                or how current behavior works when you can find out.\n\n\n                Make the plan decision-complete: state the goal and success\n                criteria; group implementation changes by subsystem; identify\n                public API, schema, and data-flow changes; cover edge cases,\n                failure modes, tests, acceptance criteria, and explicit\n                assumptions. Keep it concise enough to review but detailed\n                enough that another engineer can implement it without making\n                design decisions.\n\n\n                When ready, call exit_plan_mode with the complete plan markdown,\n                starting with a # title. Make exit_plan_mode the only and final\n                tool call in that assistant response: it presents the plan for\n                approval, and implementation begins only in a later step after\n                approval. Do not paste the final plan as a plain reply or ask\n                \"should I proceed?\" through prose or ask_user_question. If\n                review rejects it, incorporate the feedback and present again.\n                If the review channel is unavailable or aborted, stay in plan\n                mode and ask the user to switch modes manually; do not proceed\n                with implementation.\n      - id: compaction\n        name: cordis:group\n        group: true\n        isolate:\n          compaction: true\n          # 只声明不挂实现：遮蔽祖先层可能启用的截断器，ctx.get 恒为 undefined（loader 容忍无实现声明）\n          toolResultPruner: true\n        # 不挂 compaction-tool-result-pruner。\n        # 截断器改写的是整段历史里所有超预算的 tool/result——包括已经发给模型的结果，回改之后\n        # 请求不再是上一次的前缀延伸：system 之后的提示缓存整段失效，下一次请求把整段历史当\n        # 写缓存重发；旧块被改还让其后的 thinking 块签名失效，网关直接 400。收益侧只是让上下文\n        # 短一点：compaction-basic 在量测前就调它（index.ts:324，:325 重测后若已低于阈值就直接\n        # 返回、不做压缩），溢出恢复时再调一次（:296），所以它省下的压缩往往根本不会发生。\n        # 自动压缩保留：读不到截断器服务时直接摘要、不报错；压缩请求复用最近一次的 system 与\n        # tools，指令只追加在末尾，本身仍读缓存。\n        config:\n          - id: compaction-basic\n            name: '@deepseek-ai/dsh-compaction-basic'\n            config:\n              auto: true\n              thresholdRatio: 0.4\n              headroomTokens: 0\n              maxTokens: 40960\n              retainTokens: 0\n          - id: command-compact\n            name: '@deepseek-ai/dsh-command-compact'\n      - id: delegation\n        name: cordis:group\n        group: true\n        isolate:\n          workflowEngine: true\n        config:\n          - id: tool-subagent-control\n            name: '@deepseek-ai/dsh-tool-subagent-control'\n          - id: tool-subagent-list-agents\n            name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n          - id: tool-subagent\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: spawn\n              toolName: subagent-base\n              modelSelectionSettings: false\n              backgroundMode: continuable\n              maxDepth: 1\n              agentPreset: verispring-subagent\n              agentOptions:\n                # 派遣走 pi-ai 的 verispring 渠道。\n                provider: verispring\n                model: deepseek-flash\n                reasoningEffort: high\n          - id: tool-subagent-fork\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: fork\n              toolName: subagent_fork\n              backgroundMode: continuable\n          - id: tool-subagent-codex\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: codex\n              toolName: subagent_codex\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: tool-subagent-claude-code\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: claude-code\n              toolName: subagent_claude_code\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: workflow-ptc\n            name: '@deepseek-ai/dsh-workflow-ptc'\n            config:\n              provider: spawn\n          - id: tool-workflow\n            name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ralph\n            name: '@deepseek-ai/dsh-tool-ralph'\n            disabled: true\n            config:\n              subagentProvider: spawn\n              maxRounds: 64\n      - id: tool-ask-user\n        name: '@deepseek-ai/dsh-tool-ask-user'\n      - id: tool-todo\n        name: '@deepseek-ai/dsh-tool-todo'\n        config:\n          allowParallelInProgress: true\n      - id: tool-web\n        name: '@deepseek-ai/dsh-tool-web'\n        config:\n          fetch: true\n          searchTimeoutMs: 60000\n      - id: present\n        name: '@deepseek-ai/dsh-tool-present'\n      - id: tool-plugin-manager\n        name: '@deepseek-ai/dsh-plugin-manager/tools'\n        disabled: true\n- insert:\n    - id: preset-verispring-subagent\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: verispring-subagent\n        order: 100\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: >\n                    You are in plan mode. Stay in plan mode until exit_plan_mode\n                    succeeds or the user switches the session mode. Imperative\n                    language to implement changes means plan the implementation, not\n                    execute it. A user's conversational agreement — including an\n                    answer confirming something you asked — approves nothing and\n                    does not end plan mode; fold the confirmed decision into the\n                    plan and submit it through exit_plan_mode.\n\n\n                    Explore first. Use non-mutating reads, searches, static\n                    analysis, and checks to ground the plan in the actual\n                    repository. Do not edit or write files, change configuration,\n                    run formatters or code generation that rewrites tracked files,\n                    commit, or otherwise carry out the plan. Prefer existing\n                    functions and patterns over new machinery.\n\n\n                    The tool catalog stays the same across modes for request-cache\n                    stability. These plan-mode rules override any later tool\n                    description or guidance that suggests using mutation tools;\n                    those tools remain listed to keep the tool catalog unchanged. Do\n                    not use todo_write to track this planning phase: it tracks\n                    implementation after an approved plan, while the plan itself\n                    belongs in exit_plan_mode.\n\n\n                    Resolve discoverable facts by inspection. Use ask_user_question\n                    only for user-owned choices or material ambiguity that\n                    inspection cannot answer. Do not ask the user where code lives\n                    or how current behavior works when you can find out.\n\n\n                    Make the plan decision-complete: state the goal and success\n                    criteria; group implementation changes by subsystem; identify\n                    public API, schema, and data-flow changes; cover edge cases,\n                    failure modes, tests, acceptance criteria, and explicit\n                    assumptions. Keep it concise enough to review but detailed\n                    enough that another engineer can implement it without making\n                    design decisions.\n\n\n                    When ready, call exit_plan_mode with the complete plan markdown,\n                    starting with a # title. Make exit_plan_mode the only and final\n                    tool call in that assistant response: it presents the plan for\n                    approval, and implementation begins only in a later step after\n                    approval. Do not paste the final plan as a plain reply or ask\n                    \"should I proceed?\" through prose or ask_user_question. If\n                    review rejects it, incorporate the feedback and present again.\n                    If the review channel is unavailable or aborted, stay in plan\n                    mode and ask the user to switch modes manually; do not proceed\n                    with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            # 同上：不挂 tool-result-pruner（回改已发历史 → 提示缓存整段失效、thinking 签名失效），\n            # 自动压缩保留，压缩请求仍读缓存。\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n                config:\n                  auto: true\n                  thresholdRatio: 0.6\n                  headroomTokens: 0\n                  maxTokens: 61440\n                  retainTokens: 0\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent-base\n                  modelSelectionSettings: false\n                  backgroundMode: continuable\n                  maxDepth: 1\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n- insert:\n    - id: caseos-dispatch-gate\n      # 以包名加载根入口：既保留 dispatch-gate 宿主插件，又让 client-modules\n      # 能从该 Loader 行定位本包的 dsh.client 声明并加入渲染端 boot graph。\n      name: 'dsh-plugin-verispring'\n    - id: caseos-codestyle-gate\n      name: './gates/codestyle-gate.js'\n    - id: caseos-leader-scope\n      name: './gates/leader-scope.js'\n    # 回执制与「领导不亲自改码」的运行时拒绝；守卫内部按 exec.agent 自判领导会话，\n    # 子代理会话不受限，所以只挂这一处（子代理 preset 不再挂），CASEOS_LEADER_GUARD=0 关闭。\n    - id: caseos-leader-guard\n      name: './gates/leader-guard.js'\n    - id: caseos-manon-bridge\n      name: './gates/manon-bridge.js'\n    - id: caseos-scout-relay\n      name: './gates/scout-relay.js'\n    # host 内存看门狗：软阈值只剪本插件只增索引并给主会话发释放提示；硬阈值只告警\n    # （main.js 对 host 子进程任何 exit 都算失败停止，不会自动重启）。CASEOS_MEM_GUARD=0 关闭。\n    - id: caseos-memory-guard\n      name: './gates/memory-guard.js'\n    # 子代理释放器：包装 agents.resume 捕获 promote 丢掉的 handle，主会话经 release_subagent\n    # 逐个决定释放（主会话自身与子代理都不会被自动卸载）；CASEOS_EVICT=0 关闭。\n    - id: caseos-session-evictor\n      name: './gates/session-evictor.js'\n    # 主会话空闲自动压缩：连续 55 分钟无真实模型请求且 totalTokens > 50000 时调宿主\n    # compaction.compactNow 压一次；子会话/非空闲/阈值以下不碰。CASEOS_IDLE_COMPACT=0 关闭，\n    # 阈值在配置面板（verispring-config 的 idleCompact* 字段）调整。\n    - id: caseos-idle-compact\n      name: './gates/idle-compact.js'\n    # 配置面板：Config schema 提供宿主表单服务；client 组合包页渲染并把模型位落盘到执法面\n    - id: verispring-config\n      name: './gates/verispring-config.js'\n"
+    }
+  ],
+  "entries": [
+    "gates/dispatch-gate.js",
+    "gates/codestyle-gate.js",
+    "gates/leader-scope.js",
+    "gates/manon-bridge.js",
+    "cordis.patch.yml",
+    "package.json",
+    "client.js"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/codestyle-gate.js:118"
+    },
+    {
+      "name": "CASEOS_BRIEF_LINT",
+      "kind": "env",
+      "where": "gates/dispatch-gate.js:202"
+    },
+    {
+      "name": "CASEOS_MAX_EXECUTORS",
+      "kind": "env",
+      "where": "gates/dispatch-gate.js:207"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/dispatch-gate.js:692"
+    },
+    {
+      "name": "CASEOS_SCOUT",
+      "kind": "env",
+      "where": "gates/dispatch-gate.js:983"
+    },
+    {
+      "name": "CASEOS_SCOUT",
+      "kind": "env",
+      "where": "gates/dispatch-gate.js:1158"
+    },
+    {
+      "name": "CASEOS_SCOUT",
+      "kind": "env",
+      "where": "gates/dispatch-gate.js:1197"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/host-watchdog-child.js:137"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/idle-compact.js:135"
+    },
+    {
+      "name": "CASEOS_LEADER_GUARD",
+      "kind": "env",
+      "where": "gates/leader-guard.js:278"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/leader-guard.js:282"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/leader-scope.js:65"
+    },
+    {
+      "name": "CASEOS_SCOUT",
+      "kind": "env",
+      "where": "gates/leader-scope.js:93"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/manon-bridge.js:83"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/memory-guard.js:538"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/scout-relay.js:352"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/session-evictor.js:199"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/verispring-config.js:40"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "gates/verispring-config.js:44"
+    },
+    {
+      "name": "DSH_PROFILE",
+      "kind": "env",
+      "where": "gates/verispring-config.js:46"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "gates/verispring-config.js:230"
+    },
+    {
+      "name": "MANON_WORKTREE_OWN_REPO",
+      "kind": "env",
+      "where": "manon/core/ast/project.py:85"
+    },
+    {
+      "name": "MANON_EMBEDDING_URL",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:33"
+    },
+    {
+      "name": "MANON_EMBEDDING_MODEL",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:34"
+    },
+    {
+      "name": "CODEINDEX_EMBEDDING_URL",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:38"
+    },
+    {
+      "name": "MANON_EMBEDDING_API_KEY",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:55"
+    },
+    {
+      "name": "MANON_DEEPQUERY_LLM_PROVIDER",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:141"
+    },
+    {
+      "name": "MANON_DEEPQUERY_LLM_URL",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:142"
+    },
+    {
+      "name": "MANON_DEEPQUERY_LLM_MODEL",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:143"
+    },
+    {
+      "name": "MANON_DEEPQUERY_LLM_REASONING_EFFORT",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:144"
+    },
+    {
+      "name": "MANON_DEEPQUERY_API_KEY",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:165"
+    },
+    {
+      "name": "VERISPRING_API_KEY",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:165"
+    },
+    {
+      "name": "VERISPRING_API_KEY",
+      "kind": "env",
+      "where": "manon/matrixone_graph/cli.py:300"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/smoke-test.mjs:47"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/smoke-test.mjs:50"
+    },
+    {
+      "name": "DSH_BIN",
+      "kind": "env",
+      "where": "scripts/smoke-test.mjs:128"
+    },
+    {
+      "name": "DSH_SMOKE_PROFILE",
+      "kind": "env",
+      "where": "scripts/smoke-test.mjs:129"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:14"
+    },
+    {
+      "name": "CASEOS_LEADER_GUARD",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:15"
+    },
+    {
+      "name": "CASEOS_LEADER_WRITE_ALLOW",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:16"
+    },
+    {
+      "name": "CASEOS_LEADER_WRITE_ALLOW",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:143"
+    },
+    {
+      "name": "CASEOS_LEADER_WRITE_ALLOW",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:144"
+    },
+    {
+      "name": "CASEOS_LEADER_WRITE_ALLOW",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:154"
+    },
+    {
+      "name": "CASEOS_LEADER_WRITE_ALLOW",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:155"
+    },
+    {
+      "name": "CASEOS_LEADER_GUARD",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:260"
+    },
+    {
+      "name": "CASEOS_LEADER_GUARD",
+      "kind": "env",
+      "where": "scripts/test-leader-guard.mjs:274"
+    },
+    {
+      "name": "CASEOS_MEM_GUARD",
+      "kind": "env",
+      "where": "scripts/test-memory-guard.mjs:80"
+    },
+    {
+      "name": "CASEOS_HOST_WATCHDOG",
+      "kind": "env",
+      "where": "scripts/test-memory-guard.mjs:82"
+    },
+    {
+      "name": "CASEOS_SCOUT_RELAY",
+      "kind": "env",
+      "where": "scripts/test-scout-relay.mjs:37"
+    },
+    {
+      "name": "CASEOS_SCOUT_RELAY",
+      "kind": "env",
+      "where": "scripts/test-scout-relay.mjs:38"
+    },
+    {
+      "name": "CASEOS_ASK_SCOUT_TIMEOUT_MS",
+      "kind": "env",
+      "where": "scripts/test-scout-relay.mjs:39"
+    },
+    {
+      "name": "CASEOS_ASK_SCOUT_TIMEOUT_MS",
+      "kind": "env",
+      "where": "scripts/test-scout-relay.mjs:40"
+    },
+    {
+      "name": "CASEOS_ASK_SCOUT_TIMEOUT_MS",
+      "kind": "env",
+      "where": "scripts/test-scout-relay.mjs:633"
+    },
+    {
+      "name": "CASEOS_SCOUT_RELAY",
+      "kind": "env",
+      "where": "scripts/test-scout-relay.mjs:634"
+    },
+    {
+      "name": "CASEOS_EVICT",
+      "kind": "env",
+      "where": "scripts/test-session-evictor.mjs:62"
+    },
+    {
+      "name": "MANON_KG_BIN",
+      "kind": "env",
+      "where": "scripts/test-tool-surface.mjs:99"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "api.siliconflow.cn",
+      "url": "https://api.siliconflow.cn/v1",
+      "where": "client.js:22"
+    },
+    {
+      "host": "api.verispring.cn",
+      "url": "https://api.verispring.cn",
+      "where": "client.js:357"
+    },
+    {
+      "host": "api.verispring.cn",
+      "url": "https://api.verispring.cn",
+      "where": "cordis.patch.yml:25"
+    },
+    {
+      "host": "api.siliconflow.cn",
+      "url": "https://api.siliconflow.cn/v1",
+      "where": "gates/verispring-config.js:124"
+    },
+    {
+      "host": "api.siliconflow.cn",
+      "url": "https://api.siliconflow.cn/v1",
+      "where": "gates/verispring-config.js:257"
+    },
+    {
+      "host": "api.siliconflow.cn",
+      "url": "https://api.siliconflow.cn/v1",
+      "where": "gates/verispring-config.js:264"
+    },
+    {
+      "host": "api.verispring.cn",
+      "url": "https://api.verispring.cn/v1/chat/completions",
+      "where": "gates/verispring-config.js:321"
+    },
+    {
+      "host": "pypi.tuna.tsinghua.edu.cn",
+      "url": "https://pypi.tuna.tsinghua.edu.cn/simple",
+      "where": "manon/codeindex/parser_installer.py:47"
+    },
+    {
+      "host": "mirrors.aliyun.com",
+      "url": "https://mirrors.aliyun.com/pypi/simple",
+      "where": "manon/codeindex/parser_installer.py:48"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:8080",
+      "where": "manon/matrixone_graph/__init__.py:9"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:8080",
+      "where": "manon/matrixone_graph/__init__.py:49"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:8080",
+      "where": "manon/matrixone_graph/__init__.py:94"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:8080",
+      "where": "manon/matrixone_graph/cli.py:29"
+    },
+    {
+      "host": "api.siliconflow.cn",
+      "url": "https://api.siliconflow.cn/v1",
+      "where": "manon/matrixone_graph/cli.py:33"
+    },
+    {
+      "host": "api.verispring.cn",
+      "url": "https://api.verispring.cn/v1/chat/completions",
+      "where": "manon/matrixone_graph/cli.py:142"
+    },
+    {
+      "host": "open.bigmodel.cn",
+      "url": "https://open.bigmodel.cn/api/paas/v4",
+      "where": "manon/matrixone_graph/embed.py:35"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "package.json:65"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/brandonzyy/dsh-plugin-verispring.git",
+      "where": "package.json:75"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "command",
+      "name": "deep-query",
+      "where": "manon/matrixone_graph/cli.py:286"
+    },
+    {
+      "kind": "command",
+      "name": "health",
+      "where": "manon/matrixone_graph/cli.py:690"
+    },
+    {
+      "kind": "command",
+      "name": "merge-dynamic",
+      "where": "manon/matrixone_graph/cli.py:703"
+    }
+  ],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.5-alpha.1"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 131,
+    "pushed_at": "2026-10-26T10:40:46Z",
+    "created_at": "2026-10-16T05:26:50Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "gates/codestyle-gate.js",
+    "gates/dispatch-gate.js",
+    "gates/host-watchdog-child.js",
+    "gates/idle-compact.js",
+    "gates/leader-guard.js",
+    "gates/leader-scope.js",
+    "gates/manon-bridge.js",
+    "gates/memory-guard.js",
+    "gates/monitor-log.js",
+    "gates/scout-relay.js",
+    "gates/session-evictor.js",
+    "gates/tool-surface.js",
+    "gates/verispring-config.js",
+    "package.json",
+    "scripts/smoke-test.mjs",
+    "scripts/test-dispatch-gate.mjs",
+    "scripts/test-host-watchdog.mjs",
+    "scripts/test-idle-compact.mjs",
+    "scripts/test-leader-guard.mjs",
+    "scripts/test-memory-guard.mjs",
+    "scripts/test-scout-relay.mjs",
+    "scripts/test-session-evictor.mjs",
+    "scripts/test-tool-surface.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-verispring",
+      "text": "A three-role session architecture plugin (leader — scout — executor) with a bundled local\nknowledge graph (manon). The main session keeps the premium model but never reads the codebase\nitself; the heavy work runs on DeepSeek Flash and the main-session context stays clean — which\ncuts premium model API costs substantially.\n\n*leader dispatches → scout maps the repo and answers facts → executor builds → receipt back to the leader*\n\n[中文](README.zh.md) | English"
+    },
+    {
+      "section": "Three-role division, enforced by dispatch discipline",
+      "text": "The leader plans, dispatches and reviews. A resident scout owns the repository map and touches code\nread-only; executors write code and run commands. The role comes from the dispatch itself, an\nexecutor dispatch is refused while no scout is reachable, and executors start only once the map\nexists and is fresh. Briefs go straight to the child and results come back as settlement receipts,\nso the main session is never polluted by raw exploration. The manon graph is scout-owned — leaders\nand executors never invoke it directly; they ask the scout. Running executors per leader session are\ncapped (default 8), so a dispatch fan-out cannot turn into a crowd."
+    },
+    {
+      "section": "Global work-spec supply",
+      "text": "The global work spec has a single production source: `~/.claude/CLAUDE.md`. The plugin supplies it\nthrough the root-scope dynamic system section `caseos:global-work-spec`, reading the full text at\nevery prompt assembly for leader, scout and executor sessions alike — including `send_message`\ncontinuations and cold recovery; a subagent brief cannot opt out. When a task touches the specialized\nspecs the source references, those specs are read in full at the paths the source gives."
+    },
+    {
+      "section": "Global work-spec supply",
+      "text": "If the source is missing, blank, or unreadable, new subagent dispatches and every tool call from an\nexisting subagent are refused with `spec-source-missing` and written to the monitor; the leader's\nordinary tools are unaffected. Once the source is restored the next round proceeds — nothing is cached."
+    },
+    {
+      "section": "Model division that saves money",
+      "text": "The main session runs the premium model (Claude Opus 5.5 by default); scouts and executors default\nto DeepSeek Flash. The route is enforced at runtime per role — a provider/model passed on the\ndispatch call is ignored — so the cheap route cannot be slipped past. Both agent routes are picked in\nthe plugin panel; the main session uses DSH's native model picker."
+    },
+    {
+      "section": "Cache cost defense",
+      "text": "Tool definitions and regular system sections are frozen per session, so new copy shipped in a release\nnever rewrites the prompt prefix of a session already running; the global spec section is an\nintentional dynamic exception and is re-read every round. Compaction is per role: the main session at\n40% of its window, subagents at 60%. A main session that has been idle for 55 minutes with more than\n50K tokens is compacted once — flattening the large cache write that follows an expired cache TTL.\nThe accepted cost: oversized tool results stay in context until a compaction summarises them."
+    },
+    {
+      "section": "Memory and host guards",
+      "text": "Heap thresholds warn and prune the plugin's own indexes long before the cliff; an out-of-process\nwatchdog keeps sampling while the host event loop is stuck; an oversized whole-file read is refused\nwith a segmented-read hint; and the leader can release finished subagents to hand memory back. The\nhost is never killed behind your back — the hard threshold only records a restart prompt."
+    },
+    {
+      "section": "Secret hygiene",
+      "text": "Credential files (`manon.env`, `verispring.env`, project `.env*`) cannot be read or echoed, and\nwhole-environment dumps are refused. Key values never reach a session log."
+    },
+    {
+      "section": "Observability",
+      "text": "Role drift, gate denials, dispatches, releases and memory events all land in\n`~/.dsh/verispring-monitor.jsonl`, so audits no longer require decompressing session logs."
+    },
+    {
+      "section": "Operational switches",
+      "text": "Capabilities including the memory guard and scout division have `CASEOS_*` switches, so they can be\ndisabled individually without uninstalling: e.g. `CASEOS_MEM_GUARD=0` disables the memory guard and\nits watchdog, and `CASEOS_SCOUT=0` drops the scout part of the division clause. Global work-spec\nsupply and its fail-closed gate have no such bypass."
+    },
+    {
+      "section": "Install",
+      "text": "```bash"
+    },
+    {
+      "section": "Install / update (tracks main; pin a release with a tag like #v1.3.3)",
+      "text": "dsh plugin --profile <your-profile> add github:brandonzyy/dsh-plugin-verispring"
+    },
+    {
+      "section": "Desktop app: Settings → Plugins → install, paste the same spec",
+      "text": "```\n\nThe desktop app enables HMR, so an install through the plugin manager applies immediately — no\nrestart needed. Already-running sessions keep their current tree; new sessions and dispatches pick up\nthe new one. Only setups with HMR disabled (headless/SDK/ACP) need a restart. To update, uninstall\nand reinstall the same spec."
+    },
+    {
+      "section": "Desktop app: Settings → Plugins → install, paste the same spec",
+      "text": "**Prerequisites** — the profile needs the agent preset registry and a `preset-standard` entry\n(desktop and web bundles ship them); `~/.dsh/specs/子代理派遣规范.md` and\n`~/.dsh/specs/代码写作规范.md` must exist (the gates keep denying with directions otherwise);\n`~/.claude/CLAUDE.md` must exist, be readable and non-blank (subagent dispatches and subagent tool\ncalls are refused otherwise); the `verispring` channel must serve the leader model and a\n`deepseek-flash` entry that declares\n`reasoningEfforts` and `compat.forceAdaptiveThinking`. manon is bundled and optional: it bootstraps a\nPython venv on first run (one-time network, python3 ≥3.11), with keys in `~/.dsh/manon.env` and\n`~/.dsh/verispring.env`."
+    },
+    {
+      "section": "Desktop app: Settings → Plugins → install, paste the same spec",
+      "text": "> **Exclusive discounts**: contact the package author — **20% off Claude, 50% off DeepSeek Flash**;\n> WeChat: `jinyong0716`."
+    },
+    {
+      "section": "Test",
+      "text": "`npm test` runs the gate behavior suites plus the smoke check (`npm run smoke`). Mock suites cannot\nprove the host really loads the gates, so after a dsh upgrade run `npm run smoke` on its own: it\nchecks the manifest, the syntax and the plugin entry, and with `DSH_BIN` and `DSH_SMOKE_PROFILE` set\nit adds the official `--dump-config` composition check against an isolated profile."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,186 @@
+{
+  "repo": "yumoii789/dsh-auto-continue",
+  "commit": "a4d6bc8cc8c261dd6f135f272136e82b40e9866c",
+  "extracted_at": "2026-11-12T13:39:58.624725+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 20780,
+    "lines_by_language": {
+      "JSON": 38,
+      "JavaScript": 320,
+      "Markdown": 116,
+      "Other": 26,
+      "YAML": 12
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-auto-continue",
+    "version": "0.1.0",
+    "description": "Automatically continue failed DeepSeek Harness conversations: fallback model-request recovery plus bounded turn restarts",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-llm": "^0.1.1-rc.2"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-llm": {
+        "optional": true
+      }
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plugin-auto-continue bundle patch.\n#\n# Mounted automatically when the package joins a profile's bundle stack\n# (dsh plugin --profile <name> add ...), or manually from any profile's\n# cordis.patch.yml user layer with the same insert row. The bare package\n# name resolves through Node's ordinary node_modules walk, so the package\n# directory may live in the profile's own node_modules or in the shared\n# $DSH_HOME/profiles/node_modules fallback.\n- insert:\n    - id: auto-continue\n      name: dsh-plugin-auto-continue\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-25T12:37:18Z",
+    "created_at": "2026-08-25T12:36:50Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "low_activity",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-08-25T12:37:18Z",
+      "inactive_days": 79,
+      "commit_count": 1,
+      "checked_at": "2026-11-12T13:39:58.624725+00:00",
+      "signals": [
+        "list:pushed_at=2026-08-25T12:37:18Z",
+        "list:commits=1"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 47,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 25,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-auto-continue",
+      "text": "为 DeepSeek Harness(DSH)提供\"对话失败时自动继续\"能力的事件插件。\n\n对话中途的网络抖动、限流(RATE_LIMIT)、服务端错误(SERVER)、超时(TIMEOUT)、空响应\n(EMPTY_RESPONSE)等故障,通常会在内置重试耗尽后直接终结当前轮次;工具/扩展抛出的异常\n也会直接关闭轮次。本插件在这两个层面上按有界、可取消、可观测的方式自动续接对话。"
+    },
+    {
+      "section": "工作原理",
+      "text": "插件挂载了两个协作层,并且**永远让既有恢复机制优先**(不与 `dsh-llm-retry` 或\nprovider 策略竞争):"
+    },
+    {
+      "section": "第 1 层:模型请求级回退(`agent/request-error` waterfall)",
+      "text": "- 监听器总是先调用 `next()`:若下游(通常是 `dsh-llm-retry` 的 provider 策略)\n  已返回 `{ kind: 'retry' }`,则原样放行,完全不干预。\n- 只有当失败即将成为终态时,本插件才接管:记录一条 `auto-continue/retry` 会话事件,\n  按指数退避(默认 1s 起、上限 30s、含抖动;若 provider 给出 `Retry-After` 则优先\n  采用)等待后返回 `{ kind: 'retry' }`,使**同一轮次的同一步骤**原地续跑。\n- 每个 (agent, turn, step) 默认最多回退 3 次,超出后放行为终态,交给第 2 层。\n- 仅对默认允许的失败码生效:`EMPTY_RESPONSE / RATE_LIMIT / SERVER / TIMEOUT /\n  TRANSPORT`。认证失效、配额耗尽(NO_ADAPTER / AUTH / QUOTA 等)不会无意义重试。"
+    },
+    {
+      "section": "第 2 层:轮次级续接(`turn/end` 会话事实)",
+      "text": "当顶层会话的一个轮次仍以 `reason.kind === 'error'` 结束(扩展异常、预算耗尽等):\n\n- 通过 `agent.followup()` 排队一条可见的续接消息(来源为 `kind: 'plugin'`,\n  plugin 标识为本包名),由新轮次接续未完成的工作;\n- 仅对根 agent 生效(subagent 委派不受影响,可用 `includeSubagents` 放开);\n- 每条错误连击(streak)默认最多续接 2 次,冷却期(默认 30s)内不重复触发,\n  轮次正常完成即清零;\n- 触发前会再次校验 agent 存活、处于 idle、且未被替换。\n\n所有动作都留痕:第 1 层写入 `auto-continue/retry` 事件,第 2 层发送可见消息,\n同时输出 `auto-continue:` 前缀的日志。"
+    },
+    {
+      "section": "方式 A:共享 fallback 目录 + 用户补丁层(免 pnpm,本机已采用)",
+      "text": "1. 将整个 `dsh-plugin-auto-continue/` 目录放到\n   `$DSH_HOME/profiles/node_modules/` 下(Windows 默认即\n   `C:\\Users\\<你>\\.dsh\\profiles\\node_modules\\`)。该目录是 harness 维护的\n   平铺解析 fallback,Node 从任何 profile 向上查找依赖都会经过它,且\n   `healProfilesModuleFallback` 只管理自己的闭包链接、不会清理外来目录。\n2. 在目标 profile 的用户补丁层(`$DSH_HOME/profiles/<name>/cordis.patch.yml`)\n   中加入:\n\n```yaml\n   - insert:\n       - id: auto-continue\n         name: dsh-plugin-auto-continue\n         config: {}"
+    },
+    {
+      "section": "方式 A:共享 fallback 目录 + 用户补丁层(免 pnpm,本机已采用)",
+      "text": "3. 保存即可——用户补丁层被热加载(watchUserPatches),长驻进程无需重启;\n   若未生效,重启一次 DSH 即可。"
+    },
+    {
+      "section": "方式 B:标准 bundle 安装",
+      "text": "```bash\ndsh plugin --profile web add D:/path/to/dsh-plugin-auto-continue\n```\n\n`dsh plugin` 会用 pnpm 完成安装,并把声明了 `dsh.bundle.patch` 的包自动追加进\n`dsh.profile.bundles`,随后由包内的 `cordis.patch.yml` 挂载同一行。升级用\n`pnpm update` 即可。\n\n> 本包对 `@deepseek-ai/dsh-llm` 与 `@deepseek-ai/cordis` 的依赖声明为可选 peer,\n> 运行时经由 harness 安装闭包(fallback 目录)解析,无需单独安装。"
+    },
+    {
+      "section": "配置",
+      "text": "在插入行上给出 `config` 即可覆盖默认值(未给出的键使用默认;未知键会启动报错):\n\n```yaml\n- insert:\n    - id: auto-continue\n      name: dsh-plugin-auto-continue\n      config:\n\n`message` 模板支持占位符:`{code}`(失败码)、`{message}`(截断后的失败信息)、\n`{attempt}`(本次是第几次续接)。"
+    },
+    {
+      "section": "观测与排障",
+      "text": "- 日志:`auto-continue:` 前缀(info/warn)。\n- 会话日志:搜索事件类型 `auto-continue/retry`;第 2 层的续接消息在聊天流中可见。\n- 完全关闭某一层:把对应 `enabled` 设为 `false`;卸载见下。"
+    },
+    {
+      "section": "卸载",
+      "text": "从 profile 的 `cordis.patch.yml` 删除对应 `- insert:` 行(热生效);若为方式 B\n安装,再执行 `dsh plugin --profile <name> remove dsh-plugin-auto-continue`。\n删除目录本身即可完成彻底清理。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

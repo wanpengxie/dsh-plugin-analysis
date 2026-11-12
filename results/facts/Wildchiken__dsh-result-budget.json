@@ -1,0 +1,216 @@
+{
+  "repo": "Wildchiken/dsh-result-budget",
+  "commit": "e20619a45022ecf8cced7862ea2f03f224c10ebb",
+  "extracted_at": "2026-11-11T15:53:09.699465+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 91549,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 678,
+      "Markdown": 316,
+      "Other": 138,
+      "Python": 222,
+      "YAML": 78
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "bench/README.md",
+      "bench/profile/budget-on.yml",
+      "bench/profile/cordis.patch.yml",
+      "bench/results.jsonl",
+      "bench/run.py",
+      "bench/tasks.py",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/index.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-result-budget",
+    "version": "0.2.1",
+    "description": "DeepSeek Harness plugin: size every tool result to the active model's context window, so local and small models are not flooded by one oversized output.",
+    "type": "module",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --test test/"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "cordis",
+      "context-window",
+      "local-llm",
+      "small-model"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Wildchiken/dsh-result-budget.git"
+    },
+    "homepage": "https://github.com/Wildchiken/dsh-result-budget#readme",
+    "bugs": {
+      "url": "https://github.com/Wildchiken/dsh-result-budget/issues"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Mounted as a bundle, the budget applies to every agent in the profile.\n# To limit it to one agent preset, list the package inside that preset's\n# `plugins` instead and do not add it as a bundle.\n- insert:\n    - id: result-budget\n      name: dsh-result-budget\n      config:\n        ratio: 0.15\n        minTokens: 384\n        fallbackTokens: 2000\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "BENCH_WINDOW",
+      "kind": "env",
+      "where": "bench/profile/cordis.patch.yml:53"
+    },
+    {
+      "name": "BENCH_MAXTOKENS",
+      "kind": "env",
+      "where": "bench/profile/cordis.patch.yml:54"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost:1234/v1",
+      "where": "bench/profile/cordis.patch.yml:49"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Wildchiken/dsh-result-budget.git",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Wildchiken/dsh-result-budget#readme",
+      "where": "package.json:34"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Wildchiken/dsh-result-budget/issues",
+      "where": "package.json:36"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-11-04T11:02:18Z",
+    "created_at": "2026-11-04T09:40:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-result-budget",
+      "text": "English | [中文](README.zh.md)\n\nSize every DeepSeek Harness tool result to **the active model's context window**. Local and on-device models with small windows are no longer flooded by a single `cat` or `read`, and the budget follows you when you switch models — nothing is tuned for one specific model."
+    },
+    {
+      "section": "Why",
+      "text": "dsh caps tool output with fixed numbers: `read` 2000 lines / 50 KB, bash 16 000 chars, spill-policy a fixed token count. Fine for a 128k cloud model, far too much for a 4k–32k local one:"
+    },
+    {
+      "section": "Why",
+      "text": "- A 50 KB `read` is ~13k tokens — an 8k-window model is full after one call.\n- Automatic compaction only runs once the conversation is *already* near the window, so it cannot stop one result from filling it.\n- Small models degrade quickly with long context; irrelevant output hurts quality and speed even without overflow."
+    },
+    {
+      "section": "How it works",
+      "text": "Before each step, for the results that arrived since the last one:\n\n```\nbudget = max(ratio × (contextWindow − reservedOutput), minTokens)   # capped by maxTokens if you set one\n```"
+    },
+    {
+      "section": "How it works",
+      "text": "- `contextWindow` and reserved output are resolved exactly like the official `dsh-compaction-basic`: the session's routed provider/model through `llm.resolveModelInfo`; reserved output is the request's `maxTokens`, else the model default.\n- Text over budget keeps the **first 75 % and last 25 %** (errors usually sit at the end) with a one-line notice telling the model how to see the rest, such as `grep/head/tail` for shell tools.\n- `read` is different: it keeps **complete lines from the start** and names the exact `offset` to continue from. A hole in the middle of a paged file would be skipped silently, so no tail is kept. If not even one line fits, the notice points to `bash` instead of back to the same offset.\n- The token estimate depends on the kind of text: each digit counts as a token, punctuation and CJK characters count individually, and letters count by word length. A flat 4 chars/token, which the host uses, was off by up to 4× on numbers and hashes. The weights were fitted against the token counts three local models reported, then checked on files that were not part of the fit: 6 % average error, against 25 % for the flat ratio.\n- Images and other non-text blocks pass throu"
+    },
+    {
+      "section": "How it works",
+      "text": "With the defaults:\n\n| Window (reserved output) | Per-result budget |\n|---|---|\n| 4k (1k) | ≈ 460 tokens |\n| 8k (2k) | ≈ 920 tokens |\n| 32k (4k) | ≈ 4300 tokens |\n| 128k (8k) | ≈ 18 400 tokens (tools' own caps usually apply first) |\n| unknown | 2000 tokens |"
+    },
+    {
+      "section": "Does it help?",
+      "text": "Six tasks with large tool output, run with Spark X2.6 4B on LM Studio through the DeepSeek Harness headless runner, with the plugin off and on (v0.2.1). Tasks, setup and raw results are in [bench/](bench/).\n\n| Window | Plugin off | Plugin on | Runs that hit the context limit (off / on) |\n|---|---|---|---|\n| 8k | 7 / 12 | **12 / 12** | 4 / 0 |\n| 16k | 9 / 12 | **11 / 12** | 1 / 1, plus 2 timeouts off |\n| 32k | **11 / 12** | 4 / 6 | 1 / 0 |"
+    },
+    {
+      "section": "Does it help?",
+      "text": "- **8k and 16k:** paired by task, 7 runs passed only with the plugin and none only without it (p ≈ 0.016). Runs were also faster on average (48 vs 69 s at 8k, 57 vs 108 s at 16k).\n- **32k:** it can hurt. Both failures were results that would have fit, trimmed anyway: a `read` cut before the line the model needed, and a `grep` with the key line in the removed middle. The 32k sample is small (6 runs with the plugin). For windows of 32k and up, raise `ratio` or leave the plugin off.\n- One model only, and tasks chosen for large output, so this shows where it helps, not how often."
+    },
+    {
+      "section": "Does it help?",
+      "text": "Trimming by the room left in the context instead of a fixed share was also tested. It did better at 32k (12 / 12) and worse at 8k and 16k, so it was not released.\n\n**On small windows the host limits output too.** pi-ai, the model client in DeepSeek Harness, sets `max output = window − estimated input − 4096`, at least 1. On an 8k window a context past about 4k tokens leaves the model one token, and the turn ends with `max-tokens`. That is behind most of the plugin-off failures above."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile <name> add \"github:Wildchiken/dsh-result-budget\"\n```\n\nAs a bundle it applies to **every agent** in the profile."
+    },
+    {
+      "section": "Only for one agent preset",
+      "text": "Skip the bundle and list it in the preset's `plugins` — it then covers only that preset's agents:\n\n```yaml\n- insert:\n    - id: preset-local\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n\nOr compose it from your own plugin:\n\n```js\nimport { installResultBudget } from 'dsh-result-budget'\n\nexport function apply(ctx) {\n  ctx.inject(['llm'], (ctx) => installResultBudget(ctx, { ratio: 0.1 }))"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `ratio` | `0.15` | Max share of the usable window one result may take, (0, 1] |\n| `minTokens` | `384` | Budget floor |\n| `maxTokens` | `null` | Optional budget ceiling; none by default, so large-window models lose nothing |\n| `fallbackTokens` | `2000` | Budget when the window is unknown |\n| `headShare` | `0.75` | Share of the kept text taken from the start; the rest is the tail. Not used for `read` |\n| `exclude` | `[]` | Tool names to skip, `*` wildcards allowed, e.g. `[\"mcp_*\"]` |"
+    },
+    {
+      "section": "Configuration",
+      "text": "Invalid config (unknown key, ratio out of range, non-positive integer, `minTokens > maxTokens`) fails at load time instead of silently falling back."
+    },
+    {
+      "section": "Relation to built-in components",
+      "text": "- **tool-result-pruner** trims *historic* results only when compaction triggers; this plugin limits a result as it *enters* the conversation. Use both.\n- **spill-policy** is in the base bundle with a fixed cap (12 500 tokens), saves the full result to a file the model can read, and skips `read`. It runs first, and this plugin keeps the end of the text, where spill's notice sits. Results between this budget and spill's cap get no file.\n- **Per-tool caps** (`readLimit`, `maxOutputChars`) can stay at their defaults; this plugin runs after them."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- Budgets use an estimate, not the model's tokenizer. It was fitted on three local models and may differ on others. It runs high on numbers and hashes for models that group digits, so those results get trimmed sooner than necessary.\n- The model cannot read what was omitted unless spill-policy saved a file. It has to fetch it again, and for shell tools the notice suggests re-running with narrower output, which runs a command with side effects a second time.\n- A small model may ignore the notice. In a test with a local 4B model it skipped the suggested `offset` and used `grep` instead.\n- The defaults were tested on one local model only (see [Does it help?](#does-it-help)). On windows of 32k and up they can trim results that would have fit. Comparison data from other models is welcome."
+    },
+    {
+      "section": "Related",
+      "text": "[dsh-tool-output-budget](https://github.com/argszero/dsh-tool-output-budget) came first and also bounds each result as it arrives and keeps the log intact. Its budget is a fixed character count. Choose it if you want one number for every model; choose this plugin if the budget should follow the model's window."
+    },
+    {
+      "section": "Development",
+      "text": "```bash\nnpm test\n```\n\nNode 20+ built-ins only; no runtime dependencies."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

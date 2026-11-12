@@ -1,0 +1,254 @@
+{
+  "repo": "ghbhiee/dsh-plugin-tui",
+  "commit": "4980177695952e9aba551bb98ddbb3ae60b3346e",
+  "extracted_at": "2026-11-11T20:36:36.672533+00:00",
+  "tree": {
+    "files": 17,
+    "bytes": 361784,
+    "lines_by_language": {
+      "JSON": 98,
+      "JavaScript": 1501,
+      "Markdown": 120,
+      "Other": 25,
+      "TypeScript": 2274,
+      "YAML": 2101
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/index.js.map",
+      "lib/startup.js",
+      "lib/startup.js.map",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "src/host-modules.ts",
+      "src/index.ts",
+      "src/startup.ts",
+      "tests/unit.test.ts",
+      "tsconfig.json",
+      "tsdown.config.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-tui",
+    "version": "0.1.0",
+    "description": "Interactive terminal UI for DeepSeek Harness: a Claude Code-style REPL over a resumable coding-agent session",
+    "license": "MIT",
+    "author": "guohongbo@outlook.com",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ghbhiee/dsh-plugin-tui.git"
+    },
+    "homepage": "https://github.com/ghbhiee/dsh-plugin-tui#readme",
+    "bugs": {
+      "url": "https://github.com/ghbhiee/dsh-plugin-tui/issues"
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./startup": "./lib/startup.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "build": "tsdown",
+      "watch": "tsdown --watch",
+      "typecheck": "tsc -b tsconfig.json",
+      "test": "vitest run --passWithNoTests",
+      "check": "npm run typecheck && npm run test && npm run build"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.1",
+      "commander": "^15.0.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.1",
+      "@deepseek-ai/dsh-agent": ">=0.1.0-rc.6 <0.1.2 || >=0.1.2-alpha.0",
+      "@deepseek-ai/dsh-cmdline": ">=0.1.0-rc.6 <0.1.2 || >=0.1.2-alpha.0",
+      "@deepseek-ai/dsh-llm": ">=0.1.0-rc.6 <0.1.2 || >=0.1.2-alpha.0",
+      "@deepseek-ai/dsh-session": ">=0.1.0-rc.6 <0.1.2 || >=0.1.2-alpha.0"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "tui",
+      "repl"
+    ],
+    "packageManager": "pnpm@11.7.0",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "4.0.1",
+      "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-cmdline": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-commands": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-session": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-session-title": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-user-approval": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-user-questions": "0.1.0-rc.6",
+      "@deepseek-ai/schemastery": "3.18.1",
+      "@types/node": "^22.10.0",
+      "commander": "^15.0.0",
+      "tsdown": "^0.22.14",
+      "typescript": "^5.7.0",
+      "vitest": "^3.2.7"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Patch layer contributed by dsh-plugin-tui.\n#\n# The tui profile runs directly over dsh-base (no dsh-headless bundle), so the\n# few rows headless would have contributed are restated here, followed by this\n# plugin's own startup + runner pair.\n\n- id: system-prompt\n  config:\n    persona: >-\n      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.\n\n# The shared module-reload HMR row stays off; the launcher's watch-only\n# fallback still keeps the user patch layers live until the run exits.\n- id: hmr\n  disabled: true\n\n- id: tools\n  config:\n    mode: !!js process.env.DSH_TOOLS_MODE\n\n- insert:\n    # Code Mode is a core execution capability, not a Web component.\n    - id: code-runtime\n      name: '@deepseek-ai/dsh-code-runtime-worker-thread'\n\n    # No bundle mounts the ask_user_question tool row (the Web surface wires\n    # it dynamically), so an interactive profile inserts it itself; the REPL\n    # registers the matching ctx.userQuestions provider.\n    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n\n    - id: tui-startup\n      name: dsh-plugin-tui/startup\n\n    - id: tui-runner\n      name: dsh-plugin-tui\n      inject: [tuiStartup]\n      config:\n        request: !!js ctx.tuiStartup\n\n# --workdir chdirs inside tui-startup's action, before it provides tuiStartup.\n# Forcing sandbox-policy to wait on that service makes it mount AFTER the chdir,\n# so its workspaceRoot (!!js process.cwd()) follows the requested directory.\n- id: sandbox-policy\n  inject: [tuiStartup]\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/startup.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_TOOLS_MODE",
+      "kind": "env",
+      "where": "cordis.patch.yml:19"
+    },
+    {
+      "name": "TUI_DEBUG",
+      "kind": "env",
+      "where": "lib/index.js:279"
+    },
+    {
+      "name": "TUI_DEBUG",
+      "kind": "env",
+      "where": "lib/index.js:285"
+    },
+    {
+      "name": "TUI_DEBUG",
+      "kind": "env",
+      "where": "src/index.ts:303"
+    },
+    {
+      "name": "TUI_DEBUG",
+      "kind": "env",
+      "where": "src/index.ts:309"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/ghbhiee/dsh-plugin-tui.git",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ghbhiee/dsh-plugin-tui#readme",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/ghbhiee/dsh-plugin-tui/issues",
+      "where": "package.json:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "3.18.1",
+      "commander": "^15.0.0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "4.0.1",
+      "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-cmdline": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-commands": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-session": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-session-title": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-user-approval": "0.1.0-rc.6",
+      "@deepseek-ai/dsh-user-questions": "0.1.0-rc.6",
+      "@deepseek-ai/schemastery": "3.18.1",
+      "@types/node": "^22.10.0",
+      "commander": "^15.0.0",
+      "tsdown": "^0.22.14",
+      "typescript": "^5.7.0",
+      "vitest": "^3.2.7"
+    }
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 2,
+    "pushed_at": "2026-08-29T07:12:43Z",
+    "created_at": "2026-08-28T08:00:27Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/startup.js",
+    "package.json",
+    "src/host-modules.ts",
+    "src/index.ts",
+    "src/startup.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-tui",
+      "text": "An interactive terminal UI for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a Claude Code-style REPL over one resumable coding-agent session. Where `dsh-plugin-cli-session` drives a single turn and exits, this runner keeps the terminal for the whole conversation — streaming token deltas, tool-call lines, and turn errors as they commit, and answering approval requests from the keyboard."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile tui add github:ghbhiee/dsh-plugin-tui\n```\n\nOr from a local clone (a `link:`, so a local rebuild is picked up):\n\n```sh\ndsh plugin --profile tui add ./dsh-plugin-tui\n```\n\nThe `tui` profile needs only two bundle layers — this plugin restates the few\nrows dsh-headless would have contributed, so do NOT add the headless bundle:\n\n```jsonc\n// ~/.dsh/profiles/tui/package.json\n\"dsh\": { \"profile\": { \"bundles\": [\"@deepseek-ai/dsh-base\", \"dsh-plugin-tui\"] } }\n```"
+    },
+    {
+      "section": "Usage",
+      "text": "```sh\ndsh --profile tui                       # start at the prompt\ndsh --profile tui \"explain this file\"   # send a first message, then stay interactive\ndsh --profile tui -r                    # resume the latest tui session here\ndsh --profile tui -s <id>               # resume a specific session\n\nInside the REPL:"
+    },
+    {
+      "section": "Usage",
+      "text": "| Input | Meaning |\n|---|---|\n| `/exit`, `/quit`, Ctrl-D | leave (flushes the session first) |\n| `/session` | print the session id |\n| `/sessions` | pick a session interactively (↑/↓ move, Enter switches, Esc cancels); `/sessions list` prints the static list |\n| `/resume <n\\|id>` | switch to another session in place (index from `/sessions list`, or an id prefix) |\n| `/history [n]` | reveal n earlier exchanges of the current session (switching in shows only the most recent ones) |\n| `/new` | start a fresh session, releasing the current one |\n| `/title [text]` | show the session title, or rename it (a rename pins the title) |\n| `/model [id]` | pick a model interactively (↑/↓, Enter, Esc) or hot-switch by name (`id` or `provider/id`) — takes effect from the next step |\n| `/effort [id]` | pick reasoning effort interactively, or set by name (`/effort default` restores the provider default) |\n| `/help` | built-ins plus every harness-registered command |\n| Ctrl-C while a turn runs | cancel the turn, stay in the REPL |\n| Ctrl-C twice while idle | leave |\n| `y` / `N` at an approval prompt | allow / reject one gated tool call |\n| `/approvals [ask\\|auto]` | `auto` allows every request with a "
+    },
+    {
+      "section": "Usage",
+      "text": "A status bar pinned to the terminal's bottom row shows the live model and\neffort, the approvals mode, the session title, and the working directory —\nit refreshes as those change and survives resizes; the transcript scrolls\nabove it. Thinking is collapsed by default — the spinner area shows a live\nthree-line window over the reasoning stream, and **ctrl+o** toggles the full\ndim stream.\n`/model` and `/effort` choices are remembered per profile (`tui-model.json`\nbeside the profile; the machine-wide default is never touched) — `/model\ndefault` clears the preference.\nTool calls always render as one task-summary line (`⏺ Group counts (+14\nlines)`); the full command or script goes to the same per-turn detail stream\nctrl+o reveals. The toggle only ever covers the current (or just-finished)\nexchange — starting a new one clears it.\nResuming or switching to a session replays its recent exchanges statically\n(never re-running anything); `/history` pages further back, and your\nterminal's own scrollback covers the rest. The prompt appears in well under a\nsecond — MCP servers connect in the background and their tools join late.\nWhile a turn runs, a braille spinner covers quiet stretches; token delt"
+    },
+    {
+      "section": "Usage",
+      "text": "Ctrl-C works as a keystroke because raw-mode readline owns the terminal; the\nlauncher's own SIGINT handler still answers an external `kill -INT` with a full\nteardown, which is the behavior you want from outside the TUI."
+    },
+    {
+      "section": "Develop",
+      "text": "```sh\npnpm install\npnpm run check   # typecheck → vitest → tsdown build\n```\n\nBecause `lib/` is versioned (it is what a git install serves), rebuild and\ncommit it with every source change."
+    },
+    {
+      "section": "Develop",
+      "text": "Harness slash commands are dispatched through `ctx.commands`, so `/help` also\nlists whatever the composition registers — here that is `/compact`,\n`/feedback`, `/goal`, `/permission`, and `/plan`. `/permission\nworkspace-write` switches the live session to the sandboxed ask-mode preset;\ngated tool calls then surface as the y/N approval prompt."
+    },
+    {
+      "section": "Status / known gaps",
+      "text": "- One-shot approvals only: the harness approval seam carries no tool arguments\n  and no allow-always vocabulary, so there is no per-command allowlist yet.\n- Plan review (`/plan` → `exit_plan_mode`) renders through the generic\n  question flow — the plan markdown prints as the question's detail — rather\n  than a dedicated diff-style view.\n- Token deltas are written unbatched; heavy streams may want coalescing.\n- Any sibling plugin in the profile that logs to stdout will paint over the\n  REPL. Rows inserted by the machine-wide `~/.dsh/cordis.patch.yml` cannot be\n  overridden from a profile patch (the global user layer applies above it), so\n  silence chatty MCP proxies in the global file itself — e.g. wrap the command\n  as `sh -c 'exec npx … 2>>\"$HOME/.dsh/mcp-<name>.log\"'`.\n- `ctx.commands.execute` has a signature drift between the installed\n  0.1.1-rc.2 (`agent, line, images, signal`) and the published rc.6 types\n  (`agent, line, signal`); the runner dispatches on arity."
+    }
+  ],
+  "skipped": []
+}

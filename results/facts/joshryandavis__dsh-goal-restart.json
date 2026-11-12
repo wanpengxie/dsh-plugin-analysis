@@ -1,0 +1,146 @@
+{
+  "repo": "joshryandavis/dsh-goal-restart",
+  "commit": "5d3f4997ce140d8ce178b234d40bdead7e2d9940",
+  "extracted_at": "2026-11-11T22:25:22.531611+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 24425,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 345,
+      "Markdown": 178,
+      "Other": 21,
+      "YAML": 11
+    },
+    "outline": [
+      "CONTRACT.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "package.json",
+      "scripts/smoke.mjs",
+      "src/index.mjs",
+      "test/index.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-goal-restart",
+    "version": "0.1.0",
+    "description": "Automatically re-arm active goals when the dsh service (re)starts, so the goal-round driver resumes rounds without human intervention.",
+    "type": "module",
+    "main": "./src/index.mjs",
+    "exports": {
+      ".": "./src/index.mjs",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src/",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "CONTRACT.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "check": "node --check src/index.mjs",
+      "test": "node test/index.test.mjs",
+      "smoke": "node scripts/smoke.mjs"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "plugin",
+      "goal",
+      "restart",
+      "resume",
+      "autonomous",
+      "self-healing"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-goal-restart — re-arm active goals across dsh service restarts.\n# A native dsh bundle: inserting this row mounts the goal-restart plugin in any\n# profile that lists the bundle. The plugin re-arms durable 'active' goals the\n# moment their session is rehydrated from persistence (source === 'resume'),\n# letting the existing goal-round-driver continue automatically. Disable with\n# an id-targeted override if you prefer human-authorized resume only:\n#   - id: goal-restart\n#     disabled: true\n- insert:\n    - id: goal-restart\n      name: 'dsh-goal-restart'\n"
+    }
+  ],
+  "entries": [
+    "src/index.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-08-30T01:09:29Z",
+    "created_at": "2026-08-30T01:02:53Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "scripts/smoke.mjs",
+    "src/index.mjs",
+    "test/index.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "English | [中文](README.zh.md)"
+    },
+    {
+      "section": "dsh-goal-restart",
+      "text": "Re-arm persisted same-session goals automatically when the dsh service\n(re)starts, so the [goal-round driver](https://github.com/deepseek-ai/deepseek-harness)\nresumes rounds without human intervention.\n\n> **Why?** When an agent is doing long-running work — like developing its own\n> plugins — and the service it lives in gets restarted (crash, launchd\n> respawn, a deliberate bounce), the in-flight goal used to stay stuck until\n> somebody ran `/goal resume`. This plugin removes that step."
+    },
+    {
+      "section": "The problem",
+      "text": "A dsh goal's **durable state** (objective, phase, revision, `roundsStarted`)\nlives in the session log and survives restarts. Its **activation** (\"armed\")\nis deliberately process-local: it is never persisted, and every\n`agent/session-start` edge disarms it. So after the dsh service restarts, an\nin-flight goal is replayed as `active` but stays stopped until someone issues\nan explicit resume."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "On `agent/session-start` where `payload.source === 'resume'` (the session was\njust loaded from persistence), it calls `ctx.goals.resume(agent, ref)` for a\ndurable-`active` goal that still has round budget. The stock\n`goal-round-driver` (mounted by `dsh-base`) then reserves and queues the next\nround exactly as it would after a normal human resume — but nobody had to\nclick anything."
+    },
+    {
+      "section": "Policy (conservative, in one table)",
+      "text": "| Situation                                        | Action                      |\n| ------------------------------------------------- | --------------------------- |\n| Session rehydrated after a service restart, goal `active`, budget left | re-arm (`ctx.goals.resume`) |\n| Session started fresh (`source: 'startup'`)          | skip (no goal)              |\n| Forked session (inherited goal)                    | skip (in-process lineage)   |\n| Subagent session (`origin: subagent`)               | skip (in-process lineage)   |\n| Goal `paused` / `blocked` / `complete`              | skip (durable phase wins)   |\n| Goal `active` but already `armed`                   | skip (idempotent)           |\n| Goal at `roundsStarted >= maxGoalRounds`            | skip (no budget — raise the cap, then resume) |"
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile <profile> add dsh-goal-restart\n```\n\nThen restart the dsh service so the new bundle is loaded."
+    },
+    {
+      "section": "Disable",
+      "text": "In the profile's `cordis.patch.yml`:\n\n```yaml\n- id: goal-restart\n  disabled: true\n```"
+    },
+    {
+      "section": "Notes",
+      "text": "- Re-arming writes one durable `resume` mutation (revision +1) into the\n  session log — the domain's documented reactivation edge, and the same\n  write a human `/goal resume` performs.\n- The round driver already handles durability and cancellation safety; this\n  plugin only decides *that* continuation is wanted, not *how* it runs.\n- Sessions resume when a live agent loads them. In the web GUI that happens\n  when the conversation is reopened after restart; re-arming occurs at that\n  moment, before the driver's first idle checkpoint.\n- The policy is verified by 13 in-memory unit tests (`npm test`) and a smoke\n  script (`npm run smoke`) that need no network and no live process."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,156 @@
+{
+  "repo": "imtokenxinluo/dsh-fixture-bad-plugin",
+  "commit": "1fd1a50e6e1a534955f2942faa42009c4cc71b48",
+  "extracted_at": "2026-11-11T21:46:36.256572+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 20021,
+    "lines_by_language": {
+      "JSON": 28,
+      "JavaScript": 353,
+      "Markdown": 121,
+      "Other": 15,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "scripts/preflight.mjs",
+      "scripts/profile-link.mjs",
+      "scripts/selftest.mjs",
+      "src/index.js",
+      "紧急回滚.bat"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-fixture-bad-plugin",
+    "version": "0.0.1",
+    "private": true,
+    "description": "TEST FIXTURE ONLY — deliberately violates the DSH render contract so dsh-contract-check can be verified. Do not use as a real plugin.",
+    "license": "MIT",
+    "type": "module",
+    "main": "src/index.js",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "exports": {
+      ".": {
+        "default": "./src/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "engines": {
+      "node": ">=22"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-fixture-bad-plugin bundle patch: 把测试夹具挂载成 profile 里的一行。\n# 只用于验证 dsh-contract-check 的检出能力，验证完请移除（见 README）。\n- insert:\n    - id: dsh-fixture-bad-plugin\n      name: 'dsh-fixture-bad-plugin'\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PROFILE_PKG",
+      "kind": "env",
+      "where": "scripts/profile-link.mjs:14"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-30T03:29:38Z",
+    "created_at": "2026-09-30T03:29:31Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-fixture-bad-plugin（测试夹具，不要当真插件用）",
+      "text": "**用途**：验证 `dsh-contract-check` 能不能在**加载时**发现违规的 `render` 契约。\n\n它故意注册了两个工具：\n\n| 工具 | 行为 | 期望判定 |\n|---|---|---|\n| `fixture_bad_render` | `render` 返回**裸字符串**（就是当年 `dsh-ssh-ops` 那个 bug）| 🔴 **violation → 角标变黄** |\n| `fixture_unknown_render` | `render` 委托给辅助函数，静态判不出形态 | 见下（初版预期写错了）|"
+    },
+    {
+      "section": "✅ 实机验证结果（2026-09-20，第一次真正走通黄灯）",
+      "text": "```\n颜色:   yellow\n状态条: 无耗 · 检查 23 个插件 · 违规 2 · 不可判定 1\n  [violation] fixture_bad_render     返回字符串，违反 render(): ContentBlock[] 契约\n  [violation] fixture_unknown_render 实测返回对象（不是数组），违反契约（实测）\n\n**两点值得记下来**："
+    },
+    {
+      "section": "✅ 实机验证结果（2026-09-20，第一次真正走通黄灯）",
+      "text": "1. **`fixture_unknown_render` 被判成 violation 而不是 unknown，这是对的。**\n   我原本以为\"静态判不准 = unknown\"，但**实测探针把它抓出来了**：\n   它的 render 返回传进去的值，而它声明的输出 schema 是对象 → 真调用时返回的一定不是数组。\n   这正好说明实测探针的价值：静态看不透的东西，跑一次就清楚了。\n2. **`doublecheck_report` 仍是 unknown**：实测时 render 抛了\n   `Cannot read properties of null (reading 'length')` —— 假数据不合形状，归 unknown\n   （**抛异常绝不判违规**，这是零误报原则的一部分）。\n\n---"
+    },
+    {
+      "section": "⚠️ 先读：这个夹具造成过一次事故（2026-09-19）",
+      "text": "**症状**：把它加进 profile 的 bundles 后，**DSH 起不来** —— 整个插件树加载失败。\n\n**根因**：上一版源码里有 `import { defineTool } from \"@deepseek-ai/dsh-tools\"`，\n而夹具目录没有 `node_modules`。pnpm 的 `link:` 让 Node **按真实路径**解析 →\n找不到包 → `ERR_MODULE_NOT_FOUND` → 插件树整体失败。\n\n**两个教训**：\n\n1. **\"扫源码 OK\" ≠ \"能加载\"**。离线扫描只看文件存不存在、形态对不对，\n   **完全不涉及模块解析** —— 所以它当时报了 `ok`，然后 DSH 挂了。\n2. **把测试夹具装进*运行环境*的 profile 之前，必须先证明它能被加载。**\n\n**已修**：夹具改成**零外部 import**（直接用裸定义对象调 `ctx.tools.register()`），\n从根上不可能再因解析失败拖垮启动。"
+    },
+    {
+      "section": "⚠️ 先读：这个夹具造成过一次事故（2026-09-19）",
+      "text": "**已加闸门**：`scripts/preflight.mjs` —— 装之前必须先跑；它自己也有自测（`selftest.mjs`）。\n\n---"
+    },
+    {
+      "section": "⚠️ 第二个坑：`pnpm install` 不会补建新加的 `link:` 依赖",
+      "text": "2026-09-20 实测：把夹具加进 `dependencies`（`link:` 形式）后跑 `pnpm install`，\n它回一句 **\"Already up to date\"** 就结束了 —— **lockfile 更新了，但 `node_modules` 里的链接没建**。\n此时直接重启，DSH 解析不到这个包，**又是\"整个插件树起不来\"**（跟上次症状一样，根因不同）。\n\n`pnpm install --force` 也一样跳过。\n\n**判据（装完必查）**：\n\n```powershell\nTest-Path 'D:\\tool\\dsh_data\\profiles\\web\\node_modules\\dsh-fixture-bad-plugin'\n```\n\n**补建**（就是 pnpm 给其它 `link:` 依赖建的那种 Junction）："
+    },
+    {
+      "section": "⚠️ 第二个坑：`pnpm install` 不会补建新加的 `link:` 依赖",
+      "text": "```powershell\ncd D:\\tool\\dsh_data\\profiles\\web\nNew-Item -ItemType Junction -Path node_modules\\dsh-fixture-bad-plugin `\n         -Target D:\\tool\\claude_code\\dsh-fixture-bad-plugin\n```\n\n---"
+    },
+    {
+      "section": "使用流程（顺序不能换）",
+      "text": "```powershell"
+    },
+    {
+      "section": "① 预检：证明它能被加载（不通过就别装）",
+      "text": "node D:\\tool\\claude_code\\dsh-fixture-bad-plugin\\scripts\\preflight.mjs"
+    },
+    {
+      "section": "② 装进 profile（脚本会备份配置、写完校验）",
+      "text": "node D:\\tool\\claude_code\\dsh-fixture-bad-plugin\\scripts\\profile-link.mjs --apply"
+    },
+    {
+      "section": "③ 确认 node_modules 里有链接（见上面那个 pnpm 坑；没有就手工建 Junction）",
+      "text": "Test-Path D:\\tool\\dsh_data\\profiles\\web\\node_modules\\dsh-fixture-bad-plugin"
+    },
+    {
+      "section": "④ 重启 DSH（你重启，不是我）",
+      "text": "```"
+    },
+    {
+      "section": "期望看到",
+      "text": "- 会话头部圆点变 **🟡 黄**\n- 悬停状态条出现 `违规 2`\n- `/contract-check/status` 的 `findings` 里点名 `fixture_bad_render`\n- 绿灯 → 黄灯的**颜色变化**就是这条链路走通的证据"
+    },
+    {
+      "section": "⏹ 验证完立刻移除",
+      "text": "**一键**（双击即可，不需要 AI 在场）：\n\n```\nD:\\tool\\claude_code\\dsh-fixture-bad-plugin\\紧急回滚.bat\n```\n\n或命令行：\n\n```powershell\nnode D:\\tool\\claude_code\\dsh-fixture-bad-plugin\\scripts\\profile-link.mjs --remove"
+    },
+    {
+      "section": "然后重启 DSH",
+      "text": "```\n\n> 卸载脚本删链接时用的是 `rmdir` 而**不是**递归删除：\n> 在 Junction 上递归删除会**跟进目标目录**，把夹具源码本身删光。\n> （2026-09-20 卸完已核对：夹具源文件全部完好。）\n\n**上一次就是忘在这一步**：夹具留在 profile 里，于是任何原因导致的加载失败\n都会先被怀疑到它头上（而且它确实就是凶手）。"
+    }
+  ],
+  "skipped": []
+}

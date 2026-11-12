@@ -1,0 +1,576 @@
+{
+  "repo": "LosEcher/dsh-multimedia",
+  "commit": "bc61a7045a6ed9de54fb9cba71e0b04a74ee3316",
+  "extracted_at": "2026-11-11T12:15:09.128185+00:00",
+  "tree": {
+    "files": 20,
+    "bytes": 218276,
+    "lines_by_language": {
+      "CSS": 293,
+      "JSON": 44,
+      "JavaScript": 2801,
+      "Markdown": 227,
+      "Other": 4,
+      "TypeScript": 1149,
+      "YAML": 91
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/DESIGN.md",
+      "docs/PAGE-REVIEW.md",
+      "index.mjs",
+      "lib/adapters.mjs",
+      "lib/core.mjs",
+      "lib/tools.mjs",
+      "package.json",
+      "scripts/build.mjs",
+      "src/client/MultimediaTab.tsx",
+      "src/client/StatusBadge.tsx",
+      "src/client/index.ts",
+      "src/client/locales.ts",
+      "src/client/multimedia.module.css",
+      "test/fixtures/resolve-host.mjs",
+      "test/host-smoke.test.mjs",
+      "test/preflight.mjs",
+      "test/run.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-multimedia",
+    "version": "0.2.0",
+    "description": "DSH 多媒体生成插件：多渠道（fal.ai / ElevenLabs / ComfyUI）文生图、文生视频、TTS 语音合成，会话 tab 提供生成页面 + 作品库 + 渠道配置，host 侧提供生成 API 与 agent 工具，支持结果下载/复制/导出。",
+    "type": "module",
+    "main": "index.mjs",
+    "files": [
+      "index.mjs",
+      "lib",
+      "cordis.patch.yml",
+      "src",
+      "scripts",
+      "docs",
+      "test",
+      "README.md"
+    ],
+    "license": "MIT",
+    "scripts": {
+      "build": "node scripts/build.mjs",
+      "test": "node test/run.mjs && node --test test/host-smoke.test.mjs",
+      "test:unit": "node test/run.mjs",
+      "test:host-smoke": "node --test test/host-smoke.test.mjs"
+    },
+    "exports": {
+      ".": "./index.mjs",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime"
+        ],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.0 <5.0.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-multimedia bundle patch: host row (mounts /multimedia API + agent tools\n# media_generate / media_list / media_status / media_export, and the\n# '多媒体' conversation tab via dsh.client).\n#\n# Install:  dsh plugin --profile web add github:LosEcher/dsh-multimedia#main\n# Requires dsh web restart (host code). Client bundle edits: rebuild + refresh.\n#\n# 渠道配置说明（v0.1）：\n# - 种子渠道写在这里；运行时渠道设置（页面「渠道设置」区）写入\n#   dataDir/channels.json，运行时值优先于本行（仅覆盖已存在渠道的字段，\n#   apiKey 留空表示不改）。\n# - API Key 一律走环境变量（apiKeyEnv），页面输入框填了 key 也只在内存/\n#   channels.json 中保存，绝不写进本文件。\n- insert:\n    - id: multimedia\n      name: dsh-multimedia\n      inject: [timer, webServer, tools]\n      config:\n        dataDir: '~/.dsh/multimedia'\n        # 渠道种子：页面可增删/启停/改名。apiKeyEnv 优先，其次 apiKey 字面量。\n        channels:\n          - id: fal\n            type: fal\n            label: fal.ai\n            enabled: false\n            apiKeyEnv: FAL_KEY\n            apiKey: ''\n            baseUrl: 'https://queue.fal.run'\n          - id: elevenlabs\n            type: elevenlabs\n            label: ElevenLabs\n            enabled: false\n            apiKeyEnv: ELEVENLABS_API_KEY\n            apiKey: ''\n            baseUrl: 'https://api.elevenlabs.io/v1'\n          - id: comfyui\n            type: comfyui\n            label: ComfyUI (本地)\n            enabled: false\n            apiKeyEnv: ''\n            apiKey: ''\n            baseUrl: 'http://127.0.0.1:8188'\n          # ── 免费渠道（无需 API Key，开箱即用） ─────────────────────────────\n          - id: pollinations\n            type: pollinations\n            label: Pollinations（免费）\n            enabled: true\n            apiKeyEnv: ''\n            apiKey: ''\n            baseUrl: 'https://image.pollinations.ai'\n            maxConcurrent: 1          # 免费层限 1 并发/5s，防滥用被限流\n          - id: googletts\n            type: googletts\n            label: Google TTS（免费）\n            enabled: true\n            apiKeyEnv: ''\n            apiKey: ''\n            baseUrl: 'https://translate.google.com'\n            maxConcurrent: 2          # 免费渠道防滥用\n          # Cloudflare Workers AI：免费层 10k neurons/天；需 CF_API_TOKEN + extra.accountId\n          - id: cloudflare\n            type: cloudflare\n            label: Cloudflare Workers AI\n            enabled: false\n            apiKeyEnv: CF_API_TOKEN\n            apiKey: ''\n            baseUrl: 'https://api.cloudflare.com/client/v4'\n            extra:\n              accountId: ''\n          # xAI (Grok Imagine)：图片生成/编辑 + 视频生成/编辑/扩展（异步轮询）；\n          # 需 XAI_API_KEY（https://console.x.ai）。编辑/扩展由 agent 工具\n          # media_generate 的 params.action=edit|extend + params.image/video 输入驱动。\n          - id: xai\n            type: xai\n            label: xAI (Grok Imagine)\n            enabled: false\n            apiKeyEnv: XAI_API_KEY\n            apiKey: ''\n            baseUrl: 'https://api.x.ai/v1'\n          # ZenMux：OpenAI 兼容聚合网关。图片（GPT Image 2，同步 b64）+ 视频\n          # （原生异步协议 /videos，Seedance 2.0，支持图生视频 params.image）+ TTS\n          # （Gemini Flash TTS，PCM 自动封装为 WAV）。需 ZENMUX_API_KEY\n          # （https://zenmux.ai/platform/pay-as-you-go 充值并创建 Key）。\n          # 更多模型 slug 见 https://zenmux.ai/models（「供应商/模型名」格式）。\n          - id: zenmux\n            type: zenmux\n            label: ZenMux\n            enabled: false\n            apiKeyEnv: ZENMUX_API_KEY\n            apiKey: ''\n            baseUrl: 'https://zenmux.ai/api/v1'\n"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_SOURCE",
+      "kind": "env",
+      "where": "scripts/build.mjs:23"
+    },
+    {
+      "name": "NODE_ENV",
+      "kind": "env",
+      "where": "scripts/build.mjs:126"
+    },
+    {
+      "name": "DSH_HOST_MODULES",
+      "kind": "env",
+      "where": "test/fixtures/resolve-host.mjs:21"
+    },
+    {
+      "name": "DSH_HOST_MODULES",
+      "kind": "env",
+      "where": "test/host-smoke.test.mjs:33"
+    },
+    {
+      "name": "DSH_PROFILE_ROOT",
+      "kind": "env",
+      "where": "test/host-smoke.test.mjs:34"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/host-smoke.test.mjs:90"
+    },
+    {
+      "name": "DSH_HOST_MODULES",
+      "kind": "env",
+      "where": "test/host-smoke.test.mjs:91"
+    },
+    {
+      "name": "DSH_PROFILE",
+      "kind": "env",
+      "where": "test/preflight.mjs:16"
+    },
+    {
+      "name": "TEST_MM_KEY",
+      "kind": "env",
+      "where": "test/run.mjs:36"
+    },
+    {
+      "name": "TEST_MM_KEY",
+      "kind": "env",
+      "where": "test/run.mjs:43"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "queue.fal.run",
+      "url": "https://queue.fal.run",
+      "where": "cordis.patch.yml:28"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1",
+      "where": "cordis.patch.yml:35"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8188",
+      "where": "cordis.patch.yml:42"
+    },
+    {
+      "host": "image.pollinations.ai",
+      "url": "https://image.pollinations.ai",
+      "where": "cordis.patch.yml:50"
+    },
+    {
+      "host": "translate.google.com",
+      "url": "https://translate.google.com",
+      "where": "cordis.patch.yml:58"
+    },
+    {
+      "host": "api.cloudflare.com",
+      "url": "https://api.cloudflare.com/client/v4",
+      "where": "cordis.patch.yml:67"
+    },
+    {
+      "host": "console.x.ai）。编辑",
+      "url": "https://console.x.ai）。编辑/扩展由",
+      "where": "cordis.patch.yml:71"
+    },
+    {
+      "host": "api.x.ai",
+      "url": "https://api.x.ai/v1",
+      "where": "cordis.patch.yml:79"
+    },
+    {
+      "host": "zenmux.ai",
+      "url": "https://zenmux.ai/platform/pay-as-you-go",
+      "where": "cordis.patch.yml:83"
+    },
+    {
+      "host": "zenmux.ai",
+      "url": "https://zenmux.ai/models（「供应商/模型名」格式）。",
+      "where": "cordis.patch.yml:84"
+    },
+    {
+      "host": "zenmux.ai",
+      "url": "https://zenmux.ai/api/v1",
+      "where": "cordis.patch.yml:91"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "index.mjs:259"
+    },
+    {
+      "host": "api.x.ai",
+      "url": "https://api.x.ai/v1，Bearer",
+      "where": "lib/adapters.mjs:14"
+    },
+    {
+      "host": "api.x.ai",
+      "url": "https://api.x.ai/v1",
+      "where": "lib/adapters.mjs:30"
+    },
+    {
+      "host": "zenmux.ai",
+      "url": "https://zenmux.ai/api/v1，Bearer",
+      "where": "lib/adapters.mjs:164"
+    },
+    {
+      "host": "zenmux.ai",
+      "url": "https://zenmux.ai/docs/zh/guide/quickstart.html",
+      "where": "lib/adapters.mjs:171"
+    },
+    {
+      "host": "zenmux.ai",
+      "url": "https://zenmux.ai/api/v1",
+      "where": "lib/adapters.mjs:187"
+    },
+    {
+      "host": "queue.fal.run",
+      "url": "https://queue.fal.run",
+      "where": "lib/adapters.mjs:479"
+    },
+    {
+      "host": "queue.fal.run",
+      "url": "https://queue.fal.run",
+      "where": "lib/adapters.mjs:489"
+    },
+    {
+      "host": "queue.fal.run",
+      "url": "https://queue.fal.run",
+      "where": "lib/adapters.mjs:529"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1",
+      "where": "lib/adapters.mjs:558"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8188",
+      "where": "lib/adapters.mjs:692"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8188",
+      "where": "lib/adapters.mjs:699"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8188",
+      "where": "lib/adapters.mjs:739"
+    },
+    {
+      "host": "image.pollinations.ai",
+      "url": "https://image.pollinations.ai/models",
+      "where": "lib/adapters.mjs:769"
+    },
+    {
+      "host": "image.pollinations.ai",
+      "url": "https://image.pollinations.ai/prompt/${encodeURIComponent(job.prompt",
+      "where": "lib/adapters.mjs:786"
+    },
+    {
+      "host": "api.streamelements.com",
+      "url": "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=test",
+      "where": "lib/adapters.mjs:803"
+    },
+    {
+      "host": "api.streamelements.com",
+      "url": "https://api.streamelements.com/kappa/v2/speech?voice=${encodeURIComponent(voice",
+      "where": "lib/adapters.mjs:818"
+    },
+    {
+      "host": "translate.google.com",
+      "url": "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=test",
+      "where": "lib/adapters.mjs:845"
+    },
+    {
+      "host": "translate.google.com",
+      "url": "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang",
+      "where": "lib/adapters.mjs:857"
+    },
+    {
+      "host": "api.cloudflare.com",
+      "url": "https://api.cloudflare.com/client/v4/accounts/${accountId",
+      "where": "lib/adapters.mjs:877"
+    },
+    {
+      "host": "api.cloudflare.com",
+      "url": "https://api.cloudflare.com/client/v4/accounts/${accountId",
+      "where": "lib/adapters.mjs:889"
+    },
+    {
+      "host": "queue.fal.run",
+      "url": "https://queue.fal.run",
+      "where": "test/run.mjs:48"
+    },
+    {
+      "host": "queue.fal.run",
+      "url": "https://queue.fal.run",
+      "where": "test/run.mjs:54"
+    },
+    {
+      "host": "x",
+      "url": "https://x/img.png",
+      "where": "test/run.mjs:71"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1",
+      "where": "test/run.mjs:90"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1/text-to-speech/v1?output_format=mp3_44100_128",
+      "where": "test/run.mjs:94"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1/text-to-speech/v1?output_format=mp3_44100_128",
+      "where": "test/run.mjs:107"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1/flows/image",
+      "where": "test/run.mjs:113"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1/flows/flow-1",
+      "where": "test/run.mjs:118"
+    },
+    {
+      "host": "storage.elevenlabs.io",
+      "url": "https://storage.elevenlabs.io/img.png",
+      "where": "test/run.mjs:122"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1",
+      "where": "test/run.mjs:136"
+    },
+    {
+      "host": "api.elevenlabs.io",
+      "url": "https://api.elevenlabs.io/v1/user",
+      "where": "test/run.mjs:137"
+    },
+    {
+      "host": "translate.google.com",
+      "url": "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=hello",
+      "where": "test/run.mjs:155"
+    },
+    {
+      "host": "translate.google.com",
+      "url": "https://translate.google.com",
+      "where": "test/run.mjs:161"
+    },
+    {
+      "host": "image.pollinations.ai",
+      "url": "https://image.pollinations.ai/prompt/a%20cat?width=1024&height=1024&model=flux&seed=1&nologo=true&private=true",
+      "where": "test/run.mjs:167"
+    },
+    {
+      "host": "image.pollinations.ai",
+      "url": "https://image.pollinations.ai/models",
+      "where": "test/run.mjs:171"
+    },
+    {
+      "host": "image.pollinations.ai",
+      "url": "https://image.pollinations.ai",
+      "where": "test/run.mjs:174"
+    },
+    {
+      "host": "api.streamelements.com",
+      "url": "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=hello",
+      "where": "test/run.mjs:180"
+    },
+    {
+      "host": "api.streamelements.com",
+      "url": "https://api.streamelements.com",
+      "where": "test/run.mjs:186"
+    },
+    {
+      "host": "queue.fal.run",
+      "url": "https://queue.fal.run",
+      "where": "test/run.mjs:192"
+    },
+    {
+      "host": "queue.fal.run",
+      "url": "https://queue.fal.run",
+      "where": "test/run.mjs:193"
+    },
+    {
+      "host": "cdn.fal.ai",
+      "url": "https://cdn.fal.ai/img1.png",
+      "where": "test/run.mjs:206"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8188",
+      "where": "test/run.mjs:220"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8188",
+      "where": "test/run.mjs:235"
+    },
+    {
+      "host": "api.x.ai",
+      "url": "https://api.x.ai/v1",
+      "where": "test/run.mjs:242"
+    },
+    {
+      "host": "imgen.x.ai",
+      "url": "https://imgen.x.ai/xai-tmp-a.jpeg",
+      "where": "test/run.mjs:271"
+    },
+    {
+      "host": "imgen.x.ai",
+      "url": "https://imgen.x.ai/xai-tmp-b.png",
+      "where": "test/run.mjs:285"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/in.png",
+      "where": "test/run.mjs:288"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/in.png",
+      "where": "test/run.mjs:291"
+    },
+    {
+      "host": "video.x.ai",
+      "url": "https://video.x.ai/out.mp4",
+      "where": "test/run.mjs:307"
+    },
+    {
+      "host": "video.x.ai",
+      "url": "https://video.x.ai/ext.mp4",
+      "where": "test/run.mjs:329"
+    },
+    {
+      "host": "video.x.ai",
+      "url": "https://video.x.ai/resume.mp4",
+      "where": "test/run.mjs:343"
+    },
+    {
+      "host": "zenmux.ai",
+      "url": "https://zenmux.ai/api/v1",
+      "where": "test/run.mjs:361"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/in.png",
+      "where": "test/run.mjs:400"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/in.png",
+      "where": "test/run.mjs:403"
+    },
+    {
+      "host": "video.zenmux.ai",
+      "url": "https://video.zenmux.ai/out.mp4",
+      "where": "test/run.mjs:411"
+    },
+    {
+      "host": "img.zenmux.ai",
+      "url": "https://img.zenmux.ai/frame.jpg",
+      "where": "test/run.mjs:411"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/first.png",
+      "where": "test/run.mjs:413"
+    },
+    {
+      "host": "video.zenmux.ai",
+      "url": "https://video.zenmux.ai/out2.mp4",
+      "where": "test/run.mjs:423"
+    },
+    {
+      "host": "video.zenmux.ai",
+      "url": "https://video.zenmux.ai/resume.mp4",
+      "where": "test/run.mjs:453"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 21,
+    "pushed_at": "2026-10-05T14:29:45Z",
+    "created_at": "2026-09-28T12:18:51Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.mjs",
+    "lib/adapters.mjs",
+    "lib/core.mjs",
+    "lib/tools.mjs",
+    "package.json",
+    "scripts/build.mjs",
+    "test/host-smoke.test.mjs",
+    "test/run.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-multimedia — DSH 多媒体生成插件",
+      "text": "多渠道（fal.ai / ElevenLabs / ComfyUI）文生图、文生视频、TTS 语音合成插件。\n会话内「多媒体」tab 提供 **生成 / 作品库 / 渠道设置** 三区页面；host 侧提供\n`/multimedia` HTTP API 与 agent 工具（`media_generate` / `media_list` /\n`media_status` / `media_export`），支持产物下载、复制、导出到目录。\n\n> 界面设计参考调研（LobeHub/LobeChat、OpenWebUI、Sora/可灵、Coze、Dify 等平台的生图/视频/TTS\n> 页面模式），渠道 API 参考 fal.ai docs 与 ElevenLabs 文档。设计文档见\n> `docs/DESIGN.md`。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile web add github:LosEcher/dsh-multimedia#main"
+    },
+    {
+      "section": "重启 dsh web（host 代码），client 重建后刷新页面即可",
+      "text": "```"
+    },
+    {
+      "section": "配置渠道",
+      "text": "渠道种子定义在 `cordis.patch.yml` 的 `multimedia` 行；运行时增删改由页面\n「渠道」区完成，落盘到 `<dataDir>/channels.json`（0600，运行时优先）。\n\nAPI Key 策略：`apiKeyEnv`（环境变量）优先，其次页面输入的 `apiKey`\n（存 channels.json，绝不写 patch 文件、绝不回传客户端）。\n\n内置渠道类型："
+    },
+    {
+      "section": "配置渠道",
+      "text": "| type | 能力 | 认证 | 说明 |\n|---|---|---|---|\n| `pollinations` | 文生图 | **免费无 Key** | 匿名免费（限 1 并发/5s），FLUX/Turbo 等 |\n| `googletts` | TTS | **免费无 Key** | Google Translate TTS，中英日韩等，≤200 字符/次 |\n| `cloudflare` | 文生图 / TTS | CF_API_TOKEN（免费层 10k neurons/天） | Workers AI：FLUX.1 Schnell + MeloTTS，需 accountId |\n| `fal` | 文生图 / 文生视频 / TTS | `Authorization: Key <FAL_KEY>` | queue API，异步任务+轮询 |\n| `elevenlabs` | TTS / 文生图 | `xi-api-key` | 同步 TTS；图片走异步 Flows（免费层 10k credits/月） |\n| `comfyui` | 文生图 / 视频（工作流 JSON） | 无 | 本地 `127.0.0.1:8188`，需自备工作流 |\n| `xai` | 文生图 / 图生图（编辑）/ 文生视频 / 视频编辑 / 视频扩展 | `Bearer <XAI_API_KEY>` | OpenAI 兼容 `https://api.x.ai/v1`；图片同步返回、视频异步轮询（request_id → done） |\n| `zenmux` | 文生图 / 图生图（编辑）/ 图生视频 / 文生视频 / TTS | `Bearer <ZENMUX_API_KEY>` | OpenAI 兼容聚合网关 `https://zenmux.ai/api/v1`；图片/TTS 同步（b64），视频原生异步协议（`/videos` 提交 → 轮询） |"
+    },
+    {
+      "section": "配置渠道",
+      "text": "> ZenMux 渠道（2026-08-15 新增）：模型 slug 用「供应商/模型名」格式——\n> 图片 `openai/gpt-image-2`（GPT 模型总是返回 b64）、视频\n> `bytedance/doubao-seedance-2.0`（原生协议，480p–1080p，支持图生视频\n> `params.image` → first_frame，可返回 last_frame 图）、TTS\n> `google/gemini-3.1-flash-tts-preview`（默认 PCM，自动封装为 WAV 便于播放）。\n> Key 在 https://zenmux.ai/platform/pay-as-you-go 充值并创建（PAYG 按量付费）。\n> 更多模型 slug 见 https://zenmux.ai/models。"
+    },
+    {
+      "section": "配置渠道",
+      "text": "> xAI（Grok Imagine）渠道：模型 `grok-imagine-image-2.0`（图片生成/编辑）、\n> `grok-imagine-video-1.5`（视频生成/编辑/扩展）。渠道页面可生成/编辑图片、\n> 生成视频；**编辑与扩展**（需输入素材）由 agent 工具驱动：\n> `media_generate(channel:'xai', modality:'image'|'video', prompt, params:{action:'edit'|'extend', image|video: '<http(s) url 或 data: URI>'})`。\n> 视频为异步任务，`media_status` 可查询进度；结果含 xAI 用量（`cost_in_usd_ticks`）。\n>\n> **独立插件抽取路径**（dsh-xai 规划）：xAI 适配器是模块级工厂\n> `createXaiAdapter({req, sleep, log, collect})`（`lib/adapters.mjs` 顶部），\n> 不依赖 Cordis 上下文——未来需要专属控制台（用量看板/编辑工作台）时，\n> 直接 `import { createXaiAdapter }` 复用，UI 与任务队列按需自建。"
+    },
+    {
+      "section": "配置渠道",
+      "text": "> 免费验证路径（2026-08-15 实测全通）：Pollinations 文生图 + Google TTS 语音，\n> 零注册零 Key；Cloudflare/ElevenLabs 免费层需注册。视频生成暂无免费 API，\n> 可选智谱 CogVideoX / MiniMax / 即梦（每日 66 积分）或本地 ComfyUI。"
+    },
+    {
+      "section": "HTTP API（同源 `/multimedia`）",
+      "text": "- `GET  /multimedia/channels` — 渠道列表（Key 掩码）\n- `PUT  /multimedia/channels` `{id, patch{enabled|label|baseUrl|apiKey|voice|extra}}`\n- `POST /multimedia/channels` / `DELETE /multimedia/channels?id=`\n- `POST /multimedia/test` `{channelId}` — 连通性/鉴权测试\n- `GET  /multimedia/models?channelId=&modality=` — 模型/音色预设\n- `POST /multimedia/generate` `{channelId, modality, prompt, model, params}`\n- `GET  /multimedia/tasks[?limit=&modality=&status=&channelId=]`\n- `GET  /multimedia/tasks/:id` / `DELETE /multimedia/tasks/:id`\n- `POST /multimedia/cancel` `{jobId}`\n- `GET  /multimedia/file/:jobId/:idx` — 产物流式下载\n- `GET  /multimedia/export?jobId=&idx=&destPath=` — 复制产物到目录"
+    },
+    {
+      "section": "Agent 工具",
+      "text": "```\nmedia_generate(channel?, modality, prompt, params?, model?, run_in_background?)\nmedia_list(limit?, modality?, status?)\nmedia_status(jobId)\nmedia_export(jobId, outputIndex?, destPath?)\n\n产物默认落在 `~/.dsh/multimedia/results/<jobId>/`，任务快照 `jobs.json`。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\nnode test/run.mjs     # host 侧冒烟测试（core + adapters，fake fetch）\nnode scripts/build.mjs # client 构建（esbuild，CSS Module 内联）\n```\n\n- client 产物由 web 直接 serve 源文件：改 `src/client` 后重建 + 刷新页面即可；\n- host 代码（index.mjs / lib）改动需重启 dsh web。\n- 安全：产物 URL 可能含公开签名链接，`/multimedia/file` 走本地缓存流，\n  不把提供商链接透给客户端页面之外的消费方。"
+    }
+  ],
+  "skipped": []
+}

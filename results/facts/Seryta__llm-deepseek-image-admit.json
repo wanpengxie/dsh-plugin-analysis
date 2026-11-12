@@ -1,0 +1,128 @@
+{
+  "repo": "Seryta/llm-deepseek-image-admit",
+  "commit": "a029e2c33141c76035608902f4d6111b2091742f",
+  "extracted_at": "2026-11-11T14:34:27.087342+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 17876,
+    "lines_by_language": {
+      "JSON": 34,
+      "JavaScript": 235,
+      "Markdown": 71,
+      "Other": 84,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "diff-upstream.mjs",
+      "dsh.plugin.json",
+      "index.js",
+      "package.json",
+      "upstream-baseline.txt"
+    ]
+  },
+  "manifest": {
+    "name": "llm-deepseek-image-admit",
+    "description": "DSH 插件:接管 DeepSeek 官方 provider 路由并补 image 输入模态声明,让图片消息通过 apiproxy 准入预检(实际图片由 image-bridge 等插件在 agent/pre-step 转成文字)",
+    "version": "0.1.0",
+    "license": "MIT",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js"
+    },
+    "files": [
+      "index.js",
+      "upstream-baseline.txt",
+      "diff-upstream.mjs",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 禁用官方 llm-deepseek 行,由本插件接管同一 provider 路由\n- id: llm-deepseek\n  disabled: true\n\n- insert:\n    - id: llm-deepseek-image-admit\n      name: 'llm-deepseek-image-admit'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_NPM_ROOT",
+      "kind": "env",
+      "where": "diff-upstream.mjs:26"
+    },
+    {
+      "name": "DSH_NPM_ROOT",
+      "kind": "env",
+      "where": "index.js:31"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-14T02:12:43Z",
+    "created_at": "2026-08-14T02:12:38Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "llm-deepseek-image-admit — DeepSeek 图片准入",
+      "text": "DSH 插件:接管 DeepSeek 官方 provider 路由,给模型元数据补 `image` 输入模态\n声明,让图片消息通过 apiproxy 的准入预检。图片真正进入 agent 循环后由\n[image-bridge](https://github.com/Seryta/dsh-image-bridge)(或同类插件)在\n`agent/pre-step` 转成文字——**DeepSeek API 永远不会收到图片**。"
+    },
+    {
+      "section": "为什么存在",
+      "text": "DeepSeek 官方模型声明 `inputModalities: ['text']`,apiproxy 在图片消息进入\nagent 循环前按此拒绝(`MODEL_DOES_NOT_SUPPORT_IMAGES`)。harness 的三处图片\n门禁(发送预检 / 切换模型检查 / `read_image` 工具)全部由\n`adapter.resolveModel` 返回的 `inputModalities` 驱动,因此**只包装\n`resolveModel` 即完整解锁**,无需改 `listModels` 或其他面。"
+    },
+    {
+      "section": "方案",
+      "text": "- 禁用官方 `@deepseek-ai/dsh-llm-deepseek` 行(cordis.patch.yml 已带),\n  由本插件接管同一 provider 路由 `deepseek-official`——**对用户透明**,\n  模型选择器不变;\n- 本插件 = 官方 apply 逻辑的照抄(同一配置面 / settings 集成 / 凭证解析),\n  唯一差异:`resolveModel` 返回 `{ ...info, inputModalities: ['text', 'image'] }`;\n- 直接 import dsh 安装树里已构建的官方产物,零 pnpm / 零构建。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile web add github:Seryta/llm-deepseek-image-admit\n```\n\n安装后重启 `dsh web`。\n\n**安装树位置**:默认按 `~/.npm-global/lib/node_modules/@deepseek-ai/dsh`\n推导;dsh 装在其他位置时设置环境变量 `DSH_NPM_ROOT`(dsh 安装根,\n其下 `node_modules/@deepseek-ai/...`)。"
+    },
+    {
+      "section": "上游漂移与检测",
+      "text": "本插件照抄官方 apply glue(见 `upstream-baseline.txt` 基线快照)。升级 dsh 后\n运行漂移检测:\n\n```sh\nnode diff-upstream.mjs\n```\n\n脚本核对三件事:① `DeepSeekAdapter / resolveAdapterOptions / Config` 三个\nimport 符号仍存在;② `resolveModel(provider, model, signal)` 签名未变;\n③ 基线关键 apply 片段仍在官方产物中。任一不满足则非零退出,按输出提示\n更新本插件或基线。缺省官方产物路径按 homedir 推导,可用 `DSH_NPM_ROOT`\n覆盖,或把官方产物路径作为第一个参数传入。"
+    },
+    {
+      "section": "与同类解法的差异",
+      "text": "| 项目 | 暴露方式 | 本插件的取舍 |\n|---|---|---|\n| [dsh-vision-proxy](https://github.com/Flyvhidbwo/dsh-vision-proxy) | 注册新 provider route,需手动切换模型 | 本插件接管官方路由,对用户**零切换透明** |\n| [modlens](https://github.com/liustack/modlens) | 生成模型变体入口 | 本插件不新增模型入口 |\n\n取舍代价:照抄官方 apply glue 有升级漂移面,由 `diff-upstream.mjs` 兜底;\n若官方大改配置面需同步本插件。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 本插件**只放行图片、不转录图片**;不搭配 image-bridge 等 pre-step 转录\n  插件时,图片会带着原始图片块到达 DeepSeek 适配器被 API 拒绝。\n- 依赖官方包产物路径布局(`node_modules/@deepseek-ai/dsh-llm-deepseek` 等);\n  dsh 改变安装布局时用 `DSH_NPM_ROOT` 适配。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,185 @@
+{
+  "repo": "pisceslailai/dsh-delete-risk-guard",
+  "commit": "3f289cfd71be3f8fa129c7edf9ef05383008f5f6",
+  "extracted_at": "2026-11-12T02:45:02.359303+00:00",
+  "tree": {
+    "files": 20,
+    "bytes": 100788,
+    "lines_by_language": {
+      "JSON": 47,
+      "JavaScript": 2207,
+      "Markdown": 238,
+      "Other": 50,
+      "YAML": 47
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "NOTES.zh-CN.md",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "lib/analyze.js",
+      "lib/assess.js",
+      "lib/audit-log.js",
+      "lib/config.js",
+      "lib/decide.js",
+      "lib/path-utils.js",
+      "lib/report.js",
+      "lib/scan.js",
+      "lib/tokenize.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/guard.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@pisceslailai/dsh-delete-risk-guard",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "Audits every tool call that deletes files under protected user directories and asks the user before it runs.",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "safety",
+      "guardrail",
+      "delete"
+    ],
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "NOTES.zh-CN.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Delete Risk Guard — inserts one Host row into the profile.\n# The config restates every field the guard reads; omit a field to take its\n# documented default.\n#\n# Tiers: the home directory prompts for any deletion; temporary and regenerable\n# paths are recorded without a prompt. To cover another drive or a repository\n# tree with a looser threshold, add it under `protectRoots`, for example:\n#\n#   - path: 'D:\\'\n#     askFromRisk: high\n#\n- insert:\n    - id: delete-risk-guard\n      name: '@pisceslailai/dsh-delete-risk-guard'\n      config:\n        protectRoots:\n          - path: '~'\n            askFromRisk: low\n        silentRoots:\n          - '%TEMP%'\n        silentRebuildable: true\n        protectedNames:\n          - '.dsh'\n          - '.pi'\n        sensitiveNames:\n          - 'AppData'\n          - 'Documents'\n          - 'Desktop'\n          - 'Downloads'\n          - 'OneDrive'\n          - 'projects'\n          - '.ssh'\n          - '.codex'\n          - '.config'\n          - '.claude'\n          - '.vscode'\n          - '.git'\n        askFromRisk: low\n        maxScanEntries: 5000\n        scanBudgetMs: 800\n        auditLog: false\n        auditAllDeletes: true\n        auditLogPath: '%LOCALAPPDATA%\\dsh-delete-risk-guard\\audit.jsonl'\n        unknownTargetPolicy: auto\n# The audit log is off by default here: it records deletions but cannot restore\n# anything, and prompted decisions already persist as the session's\n# approval/asked + approval/decided events. Set `auditLog: true` to turn it on.\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-11-05T14:45:56Z",
+    "created_at": "2026-11-05T14:45:17Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "lib/analyze.js",
+    "lib/assess.js",
+    "lib/audit-log.js",
+    "lib/config.js",
+    "lib/decide.js",
+    "lib/path-utils.js",
+    "lib/report.js",
+    "lib/scan.js",
+    "lib/tokenize.js"
+  ],
+  "readme": [
+    {
+      "section": "Delete Risk Guard",
+      "text": "> 中文说明与发布备注：[NOTES.zh-CN.md](NOTES.zh-CN.md)\n\nA Host-only DeepSeek Harness bundle. Every tool call that would delete files\nunder a protected directory is audited before it runs and surfaced to the user\nas an approval prompt."
+    },
+    {
+      "section": "What it does",
+      "text": "The guard listens on `tools/pre-execute`. It analyzes the call's arguments,\nextracts deletion intents, resolves their targets against the protection roots,\nscans each target for file count and size, and rates the deletion:\n\n| Level | Example |\n|---|---|\n| `critical` | the root itself, a parent of the root, a recursive delete of `.dsh`/`.pi`, or a wildcard clear |\n| `high` | a recursive delete of another directory, or a single protected file |\n| `medium` | a single file elsewhere under the root |"
+    },
+    {
+      "section": "What it does",
+      "text": "Anything at or above `askFromRisk` (default `low`, so every deletion under the\nroot) becomes an `ask` decision. Allow runs the call once; reject leaves the\nfiles untouched."
+    },
+    {
+      "section": "The audit opinion",
+      "text": "The approval card carries a decision, not just the command. Its single text\nblock is ordered the way a decision is made:"
+    },
+    {
+      "section": "The audit opinion",
+      "text": "| Section | Content |\n|---|---|\n| verdict | `⛔ 建议拒绝` / `⚠️ 谨慎：建议先备份再决定` / `✅ 影响有限，核对后可允许` / `❓ 无法判定，建议拒绝` |\n| 对象 | what the target actually is: DSH 配置与会话根目录 / DSH 历史会话 / profile 配置 / .pi 配置 / 个人文档 / 构建产物/缓存 / 单个文件 … |\n| 影响 | what would be lost, and whether it is recoverable; irreversible targets say 不进回收站，无法撤销 |\n| 范围 | file count, size, truncation, wildcard, recursion, extra targets |\n| 建议 | the safer alternative for this verdict (back up first, narrow the target, retry with an absolute path) |\n| 核对 | the two questions worth answering before clicking Allow |\n| 命令 | the command, clipped |"
+    },
+    {
+      "section": "The audit opinion",
+      "text": "- a protected path, its parent, or a wildcard clear → `建议拒绝`;\n- a recursive delete of an ordinary directory → `谨慎：建议先备份再决定`;\n- a single file or a directory whose content is regenerable (`node_modules`,\n  `dist`, `build`, `tmp`, …) → allow, with the impact stating the rebuild cost;\n- a target that does not exist → allow, because nothing would change;\n- a deletion whose target cannot be resolved → `无法判定，建议拒绝`, and the\n  advice is to retry with an absolute path."
+    },
+    {
+      "section": "The audit opinion",
+      "text": "Classification is path-based. Anything below `.dsh` names its section\n(`sessions`, `profiles`, `storages`, `attachments`, `plugins`), so deleting\n`.dsh/sessions` says \"所有历史会话记录\" instead of repeating the generic warning.\n\nCovered command surfaces:"
+    },
+    {
+      "section": "The audit opinion",
+      "text": "- shell tools whose arguments carry `command`/`cmd` (the shipped `pwsh` tool):\n  `Remove-Item`, `rm`, `ri`, `del`, `erase`, `rmdir`, `rd`, `unlink`,\n  `cmd /c …`, pipeline forms such as `Get-ChildItem X | Remove-Item`,\n  `[IO.File|Directory]::Delete(...)`, `git clean -f…`, and `robocopy /MIR`;\n- file tools whose name declares a deletion (`delete_file`, `remove_path`, …)\n  and whose arguments name a path."
+    },
+    {
+      "section": "The audit opinion",
+      "text": "Placeholders are expanded (`%USERPROFILE%`, `$env:USERPROFILE`, `$HOME`, `~`),\nrelative paths resolve against the call's `workdir` or the process directory,\nand `cd`/`Set-Location` earlier in the same command updates the base."
+    },
+    {
+      "section": "Behavior under an approval policy of `never`",
+      "text": "The approval service short-circuits `ask` to `rejected` when the session policy\nis `never`, so the guard checks the session's recorded policy first and returns\nan explicit denial carrying the same audit instead of a silent block. Switch the\npermission preset to one with `approval: ask` to get interactive prompts."
+    },
+    {
+      "section": "Tiers",
+      "text": "A protection root carries its own prompt threshold, so coverage can be wide\nwithout prompting for every routine cleanup:\n\n```yaml\nprotectRoots:\n  - path: '~'          # home: every deletion prompts\n    askFromRisk: low\n  - path: 'D:\\'        # other drives/repos: only recursive deletes, wildcard"
+    },
+    {
+      "section": "Tiers",
+      "text": "A target is recorded without a prompt when it lies inside a `silentRoots` entry\nor when its classification is regenerable (`node_modules`, `dist`, `build`,\n`tmp`, …). The silent rule never applies to a *parent* of a silent root, so\ndeleting `AppData` still prompts even though `AppData\\Local\\Temp` does not.\n`auditAllDeletes` writes every judged deletion — including out-of-scope and\nsilent ones — to the audit trail, so \"covered but quiet\" is still reviewable."
+    },
+    {
+      "section": "Tiers",
+      "text": "The deployed profile sets `auditLog: false`. The log records deletions but\ncannot restore anything, and a prompted decision already persists in the\nsession as its `approval/asked` + `approval/decided` pair, so the extra file\nbought little."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `protectRoots` | `['~']` | `{ path, askFromRisk }` entries (a bare string uses `askFromRisk`) |\n| `askFromRisk` | `low` | default threshold for roots that do not set one |\n| `silentRoots` | `['%TEMP%']` | paths recorded without a prompt |\n| `silentRebuildable` | `true` | record regenerable directories without a prompt |\n| `auditAllDeletes` | `true` | log every judged deletion, not only the prompted ones |\n| `protectedNames` | `['.dsh', '.pi']` | top-level names under a root rated `critical` when cleared |\n| `sensitiveNames` | `AppData`, `Documents`, …, `.git` | names rated above an ordinary directory |\n| `maxScanEntries` | `5000` | file-count cap per audit |\n| `scanBudgetMs` | `800` | wall-clock cap per audit |\n| `auditLog` | `true` | append a JSON line per judged deletion |\n| `auditLogPath` | `%LOCALAPPDATA%\\dsh-delete-risk-guard\\audit.jsonl` | audit trail location |\n| `unknownTargetPolicy` | `auto` | `ask` for unresolvable targets that mention a protected location, `ignore`, or `always` |"
+    },
+    {
+      "section": "Configuration",
+      "text": "Unknown fields, wrong types, an invalid per-root threshold, and an empty\n`protectRoots` throw at plugin load."
+    },
+    {
+      "section": "Known limits",
+      "text": "- It is a command-argument guard, not a filesystem filter: deletions performed\n  inside a script file, an opaque tool, or a program that rewrites paths at\n  runtime cannot be inspected, and an unresolvable target is only asked about\n  when the command mentions a protected location (`unknownTargetPolicy: always`\n  makes every unresolved deletion ask).\n- Content truncation (`Clear-Content`, `Set-Content \"\"`, overwriting a file with\n  `write`) is not a deletion and is not audited.\n- The audit log appends without rotation."
+    },
+    {
+      "section": "Files",
+      "text": "```\nindex.js           plugin entry (name/inject/apply)\nlib/analyze.js     deletion-intent and target extraction\nlib/assess.js      risk rating and scanning\nlib/decide.js      tiered decision: prompt / record / ignore"
+    }
+  ],
+  "skipped": []
+}

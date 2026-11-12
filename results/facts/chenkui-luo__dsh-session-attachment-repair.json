@@ -1,0 +1,208 @@
+{
+  "repo": "chenkui-luo/dsh-session-attachment-repair",
+  "commit": "146641d0f454c8f74f8429bce06a61d8387b8602",
+  "extracted_at": "2026-11-11T18:23:02.959147+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 63182,
+    "lines_by_language": {
+      "JSON": 57,
+      "JavaScript": 1072,
+      "Markdown": 301,
+      "Other": 33,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitattributes",
+      "LICENSE",
+      "README.md",
+      "SKILL.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json",
+      "references/storage-and-failure-model.md",
+      "scripts/repair_session.mjs",
+      "tests/run_tests.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-session-attachment-repair",
+    "version": "1.0.0",
+    "description": "Scan and repair DeepSeek Harness sessions whose requests fail because historical attachments are missing from the local attachment store.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "scripts",
+      "references",
+      "tests",
+      "SKILL.md",
+      "README.md",
+      "LICENSE",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "scripts": {
+      "test": "node tests/run_tests.mjs",
+      "self-test": "node scripts/repair_session.mjs self-test"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "dsh-market",
+      "deepseek-harness",
+      "session",
+      "attachment",
+      "repair"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/chenkui-luo/dsh-session-attachment-repair.git"
+    },
+    "homepage": "https://github.com/chenkui-luo/dsh-session-attachment-repair#readme",
+    "bugs": {
+      "url": "https://github.com/chenkui-luo/dsh-session-attachment-repair/issues"
+    },
+    "author": "chenkui-luo",
+    "engines": {
+      "node": ">=22.15"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch: inserts this plugin into a profile's layer stack.\n# Used when the plugin is installed as a profile bundle (`dsh plugin --profile web add`);\n# the same row is what the bundled installer writes into a profile's own patch layer.\n- insert:\n    - id: session-attachment-repair\n      name: 'dsh-plugin-session-attachment-repair'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/repair_session.mjs:36"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "dsh.invalid",
+      "url": "http://dsh.invalid",
+      "where": "lib/index.js:82"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/chenkui-luo/dsh-session-attachment-repair.git",
+      "where": "package.json:46"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/chenkui-luo/dsh-session-attachment-repair#readme",
+      "where": "package.json:48"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/chenkui-luo/dsh-session-attachment-repair/issues",
+      "where": "package.json:50"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-27T05:26:59Z",
+    "created_at": "2026-10-27T03:53:47Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json",
+    "scripts/repair_session.mjs",
+    "tests/run_tests.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-session-attachment-repair",
+      "text": "修复 DSH（DeepSeek Harness）会话\"能打开、历史也能看，但每次发消息都失败\"的一类特定故障：会话历史引用过的图片或文件附件，其内容对象已经从本地附件库消失。"
+    },
+    {
+      "section": "有什么用",
+      "text": "每次发送消息都要重放整段历史。历史里只要有一个附件的对象文件不在了，请求就会在准备阶段中断——而失败文案往往只是兜底的 `... API stream from ... failed`，看起来像网络问题；换成别的模型通道，才会露出真实原因 `Attachment object is missing.`。\n\n手工处理这件事容易踩三个坑，直接烧掉几个小时：\n\n- **只改文件不重启**：服务端把已打开的会话留在内存里，改完不生效，复验得到假阴性；\n- **改错日志格式**：会话日志是多帧 zstd 首尾相接，一次性解码只拿到第一帧，会误判\"文件里只有几行\"；\n- **没有备份就覆盖**：会话日志是不可逆数据。\n\n这个 Skill 把流程固定下来：先证明附件确实缺失，再备份、替换悬空引用、逐节点校验，最后要求重启服务端复验。"
+    },
+    {
+      "section": "你会得到什么",
+      "text": "- 一份可审计的判断：哪些会话受影响、悬空附件多少、图片与文件各几个；\n- 修复后的会话日志 + 同位备份（`session.v3.jsonl.zstd.bak-<时间戳>`）；\n- 逐节点校验报告：确认改动只发生在\"悬空附件 → 文本占位\"上，其余内容一字未动；\n- 一条明确的下一步：重启服务端后复验，或回滚。"
+    },
+    {
+      "section": "让 Agent 安装（推荐）",
+      "text": "把这个地址交给你的 Agent：\n\n```text\nhttps://github.com/chenkui-luo/dsh-session-attachment-repair\n```\n\n可以直接说一句：\n\n```text\n请帮我安装这个 Skill：https://github.com/chenkui-luo/dsh-session-attachment-repair\n```"
+    },
+    {
+      "section": "手动安装",
+      "text": "1. 克隆或下载本仓库；\n2. 把整个目录放到宿主的 skills 根目录（例如用户主目录下的 `.dsh/skills`）；\n3. 目录名需与 `SKILL.md` 里的 `name` 一致。\n\n如果你的宿主提供 skills CLI，通常也可以 `npx skills add chenkui-luo/dsh-session-attachment-repair`；本仓库在发布环境里没能联网实测这条命令，所以不把它作为主入口。"
+    },
+    {
+      "section": "配置",
+      "text": "无需额外配置，也不需要密钥或账号。\n\nDSH 主目录默认取用户主目录下的 `.dsh`，可用环境变量 `DSH_HOME` 覆盖，或在命令里用 `--home <目录>` 指定。"
+    },
+    {
+      "section": "使用",
+      "text": "自然语言触发即可，例如：\n\n- 「这个会话发不出消息了，帮我看看是不是附件丢了」\n- 「把所有发不出消息的会话排查一遍」\n\n主要入口：\n\n```text\nnode scripts/repair_session.mjs scan                    # 扫描受影响的会话\nnode scripts/repair_session.mjs verify --session <id>   # 单个会话体检\nnode scripts/repair_session.mjs repair --session <id>   # 生成修复副本（不写入）\nnode scripts/repair_session.mjs repair --session <id> --apply   # 备份并写入\n\n`verify` 在发现悬空附件时以退出码 1 结束，便于脚本判断。"
+    },
+    {
+      "section": "以 DSH 插件方式使用",
+      "text": "本仓库同时是一个 DSH 插件包（`dsh-plugin-session-attachment-repair`）。装上之后，「设置 → 会话附件修复」里就能扫描、预览、备份并写入，不用开终端：\n\n```text\ndsh plugin --profile web add github:chenkui-luo/dsh-session-attachment-repair\n```\n\n刷新页面一次，然后打开「设置 → 会话附件修复」。\n\n没有 dsh CLI 时，把仓库放进 `<profile>/node_modules/dsh-plugin-session-attachment-repair`，并在 `<profile>/cordis.patch.yml` 加一行：\n\n```yaml\n- insert:\n    - id: session-attachment-repair\n      name: 'dsh-plugin-session-attachment-repair'\n```"
+    },
+    {
+      "section": "以 DSH 插件方式使用",
+      "text": "插件只做转发：调用本仓库自己的 `scripts/repair_session.mjs`（`scan` / `repair` / `verify` / `restore`），把报告原样显示出来。写入与还原都要二次确认，备份由脚本负责；插件不重复实现修复逻辑，因此和 Skill 不会分叉。\n\n本插件已登记到 [dsh-marketplace](https://github.com/chenkui-luo/dsh-marketplace) 的注册表（`registry/plugins/dsh-session-attachment-repair/plugin.json`）。"
+    },
+    {
+      "section": "兼容性与依赖",
+      "text": "| 维度 | 状态 |\n| --- | --- |\n| 宿主 | DSH 专用：依赖其会话日志与附件库格式 |\n| 插件形态 | 需要宿主提供 `webServer` 与 `connection` 服务；客户端走 `settings.section` 插槽 |\n| Windows | 已实际执行通过（扫描、修复、校验、备份、还原、自检、回归测试） |\n| macOS / Linux | 未验证；脚本未使用平台专属命令，路径来自 `os.homedir()` 与参数 |\n| Node.js | 需要 ≥ 22.15（`zlib` 的 zstd 同步编解码），缺失会直接报错退出 |\n| 网络 | 不需要 |\n| 宿主能力 | 需要会话目录的读写权限；重启服务端由用户亲自完成 |\n\nDSH 升级后若会话日志格式或附件库布局变化，脚本的帧解析与路径约定需要同步更新。"
+    },
+    {
+      "section": "数据与适用边界",
+      "text": "- **数据不出本机**：不联网、不上传、不调用模型。\n- **会修改会话日志**：不可逆操作，脚本强制先备份并比对哈希；写入后与副本再比对一次。\n- **会改变历史显示**：被替换的附件在界面里显示为一行 `[图片已不可用：…]` 占位说明。\n- **不能恢复图片内容**：附件库按内容哈希、字节数与宽高校验，原图拷回去会被判定为损坏。\n- **不适用**：网络或代理问题、鉴权与余额、限流、上下文超长、模型配置错误，以及\"对象存在但元数据不匹配\"的损坏情况。\n\n相邻能力：如果失败来自 DSH 版本升级带来的破坏性变更，走升级流程，不要套用本 Skill。"
+    },
+    {
+      "section": "输出",
+      "text": "- 扫描/体检：终端摘要，加 `--json` 输出结构化结果；\n- 修复：临时目录中的修复副本；`--apply` 时生成同位备份并写回；\n- 回滚：写回备份，并把回滚前状态另存一份。"
+    },
+    {
+      "section": "测试",
+      "text": "```text\nnode scripts/repair_session.mjs self-test   # 脚本内置自检\nnode tests/run_tests.mjs                    # 19 项回归测试（临时目录 + 合成会话）\n```\n\n静态校验用 oil-skill-creator 的 `validate_skill.py`，以 `--public --strict --weak-model` 运行；本 Skill 明确依赖宿主，因此不启用 `--universal`。\n\n真实效果验证：修复后重启服务端并能成功发出一条消息，才算通过。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

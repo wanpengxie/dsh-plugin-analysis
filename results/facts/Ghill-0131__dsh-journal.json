@@ -1,0 +1,165 @@
+{
+  "repo": "Ghill-0131/dsh-journal",
+  "commit": "081f4f250f5e926984612d39b497c60b2984e0ab",
+  "extracted_at": "2026-11-11T10:21:02.135313+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 24933,
+    "lines_by_language": {
+      "JSON": 40,
+      "JavaScript": 384,
+      "Markdown": 116,
+      "Other": 27,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "_selftest.mjs",
+      "cordis.patch.yml",
+      "dsh/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-journal",
+    "version": "0.1.0",
+    "description": "Graded long-term memory as a first-class DeepSeek Harness tool: entries carry a level, an expiry and a review date, so the right things persist for the right amount of time.",
+    "type": "module",
+    "main": "dsh/index.js",
+    "exports": {
+      ".": "./dsh/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "dsh",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node _selftest.mjs"
+    },
+    "license": "MIT",
+    "engines": {
+      "node": ">=22.13"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "journal",
+      "memory",
+      "long-term-memory"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Ghill-0131/dsh-journal.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-journal bundle layer: one row mounting the `journal` tool over the\n# graded long-term log. The store lives outside the profile on D: on purpose -\n# every profile on this machine shares it, and it must never land in whatever\n# directory the harness happened to start in.\n- insert:\n    - id: journal\n      name: 'dsh-journal'\n      config:\n        root: 'D:/dsh-data/journal'\n"
+    }
+  ],
+  "entries": [
+    "dsh/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "JOURNAL_ROOT",
+      "kind": "env",
+      "where": "dsh/index.js:140"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ghill-0131/dsh-journal.git",
+      "where": "package.json:38"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-11-04T14:34:15Z",
+    "created_at": "2026-11-04T14:11:55Z"
+  },
+  "runtime_files": [
+    "_selftest.mjs",
+    "cordis.patch.yml",
+    "dsh/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-journal",
+      "text": "A DeepSeek Harness plugin that turns a plain JSONL file into a first-class `journal` tool with graded memory: entries carry a level, an expiry, and a review date, so a long-lived assistant can remember the right things for the right amount of time — and let the rest go on its own."
+    },
+    {
+      "section": "Why memory needs levels",
+      "text": "A single undifferentiated memory file fails in two directions at once. Keep everything and the useful part drowns; keep only recent things and the relationship and the standing preferences — the parts that make an assistant feel like the same person — are exactly what gets dropped.\n\nSo every entry gets one of four levels, and the level decides its lifetime:"
+    },
+    {
+      "section": "Why memory needs levels",
+      "text": "| level | meaning | lifetime |\n| --- | --- | --- |\n| `S` | relationship, emotion, shared experience, promises | never auto-deleted; pinned |\n| `A` | durable facts, preferences, key decisions | 365 days |\n| `B` | project context, task progress | 60 days |\n| `C` | transient details, one-off operations | 7 days |\n\n`prune` soft-deletes expired rows into `archive/`; nothing is ever physically removed by the tool. Pinned rows are exempt."
+    },
+    {
+      "section": "Why memory needs levels",
+      "text": "The useful question when writing is not \"is this important\" but **\"which of these is this, a skeleton or a file\"** — the rules for how someone talks to you belong in `S`, the port number you debugged yesterday belongs in `B`, and a handoff note for the next session belongs in `A` because it only needs to survive until you read it."
+    },
+    {
+      "section": "The tool",
+      "text": "| action | does |\n| --- | --- |\n| `add` | write one entry (`level`, `title`, `text` required) |\n| `list` | list entries, optionally by level / status |\n| `search` | substring search across title, text and tags |\n| `digest` | the `S` + `A` summary — what a fresh session should read first |\n| `stats` | counts per level, size, expired-but-present |\n| `review` | push one entry's expiry out |\n| `prune` | soft-delete everything past its expiry |\n| `render` | rewrite `JOURNAL.md` as a readable digest |"
+    },
+    {
+      "section": "The tool",
+      "text": "Typical use in an agent loop:\n\n```\njournal action=digest                          # at the start of every new conversation\njournal action=add level=S title=\"...\" text=\"...\"\njournal action=search query=备考\njournal action=prune dryRun=true               # see what would expire, change nothing"
+    },
+    {
+      "section": "Storage",
+      "text": "One JSON object per line at `<root>/journal.jsonl`. Writes go through a temp file and a rename, so a crash mid-write cannot tear the store. A torn trailing line on read is skipped rather than failing the call.\n\nRow shape:\n\n```json\n{\n  \"id\": \"j-20261104-140902-479d\",\n  \"ts\": \"2026-11-04T14:09:02+00:00\",\n  \"level\": \"B\",\n\nThe format is deliberately plain. Any script that can read JSONL can read this, and any script that can write one line can add to it."
+    },
+    {
+      "section": "Install",
+      "text": "A DeepSeek Harness plugin only receives the host packages (`@deepseek-ai/*`) when it is installed as a **link**. An ordinary npm dependency fails to import and is silently skipped.\n\n```powershell"
+    },
+    {
+      "section": "2) real junction (a cross-drive symlink can be created broken, silently)",
+      "text": "New-Item -ItemType Junction `\n  -Path   \"$env:USERPROFILE\\.dsh\\profiles\\desktop\\node_modules\\dsh-journal\" `\n  -Target \"D:\\DSH-Plugins\\dsh-journal\\0.1.0\""
+    },
+    {
+      "section": "4) restart the harness",
+      "text": "```\n\nConfiguration (in the bundle layer `cordis.patch.yml`):\n\n| key | default | meaning |\n| --- | --- | --- |\n| `root` | `D:/dsh-data/journal` (Windows) / `/dsh-data/journal` | where `journal.jsonl` lives |\n| `toolName` | `journal` | the tool's name in the model's toolset |\n\n`JOURNAL_ROOT` overrides `root` from the environment."
+    },
+    {
+      "section": "Test",
+      "text": "```bash\nnode _selftest.mjs\n```\n\nRuns against a temporary store: add at each level, list, search, digest, stats, prune dry-run, render, review, and the two validation paths (bad level, empty title are both rejected)."
+    },
+    {
+      "section": "Note on what it is not",
+      "text": "This is not a vector store and does not do retrieval by similarity. It is a small, inspectable, hand-curated log — closer to a notebook than a database. The bet is that an assistant which writes down the right few hundred lines, and forgets the rest on schedule, beats one that hoards everything and searches it."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

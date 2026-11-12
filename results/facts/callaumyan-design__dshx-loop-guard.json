@@ -1,0 +1,160 @@
+{
+  "repo": "callaumyan-design/dshx-loop-guard",
+  "commit": "a67457fb1234ce14076dbea9950a2361bb2d9b23",
+  "extracted_at": "2026-11-11T18:08:26.246818+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 29702,
+    "lines_by_language": {
+      "JSON": 45,
+      "JavaScript": 497,
+      "Markdown": 45,
+      "Other": 26,
+      "YAML": 12
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test-resolve.mjs",
+      "test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dshx-loop-guard",
+    "version": "1.0.0",
+    "description": "Detect and stop repeated identical tool calls (agent loops), mainly for small local models.",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis"
+    ],
+    "author": "callaumyan-design",
+    "license": "MIT",
+    "homepage": "https://github.com/callaumyan-design/dshx-loop-guard#readme",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/callaumyan-design/dshx-loop-guard.git"
+    },
+    "bugs": {
+      "url": "https://github.com/callaumyan-design/dshx-loop-guard/issues"
+    },
+    "type": "module",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "index.js"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "marketplace": {
+        "profiles": [
+          "headless",
+          "web",
+          "desktop"
+        ],
+        "requiresBuildApproval": false,
+        "requiresRestart": true,
+        "manualSteps": false
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dshx-loop-guard 随包自带的默认配置（DSH 加载这个 bundle 时插入）。\n# 实际生效的配置以 profile 里的 cordis.patch.yml 为准，那里有同名条目时会覆盖这里。\n- insert:\n    - id: dshx-loop-guard\n      name: dshx-loop-guard\n      config:\n        providers: [local]   # 只对这些 provider 生效；写成 [] 表示对所有模型生效\n        warnAt: 3            # 同一调用第几次得到相同结果时，在结果后附加提醒\n        stopAt: 5            # 同一调用第几次（结果都相同）时直接拒绝执行\n        hardLimit: 12        # 同一调用一轮内最多执行几次（不管结果是否相同）\n        maxCallsPerTurn: 0   # 一轮内工具调用总数上限，0 = 不限\n        maxDenials: 3        # 一轮内被拒绝几次后直接中止本轮\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "SCHEMASTERY_PATH",
+      "kind": "env",
+      "where": "test-resolve.mjs:10"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/callaumyan-design/dshx-loop-guard#readme",
+      "where": "package.json:13"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/callaumyan-design/dshx-loop-guard.git",
+      "where": "package.json:16"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/callaumyan-design/dshx-loop-guard/issues",
+      "where": "package.json:19"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-19T16:43:49Z",
+    "created_at": "2026-10-19T16:43:42Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dshx-loop-guard",
+      "text": "> Detects and stops agent loops — the same tool call returning the same result again and again — mainly for small local models.\n\n防止 agent（主要是本地小模型）陷入「反复调用同一个工具」的死循环。只挂 DSH 公开的 `agent/request`、`tools/pre-execute`、`tools/post-execute` 事件，不改 agent 主循环。"
+    },
+    {
+      "section": "判定规则（按 agent、按轮计数）",
+      "text": "1. 调用指纹 = 工具名 + 参数（键顺序无关）；\n2. 同一调用连续得到**完全相同**的结果：第 `warnAt` 次在结果后附加提醒，第 `stopAt` 次直接拒绝；\n3. 同一调用一轮内执行满 `hardLimit` 次（不论结果）后拒绝；\n4. 一轮工具调用总数超过 `maxCallsPerTurn` 时拒绝（0 = 不限）；\n5. 一轮被拒绝 `maxDenials` 次后中止本轮。\n\n改完文件再跑同一条测试命令不算循环：结果变了，计数就清零。"
+    },
+    {
+      "section": "配置（`cordis.patch.yml`）",
+      "text": "| 字段 | 默认 | 说明 |\n|---|---|---|\n| `providers` | `['local']` | 只对这些 provider 生效；空数组 = 所有模型 |\n| `warnAt` | `3` | |\n| `stopAt` | `5` | |\n| `hardLimit` | `12` | |\n| `maxCallsPerTurn` | `0` | |\n| `maxDenials` | `3` | |"
+    },
+    {
+      "section": "安装",
+      "text": "```sh"
+    },
+    {
+      "section": "Web profile",
+      "text": "dsh plugin --profile web add github:callaumyan-design/dshx-loop-guard"
+    },
+    {
+      "section": "Desktop（用 DSH Desktop 自带的 dsh 命令，先从托盘完全退出 Desktop）",
+      "text": "dsh plugin --profile desktop add github:callaumyan-design/dshx-loop-guard\n```\n\n安装后重启 DSH。卸载：`dsh plugin --profile <profile> remove dshx-loop-guard`。"
+    },
+    {
+      "section": "兼容性",
+      "text": "在 DeepSeek Harness 0.2.0-rc.2（desktop / web profile）上开发和使用。纯 JavaScript，无构建步骤，无安装脚本。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

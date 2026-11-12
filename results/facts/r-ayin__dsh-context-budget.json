@@ -1,0 +1,155 @@
+{
+  "repo": "r-ayin/dsh-context-budget",
+  "commit": "1b24adf74903db596202c655cc49a00f43d1fed7",
+  "extracted_at": "2026-11-12T03:23:44.296339+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 50609,
+    "lines_by_language": {
+      "JSON": 68,
+      "Markdown": 106,
+      "Other": 25,
+      "Shell": 7,
+      "TypeScript": 731,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitignore",
+      "DESIGN.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "scripts/build.sh",
+      "src/index.ts",
+      "src/notes.ts",
+      "src/rollover.ts",
+      "src/transcript.ts",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-context-budget",
+    "version": "0.0.1",
+    "description": "Ports the Codex CLI TokenBudget mechanism to dsh: remaining-context awareness, archive rollover, and notes/history retrieval tools for past sessions.",
+    "private": true,
+    "type": "module",
+    "main": "./lib/index.js",
+    "types": "./lib/types/index.d.ts",
+    "files": [
+      "lib"
+    ],
+    "license": "MIT",
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.0.1-rc <2",
+      "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
+      "cordis": ">=4.0.0-rc <5",
+      "schemastery": "^3.18.0"
+    },
+    "devDependencies": {
+      "@types/node": "^24.13.3",
+      "typescript": "^5.9.0"
+    },
+    "scripts": {
+      "build": "bash scripts/build.sh",
+      "typecheck": "tsc -p tsconfig.json --noEmit"
+    },
+    "author": "r-ayin",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/r-ayin/dsh-context-budget.git"
+    },
+    "homepage": "https://github.com/r-ayin/dsh-context-budget#readme",
+    "bugs": {
+      "url": "https://github.com/r-ayin/dsh-context-budget/issues"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness"
+    ],
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch: inserts this plugin into the profile layer stack.\n- insert:\n    - id: dsh-context-budget\n      name: dsh-context-budget\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/r-ayin/dsh-context-budget.git",
+      "where": "package.json:30"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/r-ayin/dsh-context-budget#readme",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/r-ayin/dsh-context-budget/issues",
+      "where": "package.json:34"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@types/node": "^24.13.3",
+      "typescript": "^5.9.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 1,
+    "pushed_at": "2026-10-15T05:30:51Z",
+    "created_at": "2026-10-15T05:30:44Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "src/index.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-context-budget",
+      "text": "移植 OpenAI Codex CLI 的 TokenBudget 上下文机制到 DSH（2026-09-16，源码级对标 codex-rs main 分支）。"
+    },
+    {
+      "section": "对标关系",
+      "text": "| Codex 机制 | 本插件实现 |\n|---|---|\n| 注入 developer 消息 \"You have N tokens left\" | `systemPrompt.context` 预算行（每轮装配渲染进尾部 snapshot，不破坏前缀缓存） |\n| `get_context_remaining` 工具 | `*_remaining` 工具（tokenMeter.measure + 转录派生双路） |\n| 阈值提醒 TokenBudgetReminder | 剩余 ≤30% 时预算行切换为 ⚠ 提醒（早于 DSH 80% 压缩阈值，留出写检查点窗口） |\n| 换窗不摘要 + 同 rollout 新窗口 | DSH 压缩本就是无损 shadow（旧事件永久留在 session.jsonl.zstd）——无需换窗，直接可检索 |\n| `history.*` 检索旧窗口 | `*_history_search` / `*_history_read`（进程内 snapshotEvents 快路径 + zstd 转录解压兜底，CLI 优先解多帧） |\n| `notes.*` 检查点 | `*_notes`（write/read，独立于压缩永久保留；compaction/end 自动落一条 auto 检查点） |"
+    },
+    {
+      "section": "工具（注入后前缀 `_dsh_external_dsh_context_budget_`）",
+      "text": "- `remaining` — 窗口/已用/剩余/压缩次数/转录路径\n- `history_search` — 大小写不敏感子串检索全会话转录（含被压缩 shadow 的旧轮次）\n- `history_read` — 按 seq 范围读事件原文\n- `notes` — action=write/read 跨压缩检查点\n- `new_window` — 模型主动换窗（对标 Codex new_context）：写检查点+置标志（内存+文件双通道），pre-step 边界走 compactIfNeeded('context-overflow') 强制压缩（低于阈值也能换；不用 compactNow 因其要求 agent idle）。v1.3 realm 架构：压缩引擎被 preset 隔离在 isolate realm 内（`isolate: compaction: true`），root 插件解析不到——故 preset 的 compaction 组内追加挂载本插件的 realmRollover 实例（只注册 pre-step 监听，不注册工具/provider），经 ~/.dsh/context-budget/rollover/<sid>.json 标志文件跨 isolate 边界通信；root 侧 stale 看门狗 90s 未消费即落「未消费」笔记指引 handoff\n- `handoff` — 跨会话移交：写 handoff 检查点 + 生成接续 prompt（内嵌旧会话 id 与检索指令），交给 subagent 或新会话；旧会话凭 session_id 参数跨会话可检索"
+    },
+    {
+      "section": "配置（loader config）",
+      "text": "`enabled`(true) / `injectBudgetLine`(true) / `reminderRemainingPct`(30) / `maxSearchHits`(20) / `notesDir`(默认 ~/.dsh/context-budget/notes)"
+    },
+    {
+      "section": "构建（本机无源码 checkout，用 install-mode）",
+      "text": "`bash scripts/build.sh`（依赖链接自 /usr/lib/node_modules/@deepseek-ai/dsh/node_modules，tsc 探测盘上现成 typescript）→ `dev_inject_plugin {dir}` → `dev_reload_package` 热重载。"
+    },
+    {
+      "section": "已验证（2026-09-16）",
+      "text": "- 预算行活体注入（本会话每轮 runtime context 可见，数值与转录 summarizeBudget 一致）\n- 4 工具活体调用通过；history_search 在 24757 事件会话命中第 1 轮旧内容\n- 真实压缩会话（session-0ef7a42c，shadowedRange 8→125873）中被 shadow 的旧轮次可检索命中\n- 缓存无回归：注入前后稳态命中率 ≈100%（预算行在尾部 snapshot，不碰前缀）\n- 单测：summarizeBudget / shadowed 检索 / notes 读写全过"
+    }
+  ],
+  "skipped": []
+}

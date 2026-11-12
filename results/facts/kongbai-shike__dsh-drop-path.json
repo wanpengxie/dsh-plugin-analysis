@@ -1,0 +1,187 @@
+{
+  "repo": "kongbai-shike/dsh-drop-path",
+  "commit": "e2a2297b3bec629f6a18b31e2de69612b83ef4cd",
+  "extracted_at": "2026-11-11T23:00:37.382608+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 36731,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 691,
+      "Markdown": 239,
+      "Other": 35,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "PUBLISHING.md",
+      "README.md",
+      "client/drop-path.js",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "test/dom-harness.mjs",
+      "test/logic.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-drop-path",
+    "version": "1.1.0",
+    "description": "拖入本地文件时，自动把文件在电脑上的绝对路径填入输入框并复制到剪贴板 ｜ Fill a dropped local file's absolute path into the DSH composer",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis-plugin",
+      "drag-drop",
+      "file-path",
+      "electron"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "files": [
+      "lib",
+      "client",
+      "test",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node test/logic.test.mjs"
+    },
+    "engines": {
+      "node": ">=18"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/kongbai-shike/dsh-drop-path.git"
+    },
+    "homepage": "https://github.com/kongbai-shike/dsh-drop-path#readme",
+    "bugs": {
+      "url": "https://github.com/kongbai-shike/dsh-drop-path/issues"
+    },
+    "author": "kongbai-shike (https://github.com/kongbai-shike)",
+    "license": "MIT",
+    "publishConfig": {
+      "access": "public"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch: inserts this plugin into a profile's layer stack.\n- insert:\n    - id: dsh-drop-path\n      name: dsh-drop-path\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/kongbai-shike/dsh-drop-path.git",
+      "where": "package.json:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kongbai-shike/dsh-drop-path#readme",
+      "where": "package.json:39"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kongbai-shike/dsh-drop-path/issues",
+      "where": "package.json:41"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kongbai-shike",
+      "where": "package.json:43"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-11T06:41:07Z",
+    "created_at": "2026-09-11T06:35:52Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-drop-path",
+      "text": "> 拖入本地文件时，自动把文件的**电脑绝对路径**填入输入框，并复制到剪贴板。\n> Drop a local file into DSH and its absolute filesystem path lands in the composer.\n\nDSH 的输入框只接受图片附件，拖其它文件（.txt / .pdf / .zip / 代码……）通常会被拒绝，什么也不会发生。\n本插件接管这类被拒绝的拖放：提取文件在磁盘上的真实路径，写进输入框，顺手复制到剪贴板 ——\n于是可以直接把路径发给模型去读。"
+    },
+    {
+      "section": "原理",
+      "text": "DSH 桌面端 preload 暴露了 `window.__DSH_DESKTOP_FILE_PATH__.getPathForFile(file)`（一个\n`contextBridge` 桥，内部是 Electron 的 `webUtils.getPathForFile`），本插件用它把操作系统拖拽的\n`File` 对象解析成真实路径，例如 `C:\\work\\report.pdf`、`/home/you/report.pdf`。\n\n插件本体是一个 **DSH 服务端 bundle 插件**（cordis 风格 `name / inject / apply`）："
+    },
+    {
+      "section": "原理",
+      "text": "- `ctx.webServer.register` 注册 `/dsh-drop-path/script.js`；\n- `ctx.webServer.tapIndex` 把 `<script defer src=\"/dsh-drop-path/script.js\"></script>` 注入网页 `index`；\n- 注入的脚本在 `window` 捕获阶段监听拖放，把路径写进当前输入框\n  （兼容 `textarea` 与 `contenteditable`，对 React 受控输入走原生 setter + `input` 事件）。"
+    },
+    {
+      "section": "行为模式",
+      "text": "左下角有一个小的「路径拖放」开关，点按钮循环切换或下拉选择，状态存在浏览器 `localStorage`：\n\n| 模式 | 说明 |\n| --- | --- |\n| 自动（默认） | **非图片文件**（含未知类型）→ 填入路径；**纯图片**拖放 → 交回 DSH 当附件处理。 |\n| 总是 | 所有文件的拖放都填入路径（包括图片）。 |\n| 关闭 | 不拦截，恢复 DSH 原行为。 |\n\n控制台排障：\n\n```js\nwindow.__dshDropPath.reset()                        // 强制清掉可能残留的拖拽浮层\nwindow.__dshDropPath.setMode('off'|'auto'|'always') // 直接切模式\nwindow.__dshDropPath.mode()                         // 读当前模式\n```"
+    },
+    {
+      "section": "实现要点：不要和 DSH 自带的拖放浮层打架",
+      "text": "DSH 的 `ComposerAttachments`（`@deepseek-ai/dsh-client-ui-attachment`）在 `document` 上以**冒泡**方式监听\n`dragenter / dragover / dragleave / drop`，`dragenter` 时就 `setDragActive(true)` 弹出「拖入图片」浮层，\n而浮层**只有它自己的 `drop` 处理或 window 的 `dragend` 才会关掉**："
+    },
+    {
+      "section": "实现要点：不要和 DSH 自带的拖放浮层打架",
+      "text": "```js\nconst onDragEnter = (event) => { /* 有 Files 就 */ event.preventDefault(); dragDepth.current += 1; setDragActive(true) }\nconst onDrop      = (event) => { ...; event.preventDefault(); reset(); if (canAcceptDrop) onAddImages([...dataTransfer.files]) }\nwindow.addEventListener('dragend', reset)\n```\n\n又因为它的 `canAcceptDrop` 只判断「编辑器是否空闲、是否支持图片」而**不看文件类型**，\n所以拖任何文件都会弹浮层。于是有一个很容易踩的坑：如果在 `document` 的**捕获**阶段监听 `drop`\n并 `stopPropagation()`，DSH 的 `onDrop` 就永远不会执行 → `reset()` 不被调用 → **浮层永久卡在屏幕上**。"
+    },
+    {
+      "section": "实现要点：不要和 DSH 自带的拖放浮层打架",
+      "text": "本插件的做法：\n\n- 监听挂在 **`window` 的捕获阶段**（早于 `document` 上的任何监听）。要接管的拖放直接 `stopPropagation()`，\n  **DSH 完全看不到这次拖拽** → 浮层根本不会出现，也就无从卡住。\n- 开始接管时向 window 派发一次 `dragend`，强制 DSH 的 `reset()` 跑一遍，清掉可能残留的浮层；\n  用 `syntheticDragEnd` 标记避免这个自派事件误清自身状态。\n- `drop` 阶段用真实的 `File.type` 再确认一次：若最终是纯图片，**不吞事件**，交回 DSH 正常当附件收下\n  （DSH 的 `onDrop` 不依赖 `dragActive`，所以浮层没出现也能收下图片）。\n- 1.2s 看门狗：拖拽被 Esc 取消、`dragleave` 丢失时，提示条自己消失，绝不留残影。"
+    },
+    {
+      "section": "安装",
+      "text": "已发布到 npm 后：\n\n```powershell\ndsh plugin --profile <profile> add dsh-drop-path\n```\n\n本地开发（把本仓库目录 link 进 profile）：\n\n```powershell\ndsh plugin --profile <profile> add link:<path-to-this-repo>"
+    },
+    {
+      "section": "等价于在 profile 目录执行：pnpm add link:<path-to-this-repo>",
+      "text": "```\n\n手动方式：把包装进 profile 的 `node_modules`，并把 `dsh-drop-path` 加进\n`<DSH_HOME>/profiles/<profile>/package.json` 的 `dsh.profile.bundles` 数组：\njsonc\n\"dsh\": {\n  \"profile\": {\n    \"bundles\": [\n      /* ...原有 bundle... */\n      \"dsh-drop-path\"\n    ]\n  }\n}\n```"
+    },
+    {
+      "section": "生效",
+      "text": "bundle 层是 **profile 启动时**读取的。新增 bundle 需**重启 DSH**（或让该 profile 重新加载），\n之后刷新网页即可看到左下角的「路径拖放」开关。\n\n> 注意：仅改动 `client/drop-path.js`（客户端脚本）时**不需要重启** —— 服务端路由每次请求都重新读文件\n> 并带 `Cache-Control: no-store`，刷新页面即可。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnode test/logic.test.mjs\n```\n\n用最小 DOM 桩在 Node 里加载 `client/drop-path.js` 并驱动事件，无需浏览器。覆盖 19 条断言：\n非图片 / 图片 / 混合 / 关闭 / 无 preload 桥 的接管判定、提示条显隐、剪贴板内容，\n以及「拖拽被 Esc 取消时提示条必须自动消失」的看门狗行为。改客户端逻辑后请先跑它。"
+    },
+    {
+      "section": "兼容性",
+      "text": "- 仅桌面端有意义：依赖 DSH Desktop 的 preload 桥。拿不到桥时会自动**完全不接管**，不影响 DSH 原行为。\n- 仅桌面端路径：普通浏览器出于安全不暴露本地路径，本插件在这种情况下自动降级。"
+    },
+    {
+      "section": "文件结构",
+      "text": "```\ndsh-drop-path/\n  package.json          # 声明 dsh.bundle.patch -> ./cordis.patch.yml\n  cordis.patch.yml      # 把 dsh-drop-path 插入 profile 层栈\n  lib/index.js          # 服务端：注册路由 + tapIndex 注入脚本"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

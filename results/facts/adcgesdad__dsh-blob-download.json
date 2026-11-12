@@ -1,0 +1,179 @@
+{
+  "repo": "adcgesdad/dsh-blob-download",
+  "commit": "8cb2397a9fda7d5f9964a2895c6d6ff1d114009d",
+  "extracted_at": "2026-11-11T17:02:29.584336+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 21487,
+    "lines_by_language": {
+      "JSON": 80,
+      "JavaScript": 354,
+      "Markdown": 127,
+      "Other": 33,
+      "YAML": 14
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "dsh-plugin.json",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-blob-download",
+    "version": "0.1.0",
+    "description": "在 DSH 浏览器里用 blob: 方案下载文件，绕过迅雷等下载扩展的劫持",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "dsh-plugin.json",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "check": "node --check lib/index.js",
+      "prepublishOnly": "npm run check"
+    },
+    "os": [
+      "linux",
+      "darwin",
+      "win32"
+    ],
+    "engines": {
+      "dsh": ">=0.2.1-rc.5 <0.3.0",
+      "node": ">=22"
+    },
+    "license": "MIT",
+    "author": "adcgesdad",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/adcgesdad/dsh-blob-download.git"
+    },
+    "homepage": "https://github.com/adcgesdad/dsh-blob-download#readme",
+    "bugs": {
+      "url": "https://github.com/adcgesdad/dsh-blob-download/issues"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "download",
+      "blob",
+      "thunder",
+      "迅雷"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-blob-download 的 bundle patch —— 把这个下载工具挂进 DSH 配置树\n#\n#   insert: 往配置树里加一行 entry\n#   id:     这一行的唯一标识\n#   name:   'dsh-blob-download' 解析到本包入口 lib/index.js\n\n- insert:\n    - id: blob-download\n      name: 'dsh-blob-download'\n      config:\n        # 默认目标目录（相对或绝对）。留空则用浏览器默认下载目录。\n        downloadDir: ''\n        # 单次下载等待上限（毫秒）\n        timeoutMs: 120000\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "XDG_DOWNLOAD_DIR",
+      "kind": "env",
+      "where": "lib/index.js:52"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/adcgesdad/dsh-blob-download.git",
+      "where": "package.json:42"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/adcgesdad/dsh-blob-download#readme",
+      "where": "package.json:44"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/adcgesdad/dsh-blob-download/issues",
+      "where": "package.json:46"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-31T03:12:25Z",
+    "created_at": "2026-10-31T02:57:28Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-blob-download",
+      "text": "给 [DeepSeek Harness](https://github.com/deepseek-ai) 用的下载工具插件：在 DSH 浏览器里用 `blob:` 方案下载文件，绕过迅雷等下载扩展的劫持。\n\nDownload files inside the DSH browser through a `blob:` URL, so download-hijacking extensions (Thunder/迅雷 等) never see a `chrome.downloads` event."
+    },
+    {
+      "section": "解决什么问题",
+      "text": "迅雷「下载支持」扩展（`popomkonnjgcdagdhgcpcekbdeoibglc`）会监听\n`chrome.downloads`，把浏览器的下载 `cancel` 掉，再经 nativeMessaging 交给\n迅雷客户端建任务——于是你在 DSH 里让 agent 下个文件，弹出来的却是迅雷的\n「新建下载任务」窗口。\n\n但这类扩展在决策函数里通常明确排除了 `blob:` / `data:` 协议，因为 blob 无法\n可靠地交给外部下载器重下。迅雷 v4.1.5 的 `bd()` 第一条就是：\n\n```js\nif (vd.has(new URL(url).protocol)) return false;\n// vd = Set([\"blob:\", \"data:\", \"chrome-extension:\", \"file:\"])\n```\n\n所以在页面内走一遍 `fetch → Blob → createObjectURL → <a download>.click()`\n就能让文件老老实实走浏览器自己的下载管线，不触发扩展。"
+    },
+    {
+      "section": "为什么不用 `dsh_browser_download`",
+      "text": "DSH 自带的 `dsh_browser_download` 走 provider 的原生下载通道，而**桌面端\n（desktop shell）不支持它**：\n\n```\nbrowser: download is only available on the self-hosted browser\n```\n\n本插件改走页面内 blob 方案，桌面端同样可用。"
+    },
+    {
+      "section": "安装",
+      "text": "插件要求 DSH **0.2.1-rc.5 或更高**，并且 profile 里装了\n[`dsh-builtin-browser`](https://github.com/wqty123/dsh-browser)（浏览器工具\n`dsh_browser_*` 的来源，插件要用它的 `browser` 服务）。\n\n**方式一：插件页安装（推荐）**\n\nWeb 侧边栏 → **插件** → 安装，填本仓库的 git 地址：\n\n```\ngit+https://github.com/adcgesdad/dsh-blob-download.git\n```\n\n需要固定版本就在后面加 `#<commit>`。装完重启 DSH。\n\n**方式二：本地源码**"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ngit clone https://github.com/adcgesdad/dsh-blob-download.git ~/.dsh/plugin-src/dsh-blob-download\ncd ~/.dsh/profiles/desktop\npnpm add link:~/.dsh/plugin-src/dsh-blob-download\n```\n\n然后把包名追加进同一个 `package.json` 的 bundle 列表：\n\n```json\n{\n  \"dependencies\": { \"dsh-blob-download\": \"link:...\" },\n  \"dsh\": { \"profile\": { \"bundles\": [\"dsh-builtin-browser\", \"dsh-blob-download\"] } }\n}\n\n重启 DSH 生效。\n\n**方式三：npm（暂未发布）**\n\n`npm i dsh-blob-download` 这条要等包发到 npm 之后才能用，目前请走上面两种。"
+    },
+    {
+      "section": "工具：`blob_download`",
+      "text": "| 参数 | 必填 | 说明 |\n|---|---|---|\n| `url` | 是 | 要下载的 URL（http/https） |\n| `fileName` | 否 | 保存的文件名，不传就从 URL 末段推断 |\n| `saveDir` | 否 | 保存目录（绝对路径），不传用配置或系统下载目录 |\n| `waitSeconds` | 否 | 等待落盘的秒数，默认 30，上限 300 |\n\n返回：\n\n```ts\n{ ok: boolean, message: string, path?: string, bytes?: number, fileName?: string, verified?: boolean }\n```\n\n`verified: true` 表示宿主真的在目标目录里看到了大小相符的新文件，不只是\n「点了一下下载链接」。"
+    },
+    {
+      "section": "行为细节",
+      "text": "- **一次只下一个**：浏览器对并发触发多个下载会弹「允许下载多个文件」确认框，\n  未确认前后续下载被挂起，看起来就像失败。插件内部串行排队，一个下完（无论\n  成败）才轮到下一个。\n- **先落目录再下**：下载前会把会话导航到目标 URL 的 origin 根路径，让页面内\n  `fetch` 是同源请求（同站资源不受 CORS 限制）。注意不能直接 `openUrl` 目标\n  文件——那会先触发一次真正的浏览器下载，正好喂给迅雷。\n- **文件名消毒**：去掉 Windows 不允许的字符和路径穿越段；重名自动加 ` (1)`\n  后缀。\n- **会删空目录**：不会。插件只读目录，不清理也不移动文件。"
+    },
+    {
+      "section": "配置",
+      "text": "`cordis.patch.yml` 里可改：\n\n```yaml\n- insert:\n    - id: blob-download\n      name: 'dsh-blob-download'\n      config:"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 只支持 http/https。`file:`、`data:` 等协议会被拒绝。\n- 依赖页面能 `fetch` 到目标 URL。有反爬或需要特殊 header 的站点可能取不到字节。\n- 目标站点若禁止跨源读取（没给 CORS 头）且文件不在同站，`fetch` 会失败。\n- 需要 `browser` 服务在场：没装 `dsh-builtin-browser` 时工具会直接报错。"
+    },
+    {
+      "section": "许可",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

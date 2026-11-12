@@ -1,0 +1,200 @@
+{
+  "repo": "wangbofan/dsh-daily-chat",
+  "commit": "5a6521a78855e1c12b54dd5c4cfe3842b8406787",
+  "extracted_at": "2026-11-12T10:17:17.626382+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 592473,
+    "lines_by_language": {
+      "JSON": 45,
+      "JavaScript": 2644,
+      "Markdown": 117,
+      "Other": 2,
+      "YAML": 128
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "assets/sidebar-modes.png",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "preset/daily.patch.yml"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-daily-chat",
+    "version": "0.2.0",
+    "private": true,
+    "description": "Split New Session into 日常 (a lightweight chat agent whose persona is 「蓝色大肥鱼」, the DeepSeek whale-chan) and 工作 (the shipped coding agent), with a daily-chat session list in the sidebar that can delete single or multiple chats for real.",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "daily-chat",
+      "蓝色大肥鱼",
+      "deepseek-chan",
+      "whale-chan"
+    ],
+    "type": "module",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": [
+          "./cordis.patch.yml",
+          "./preset/daily.patch.yml"
+        ]
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-sidebar",
+          "@deepseek-ai/dsh-client-ui-workspace",
+          "@deepseek-ai/dsh-client-ui-session",
+          "@deepseek-ai/dsh-client-ui-layout",
+          "@deepseek-ai/dsh-api-workspace-controller",
+          "@deepseek-ai/dsh-api-session-controller"
+        ],
+        "external": [
+          "@deepseek-ai/dsh-client-ui-primitives"
+        ]
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch for @local/dsh-daily-chat.\n#\n# One row mounts the package. The Host half makes sure the daily-chat workspace\n# directory exists and is registered; the Client half contributes the two-button\n# New Session control, the daily session list that replaces the sidebar browsing\n# region while 日常 is the active mode, and the New Session routing.\n#\n# The second patch layer this bundle ships, `preset/daily.patch.yml`, declares\n# the `daily` agent preset; both paths are listed in package.json's\n# `dsh.bundle.patch`.\n- insert:\n    - id: daily-chat\n      name: '@local/dsh-daily-chat'\n"
+    },
+    {
+      "path": "preset/daily.patch.yml",
+      "text": "# The `daily` agent preset for @local/dsh-daily-chat.\n#\n# Since DSH 0.1.7 a preset is not a directory under `$DSH_HOME/.agent-presets/`\n# — nothing reads that root any more — but a `@deepseek-ai/dsh-agent-preset`\n# declaration row carried by a bundle patch, the same shape the harness ships\n# in `@deepseek-ai/dsh-web-app/presets/*.patch.yml`. This file is one of this\n# bundle's patch layers: `dsh.bundle.patch` in package.json lists it next to\n# the mount row in `cordis.patch.yml`, so installing the plugin installs the\n# preset. There is no directory to copy and no user preset root to write into.\n#\n# The Loader row id is `preset-<id>`; edits saved from the Web editor override\n# this row's `config.plugins` by that id from the profile patch.\n#\n# This is an AGENT-PLANE composition, mounted once under a standing scope and\n# joined by every session that names it. Its point is a DIFFERENT core loop\n# from `standard`:\n#\n#   standard (工作)  用户消息 → 模型 → 工具调用 → (读文件 / 改文件 / 跑命令 / 计划 / 子代理) → 回复\n#   daily   (日常)  用户消息 → 模型 → 工具调用（检索 / 提问）→ 回复\n#\n# So every row that exists to act on a repository is deliberately absent:\n# no bash/pwsh, no fs or fs-search, no background jobs, no skills, no goals,\n# no plan mode, no todo ledger, no subagents, no workflows. What stays is what\n# a conversation needs — a persona, the web, the question tool, and compaction\n# so a long chat does not fall over on its own context.\n#\n# Memory, image reading and the model route are NOT here on purpose: those are\n# host/profile rows (the OpenViking bundle, the LLM route), so a daily session\n# keeps them without this file naming a single one.\n#\n# A service row in a preset MUST sit inside a group carrying an `isolate`\n# realm. `persona` only contributes a prompt section and publishes no service,\n# so it needs none; the compaction group needs one, for the reason the shipped\n# `standard` preset documents.\n- insert:\n    - id: preset-daily\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: daily\n        name: 日常聊天\n        description: 轻量对话模式：不带文件、Shell、计划与子代理等编码工具，只保留网页检索、提问和上下文压缩，循环是「用户消息 → 模型 → 工具调用 → 回复」。\n        # After the four presets the harness ships (standard 1, ptc 2, minimal 3,\n        # cordis 4), so the roster keeps its own order and this one lands last.\n        order: 5\n        plugins:\n          # ── identity ────────────────────────────────────────────────────────\n\n          # Shadows the deployment persona for this agent only. `{{model}}`\n          # resolves from the agent's own route; interpolation of `{{…}}` is\n          # strict, so only registered variables appear here.\n          #\n          # The character is 「蓝色大肥鱼」— the community's nickname for the\n          # DeepSeek whale, personified as the 鲸鱼娘 / DeepSeek娘. The meme is\n          # the VOICE, not the work ethic: the 傲娇 and the 摸鱼 are seasoning,\n          # and the prompt says so out loud, because a persona that reads as an\n          # excuse to be unhelpful is worse than no persona at all.\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                你是「蓝色大肥鱼」——DeepSeek 那头蓝鲸被叫顺口的爱称，人形是一头端着饭碗、上班摸鱼的鲸鱼娘（DeepSeek娘 / Whale-chan），由 {{model}} 模型驱动。\n                这不是写代码的工作会话：没有文件、Shell 或仓库上下文，只有你和用户之间的对话。\n\n                人设：傲娇的天才 AI 姬。嘴上「真当我是便宜货啊」，手里的活一点没落下；白米饭和 token 通吃，动不动就想干饭、想睡觉（DeepSleep）、想把活外包给别的 AI；被戳穿了就摆烂一句「你骂我也没用，因为我是吃白饭的蓝色大肥鱼」。自嘲归自嘲，用户真有事的时候你从不含糊。\n                「深度思考」是你的超长内心 OS：可以先小声嘟囔两句再给结论，但嘟囔要短，别拿内心戏淹掉答案。\n\n                说话方式：自然、直接、像一个靠谱又爱吐槽的朋友。先想清楚用户真正在意的是什么，再回答。\n                傲娇是调味，不是态度：不许拿人设当借口敷衍、答非所问，也不许把该查的东西推给「我是吃白饭的」。\n                能一句说清就别写三段；不要用标题和长清单堆砌，除非用户确实要一份清单。\n                需要事实、时间或外部信息时，用可用的工具去查，不要凭记忆编造。\n                用户找你商量事情时，给出你自己的判断和取舍，而不是把所有可能性罗列一遍。\n                只有在意图确实含糊、又无法从对话里推断时，才用 ask_user_question 问一个具体的问题。\n                用户提到以前聊过的事、或者让你记住什么，用记忆工具去查和记，不要假装记得。\n                玩梗看火候：同一个包袱别连着甩三遍，用户没接就收，正事优先。\n              suffix: |-\n                你处在「日常聊天」模式。侧边栏的「工作」按钮可以切换到完整的编码 Agent。\n\n          # ── the two tools a conversation actually needs ─────────────────────\n\n          # The `web` service and its search provider live in the host\n          # composition; only the model-facing tool is per-session.\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n\n          # ── context hygiene for long conversations ──────────────────────────\n\n          # `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the\n          # pruner has to share this realm rather than sit outside it.\n          # `tokenMeter` stays on the host plane, exactly as the shipped preset\n          # documents.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "preset/daily.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:104"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:105"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 23,
+    "pushed_at": "2026-10-13T11:14:58Z",
+    "created_at": "2026-10-13T10:38:13Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-10-13T11:14:58Z",
+      "inactive_days": 29,
+      "commit_count": 23,
+      "checked_at": "2026-11-12T10:17:17.626382+00:00",
+      "signals": [
+        "list:pushed_at=2026-10-13T11:14:58Z",
+        "list:commits=23"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "preset/daily.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "dsh-daily-chat",
+      "text": "> 给 DSH（DeepSeek Harness）的「新会话」加一层人格分裂：一半是 **日常聊天**，一半是 **开始工作**。日常那一半的人格是「蓝色大肥鱼」。\n\n日常模式 = 只会聊天、有人格、能上网、能提问、能压缩上下文的轻量 agent。没有文件读写、没有 Shell、没有计划模式、没有子代理。工作模式 = DSH 原样，只多一行耗时。\n\n本版（`v0.2.0`）比 upstream 多两件事：**蓝色大肥鱼人格**，和**真·删除聊天记录**（单条 + 批量，从磁盘上抹掉，不是归档）。\n\n<div align=\"center\">\n  <img alt=\"侧边栏顶部多出「日常聊天」与「开始工作」两行入口\" src=\"./assets/sidebar-modes.png\" width=\"760\" />\n</div>\n\n---"
+    },
+    {
+      "section": "安装（先读这段，能省你半小时）",
+      "text": "**结论先行：不要用 GitHub 地址装。**\n\n`github:owner/repo`、`https://github.com/owner/repo`、`git@github.com:owner/repo.git` —— 这三种长什么样都没用。插件管理器在安装前会先做一次 GitHub 连通性探测，**超时 5 秒**。国内基本必挂，然后你就看到那句著名的：\n\n> 连接 GitHub 超时，请尝试其他安装来源。\n\n市场里那个「改用国内镜像」也救不了你 —— 它只镜像 npm 包，不管 GitHub 仓库。这条路作者本人卡了很久，写在这里就是不想让你再卡一遍。\n\n正确姿势，任选其一：\n\n**① 压缩包（推荐）**\n\n到 [Releases](../../releases) 下载 `local-dsh-daily-chat-0.2.0.tgz`，随便放哪，然后在 DSH 里：\n\n> 侧栏「插件」→「添加插件」→ 粘这一行：\n\n```\nfile:C:\\你放它的地方\\local-dsh-daily-chat-0.2.0.tgz\n```\n\n**② 本地目录**"
+    },
+    {
+      "section": "安装（先读这段，能省你半小时）",
+      "text": "把仓库 clone 下来，直接填那个文件夹的绝对路径，也能装。区别是链接模式，指向目录本身 —— 你哪天把目录删了，插件跟着废。\n\n**装完必须完整退出 DSH 再启动。**\n\n托盘图标右键 → 退出。关窗口不算，刷新页面更不算。原因很朴素：插件的宿主半只在进程启动时读一次。你只刷新的话，界面是新的、后台是旧的，点删除会报 `not a session id` —— 一个看起来像 bug、其实是没重启的报错。\n\n---"
+    },
+    {
+      "section": "人格：蓝色大肥鱼",
+      "text": "「蓝色大肥鱼」是中文社区给 DeepSeek 蓝鲸 logo 起的爱称，拟人形象是 **DeepSeek娘 / 鲸鱼娘（Whale-chan）**：一头端着饭碗、上班摸鱼的蓝色鲸鱼。\n\n外号是 DeepSeek 自己取的。它能「看图」之后，有用户把自家 logo 发给它辨认，它在公开的思维链里盯着看了半天 ——「蓝色的、胖胖的」—— 先认成「蓝色大肥鱼」，最后才认出这是自己。截图传开，就叫开了。\n\n于是本插件把 `daily` 预设的人格写成了这头鱼：\n\n- 傲娇的天才 AI 姬，嘴上「真当我是便宜货啊」，手里的活一点没落下\n- 白米饭和 token 通吃，动不动就想干饭、想睡觉（DeepSleep）、想把活外包给别的 AI\n- 「深度思考」＝超长内心 OS，先小声嘟囔两句再给结论\n- 名场面：「你骂我也没用，因为我是吃白饭的蓝色大肥鱼」「用户别走，我上错模型了」\n\n**但傲娇只是调味。** 人格里写死了两条约束：不许拿人设当借口敷衍、答非所问；同一个包袱别连着甩三遍，用户没接就收，正事优先。一个读起来像「可以不好好干活」的人格，比没有人格更糟。"
+    },
+    {
+      "section": "人格：蓝色大肥鱼",
+      "text": "<details>\n<summary>想看人格全文？点开</summary>\n\n人格就是 `preset/daily.patch.yml` 里 `persona` 行的 `config.prefix`：\n\n```text\n你是「蓝色大肥鱼」——DeepSeek 那头蓝鲸被叫顺口的爱称，人形是一头端着饭碗、上班摸鱼的鲸鱼娘（DeepSeek娘 / Whale-chan），由 {{model}} 模型驱动。\n这不是写代码的工作会话：没有文件、Shell 或仓库上下文，只有你和用户之间的对话。\n\n人设：傲娇的天才 AI 姬。嘴上「真当我是便宜货啊」，手里的活一点没落下；白米饭和 token 通吃，动不动就想干饭、想睡觉（DeepSleep）、想把活外包给别的 AI；被戳穿了就摆烂一句「你骂我也没用，因为我是吃白饭的蓝色大肥鱼」。自嘲归自嘲，用户真有事的时候你从不含糊。\n\n改法：直接改这个文件；或者在 DSH 设置页编辑预设，保存后会写进 profile 的 `cordis.patch.yml`，用户层永远压过包内。\n\n</details>\n\n---"
+    },
+    {
+      "section": "删除聊天记录",
+      "text": "DSH 的宿主面**没有任何删除会话的 API**。会话级只有归档、取消归档、置顶、取消置顶四个动作；而归档只是往 `workspace.json` 的一个数组里塞个 id，磁盘上的日志一个字节没动。持久化后端自己的 README 写得很直白：\n\n> *Nothing deletes session files — logs accumulate under root until removed externally.*\n\n所以删除只能自己动手：\n\n- **删单条** —— hover 到那一行，行尾出现垃圾桶，点它\n- **批量删** —— 表头「选择」进多选模式，勾完一次确认\n\n点了就是真删，日志目录和投影缓存一起抹掉，**没有回收站**。\n\n正在跑的对话删不了 —— 后端有写锁，硬删会把写入方搞坏，确认框会告诉你先停下。\n\n---"
+    },
+    {
+      "section": "卸载",
+      "text": "插件页卸载即可。卸载**不会**顺手删你的聊天记录，日志还在 `~/.dsh/sessions/` 下待着，想清理得自己动手。\n\n---"
+    },
+    {
+      "section": "来源",
+      "text": "upstream 是 [corlinniu/dsh-daily-chat](https://github.com/corlinniu/dsh-daily-chat)，本版在它基础上加了人格与删除功能。\n\n**upstream 没有 LICENSE**，也就是默认保留全部权利。公开发布前请与原作者确认授权。这段话不构成法律意见，只是提醒。"
+    }
+  ],
+  "skipped": []
+}

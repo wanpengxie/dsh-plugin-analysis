@@ -1,0 +1,244 @@
+{
+  "repo": "czhzz/dsh-net-access",
+  "commit": "daf9a9381ba85096b2708a258300088c1bbae6a5",
+  "extracted_at": "2026-11-11T18:48:32.571571+00:00",
+  "tree": {
+    "files": 24,
+    "bytes": 134451,
+    "lines_by_language": {
+      "CSS": 308,
+      "JSON": 897,
+      "JavaScript": 1972,
+      "Markdown": 158,
+      "Other": 49,
+      "YAML": 199
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/build-info.json",
+      "lib/client.js",
+      "lib/detect.js",
+      "lib/index.js",
+      "package-lock.json",
+      "package.json",
+      "scripts/build.mjs",
+      "src/client/Section.js",
+      "src/client/Section.module.css",
+      "src/client/index.js",
+      "src/client/locales.js",
+      "src/client/section-controller.js",
+      "src/detect.js",
+      "src/index.js",
+      "tests/detect.test.js",
+      "tests/load-dependency.mjs",
+      "tests/peer-range.check.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-net-access",
+    "version": "0.1.2",
+    "description": "Control how the DeepSeek Harness Web GUI is reachable: local only, Tailscale, all local networks, or off.",
+    "type": "module",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/czhzz/dsh-net-access.git"
+    },
+    "homepage": "https://github.com/czhzz/dsh-net-access#readme",
+    "bugs": {
+      "url": "https://github.com/czhzz/dsh-net-access/issues"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin",
+      "dsh",
+      "remote-access",
+      "tailscale",
+      "lan",
+      "cordis"
+    ],
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "main": "./lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./client": {
+        "default": "./lib/client.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "scripts": {
+      "build": "node scripts/build.mjs",
+      "test": "node tests/detect.test.js && node tests/peer-range.check.mjs",
+      "check:lib": "npm run build && git diff --exit-code -- lib/"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": ">=3.18.2 <4"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/schemastery": {
+        "optional": true
+      }
+    },
+    "devDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2",
+      "esbuild": "^0.25.0",
+      "lightningcss": "^1.28.0",
+      "semver": "^7.7.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-net-access — the bundle's contribution to a dsh profile.\n#\n# Three entries, in order, and the order is the contract.\n#\n# 1. `insert` mounts the plugin row, which resolves the reachability posture and\n#    provides the `remoteAccess` service.\n# 2. The `webserver` override reads the bind host the posture composed. The base\n#    expression is `ctx.webStartup.host ?? '127.0.0.1'`; it is restated here\n#    because a patch replaces the whole `config` block.\n# 3. The `connection` override reads the trust fence.\n#\n# The reads are function CALLS, not value captures. `!!js` is interpolated once\n# when the loader resolves the row, so `ctx.remoteAccess.trustedHosts` without\n# the call would freeze the fence at boot and the settings page would appear to\n# do nothing. In practice the service is present whenever this bundle is mounted.\n- insert:\n    - id: remote-access\n      name: dsh-net-access\n      config:\n        # `off` binds loopback and closes the port; `local` keeps the port open\n        # but admits loopback alone; `tailscale` trusts just the tailnet\n        # address; `all` trusts every local IPv4. Only `off` changes the bind,\n        # so only `off` needs a restart.\n        mode: local\n        # Leave empty to detect the Tailscale adapter address. Pin a 100.x.y.z\n        # literal when detection is wrong (several CGNAT overlays, or a node\n        # reached by hostname rather than interface).\n        address: ''\n        extraTrustedHosts: []\n\n- id: webserver\n  # `inject` is required, not decorative: Cordis's context proxy refuses a read\n  # of a service the reading fiber never declared.\n  #\n  # `host` is limited by the upstream schema to `127.0.0.1` or `0.0.0.0`, so a\n  # posture that wants all interfaces must bind `0.0.0.0` and fence access at\n  # the `connection` row below. This expression therefore carries the *bind*\n  # only; it is read once, as the socket is opened at activation.\n  inject: [webStartup, remoteAccess]\n  config:\n    host: !!js \"ctx.remoteAccess.bindHost()\"\n    port: !!js \"ctx.webStartup.port ?? 3080\"\n    compression: gzip\n    compressionLevel: 1\n    compressionThresholdBytes: 1024\n\n- id: connection\n  # This fence is evaluated per request, so a posture switched in the settings\n  # page takes effect on the next request without a restart.\n  #\n  # The composed `ctx.webRuntime.trustedHosts` is deliberately NOT consulted:\n  # upstream derives it from *every* non-internal IPv4 whenever the bind is\n  # `0.0.0.0`, which is precisely the set the `tailscale` posture exists to\n  # exclude. The `all` posture reproduces that set itself, and any\n  # `--trusted-host` authorities arrive through `webStartup` and are merged by\n  # the plugin, so nothing the operator asked for is lost.\n  inject: [remoteAccess]\n  config:\n    trustedHosts: !!js \"ctx.remoteAccess.trustedHosts()\"\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "NODE_ENV",
+      "kind": "env",
+      "where": "scripts/build.mjs:185"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:35"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/czhzz/dsh-net-access.git",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/czhzz/dsh-net-access#readme",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/czhzz/dsh-net-access/issues",
+      "where": "package.json:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2",
+      "esbuild": "^0.25.0",
+      "lightningcss": "^1.28.0",
+      "semver": "^7.7.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 13,
+    "pushed_at": "2026-09-17T11:43:00Z",
+    "created_at": "2026-09-17T01:31:15Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/detect.js",
+    "lib/index.js",
+    "package.json",
+    "scripts/build.mjs",
+    "src/client/section-controller.js",
+    "src/detect.js",
+    "src/index.js",
+    "tests/detect.test.js",
+    "tests/load-dependency.mjs",
+    "tests/peer-range.check.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-net-access",
+      "text": "[](https://www.npmjs.com/package/dsh-net-access)\n[](./LICENSE)\n[](https://nodejs.org)\n[](https://github.com/czhzz/dsh-net-access)\n\n从设置页控制 DeepSeek Harness Web GUI 的访问范围。\n\n想在手机上通过 [Tailscale](https://tailscale.com) 打开 GUI、想开放给整个局域网、或者只想锁死在本机——一个设置项、四种模式，并且会明确告诉你什么时候需要重启才生效。\n\n在 **设置 → 远程访问** 中配置。"
+    },
+    {
+      "section": "四种模式",
+      "text": "| 模式 | 监听套接字 | 信任的授权来源 | 能否热切换 |\n|---|---|---|---|\n| **仅本机**（默认） | 所有网卡 | 仅回环地址 | **能** |\n| **仅 Tailscale** | 所有网卡 | tailnet 地址 | **能** |\n| **所有本地网络** | 所有网卡 | 所有本地 IPv4 | **能** |\n| **关闭** | `127.0.0.1` | 回环地址 | 否 —— 需重启 |"
+    },
+    {
+      "section": "为什么只有一种模式需要重启",
+      "text": "DSH 在服务器启动时**只绑定一次** HTTP 监听端口，且 `dsh-host-webserver` 只接受 `127.0.0.1` 和 `0.0.0.0` 两个绑定地址。进程运行期间没有重新绑定的路径，所以已经绑定到回环的套接字无法再次打开。\n\n本插件把这个限制变成设计，而不是与之对抗：\n\n- 三种模式让套接字保持在**所有网卡**上，改为在 `/api` 的信任围栏（trust fence）上表达访问决策。该围栏**按请求**求值，因此「仅本机」「仅 Tailscale」「所有本地网络」这三种模式可以在设置页热切换。\n- **关闭**是唯一改变绑定地址的模式：它把套接字收回回环。它也是唯一让端口在端口扫描中不可见的模式——这正是它值得重启一次的原因。\n\n设置页会读取当前服务器启动时使用的模式，并在选择尚未生效时明确提示，而不是报告一个不会发生的切换。"
+    },
+    {
+      "section": "需要接受的取舍",
+      "text": "**仅本机**模式让端口保持对所有网卡开放，只在应用层拒绝除回环之外的一切请求。这在一个具体方面**弱于**回环绑定：\n\n| | 关闭 | 仅本机 |\n|---|---|---|\n| 局域网端口扫描能看到端口 | 否 | **是** |\n| 局域网设备能完成 TCP 握手 | 否 | **是** |\n| 局域网设备能访问 GUI | 否 | 否（403） |\n\n如果你需要端口本身不可达，请使用**关闭**并接受重启——或者添加一条主机防火墙规则。**仅本机**模式适用于：你想保留较宽的监听，但又不希望其他设备穿过它。"
+    },
+    {
+      "section": "可达性是如何被强制执行的",
+      "text": "信任围栏位于 `dsh-client-connection`。在认证之前，每个请求都必须提供回环地址或已声明的授权 `Host`；其他一律返回 **403**，已信任但未认证的请求返回 **401**。\n\n在一台同时具备 Tailscale、局域网、VMware 和 WSL 网卡的机器上、处于**仅 Tailscale**模式时实测（下表用文档示例地址代替实测时的真实地址）："
+    },
+    {
+      "section": "可达性是如何被强制执行的",
+      "text": "| `Host` 请求头 | 结果 | 含义 |\n|---|---|---|\n| `100.64.0.10:3080` | `401` | 已信任（tailnet）—— 进入令牌认证 |\n| `localhost:3080` | `401` | 已信任（回环） |\n| `192.0.2.10:3080` | `403` | 被拒绝（局域网） |\n| `198.51.100.10:3080` | `403` | 被拒绝（VMware 虚拟网卡） |\n| `203.0.113.10:3080` | `403` | 被拒绝（WSL 虚拟网卡） |\n| `evil.com` | `403` | 被拒绝（DNS 重绑定） |\n\n**这个围栏拦的是浏览器访问，不是 TCP 可达性。** 在三种「所有网卡」模式下，其他网络上的设备仍然可以与端口完成 TCP 握手，只是无法穿过围栏。\n\n认证与可达性相互独立：URL 中打印的进程令牌才是授权浏览器的凭据。"
+    },
+    {
+      "section": "Tailnet 地址探测",
+      "text": "插件不硬编码任何 IP，因此在任何机器上都能工作：\n\n1. 先按网卡名查找 Tailscale 网卡（`Tailscale`、`tailscale0` 等），客户端在 Windows、macOS、Linux 上命名一致。\n2. 找不到网卡时，接受 Tailscale `100.64.0.0/10` 范围内的任意地址。\n\n网卡名优先于网段，因此运行**第二个** CGNAT 覆盖网络的机器仍能解析出正确地址。当探测结果不可能正确时（例如你通过 MagicDNS 域名而非 IP 访问该节点），在设置页手动填写 **Tailnet 地址**。\n\n在**仅 Tailscale**模式下，若机器上不存在 tailnet 地址，插件会**回退到「关闭」**并记录原因，而不会静默放宽为「所有本地网络」。"
+    },
+    {
+      "section": "安装",
+      "text": "推荐从 npm 安装：\n\n```sh\ndsh plugin --profile web add dsh-net-access\n```\n\n包内已含构建产物，因此这条命令不需要本地构建，也不需要 `allowBuilds` 授权。\n\n<details>\n<summary>其他安装方式</summary>\n\n**从 GitHub 安装** —— 想跟未发布的提交时用：\n\n```sh\ndsh plugin --profile web add github:czhzz/dsh-net-access\n```\n\n**从本地目录安装** —— 改代码时用：\n\n```sh\ncd dsh-net-access\nnpm run build\n\ndsh plugin --profile web add /absolute/path/to/dsh-net-access\n\n</details>"
+    },
+    {
+      "section": "重启生效",
+      "text": "安装后重启一次 GUI，让 profile 加载新的组合包：\n\n```sh\ndsh --profile web\n```\n\n启动时会打印可访问的 URL，适用时包含局域网形式：\n\n```\ndsh web: http://127.0.0.1:3080/?token=… (LAN: http://100.x.y.z:3080/?token=…)\n```"
+    },
+    {
+      "section": "配置",
+      "text": "设置页是常规路径。相同的值也可以写在 `cordis.patch.yml` 中该行的 `config` 块里，它作为设置页覆盖的基础层。\n\n| 字段 | 默认值 | 含义 |\n|---|---|---|\n| `mode` | `local` | `local`、`tailscale`、`all` 或 `off` |\n| `address` | `\"\"` | 固定 tailnet 地址；留空表示自动探测 |\n| `extraTrustedHosts` | `[]` | 额外接受的 `host[:port]` 授权 |\n\n命令行传入的 `--trusted-host` 授权会合并进所有模式。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **「仅本机」需要重启。** 绑定地址在监听器打开时就固定了。\n- **不自动重启。** 设置页只显示重启命令，而不是替你重启：插件运行在 DSH 进程内部，退出以重启会杀掉当前会话以及其中运行的所有任务，且没有任何机制把它带回来。\n- **地址按请求采样，但绑定地址不会。** 运行中切换网络会立即反映到「所有本地网络」，但不会移动套接字。\n- **无 TLS。** Tailscale 会加密节点间流量，但 GUI 本身使用 HTTP。\n- **仅 IPv4。** 不探测 Tailscale 的 IPv6 网段。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\nnpm install     # esbuild、lightningcss、semver，以及 schemastery（仅开发用）\nnpm run build   # 宿主部分直接复制；客户端部分用 esbuild 打包\nnpm test        # 16 项行为测试，覆盖四种模式\n```\n\n`@deepseek-ai/schemastery` 是**可选 peer**：运行时由 DSH 宿主提供，插件自身不打包它，所以它不在 `dependencies` 里；但开发时源码要导入它，因此它同时列在 `devDependencies`。版本范围 `>=3.18.2 <4` 描述的是 **schemastery 自己的版本线**，不是 DSH 的——两者独立发版（`dsh` 是 `0.1.6-alpha.1` 时 schemastery 是 `3.18.2`）。照着 DSH 版本号写范围会让 `npm install` 直接 `ETARGET`，`tests/peer-range.check.mjs` 专门守住这一点，并从 `package.json` 读取范围本身。"
+    },
+    {
+      "section": "开发",
+      "text": "构建依赖优先从本目录的 `node_modules` 解析；找不到时才回退到旁边的 harness checkout 及其 pnpm store，因此在没有 harness checkout 的机器上也能构建。\n\n客户端部分被打包成 DSH 模块加载器所要求的单文件工厂。React 与 `@deepseek-ai/dsh-client-ui-primitives` 保持为外部依赖——由浏览器的模块表提供，姿态选择条复用共享的 `Pill` 控件而非另带一份副本。CSS Modules 经 lightningcss 编译，并通过带 `data-plugin-css` 标记的 `<style>` 元素按插件注入一次。\n\n测试直接运行文件而非通过 `node --test`，因为测试运行器会派生子进程，而这在受限文件系统沙箱下会被拒绝。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

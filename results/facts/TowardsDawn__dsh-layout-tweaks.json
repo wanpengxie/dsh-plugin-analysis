@@ -1,0 +1,412 @@
+{
+  "repo": "TowardsDawn/dsh-layout-tweaks",
+  "commit": "2770b598735b1d89f45383564adc572fdbc46fe0",
+  "extracted_at": "2026-11-11T15:24:26.842864+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 246995,
+    "lines_by_language": {
+      "HTML": 264,
+      "JSON": 45,
+      "JavaScript": 607,
+      "Markdown": 939,
+      "Other": 34,
+      "YAML": 15
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "assets/after.png",
+      "assets/before.png",
+      "assets/collapsed.png",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json",
+      "test/fixture.html",
+      "test/smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-layout-tweaks",
+    "version": "0.4.1",
+    "description": "DSH Web GUI 布局微调：会话头上边栏拆成两行、左侧栏面板列表一键折叠、底栏入口两行排布。纯渲染层实现，不修改任何其他插件。 · Layout tweaks for the DSH Web GUI: a two-row session header, a collapsible sidebar panel list, and a two-row footer layout.",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "cordis",
+      "plugin",
+      "client-plugin",
+      "layout",
+      "sidebar",
+      "ui"
+    ],
+    "license": "MIT",
+    "type": "module",
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node test/smoke.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-layout-tweaks bundle patch —— 把本插件挂进 profile 装配树。\n#\n# dsh 的 bundle 层会读取本文件；只要本包出现在 profile 的\n# `dsh.profile.bundles` 列表里，下面这条 insert 就会把插件条目追加到\n# cordis 装配树（host 半加载包主入口，`dsh.client` 声明让 Web 客户端\n# 额外加载 ./client 作为浏览器半）。\n#\n# 需要临时停用（不卸载）时，改成：\n#   - insert:\n#       - id: dsh-layout-tweaks\n#         name: 'dsh-layout-tweaks'\n#         disabled: true\n- insert:\n    - id: dsh-layout-tweaks\n      name: 'dsh-layout-tweaks'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 15,
+    "pushed_at": "2026-11-02T11:26:19Z",
+    "created_at": "2026-10-03T15:21:12Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json",
+    "test/smoke.mjs"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">"
+    },
+    {
+      "section": "dsh-layout-tweaks",
+      "text": "**DSH Web GUI 布局微调 —— 会话头两行、面板列表折叠、底栏入口两行排布**\n\n纯渲染层实现 · 不修改任何其他插件 · 免构建\n\n[](LICENSE)\n[](https://github.com/topics/dsh-plugin)\n[](https://dsh.market/)\n\n[功能](#功能) · [效果](#效果) · [安装](#安装) · [配置](#配置) · [工作原理](#工作原理) · [被放弃的尝试](#附录一次被放弃的尝试) · [兼容性](#兼容性) · [FAQ](#faq)\n\n[English](README.en.md) | 中文\n\n</div>\n\n---"
+    },
+    {
+      "section": "这是什么",
+      "text": "DSH Web GUI 里有三处布局上的不便：\n\n1. **会话头上边栏**把会话名、工作模式和十几个操作按钮挤在同一行；\n2. **左侧栏顶部的面板模块**（插件、任务看板、技能中心、SSH）始终占着位置；\n3. **左侧栏底部的动作行**由多个插件各自的 CSS 拼出来 —— 谁占一行、谁靠左谁靠右全看各自下发的规则，插件一多就挤成参差不齐的多行。\n\n`dsh-layout-tweaks` 用一个客户端插件处理这三处，且：\n\n- **不接管任何 slot**、**不修改其他插件的任何代码**；\n- 全部通过注入 CSS（外加一个自建的折叠头）完成，React 渲染树零感知；\n- **免构建**：`lib/` 直接手写可加载产物，不需要 tsdown / rolldown / tsc；\n- 找不到锚点时**静默失效**，绝不会把宿主界面改坏。\n\n> ③ 处理的是一个**多方共享**的槽位（`sidebar.footer.action`）：条目仍由各插件自己渲染，\n> 本插件只决定它们落在第几行 —— **不搬 DOM、不改容器结构、不动宽度与对齐**。"
+    },
+    {
+      "section": "功能",
+      "text": "| # | 功能 | 默认 | 说明 |\n|---|------|:----:|------|\n| ① | **会话头拆两行** | 开 | 第 1 行 = 会话名 + 工作模式；第 2 行 = 撤销 / 恢复 / 快照 / 对话撤回 / 归档 / 标签备注 / 移动至工作区 / 复制链接等其余控件；页签行保持不变 |\n| ② | **面板列表折叠** | 展开 | 侧栏顶部新增折叠头，一键收起「插件 / 任务看板 / 技能中心 / SSH」，把空间让给工作区与会话列表 |\n| ③ | **底栏两行排布** | 开 | 「会话与工作区」独占第 1 行；其余动作（远程访问等）统一排第 2 行，**各自保留原有对齐** |\n\n- ① 与 ③ 是纯 CSS，无任何 DOM 写入；② 点击折叠头本体，状态即时生效并记忆。\n- **② 与 ③ 互相独立**：两个开关、两个 flag（`collapsed` / `footer-layout`），折叠顶栏不影响底栏排布，反之亦然。\n- 侧栏收起成 56px 轨道时，③ 自动让位（轨道态由各插件自己的竖排逻辑负责）。"
+    },
+    {
+      "section": "Before → After",
+      "text": "| Before（未启用） | After（已启用） |\n|:------:|:-----:|\n|  |  |\n\n- **会话头**：`dsh bug 检查` + `标准模式` 独占第一行，其余控件整体下移一行。\n- **侧栏**：面板列表上方多了一个折叠头 `▾ 面板与插件 4`。\n- **底栏**：`会话与工作区` 独占第一行，其余动作统一排第二行（远程访问靠右）；\n  将来新插件注册进来的入口也会自动落到第二行，不会各自插乱。\n\n> 底栏这张对比是**真实现象的复刻**：夹具里如实复刻了这些插件各自的 CSS，\n> 夹具里的「示例新模块」模拟一个未来插件：它会被归位到第二行，而不是自己另起一行。"
+    },
+    {
+      "section": "② 折叠",
+      "text": "> 示意图由仓库内的离线夹具 `test/fixture.html` 渲染 —— 它用**实测的 DSH 客户端 DOM**（class 名与层级取自真机核对）复刻了会话头、左侧栏与底栏，因此不用登录 GUI 也能验证布局。右下角浮层会直接报出底栏的实际行数与每行成员。"
+    },
+    {
+      "section": "方式一：用 `dsh plugin` 命令（推荐）",
+      "text": "```bash\ndsh plugin --profile web add \"github:TowardsDawn/dsh-layout-tweaks\"\n```\n\n该命令会把本包写进 profile 的 `dsh.profile.bundles`，并让 bundle 层读取本包的 `cordis.patch.yml`。"
+    },
+    {
+      "section": "方式二：手动挂载",
+      "text": "1. 把本目录放到任意位置（例如 `<DSH插件目录>/dsh-layout-tweaks`）；\n2. 编辑 `<DSH_HOME>/profiles/web/package.json`：\n\n```jsonc\n   {\n     \"dependencies\": {\n       \"dsh-layout-tweaks\": \"file:<本目录绝对路径>\"\n     },\n\n3. 重启 `dsh web`。\n\n> 本插件是**纯客户端**插件：host 半（`lib/index.js`）只是装配树里的挂载点，不注册服务、不读取会话。\n>\n> 注意：客户端半（`lib/client.js`）是被宿主**在启动时读入内存**的（响应头带 `immutable` + 一年缓存），所以**改动 `lib/client.js` 之后需要重启 `dsh web` 才会生效**；日常的折叠开关不受影响，即时生效。"
+    },
+    {
+      "section": "临时停用（不卸载）",
+      "text": "编辑本包 `cordis.patch.yml`：\n\n```yaml\n- insert:\n    - id: dsh-layout-tweaks\n      name: 'dsh-layout-tweaks'\n      disabled: true"
+    },
+    {
+      "section": "卸载",
+      "text": "删掉 `dsh.profile.bundles` 里的那一行与对应依赖即可。插件在卸载时会自行移除注入样式、自建节点与 `<html>` 上的状态属性。"
+    },
+    {
+      "section": "配置",
+      "text": "所有开关都记在浏览器 `localStorage` 的 `dsh-layout-tweaks:v1`：\n\n```json\n{ \"headerTwoRows\": true, \"footerLayout\": true, \"collapsed\": false }\n```\n\n| 键 | 作用 |\n|---|---|\n| `headerTwoRows` | ① 会话头两行 |\n| `footerLayout` | ③ 底栏两行排布 |\n| `collapsed` | ② 面板列表是否折叠（点折叠头时自动写入） |"
+    },
+    {
+      "section": "折叠面板列表（②）",
+      "text": "点折叠头即可。等价于设置 `collapsed`。"
+    },
+    {
+      "section": "关掉某一项",
+      "text": "v0.3.0 起折叠头上不再挂设置入口（原来的 ⚙ 与弹层已移除），三项默认全开。要关掉任意一项，在浏览器控制台执行：\n\n```js\nconst s = JSON.parse(localStorage.getItem('dsh-layout-tweaks:v1') || '{}')\ns.headerTwoRows = false   // 或 s.footerLayout = false\nlocalStorage.setItem('dsh-layout-tweaks:v1', JSON.stringify(s))\nlocation.reload()\n\n恢复默认（全开）：\n\n```js\nlocalStorage.removeItem('dsh-layout-tweaks:v1'); location.reload()\n```\n\n> 旧版本留下的 `foldEntries` / `bottomKeep` 字段已不再被读取，留着无影响。"
+    },
+    {
+      "section": "为什么不走 slot",
+      "text": "DSH 的 slot 系统对「重排别人的 UI」有三个硬约束（详见 `@deepseek-ai/dsh-client-ui-slots` 的设计）：\n\n1. **`single` 槽位独占、声明即认领**：`conversation.session.header` 已被 `@deepseek-ai/dsh-client-ui-conversation` 自己注册占据，再注册会抛 `SlotOwnershipError`。\n2. **条目的 disposer 会递归移除它声明的子槽**：即使强拆原注册再顶替，`actions` / `utilities` / `corner` 三个子槽连同**其他插件**注册的按钮会一起消失。\n3. **`list` 条目的渲染位置由宿主决定**：`sidebar.footer.action` 与 `sidebar.panellist` 是两个不同的槽位与容器，注册对象绑定槽位名，跨容器搬移不可能。\n\n因此本插件只做「渲染层重排」：**不改结构、不搬 React 节点、不抢槽位**。它对 DOM 的全部写入只有一个属于自己的折叠头节点。"
+    },
+    {
+      "section": "① 会话头拆两行：零 DOM 注入的断行符",
+      "text": "真实 DOM（`data-slot` 锚点是 `display:contents` 的透明包装，所以 `titleRow`/`tabs` 直接参与 `<header>` 的 grid）：\n\n```html\n<header class=\"…_header\" style=\"display:grid; grid-template-columns:auto minmax(0,1fr)\">\n  <div class=\"…_headerLeading\"></div>\n  <div data-slot=\"conversation.session.header\" style=\"display:contents\">\n    <div class=\"…_titleRow\">\n\n做法："
+    },
+    {
+      "section": "① 会话头拆两行：零 DOM 注入的断行符",
+      "text": "```css\n/* 拆掉 titleCluster / headerActions 两层盒子，让 crumbs 与各控件成为 titleRow 的 flex item */\n… > div:first-child{ flex-wrap:wrap }\n… > div:first-child > div:has(> nav){ display:contents }\n… div:has(> [data-slot=\"conversation.session.header.actions\"]){ display:contents }\n\n`::after` 伪元素的妙处：它天然是宿主元素内部的 flex item，因此**不需要往 DOM 里插任何节点**就能造出断行点，React reconciliation 完全无感。"
+    },
+    {
+      "section": "② 折叠头",
+      "text": "唯一注入的 DOM 节点（`.dsh-lt-head`），由插件自己创建、自己插入、自己清理：\n\n- 定位锚点：侧栏根的直接子元素 `nav`（面板列表），退化为工作区区容器；用 `insertBefore` 放在它前面，**不移动任何 React 管理的节点**；\n- 收起动作是纯 CSS：`html[data-dsh-lt-collapsed] [data-slot=\"sidebar\"] > div > nav{ display:none }`；\n- 维护方式：`MutationObserver`（`documentElement` + `subtree`）＋ `requestAnimationFrame` 节流，确保 SPA 重挂载后回到位；\n- 自激防护：文本只在真的变化时写入（否则 `textContent` 赋值会再次触发 observer）；\n- 侧栏收起为 56px 轨道时由 CSS 隐藏（`[class*=\"collapsed\"]`）。"
+    },
+    {
+      "section": "③ 底栏两行：只管顺序，不碰外观",
+      "text": "`sidebar.footer.action` 是**多方共享**的槽位（`kind: 'list'`），目前有三个占用者，它们各自带一套互相冲突的布局规则：\n\n| 条目 | 身份标识 | 自带的布局规则 |\n|---|---|---|\n| 会话与工作区 | `class*=\"sm-footerBtn\"` | `.sm-footerBtn-wide{ flex:1 1 100% }`，并用 `:has()` **把父容器改成 `flex-wrap:wrap`** |\n| 手机App远程访问 | （不在本插件规则里） | `{ order:1; margin-inline-start:auto }`（自己排最后并靠右） |\n多条规则叠加就容易参差不齐：`flex:1 1 100%` 的条目要独占一行，带 `order` 的又要抢位置，插件每多一个就多一分错位的可能。\n\n本插件只做两件事："
+    },
+    {
+      "section": "③ 底栏两行：只管顺序，不碰外观",
+      "text": "```css\n/* 1. 保证容器可换行（其余一律不动） */\n… :where([class*=\"footerActions\"]){ flex-wrap:wrap !important; align-content:flex-start !important; height:auto !important }\n/* 2. 用 order 决定谁在第几行；宽度、对齐、外观全部保留原样 */\n… [data-slot=\"sidebar.footer.action\"] > :where(*){ order:3 !important }              /* 基线：未识别的排最后 */"
+    },
+    {
+      "section": "③ 底栏两行：只管顺序，不碰外观",
+      "text": "- **排序在原有容器内完成**，没有 `display:contents`、没有搬节点 —— 容器还是那个容器，方向还是那个方向（这正是 0.2.x 那套「搬进折叠块」失败的根源，见[附录](#附录一次被放弃的尝试)）。\n- 选择器只用**稳定标识**：`data-dsh-plugin` 是插件自己写在元素上的常量，`sm-footerBtn` 是无 hash 的类名后缀；不使用会随打包变化的 CSS Module 前缀。\n- 未识别的条目（未来新插件）走零特异性基线 `order:3`，排在最后一行之后，不会被挤进目标两行。\n- 只在**侧栏展开**时接管（`[data-slot=\"sidebar\"] > div:not([class*=\"collapsed\"])`）；收起成 56px 轨道时底部区域整体隐藏，各插件有自己的竖排逻辑，本插件不参与。\n- 所有 `order` 都带 `!important`：真机上还有一条第三方规则 `[data-dsh-frame]:not(…) [class*=\"footerActions\"] > [data-slot=\"sidebar.footer.action\"] > :not(…) { order: 1 }`，不加会被它整片覆盖。"
+    },
+    {
+      "section": "使用的 DOM 锚点",
+      "text": "| 用途 | 锚点 |\n|------|------|\n| 会话头槽位 | `[data-slot=\"conversation.session.header\"]` |\n| 头部控件槽位 | `[data-slot=\"conversation.session.header.actions\" / `.utilities` / `.corner`]` |\n| 侧栏宿主 / 根 | `[data-slot=\"sidebar\"]` → 其第一个子元素 |\n| 面板列表 | 侧栏根的直接子元素 `nav` |\n| 工作区区（折叠头兜底锚点） | 侧栏根的子元素 `div:has(> [data-slot=\"sidebar.workspaces\"])` |\n| 底栏槽位 | `[data-slot=\"sidebar.footer.action\"]`（其直接子元素即各条目） |\n\n全部为 **`data-slot` 属性、插件自带的稳定属性与类名后缀**，**不使用会随版本变化的 CSS Module hash 前缀**（如 `wSkVaW_` / `hHd-Xa_`）。"
+    },
+    {
+      "section": "附录：一次被放弃的尝试",
+      "text": "v0.1.0 → v0.2.4 之间，本插件还做过一件事：把侧栏底部的「上下文洞察 / 会话管理」这类功能入口**搬到面板列表下方，并收进折叠块**。**v0.3.0 把它整套删掉了**，因为收益（少占一屏）远小于代价。留下的教训写在这里，免得以后重蹈："
+    },
+    {
+      "section": "附录：一次被放弃的尝试",
+      "text": "1. **底部入口与面板列表的注册方式差异很大。** 它们属于不同的槽位、住在不同的容器里、受不同的布局约束；「并入折叠块」只能靠在渲染层把整条容器链拆成 `display:contents` 来伪造，天生脆弱。\n2. **`order` 作用于「布局」上的 flex item，而选择器必须按「DOM 层级」书写。** `display:contents` 只让容器在布局上透明，它在 DOM 里仍是那些条目的父元素 —— 一开始把选择器写成直接子级，结果匹配不到任何条目，它们保持默认 `order:0` 全部堆到侧栏顶上。\n3. **拆掉容器盒子会连带改变容器自身的 flex 方向。** 这是最贵的一个坑：底部入口原本待在横向容器里靠 `flex:1` 占满宽度，被搬进侧栏根（纵向容器）后，同一个 `flex:1` 变成「**抢占高度**」—— 实测入口被撑到 125px（正常 36px），工作区列表被挤到 0 高度，表现是「工作区/会话列表不见了」。\n4. **同一批条目可能已经被别的插件排序了。** 实测有另一个插件（用 `data-dsh-frame` / `data-dsh-part` 标记侧栏）下发 `[data-dsh-frame]:not(…) [class*=\"footerActions\"] > [data-slot=\"sidebar.footer.action\"] > :not(…) { order: 1 }`，特异性 `(0,6,0)`，比本插件的 `(0,3,1)` 高，会把分类结果整片压掉。最终只能靠清一色 `!important` 对抗。\n5. **基线规则的特异性会反噬分类规则**，得靠 `:where()` 把基线压到零特异性才压得住。"
+    },
+    {
+      "section": "附录：一次被放弃的尝试",
+      "text": "结论分两条：\n\n- **不搬**：跨容器的「并入折叠块」永久放弃 —— 它必须改变容器的存在与方向，代价（布局脆弱、挤掉工作区）远大于收益。\n- **可以排**：v0.4.0 的 ③ 只在**原容器内**用 `order` 决定行，不拆盒子、不搬节点，因此上面第 2、3 条坑不再适用；第 4、5 条的经验则直接复用（`!important` + `:where()` 基线）。\n\n`npm test` 里有一组反向断言专门盯着这条边界：`data-dsh-lt-fold` / `data-dsh-lt-keep` / `data-dsh-lt-box` / `data-dsh-lt-settings` / `BOTTOM_KEEP_SELECTORS` 一旦重新出现，测试直接失败。"
+    },
+    {
+      "section": "兼容性",
+      "text": "| 项目 | 要求 |\n|------|------|\n| 宿主 | DSH Web 客户端（DOM 形态基于 0.2.1-rc 系列实测） |\n| 浏览器 | 支持 `:has()` 的现代浏览器（Chrome / Edge 105+、Firefox 121+、Safari 15.4+） |\n| 降级 | 不支持 `:has()` 时 ① 与 ③ 被 `@supports` 挡下，插件静默不生效；② 折叠仍可用（它不依赖 `:has()`） |\n| Node（仅安装时） | ≥ 22.19 |"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **依赖宿主 DOM 形态**：DSH 大版本若重构会话头或侧栏结构，规则会失配。此时表现是「插件不生效」而不是报错；更新选择器即可。\n- **③ 依赖两个第三方标识**：`data-dsh-plugin=\"update\"` / `data-dsh-plugin=\"remote-bridge\"` 与类名后缀 `sm-footerBtn`。若作者改名，这两条规则会静默失效（底栏退回原样，不会变坏）—— 届时改一行选择器即可。\n- **③ 只保证「谁在第几行」**：条目的宽度与对齐仍由各插件决定。若某个插件将来把 `flex` 改成需要独占整行的值，它会自动换到下一行（基线 `order:3` 保证不会被排进目标两行）。\n- **折叠头假设侧栏根的第一个 `nav` 就是面板列表**（找不到时退化为工作区区容器）。\n- **顶部两行假设 `actions` 的第一项是工作模式**（它本身带 `order:-10`，恒定第一个）。\n- **会话头第 2 行是普通 flex 行**（`flex-wrap`）：窗口很窄或注册了很多头部按钮时会自然溢出到更多行，这是刻意行为，保证控件不被裁切。"
+    },
+    {
+      "section": "FAQ",
+      "text": "<details>\n<summary><b>会影响其他插件吗？</b></summary>\n\n不会改它们的代码、注册或渲染的节点。对 DOM 的唯一写入是一个属于自己的折叠头节点（卸载时移除）；③ 只是给共享槽位里的条目排了个序，宽度、对齐、外观一律不动。\n</details>\n\n<details>\n<summary><b>为什么不做成标准的 slot 插件？</b></summary>\n\n见[工作原理](#为什么不走-slot) —— `single` 槽位独占、子槽级联销毁、list 条目位置由宿主决定，这三条让「重排别人的 UI」在 slot 层无法实现。渲染层重排是唯一不牵连其他插件的做法。\n</details>\n\n<details>\n<summary><b>③ 和 ② 是一套吗？</b></summary>"
+    },
+    {
+      "section": "FAQ",
+      "text": "不是。② 折叠的是**顶部的面板列表**（`sidebar.panellist` 所在的那条 `nav`），③ 排的是**底部的动作行**（`sidebar.footer.action`）。两个独立开关：`collapsed` 与 `footerLayout`。\n</details>\n\n<details>\n<summary><b>为什么还保留「附录：一次被放弃的尝试」？</b></summary>\n\n因为那段历史解释了 ③ 与旧方案的本质区别：旧的「并入折叠块」要拆容器盒子并改变容器 flex 方向，代价极大；新的 ③ 只在原容器里排序。写清楚，免得以后有人再走一遍。\n</details>\n\n<details>\n<summary><b>改完要重启 DSH 吗？</b></summary>\n\n改 `lib/client.js` 需要重启 `dsh web`（客户端半在启动时被读入内存并带长缓存）；安装/卸载同理。日常的折叠开关**不需要**，即时生效并自动记忆。\n</details>\n\n<details>\n<summary><b>怎么完全恢复原样？</b></summary>"
+    },
+    {
+      "section": "FAQ",
+      "text": "清掉 `localStorage` 的 `dsh-layout-tweaks:v1`（或按[配置](#配置)逐项关闭），页面即回到宿主原生布局。要在装配层面彻底移除，见[安装](#安装)里的「卸载」。\n</details>\n\n<details>\n<summary><b>怎么确认 ③ 生效了？</b></summary>\n\n打开离线夹具 `test/fixture.html?on=1`，右下角会报「底栏行数：2（预期 2）」并列出每行成员（第1行：会话与工作区；第2行：手机App远程访问｜示例新模块）。\n</details>"
+    },
+    {
+      "section": "开发",
+      "text": "本插件**免构建**，`lib/` 即产物：\n\n```bash"
+    },
+    {
+      "section": "注释里误用反引号会提前终止它，模块 import 失败（DSH 界面报 \"import failed\"）",
+      "text": "npm test"
+    },
+    {
+      "section": "test/fixture.html?on=1&collapsed=1 → 启用并折叠面板列表",
+      "text": "```\n\n**push 前请先跑 `npm test`**：客户端插件的错误只会在浏览器里炸，而这个脚本不需要 DSH、也不需要浏览器。\n\n夹具里复刻了这些插件的真实 CSS 规则（session-manager 的 `:has()` 换行 + `flex:1 1 100%`、remote-bridge 的 `order:1` + `margin-inline-start:auto`），右下角浮层直接报底栏行数：**开启插件后必须恰好 2 行**。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\ndsh-layout-tweaks/\n├─ lib/\n│  ├─ index.js          # host 半：空挂载点\n│  └─ client.js         # 浏览器半：两行头部 + 折叠头 + 底栏排布（免构建）"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    },
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">"
+    },
+    {
+      "section": "dsh-layout-tweaks",
+      "text": "**Layout tweaks for the DSH Web GUI — a two-row session header, a collapsible panel list, and a two-row footer**\n\nRender-layer only · touches no other plugin · no build step\n\n[](LICENSE)\n[](https://github.com/topics/dsh-plugin)\n[](https://dsh.market/)\n\n[中文](README.md) | English\n\n</div>\n\n---"
+    },
+    {
+      "section": "What it does",
+      "text": "Three spots in the DSH Web GUI are awkward:\n\n1. the **session header** crams the title, the working mode and a dozen action buttons into one row;\n2. the **panel modules** at the top of the left sidebar (Plugins / Task board / Skill center / SSH) always take up space;\n3. the **sidebar footer** is assembled from several plugins' competing CSS — who gets a row, who sits\n   left and who sits right all depend on each plugin's own rules, so it easily turns into a ragged block."
+    },
+    {
+      "section": "What it does",
+      "text": "This plugin fixes all three, and:\n\n- **claims no slot** and **changes no other plugin's code**;\n- works purely through injected CSS plus one self-owned collapse header — the React tree never notices;\n- ships **prebuilt, hand-written `lib/`** (no tsdown / rolldown / tsc required);\n- **fails silently** when an anchor is missing — it can never half-break the host UI."
+    },
+    {
+      "section": "What it does",
+      "text": "> ③ touches a **shared** slot (`sidebar.footer.action`): entries are still rendered by their own plugins;\n> this one only decides **which row** each entry lands on — no DOM moves, no container changes, no\n> width or alignment overrides."
+    },
+    {
+      "section": "Features",
+      "text": "| # | Feature | Default | Notes |\n|---|---------|:-------:|-------|\n| ① | **Two-row session header** | on | Row 1 = session title + working mode; row 2 = undo / restore / snapshot / archive / tags / move / copy link; the tab strip stays where it is |\n| ② | **Collapsible panel list** | expanded | A collapse header at the top of the sidebar hides Plugins / Task board / Skill center / SSH in one click |\n| ③ | **Two-row footer** | on | *Session & workspaces* gets row 1 alone; every other action (Remote access, …) shares row 2, **keeping its own alignment** |"
+    },
+    {
+      "section": "Features",
+      "text": "- ① and ③ are pure CSS (zero DOM writes); ② is a click on the collapse header, instant and remembered.\n- **② and ③ are independent**: two switches, two flags (`collapsed` / `footer-layout`).\n- When the sidebar collapses to the 56px rail, ③ steps aside — the rail's own vertical stacking applies."
+    },
+    {
+      "section": "Preview",
+      "text": "| Before (plugin off) | After (plugin on) |\n|:------:|:-----:|\n|  |  |\n\n- **Header**: `dsh bug 检查` + `标准模式` get row 1 to themselves; every other control moves down a row.\n- **Sidebar**: a collapse header (`▾ Panels & plugins 4`) appears above the panel list.\n- **Footer**: *Session & workspaces* on top, every other action on the second row (Remote access on the\n  right); a future plugin's entry lands there automatically instead of adding its own row."
+    },
+    {
+      "section": "Preview",
+      "text": "> The footer comparison is a **faithful reproduction**: the fixture ships these plugins' real CSS,\n> so with the plugin off the rows can end up ragged, and with it on they settle into two."
+    },
+    {
+      "section": "② Collapsed",
+      "text": "> Screenshots come from the offline fixture `test/fixture.html`, which reproduces the session header,\n> left sidebar and footer using the **real DOM shape observed on a live client** — so the layout can be\n> verified without signing in to a GUI. A badge in the corner reports the footer's actual row count."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add \"github:TowardsDawn/dsh-layout-tweaks\"\n```\n\nThis writes the package into the profile's `dsh.profile.bundles` and lets the bundle layer read its\n`cordis.patch.yml`. Or do it manually: add a `file:` dependency plus one entry in\n`dsh.profile.bundles` inside `<DSH_HOME>/profiles/web/package.json`, then restart `dsh web`."
+    },
+    {
+      "section": "Install",
+      "text": "This is a **client-only** plugin: the host half (`lib/index.js`) is just a mount point in the assembly\ntree — it registers no service and reads no session.\n\n> The client half (`lib/client.js`) is read into memory **at startup** by the host (served with\n> `immutable` and a one-year cache), so **editing `lib/client.js` needs a `dsh web` restart** to take\n> effect. The day-to-day collapse toggle is unaffected and applies live."
+    },
+    {
+      "section": "Install",
+      "text": "To disable without uninstalling, set `disabled: true` on the inserted row in this package's\n`cordis.patch.yml`."
+    },
+    {
+      "section": "Configuration",
+      "text": "Everything lives in `localStorage` under `dsh-layout-tweaks:v1`:\n\n```json\n{ \"headerTwoRows\": true, \"footerLayout\": true, \"collapsed\": false }\n```\n\n| Key | Effect |\n|---|---|\n| `headerTwoRows` | ① two-row session header |\n| `footerLayout` | ③ two-row footer |\n| `collapsed` | ② panel list folded (written when you click the header) |"
+    },
+    {
+      "section": "Turning a feature off",
+      "text": "Since v0.3.0 the collapse header carries no settings entry (the old ⚙ and its popover are gone); all\nthree default to on. To disable one, run this in the browser console:\n\n```js\nconst s = JSON.parse(localStorage.getItem('dsh-layout-tweaks:v1') || '{}')\ns.headerTwoRows = false   // or s.footerLayout = false\nlocalStorage.setItem('dsh-layout-tweaks:v1', JSON.stringify(s))\nlocation.reload()\n\nReset everything:\n\n```js\nlocalStorage.removeItem('dsh-layout-tweaks:v1'); location.reload()\n```"
+    },
+    {
+      "section": "Turning a feature off",
+      "text": "> The old `foldEntries` / `bottomKeep` fields are no longer read; leaving them in place is harmless."
+    },
+    {
+      "section": "Why not slots",
+      "text": "1. **`single` slots are exclusive** — `conversation.session.header` is already claimed by\n   `@deepseek-ai/dsh-client-ui-conversation`; registering again throws `SlotOwnershipError`.\n2. **An entry's disposer recursively removes the child slots it declared** — so force-replacing the\n   claim would take the `actions` / `utilities` / `corner` seats (and **every other plugin's buttons**\n   in them) down with it.\n3. **A `list` entry's render position belongs to the host** — `sidebar.footer.action` and\n   `sidebar.panellist` are different slots in different containers, and a registration is bound to its\n   slot name."
+    },
+    {
+      "section": "Why not slots",
+      "text": "So this plugin only rearranges at the render layer: no structural changes, no moving React-managed\nnodes, no slot claims. Its only DOM write is a single collapse header it owns."
+    },
+    {
+      "section": "① Two rows: a zero-DOM line break",
+      "text": "`titleRow` is a flex container. The plugin sets `display:contents` on the `titleCluster` and\n`headerActions` wrappers so the breadcrumb and each control become flex items of `titleRow`, then\ninserts a line break **without touching the DOM** — the `::after` pseudo-element *is* a flex item:"
+    },
+    {
+      "section": "① Two rows: a zero-DOM line break",
+      "text": "```css\n… > div:first-child{ flex-wrap:wrap }\n… > div:first-child::after{ content:\"\"; order:5; flex-basis:100%; height:0 }\n… nav{ order:0 }                                          /* session title */\n… [data-slot=\"conversation.session.header.actions\"] > *:nth-child(1){ order:1 }   /* working mode */"
+    },
+    {
+      "section": "② The collapse header",
+      "text": "The single injected DOM node (`.dsh-lt-head`), created and cleaned up by the plugin: an `insertBefore`\nanchor on the sidebar root's `nav` (falling back to the workspaces container), kept in place by a\nthrottled `MutationObserver`, with text writes guarded against self-triggering. Folding is pure CSS:\n`html[data-dsh-lt-collapsed] [data-slot=\"sidebar\"] > div > nav{ display:none }`."
+    },
+    {
+      "section": "③ Two-row footer: order only, appearance untouched",
+      "text": "`sidebar.footer.action` is a **shared** `list` slot with three current occupants, each shipping its own\nconflicting layout rules:\n\n| Entry | Stable identity | Its own rule |\n|---|---|---|\n| Session & workspaces | `class*=\"sm-footerBtn\"` | `.sm-footerBtn-wide{ flex:1 1 100% }` **and a `:has()` rule that turns the parent into `flex-wrap:wrap`** |\n| Remote access | `data-dsh-plugin=\"remote-bridge\"` | `[data-wide=wide]{ order:1; margin-inline-start:auto }` (always last, always right) |"
+    },
+    {
+      "section": "③ Two-row footer: order only, appearance untouched",
+      "text": "Several competing rules easily produce a ragged stack: an entry that must own a whole row, another\nshouting `order`, and every extra plugin adds one more chance to misalign.\n\nThe plugin does exactly two things:"
+    },
+    {
+      "section": "③ Two-row footer: order only, appearance untouched",
+      "text": "```css\n/* 1. make the container wrap (nothing else about it is changed) */\n… :where([class*=\"footerActions\"]){ flex-wrap:wrap !important; align-content:flex-start !important; height:auto !important }\n/* 2. decide the row with order; width, alignment and looks stay as they are */\n… [data-slot=\"sidebar.footer.action\"] > :where(*){ order:3 !important }                      /* baseline: unknown entries last */"
+    },
+    {
+      "section": "③ Two-row footer: order only, appearance untouched",
+      "text": "- **Ordering happens inside the original container** — no `display:contents`, no node moves; the\n  container keeps its existence and direction (exactly what broke the 0.2.x \"fold into the block\"\n  attempt, see [the appendix](#appendix-an-abandoned-attempt)).\n- Selectors use **stable identities only**: `data-dsh-plugin` is a constant the plugins write\n  themselves, and `sm-footerBtn` is a hash-free class suffix.\n- Unknown entries (future plugins) fall back to a zero-specificity `order:3` baseline, so they land\n  after the target rows.\n- Only active while the sidebar is **expanded**; collapsed to the rail, the footer is hidden and each\n  plugin's own vertical stacking applies.\n- Every `order` carries `!important` because a third-party rule\n  `[data-dsh-frame]:not(…) [class*=\"footerActions\"] > [data-slot=\"sidebar.footer.action\"] > :not(…) { order: 1 }`\n  exists in the wild and would otherwise flatten the result."
+    },
+    {
+      "section": "Anchors used",
+      "text": "`data-slot=\"conversation.session.header\"` (+ `.actions` / `.utilities` / `.corner`),\n`data-slot=\"sidebar\"`, `data-slot=\"sidebar.workspaces\"`, `data-slot=\"sidebar.footer.action\"`, plus the\nplugins' own `data-dsh-plugin` attributes and hash-free class suffixes.\n**No CSS-Module hashes** (such as `wSkVaW_` / `hHd-Xa_`), which change between releases."
+    },
+    {
+      "section": "Appendix: an abandoned attempt",
+      "text": "Between v0.1.0 and v0.2.4 this plugin also tried to **move** the sidebar's bottom entries up under the\npanel list and into the fold. **v0.3.0 removed that machinery entirely**, because the cost far\noutweighed the benefit (one screen of space):"
+    },
+    {
+      "section": "Appendix: an abandoned attempt",
+      "text": "1. **Bottom entries and the panel list are registered very differently** — different slots, different\n   containers, different layout constraints. \"Fold them in\" can only be faked by flattening the whole\n   container chain with `display:contents`; fragile by construction.\n2. **`order` applies to the *layout* flex item, while selectors follow the *DOM* hierarchy.**\n3. **Flattening a container changes the container's own flex direction** — the expensive one: `flex:1`\n   went from \"fill the width\" to \"grab height\", stretching an entry to 125px and squeezing the workspace\n   list to zero (\"the workspace list disappeared\").\n4. **Someone else may already be ordering the same entries** (a `(0,6,0)` third-party rule) — hence\n   `!important` everywhere.\n5. **The baseline rule's specificity can beat the classification rules** — hence `:where()`."
+    },
+    {
+      "section": "Appendix: an abandoned attempt",
+      "text": "Two conclusions:\n\n- **Never move**: cross-container \"fold into the block\" is abandoned for good — it must change the\n  container's existence and direction.\n- **Ordering is fine**: ③ only sets `order` **inside the original container**, so items 2–3 no longer\n  apply; the lessons from 4–5 are reused directly.\n\n`npm test` guards the boundary with reverse assertions: `data-dsh-lt-fold` / `data-dsh-lt-keep` /\n`data-dsh-lt-box` / `data-dsh-lt-settings` / `BOTTOM_KEEP_SELECTORS` must never reappear."
+    },
+    {
+      "section": "Compatibility",
+      "text": "- Host: DSH Web client (DOM shape verified against the 0.2.1-rc series).\n- Browser: anything with `:has()` (Chrome / Edge 105+, Firefox 121+, Safari 15.4+).\n- Degradation: without `:has()` the `@supports` guard disables ① and ③; ② keeps working.\n- Node (install time only): ≥ 22.19."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- Tied to the host DOM shape; a major DSH restructure makes the rules miss (the plugin goes inert\n  rather than erroring — update the selectors).\n- **③ relies on two third-party identities** (`data-dsh-plugin=\"update\"` / `\"remote-bridge\"` and the\n  `sm-footerBtn` class suffix). If an author renames them, those rules silently stop applying — the\n  footer simply returns to its original look, nothing breaks.\n- **③ only decides *which row*** — width and alignment still come from the entries' own plugins.\n- The collapse header assumes the sidebar root's first `nav` is the panel list.\n- The two-row header assumes the first item of `actions` is the working mode."
+    },
+    {
+      "section": "FAQ",
+      "text": "<details>\n<summary><b>Does it affect other plugins?</b></summary>\n\nIt changes none of their code, registrations or rendered nodes. Its only DOM write is one collapse\nheader it owns (removed on unload); ③ merely orders entries inside a shared slot — width, alignment and\nlooks are untouched.\n</details>\n\n<details>\n<summary><b>Why not a proper slot plugin?</b></summary>"
+    },
+    {
+      "section": "FAQ",
+      "text": "See [How it works](#why-not-slots) — exclusive `single` slots, cascade-disposed child slots, and\nhost-owned `list` positions make \"rearranging someone else's UI\" impossible at the slot layer.\n</details>\n\n<details>\n<summary><b>Are ② and ③ the same thing?</b></summary>\n\nNo. ② folds the **panel list at the top** (`sidebar.panellist`'s `nav`); ③ orders the **footer action\nrow** (`sidebar.footer.action`). Two independent switches: `collapsed` and `footerLayout`.\n</details>"
+    },
+    {
+      "section": "FAQ",
+      "text": "<details>\n<summary><b>Why keep the \"abandoned attempt\" appendix?</b></summary>\n\nBecause it explains the difference between ③ and the old approach: the old \"fold into the block\" had to\nflatten containers and flip a container's flex direction; ③ only orders inside the existing container.\n</details>\n\n<details>\n<summary><b>Do I need to restart DSH?</b></summary>"
+    },
+    {
+      "section": "FAQ",
+      "text": "Editing `lib/client.js` (and installing/uninstalling) does — the client half is read into memory at\nstartup and served with a long cache. The collapse toggle does not: it applies live and is remembered.\n</details>\n\n<details>\n<summary><b>How do I restore the original layout?</b></summary>\n\nClear `dsh-layout-tweaks:v1` from `localStorage` (or turn features off as shown in\n[Configuration](#configuration)). To remove it at the assembly level, see *Install*.\n</details>"
+    },
+    {
+      "section": "FAQ",
+      "text": "<details>\n<summary><b>How can I verify ③ works?</b></summary>\n\nOpen the fixture at `test/fixture.html?on=1`; the badge reports **\"known three occupy 2 rows\n(expected 2)\"** and lists each row (row 1: Session & workspaces; row 2: Remote\naccess). Drop `?on=1` to see the broken three-row state for comparison.\n</details>"
+    },
+    {
+      "section": "Development",
+      "text": "No build step — `lib/` is the artifact:\n\n```bash"
+    },
+    {
+      "section": "literal, so a stray backtick in a comment terminates it and the module fails to import in DSH",
+      "text": "npm test"
+    },
+    {
+      "section": "test/fixture.html?on=1&collapsed=1 → plugin on, panel list folded",
+      "text": "```\n\n**Run `npm test` before pushing** — client-plugin mistakes only surface in the browser, and this script\nneeds neither DSH nor a browser.\n\nThe fixture reproduces these plugins' real CSS rules: **the badge must report exactly two rows when the plugin is on**."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,159 @@
+{
+  "repo": "hongweifei/dsh-pwsh-encoding-fix",
+  "commit": "2e81d79a189563d96610903aeafad32200ffdaba",
+  "extracted_at": "2026-11-11T21:16:39.955675+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 16223,
+    "lines_by_language": {
+      "JSON": 24,
+      "JavaScript": 143,
+      "Markdown": 150,
+      "Other": 26,
+      "YAML": 8
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@dsh-external/dsh-pwsh-encoding-fix",
+    "version": "2.0.0",
+    "description": "Fix garbled non-ASCII output from the pwsh tool on Windows: native output (ANSI or UTF-8) is captured byte-preserving inside pwsh and decoded per-segment (strict UTF-8 else ANSI) before re-emitting as UTF-8. 修复 pwsh 工具中文/非 ASCII 输出乱码（兼容 GBK 与 UTF-8 两种原生输出）。",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Activation row for the pwsh-encoding-fix bundle.\n#\n# When this package joins a profile's `dsh.profile.bundles` (via\n# `dsh plugin add`), this patch is applied as that profile's bundle layer and\n# the row below mounts the plugin at startup. No manual editing needed.\n- insert:\n    - id: pwsh-encoding-fix\n      name: '@dsh-external/dsh-pwsh-encoding-fix'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-08-15T05:07:39Z",
+    "created_at": "2026-08-15T02:53:33Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-pwsh-encoding-fix",
+      "text": "一个用于 **DeepSeek Harness（DSH）** 的 Cordis 插件（bundle 型），修复 DSH 的\npwsh 工具在 Windows 上执行命令时，中文及其他非 ASCII 输出变成乱码的问题。"
+    },
+    {
+      "section": "简介",
+      "text": "DSH 的 pwsh 工具会在 Windows 上执行 PowerShell 命令，并把命令的 stdout/stderr\n回传给你。在中文 Windows 上，原生程序的输出编码并不统一：\n\n- 有的程序按 **系统 ANSI 代码页**输出（中文系统即 GBK/936，如 `ipconfig`、\n  `systeminfo`、`chcp`、直接调用的 javac 等）；\n- 有的程序按 **UTF-8** 输出（`node`、`git`、Maven 3.9+、Gradle 9 的编译诊断、\n  Java 18+ 等）。\n\n而 DSH 内部只按 UTF-8 解码输出，于是**任何单一解码方式都会让其中一类程序\n变成乱码**：GBK 输出按 UTF-8 解码会得到 `锟斤拷` 一类的替换字符，UTF-8 输出\n按 GBK 解码会得到 `閿欒` 一类的错字（`错误` → `閿欒`）。\n\n本插件在 PowerShell 进程内做一次「按字节无损捕获 → 自动识别编码 → 以 UTF-8\n重新输出」的转换，让两类程序的输出都能正确显示。"
+    },
+    {
+      "section": "特性",
+      "text": "- **自动识别编码**：同一命令里 GBK 与 UTF-8 输出混排也能逐段正确处理；\n- **无损捕获**：用 Latin-1（代码页 28591）逐字节接收原生输出，不会把非法\n  字节序列替换成 U+FFFD，信息不会丢失；\n- **不改变命令语义**：`$?` / `$LASTEXITCODE` 照常捕获，命令失败时退出码不变；\n- **前台与后台命令都生效**：包装发生在 `shell.resolve`（`run` 与 `start`\n  共同经过的入口）；\n- **只作用于 PowerShell**：bash 执行器不受影响；沙箱执行器（pwsh-sandbox）\n  自身的逻辑被保留（包装而非替换）。"
+    },
+    {
+      "section": "问题背景",
+      "text": "DSH 的 pwsh 执行器（`@deepseek-ai/dsh-pwsh-local`）会为每条命令前置\n`[Console]::OutputEncoding = UTF8`，Node 侧收集器也只按 UTF-8 解码管道。\n以两种典型的程序输出为例：\n\n| 程序输出 | 实际字节 | 按 UTF-8 解码 | 按 GBK 解码 |\n| --- | --- | --- | --- |\n| `ipconfig`、直接调用的 javac | GBK | U+FFFD 乱码 | 正确 |\n| `node`、Maven 3.9+、Gradle 9 | UTF-8 | 正确 | `閿欒` 乱码 |\n\n早期的 v1 版本固定按系统 ANSI 代码页解码，修好了 GBK 一类，却把 UTF-8\n一类弄成了新的乱码（`错误` → `閿欒`）。v2 改为逐字节捕获后再自动判断。"
+    },
+    {
+      "section": "解决思路",
+      "text": "1. 先把 `[Console]::OutputEncoding` 切换为 **Latin-1（28591）**。Latin-1\n   是逐字节编码——一个字节对应一个字符，无论原生程序实际写的是 GBK 还是\n   UTF-8，字节都被无损保留，不会在捕获阶段丢失信息；\n2. 在脚本块内执行原命令，并紧接其后捕获 `$?` 与 `$LASTEXITCODE`；\n3. 对捕获结果按字符范围切分：\n   - **字节段**（连续 `≤ U+00FF` 的字符）：还原成原始字节后做启发式解码——\n     先按严格 UTF-8 解码，失败则按系统 ANSI 代码页解码（可用 `codePage`\n     配置覆盖）；\n   - **文本段**（PowerShell 自己输出的 Unicode 字符）：原样保留；\n4. `finally` 中恢复 UTF-8，再把恢复出的文本以 UTF-8 输出，Node 侧即可\n   正确解码；\n5. 命令失败时按捕获的退出码 `exit`，保持原工具的退出码语义。"
+    },
+    {
+      "section": "实现说明",
+      "text": "- 包装点在 `ctx.shell.resolve`，前台 `run` 与后台 `start` 都经过这里；\n- 仅当执行器是 PowerShell（运行时检测 `shell.pwshPath`）时才生效；\n- 包装器保持单行，`try{}finally{}` 必须相邻（中间加 `;` 是 PowerShell\n  语法错误）；\n- 内部变量统一使用 `__dshx_` 前缀，避免与用户命令的变量冲突。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash"
+    },
+    {
+      "section": "从 GitHub 安装",
+      "text": "dsh plugin --profile web add \"github:hongweifei/dsh-pwsh-encoding-fix\""
+    },
+    {
+      "section": "从本地源码安装（<绝对路径> 换成插件源码所在目录）",
+      "text": "dsh plugin --profile web add \"<绝对路径>\""
+    },
+    {
+      "section": "重启 dsh web 并硬刷新浏览器（Ctrl+F5）",
+      "text": "```\n\n包声明了 `dsh.bundle.patch`，`dsh plugin add` 会自动把它并入该 profile 的\n`dsh.profile.bundles`，启动时作为 bundle 补丁层自动激活，无需手改配置。"
+    },
+    {
+      "section": "手动安装（github 不可达 / pnpm 解析其他 git 依赖失败时）",
+      "text": "```powershell"
+    },
+    {
+      "section": "1. 把插件源码目录链接进 profile 的 node_modules（<插件源码绝对路径> 换成实际路径）",
+      "text": "New-Item -ItemType Junction -Path \"$env:USERPROFILE\\.dsh\\profiles\\web\\node_modules\\@dsh-external\\dsh-pwsh-encoding-fix\" -Target \"<插件源码绝对路径>\""
+    },
+    {
+      "section": "dsh.profile.bundles 加 \"@dsh-external/dsh-pwsh-encoding-fix\"",
+      "text": "```\n\n> 说明：`dsh plugin add` 会重解析 profile 的全部依赖；若其他依赖是 git 源且\n> 当前网络无法访问，pnpm 会整体失败。手动方式绕过 pnpm，运行时加载器只读\n> `node_modules` 与 `dsh.profile.bundles`。\n>\n> 注意：若 profile 同时安装了会**自动同步/更新插件**的其他插件（例如\n> dsh-plugin-workshop 的自动更新），它可能把以 `github:` 方式安装的插件\n> 重新拉取并覆盖本地改动。需要本地版本长期生效时，请使用本地源码\n> （`link:`/`file:`）方式安装，或关闭自动更新。"
+    },
+    {
+      "section": "配置",
+      "text": "如需显式指定「非 UTF-8 字节」的 ANSI 代码页（默认 `Default` = 系统 ANSI\n代码页），可在 profile 的 `cordis.patch.yml` 中给该行追加配置：\n\n```yaml\n- insert:\n    - id: pwsh-encoding-fix\n      name: '@dsh-external/dsh-pwsh-encoding-fix'\n      config:"
+    },
+    {
+      "section": "验证",
+      "text": "重启 dsh web 后，在 pwsh 工具里执行：\n\n```powershell"
+    },
+    {
+      "section": "UTF-8 输出的程序：修复前显示 閿欒: 鎵句笉鍒扮鍙?，修复后显示 错误: 找不到符号",
+      "text": "node -e \"process.stdout.write('\\u9519\\u8bef: \\u627e\\u4e0d\\u5230\\u7b26\\u53f7\\n')\""
+    },
+    {
+      "section": "GBK 输出的程序：中文应正常显示",
+      "text": "ipconfig\n```"
+    },
+    {
+      "section": "已知边界",
+      "text": "- `Write-Host` 输出走宿主输出流、绕过管道：捕获期间 `[Console]::OutputEncoding`\n  是 Latin-1，`Write-Host` 的中文会被按 Latin-1 编码成 `?`。请改用\n  `Write-Output` 输出到管道（原生工具输出与 `Write-Output` 混排完全正常）。\n- 命令以 `exit N` 结尾：包装分支下输出先被收集、`exit` 直接终止进程，该次\n  输出会丢失（退出码仍正确）——罕见场景。\n- PowerShell 5.1 向原生程序传参（`$OutputEncoding` 为 UTF-8 时）对含 `.`\n  的参数（如 `-Dstdout.encoding=UTF-8`）有 5.1 自带的拆参数问题，与输出编码\n  无关；可改用环境变量（如 `$env:JAVA_TOOL_OPTIONS='-Dstdout.encoding=UTF-8'`）。\n- 超大输出会在 pwsh 内存中先聚合（`Out-String`）；管道的字节截断/溢出落盘\n  机制不受影响。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

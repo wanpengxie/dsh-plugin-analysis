@@ -1,0 +1,484 @@
+{
+  "repo": "bitqyh/dsh-codex-bridge",
+  "commit": "98234f575b4fb67f8df523f770f1d2b89e5d3419",
+  "extracted_at": "2026-11-11T17:54:17.143737+00:00",
+  "tree": {
+    "files": 34,
+    "bytes": 426755,
+    "lines_by_language": {
+      "JSON": 80,
+      "JavaScript": 2173,
+      "Markdown": 1110,
+      "Other": 41,
+      "Python": 6437,
+      "Shell": 259,
+      "YAML": 28
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "COMPARISON.md",
+      "LICENSE",
+      "README.md",
+      "RELEASE.md",
+      "assets/hooks/post-tool-use.sh",
+      "assets/hooks/pre-tool-use.sh",
+      "assets/hooks/session-start.sh",
+      "assets/hooks/stop.sh",
+      "assets/hooks/subagent-start.sh",
+      "assets/hooks/subagent-stop.sh",
+      "assets/hooks/user-prompt-submit.sh",
+      "assets/tools/codex-checkpoint.py",
+      "assets/tools/dsh-checkpoint.py",
+      "assets/tools/recover-interrupted.py",
+      "assets/tools/resume.py",
+      "assets/tools/verify-autosave.py",
+      "assets/tools/verify-autosave.sh",
+      "bin/cli.mjs",
+      "cordis.patch.yml",
+      "package.json",
+      "src/index.js",
+      "src/ui-client.js",
+      "src/ui-server.js",
+      "test-plugin.mjs",
+      "tests/batch1-tests.py",
+      "tests/batch2-tests.py",
+      "tests/batch3-tests.py",
+      "tests/batch4-resume-tests.py",
+      "tests/project-scope-tests.py",
+      "tests/ui-tests.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@bitqyh/dsh-codex-bridge",
+    "version": "0.1.1",
+    "description": "在 DSH 输入框下方列出可接续的 Codex 聊天，按具体项目分组，只把恢复内容插入草稿、不自动发送。",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./ui": "./src/ui-server.js",
+      "./ui-client": "./src/ui-client.js",
+      "./package.json": "./package.json",
+      "./client": "./src/ui-client.js"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "src/index.js",
+      "src/ui-server.js",
+      "src/ui-client.js",
+      "bin/cli.mjs",
+      "assets/hooks/*",
+      "assets/tools/*.py",
+      "assets/tools/*.sh",
+      "assets/skills/**/*",
+      "COMPARISON.md",
+      "CHANGELOG.md",
+      "README.md",
+      "LICENSE"
+    ],
+    "license": "MIT",
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.2.0-rc.1 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.2.0-rc.1 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0"
+    },
+    "scripts": {
+      "test": "node test-plugin.mjs && node tests/ui-tests.mjs && python3 tests/batch1-tests.py && python3 tests/batch2-tests.py && python3 tests/batch3-tests.py && python3 tests/batch4-resume-tests.py && python3 tests/project-scope-tests.py",
+      "test:ui": "node tests/ui-tests.mjs"
+    },
+    "bin": {
+      "dsh-codex-bridge": "bin/cli.mjs"
+    },
+    "engines": {
+      "node": ">=20",
+      "dsh": ">=0.2.0-rc.1 <0.3.0-0"
+    },
+    "dsh": {
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/bitqyh/dsh-codex-bridge.git"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "codex",
+      "handoff",
+      "resume",
+      "session",
+      "cordis"
+    ],
+    "homepage": "https://github.com/bitqyh/dsh-codex-bridge#readme",
+    "bugs": {
+      "url": "https://github.com/bitqyh/dsh-codex-bridge/issues"
+    },
+    "publishConfig": {
+      "access": "public"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# @bitqyh/dsh-codex-bridge 的 bundle patch。\n#\n# 只插入 **UI 入口**（src/ui-server.js + client）。\n# 事件扫描插件（src/index.js）**默认不插入**：\n# 它会按限速扫描日志并注入中断提示，属于可选的辅助能力，\n# 想要的人在自己 profile patch 里按文档手动添加即可。\n#\n# `cliPath` 由 src/ui-server.js 用 import.meta.url 解析为包内 bin/cli.mjs，\n# 这里不需要硬编码任何本机路径。\n#\n# ⚠️ `name` 必须用 **pathLike 形式**（`./` 开头），不能写「包名 + 子路径」\n# （`@bitqyh/dsh-codex-bridge/ui`）：宿主 @deepseek-ai/dsh-client-modules 的\n# exactPackageSpecifier 会拒掉带 `/` 的包名形式，条目被**静默跳过**——\n# 服务端接口一切正常，但界面上的按钮不渲染。`parsePatchList` 会把 `./`\n# 按 **patch 文件所在目录**锚成 file:// URL，所以同一份 patch 装到任何目录\n# 都能解析到各自的 ui-server.js，是可移植的。\n# 详见：~/Documents/GPToutput/ai-memory跨agent交接/插件加载恢复记录-2026-11-02.md\n\n- insert:\n    - id: dsh-codex-bridge-ui\n      name: './src/ui-server.js'\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "bin/cli.mjs",
+    "src/ui-server.js",
+    "src/ui-client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "AI_MEMORY_HOOK_URL",
+      "kind": "env",
+      "where": "assets/tools/codex-checkpoint.py:33"
+    },
+    {
+      "name": "AI_MEMORY_AUTH_TOKEN",
+      "kind": "env",
+      "where": "assets/tools/codex-checkpoint.py:511"
+    },
+    {
+      "name": "AI_MEMORY_DATA_DIR",
+      "kind": "env",
+      "where": "assets/tools/codex-checkpoint.py:515"
+    },
+    {
+      "name": "AI_MEMORY_HOOK_URL",
+      "kind": "env",
+      "where": "assets/tools/dsh-checkpoint.py:41"
+    },
+    {
+      "name": "AI_MEMORY_AUTH_TOKEN",
+      "kind": "env",
+      "where": "assets/tools/dsh-checkpoint.py:789"
+    },
+    {
+      "name": "AI_MEMORY_DATA_DIR",
+      "kind": "env",
+      "where": "assets/tools/dsh-checkpoint.py:793"
+    },
+    {
+      "name": "AI_MEMORY_DATA_DIR",
+      "kind": "env",
+      "where": "assets/tools/resume.py:38"
+    },
+    {
+      "name": "BRIDGE_DB",
+      "kind": "env",
+      "where": "assets/tools/resume.py:41"
+    },
+    {
+      "name": "BRIDGE_DSH_ROOT",
+      "kind": "env",
+      "where": "assets/tools/resume.py:42"
+    },
+    {
+      "name": "BRIDGE_CODEX_ROOT",
+      "kind": "env",
+      "where": "assets/tools/resume.py:43"
+    },
+    {
+      "name": "BRIDGE_CODEX_INDEX",
+      "kind": "env",
+      "where": "assets/tools/resume.py:45"
+    },
+    {
+      "name": "BRIDGE_CODEX_STATE_DB",
+      "kind": "env",
+      "where": "assets/tools/resume.py:1170"
+    },
+    {
+      "name": "AI_MEMORY_HOOK_URL",
+      "kind": "env",
+      "where": "bin/cli.mjs:43"
+    },
+    {
+      "name": "AI_MEMORY_DATA_DIR",
+      "kind": "env",
+      "where": "bin/cli.mjs:46"
+    },
+    {
+      "name": "AI_MEMORY_AUTH_TOKEN",
+      "kind": "env",
+      "where": "bin/cli.mjs:54"
+    },
+    {
+      "name": "AI_MEMORY_DATA_DIR",
+      "kind": "env",
+      "where": "src/index.js:52"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/hooks/post-tool-use.sh:15"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/hooks/pre-tool-use.sh:15"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/hooks/session-start.sh:22"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/hooks/stop.sh:15"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/hooks/subagent-start.sh:10"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/hooks/subagent-stop.sh:10"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/hooks/user-prompt-submit.sh:23"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/tools/codex-checkpoint.py:33"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/acme/api/",
+      "where": "assets/tools/codex-checkpoint.py:382"
+    },
+    {
+      "host": "github.com",
+      "url": "https://user@github.com:443/Acme/API",
+      "where": "assets/tools/codex-checkpoint.py:383"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/tools/dsh-checkpoint.py:41"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/acme/api/",
+      "where": "assets/tools/dsh-checkpoint.py:605"
+    },
+    {
+      "host": "github.com",
+      "url": "https://user@github.com:443/Acme/API",
+      "where": "assets/tools/dsh-checkpoint.py:606"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "assets/tools/verify-autosave.py:33"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374",
+      "where": "bin/cli.mjs:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/akitaonrails/ai-memory",
+      "where": "bin/cli.mjs:109"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:49374）",
+      "where": "bin/cli.mjs:332"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/bitqyh/dsh-codex-bridge.git",
+      "where": "package.json:61"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/bitqyh/dsh-codex-bridge#readme",
+      "where": "package.json:73"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/bitqyh/dsh-codex-bridge/issues",
+      "where": "package.json:75"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.2.0-rc.1 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 13,
+    "pushed_at": "2026-11-05T03:23:04Z",
+    "created_at": "2026-11-01T12:59:05Z"
+  },
+  "runtime_files": [
+    "bin/cli.mjs",
+    "cordis.patch.yml",
+    "package.json",
+    "src/index.js",
+    "src/ui-client.js",
+    "src/ui-server.js",
+    "test-plugin.mjs",
+    "tests/batch1-tests.py",
+    "tests/batch2-tests.py",
+    "tests/batch3-tests.py",
+    "tests/batch4-resume-tests.py",
+    "tests/project-scope-tests.py",
+    "tests/ui-tests.mjs"
+  ],
+  "readme": [
+    {
+      "section": "@bitqyh/dsh-codex-bridge",
+      "text": "Codex ↔ DSH 跨 agent 接力：会话采集、自动存档、中断恢复提示。\n\n**一个包，一条命令安装。**\n\n> **只想用中断恢复？** 直接在项目目录跑\n> `dsh-codex-bridge resume --from-agent codex` 即可，**不需要**注册插件、\n> 装 profile 或重启 DSH。\n> 下面「安装」段落装的是**事件插件**（会话采集/自动存档/中断提示），\n> 那套需要注册与重启；**它不是使用 `resume` 的前置条件**。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile desktop add @bitqyh/dsh-codex-bridge\n```\n\n然后跑安装命令（**不会自动改文件**，见下方说明）：\n\n```bash\nnpx @bitqyh/dsh-codex-bridge doctor          # 先只读检查\nnpx @bitqyh/dsh-codex-bridge setup           # 看计划（不写文件）\nnpx @bitqyh/dsh-codex-bridge setup --yes     # 真正安装 DSH 侧\nnpx @bitqyh/dsh-codex-bridge setup-codex --yes   # 安装 Codex 侧\n\n> 本包的 `cordis.patch.yml` 已自带 **UI 入口**（「交接」按钮），`dsh plugin add`\n> 装完重启 DSH 即可使用，不需要再手动改 profile patch。\n> 只有想额外启用**事件扫描插件**（中断提示）时才需要下面这一步。\n\n最后（可选，仅事件插件）："
+    },
+    {
+      "section": "安装",
+      "text": "1. 在 `~/.dsh/profiles/desktop/cordis.patch.yml` 加：\n\n```yaml\n- insert:\n    - id: dsh-codex-bridge-events\n      name: '@bitqyh/dsh-codex-bridge'\n```\n\n2. 重启 DSH\n3. Codex 里 `/hooks` 重新信任（改了命令哈希会失效，且**静默跳过**）"
+    },
+    {
+      "section": "为什么不用 postinstall 自动装",
+      "text": "两个原因，都实测过：\n\n**1. 技术上跑不起来。** DSH profile 用 pnpm 11，`pnpm-workspace.yaml` 的\n`allowBuilds` 白名单会拦掉未批准的安装脚本：\n\n```\n[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: ...\n```\n\n本机白名单只有 `cloudflared`，所以 `postinstall` 根本不会执行。\n\n**2. 产品上不该这么做。** 安装要往\n`~/Library/Application Support/ai-memory/hooks/dsh/` 写 13 个文件\n（7 个 hook 脚本 + 6 个工具脚本）、覆盖 `hooks.json`——都在项目目录之外。\n装一个 npm 包不预期会改这些。\n\n所以改成显式命令：**默认只打印计划，加 `--yes` 才执行**，且改任何文件前先备份。"
+    },
+    {
+      "section": "命令",
+      "text": "| 命令 | 作用 |\n|---|---|\n| `dsh-codex-bridge resume` | 构建中断会话的恢复上下文（只读） |\n| `dsh-codex-bridge doctor` | 只读检查两侧状态 |\n| `dsh-codex-bridge setup` | 安装 DSH 侧（先看计划） |\n| `dsh-codex-bridge setup --yes` | 真正执行 |\n| `dsh-codex-bridge setup-codex` | 安装 Codex 侧（合并，保留原有其他事件） |\n| `dsh-codex-bridge paths` | 打印所有相关路径 |\n\n选项：`--server=<url>` 覆盖 ai-memory 地址（默认 `http://127.0.0.1:49374`）。"
+    },
+    {
+      "section": "接续已有聊天",
+      "text": "**没有「已完成的任务」**——只有「本轮已收尾」和「因故中断」，后续都还会有新需求。\n所以接续既用于中断恢复，也用于上一轮正常结束之后的后续需求。\n\n三种入口，按顺手程度选：\n\n**1. DSH 界面按钮**：点输入框下方的「交接」→ 按**聊天名称**选 → 看预览 →\n点「插入当前对话」，内容进草稿，自己确认后再发送。\n\n列表**按具体项目分组**（组名就是项目名），未归属的合成「非项目会话」放最后；\n组顺序按组内最新会话时间倒序。搜索作用于全部会话，展开后行数只增不减。\n分组依据与它的边界见下面「项目归属」一节。\n\n**只插入草稿，绝不自动发送。** 按钮只调 `insertText`，不碰 `setDraft`/`paste`/`submit`。\n\n**2. Codex skill**：说「用接续任务接着 DSH 没做完的任务」，或 `$resume-task`。\n\n**3. 命令行**（备用入口）：\n\n> 在同一项目目录运行 `dsh-codex-bridge resume --from-agent codex`，先核验现场，再继续。"
+    },
+    {
+      "section": "接续已有聊天",
+      "text": "反向（从 DSH 切到 Codex）把参数改成 `--from-agent dsh`。\n\n候选里每个聊天带一个**本轮**标识：`本轮已收尾` / `因故中断` / `未收尾/需核验`。\n它说的是这一轮怎么结束的，不是任务完成度。徽标是**可接续聊天数**。\n\n```bash"
+    },
+    {
+      "section": "备用 agent 在项目目录里跑；只读，不写 handoff/DB，不调用模型",
+      "text": "dsh-codex-bridge resume --from-agent codex"
+    },
+    {
+      "section": "两边工作目录不一致时，显式给路径",
+      "text": "dsh-codex-bridge resume --from-agent codex --cwd '<实际项目路径>'"
+    },
+    {
+      "section": "只有出现多个可接续来源时才需要指定（必须完整 native id，不猜 latest）",
+      "text": "dsh-codex-bridge resume --from-agent codex --session <完整native-id>\n```\n\n输出是一份机械提取的恢复上下文：定位信息、任务目标（人类原话）、已确认成功\n的操作、失败/未知/待审批、最后一条助手可见输出、接续前必须先核验的清单。\n\n**它是证据，不是新授权。** 备用 agent 按你当前的指令继续任务时，用的是它自己的\n模型和工具；`resume` 本身只读日志。\n\n退出码：`0` ready、`2` no-candidate、`3` needs-selection、`4` incomplete。\n`incomplete` 表示信息不足（缺目标、未知 scope、片段无法排序），**不要当通过**。"
+    },
+    {
+      "section": "它提供什么",
+      "text": "| 能力 | 说明 |\n|---|---|\n| 会话采集 | prompt、工具调用、轮次边界，上报 ai-memory |\n| 自动存档 | 每轮结束刷新可恢复快照（零 token） |\n| 中断检测 | 限速扫描磁盘日志，发现额度中断/崩溃的会话并注入提示 |\n| **手动恢复** | `resume` 只读解析原生日志，构建中断会话的恢复上下文；**可离线、无 DB 降级**，不依赖服务运行 |\n| **「交接」按钮** | 输入框下方按**具体项目**分组列出可接续的 Codex 聊天，只把恢复内容插入草稿 |"
+    },
+    {
+      "section": "和已有插件的区别",
+      "text": "市场里已有一批「把外部会话带进 DSH」的插件。本插件的定位是\n**不导入、不切换上下文、不写回**——只把会话列清楚，并诚实标注归属判断有多可靠。\n\n与 `dsh-codex-history`（平铺列表 + 导入）、`dsh-assembly.resume`（按路径末段命名分组 +\n导入会话）、`dsh-takeover`（新建会话接管）、`task-passport`（任务状态搬运）的逐条对比\n见 [COMPARISON.md](./COMPARISON.md)。"
+    },
+    {
+      "section": "开发与发布",
+      "text": "改了代码要发新版本时，完整流程（含 npm scope 组织、token 类型、202 异步落地、\n市场 PR 的几个坑）见 [RELEASE.md](./RELEASE.md)。\n\n```bash\nnpm install     # 首次：装 peer 依赖\nnpm test        # 201 项\nnpm pack --dry-run   # 发版前看清单\n```"
+    },
+    {
+      "section": "运行时依赖一览",
+      "text": "**这个包不是「一条命令装完就什么都不用管」。** 它复用你机器上已有的 `python3`\n读原生日志，装之前先对一下表：\n\n| 依赖 | 谁需要 | 缺了会怎样 |\n|---|---|---|\n| **Node.js ≥ 20** | 全部 | 插件不加载 |\n| **`python3` ≥ 3.8** | 「交接」列表、`resume`、`doctor` | **列表静默为空**，前端显示「读取失败」；CLI 无输出 |\n| `zstd` | 只读 **DSH 侧**会话时需要 | DSH 侧会话全部读不出，逐个进「已跳过」；Codex 侧不受影响 |\n| **ai-memory 服务** | 采集 / 自动存档 / 中断提示 | 「交接」列表和 `resume` 仍可用（它们不依赖服务） |\n| **Codex**（CLI 或 Desktop） | 读 Codex 会话 | Codex 侧没有可接续聊天 |\n\n自检："
+    },
+    {
+      "section": "运行时依赖一览",
+      "text": "```bash\nnode -v          # ≥ 20\npython3 -V       # ≥ 3.8（只用标准库，不需要 pip 装任何东西）\ncommand -v zstd  # 只读 DSH 侧才需要\n```\n\n`python3` 只用到标准库（`json`/`sqlite3`/`subprocess`/`pathlib` 等），\n**不需要 pip / requirements.txt**。已实测 macOS 自带的 `/usr/bin/python3`（3.9）\n可用；5 个工具脚本在 3.9 下全部编译通过。\n\n> 🪟 **Windows 暂未适配。** 代码里直接 `spawnSync(\"python3\", ...)`，而 Windows\n> 上通常只有 `python` 或 `py`，没有 `python3`。没有做 `process.platform` 分支，\n> 所以 Windows 上「交接」列表会是空的。装之前请确认 `python3` 在 PATH 里，\n> 否则等后续版本。"
+    },
+    {
+      "section": "运行时依赖一览",
+      "text": "> ⚠️ **`python3` 是硬依赖，而且缺了不会报错。** 实测：PATH 里没有 `python3` 时\n> CLI 退出码 1、stdout 为空、stderr 也为空，界面只说「读取失败」。\n> 如果你装完发现「交接」列表一直是空的，先 `command -v python3`。"
+    },
+    {
+      "section": "按你要用的能力分",
+      "text": "**① 采集 / 自动存档 / 普通 handoff** — 需要已安装并运行 ai-memory 服务\n（本包不包含）：\n\n```bash\nlaunchctl list | grep ai-memory\ncurl -s http://127.0.0.1:49374/healthz   # → {\"status\":\"ok\"}\n```\n\n没装见 https://github.com/akitaonrails/ai-memory\n\n**② `resume` 手动恢复** — **不需要服务运行**："
+    },
+    {
+      "section": "按你要用的能力分",
+      "text": "- 直接读本机原生日志（Codex `~/.codex/sessions`、DSH sessions 目录）。\n- **没有 ai-memory 数据库也能用**：正文全部由原生日志构建，恢复内容一个字节都不少。\n- **只读 DSH 侧会话时需要 `zstd`**（DSH 日志是 `session.v4.jsonl.zstd`）。\n  没有 zstd 时 DSH 侧会话会全部读不出并逐个进「已跳过」统计，Codex 侧不受影响\n  ——因为 Codex 日志是未压缩的 `.jsonl`。\n- **有 DB 时会多做三项一致性核对**（这是 DB 唯一的作用，它不是恢复内容的来源）：\n  1. 日志末尾 vs 钩子最后上报 → 钩子是否在丢事件\n  2. 日志末尾 vs 存档时间 → **存档是否落后于真实进度**（超过 90 秒即报，\n     额度中断/崩溃时最容易出现）\n  3. 会话是否在 DB 登记、agent kind 是否一致\n  缺 DB 时这三项跳过，正文开头标一行「缺 DB 校验」。\n- 注意 `ended_at` **不参与**进度新旧判断：它是「钩子捕获到结束的时刻」，\n  与日志末尾实测可差 ±16 小时且方向不定。"
+    },
+    {
+      "section": "配置",
+      "text": "```js\n{\n  scriptPath: \"\",         // 留空自动解析（已安装位置 → 包内自带）\n  throttleSeconds: 600,   // 扫描限速窗口\n  sinceHours: 24,         // 只看最近 N 小时有活动的会话"
+    },
+    {
+      "section": "为什么挂 UserPromptSubmit 而不是 SessionStart",
+      "text": "常驻会话不会重新触发 `SessionStart`。实测一个长期会话：\n\n| 钩子 | 触发次数 |\n|---|---|\n| PreToolUse / PostToolUse | 821 / 821 |\n| UserPromptSubmit | 63 |\n| **SessionStart** | **0** |\n\n用户日常把 agent 挂后台，挂 `SessionStart` 基本不会跑。"
+    },
+    {
+      "section": "为什么 hooks 全用脚本模式",
+      "text": "DSH 钩子在会话沙箱里运行。`workspace-write` 模式下写不了\n`~/Library/Application Support/ai-memory`，而 ai-memory 原生二进制\n**先落 spool 再发送**，写不进去就整条丢弃：\n\n```\nai-memory hook warning: failed to spool lifecycle event\n```\n\n实测某会话 762 次钩子调用里 **744 次**这样丢失。所以本包生成的\n`hooks.json` 7 个事件全部走脚本直连。"
+    },
+    {
+      "section": "为什么插件只提示、不自动写交接",
+      "text": "恢复摘要需要理解「他做到哪一步」，机械解析给不了。所以：\n插件负责**发现和提示**，接手的 agent 读 raw 后自己写恢复交接。"
+    },
+    {
+      "section": "包内结构",
+      "text": "```\ndsh-codex-bridge/\n├── src/index.js      事件插件（中断扫描 + 注入）\n├── src/ui-server.js  「交接」按钮的后端（只读接口）\n├── src/ui-client.js  「交接」按钮的前端（分组渲染）"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnpm install                           # 先装 peer 依赖（@deepseek-ai/dsh-llm）\nnpm test                              # 全部 201 项\nnode test-plugin.mjs                  # 11 项：插件逻辑\nnode tests/ui-tests.mjs               # 16 项：交接按钮前端\n\n> 从 GitHub 克隆后直接 `npm test` 会报 `Cannot find package '@deepseek-ai/dsh-llm'`\n> ——它声明在 `peerDependencies`（装进 DSH profile 时由宿主提供）。\n> 只在仓库里跑测试需要先 `npm install`，`devDependencies` 会把它装上。\n> 已作为插件装进 profile 的开发副本不需要，因为它会沿目录树解析到 profile 的\n> `node_modules`。"
+    },
+    {
+      "section": "测试",
+      "text": "插件逻辑测试覆盖：注册事件、只注入可操作项、活跃会话不提示、去重、限速、\n脚本缺失静默、开关、downstream 非 enter 时不注入。"
+    },
+    {
+      "section": "项目归属：怎么分组，以及它不知道什么",
+      "text": "「交接」列表按**每个具体项目各自一组**显示，未归属的合成「非项目会话」放最后。\n组顺序按组内最新一条会话的时间倒序（最近在做的项目排最前），组内仍按时间倒序。\n\n**分组依据是「目录匹配」，不是会话归属。** 这点必须说清楚：\n\n| 依据 | 含义 | 代码里的 `project_basis` |\n|---|---|---|\n| `threads.project_id` | Codex 记录的**会话所属项目**，权威 | `thread` |\n| `project_roots.path` + cwd 路径边界匹配 | 只能说明 cwd 落在某个**登记目录**内 | `dir` |\n| 元数据读不到 | 归属**未知**，不等于「确认非项目」 | `unavailable` |\n| 目录同时登记给多个项目 | 归属**未知**，不按注册表行序猜一个 | `ambiguous` |\n| 都不命中 | 确实没有依据 | `none` |"
+    },
+    {
+      "section": "项目归属：怎么分组，以及它不知道什么",
+      "text": "优先级 `thread` > `dir` > `ambiguous` / `unavailable` > `none`。当前 Codex 版本的\n`threads.project_id` 整列为空，所以实际跑的是 `dir`；将来该列有值时自动接管。\n\n**几个容易误解的点：**"
+    },
+    {
+      "section": "项目归属：怎么分组，以及它不知道什么",
+      "text": "- `threads.project_id` 全空**不代表**这些会话不属于任何项目，只说明这一版 schema\n  没写入这个字段。所以元数据不可读时标「未知」，**不**降级成「确认非项目」。\n- 不把「cwd 不是 home」当作项目，也不按目录名或日期形状（如 `2026-11-01`）推断——\n  日期目录只有在 `project_roots` 里登记过才算项目。\n- 路径边界匹配：`/a/b` **不**匹配 `/a/bc`；嵌套取最长根；尾斜杠归一。\n- **同一目录登记给多个项目时不猜**：注册表里两个根路径相同，谁先出现只取决于\n  SQLite 返回顺序。这时取「第一个」等于让行序静默决定归属，所以标 `ambiguous`\n  并归入非项目组。（真实案例：`.../Liner-transformer` 同时挂在「论文复现」和\n  「PPT制作」下。）\n- 元数据不可用、或目录歧义时，列表会分别单独提示，且这些会话**没有被跳过**\n  ——不计入「N 个日志无法确认归属，已跳过」的统计。"
+    },
+    {
+      "section": "项目归属：怎么分组，以及它不知道什么",
+      "text": "默认读 `~/.codex/state_5.sqlite`，可用环境变量 `BRIDGE_CODEX_STATE_DB`\n或 `--db` 覆盖。"
+    },
+    {
+      "section": "边界",
+      "text": "- **不包含 ai-memory 服务本身**。采集、存档、普通 handoff 需要它；\n  `resume` 读原生日志不依赖它；缺 DB 时只是少做三项一致性核对，不丢恢复内容。\n- **Codex 侧需要重新信任钩子**（信任哈希绑定命令），改完不信任会静默跳过。\n  这条只影响采集，不影响 `resume`。\n- **插件只发现和提示中断**，不自动写恢复交接。\n- 中断期间不会有任何自动动作（进程已死），只能等下次有 agent 活着时补。\n- **没有后台派发、没有自动切换模型**；切换由你手动决定，`resume` 只负责\n  把上一个 agent 的现场整理成可核验的文本。\n- **未落盘的信息无法重建**：日志里没有的事件，恢复上下文里也不会有。\n- 源会话如果还活着，先暂停/确认停止再接手，避免两边同时改同一个任务。"
+    }
+  ],
+  "skipped": []
+}

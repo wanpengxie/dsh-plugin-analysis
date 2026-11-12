@@ -1,0 +1,998 @@
+{
+  "repo": "SOH4C4759/dsh-plugin-cicd",
+  "commit": "f162a3227f189e086abcdc33712e7e657c771ea3",
+  "extracted_at": "2026-11-11T14:24:07.402363+00:00",
+  "tree": {
+    "files": 24,
+    "bytes": 938708,
+    "lines_by_language": {
+      "JSON": 65,
+      "JavaScript": 16689,
+      "Markdown": 512,
+      "Other": 165,
+      "YAML": 418
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "RELEASING.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "lib/bilibili.mjs",
+      "lib/config-store.mjs",
+      "lib/pipeline.mjs",
+      "package.json",
+      "scripts/configure.mjs",
+      "scripts/push-via-api.ps1",
+      "scripts/verify-bundle.mjs",
+      "tests/bilibili-check.mjs",
+      "tests/bump-e2e.mjs",
+      "tests/client-render.mjs",
+      "tests/host-checks.mjs",
+      "tests/mount-check.mjs",
+      "tests/pipeline-check.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-cicd",
+    "version": "0.5.3",
+    "description": "发布台（Release Console）for DeepSeek Harness: a sidebar entry and a full main-panel page that show what each repository has built, what it has released, whether the local checkout is ahead of the release, whether the copy installed in this profile is the published artifact, and which version npm holds. 发布 is one press that does the whole release (发布同台): push the code, bump the version when the workflow would refuse it, dispatch release.yml asking for a draft, wait for that run, push npm, then make the draft public, then announce on Bilibili. The order is the feature — an npm publish is irreversible and a draft is not, so a refused npm push leaves the Release unpublished and the pipeline can be resumed, or the Release published without npm. The separate buttons remain for a repository whose release must stay a draft. It also carries the third channel: when a release goes public, one short update note is posted under the video that introduces the plugin, with the credential obtained from a Bilibili sign-in inside the panel. Reuses the machine's authenticated gh CLI and the Host's own package manager, so the plugin stores no GitHub or npm credential of its own; the one credential it does own is the Bilibili session it created, kept in its own directory and never echoed back.",
+    "type": "module",
+    "icon": "./icon.svg",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "lib",
+      "icon.svg",
+      "cordis.patch.yml",
+      "README.md",
+      "RELEASING.md",
+      "scripts",
+      "tests",
+      "LICENSE"
+    ],
+    "meta": {
+      "title": "DSH 插件发布台",
+      "description": "面向 DSH 插件仓库的持续构建与发布（CI/CD）：侧边栏图标 + 独立主面板，显示每个仓库的最近一次运行、已发布的 Release、本地是否领先于发布、本 profile 装的到底是哪一份（link: 本地检出 / Release 的 tgz），以及 npm 上是哪一版。浏览器登录、勾选仓库即可，复用本机已登录的 gh 与 Host 自己的包管理器，不另存 GitHub / npm 凭据。【发布】是一键发布（发布同台）：提交并推送代码 → 升版本（必要时）→ 触发 release.yml 取草稿 → 等 CI 成功 → 推 npm → 公开 Release → B 站播报，顺序不可换——npm 推送不可逆而草稿不是，所以 npm 失败时 Release 留在草稿、对外全有或全无，补上原因（如 2FA 一次性密码）即可继续，也可以选择跳过 npm 只公开 Release。装 Release 后面板接着问要不要重启（转发给 dsh-plugin-restart）；未登录 npm 时可在面板里粘贴 token 写入 npm 自己的 .npmrc。第三条渠道是 B 站更新播报：Release 公开后，在绑定的视频评论区自动补一条简短的更新说明——只认已公开的 Release（草稿不算），按 (仓库, tag) 幂等，绑定视频时写入基线所以不追发历史版本；凭据走面板内的 B 站登录（passport 网页二维码）或粘贴一次，落在插件自己的目录里、不回显，并且会真的去问一次账号接口——因为 biliup 默认写下的 cookies.json 是 BiliTV 登录，发评论走的却是 Web 接口。门禁与产包形状按 DSH bundle 设计（契约检查 + 整树 zip + 可安装 tgz + npm），任何带 ci.yml / release.yml 的仓库都能接。"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-layout",
+          "@deepseek-ai/dsh-client-ui-sidebar"
+        ]
+      }
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "github-actions",
+      "release",
+      "ci",
+      "cd",
+      "gh-cli"
+    ],
+    "license": "MIT",
+    "author": "林冠宇 (SOH4C4759) <107021339+SOH4C4759@users.noreply.github.com>",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/SOH4C4759/dsh-plugin-cicd.git"
+    },
+    "homepage": "https://github.com/SOH4C4759/dsh-plugin-cicd#readme",
+    "bugs": {
+      "url": "https://github.com/SOH4C4759/dsh-plugin-cicd/issues"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plugin-cicd bundle patch.\n#\n# One Host row named after the package. The Host half owns the loopback route\n# family `/api/dsh-cicd/*` and shells out to the machine's authenticated `gh`;\n# the browser half is declared by `dsh.client` in package.json and registers the\n# sidebar entry plus the `main` panel.\n#\n# The repository list is deliberately EMPTY here. Which repositories a machine\n# watches is deployment state, not package state: shipping a list would publish\n# one user's private repository names inside a public package, and every install\n# would then need to unpick it.\n#\n# Do not hand-write the list either. `scripts/configure.mjs` owns a JSON file and\n# the panel re-reads it on every request, so a change applies without a restart:\n#\n#   node scripts/configure.mjs add <repo> --path <absolute dir>\n#\n# This row therefore carries only the machine-specific bits:\n#\n#   - id: dsh-plugin-cicd\n#     config:\n#       ghPath: 'C:\\Program Files\\GitHub CLI\\gh.exe'\n#       owner: your-login\n#\n# Full option list (each has a default, so only write what you change):\n#   owner             default ''      GitHub login for bare `repo` entries\n#   repos             default []      hand-written fallback; the managed file wins\n#   configFile        default ''      '' = <DSH_HOME>/dsh-plugin-cicd/repos.json\n#   projectsRoot      default ''      where local checkouts live; the panel adds a\n#                                     repository by matching its package.json name there\n#   defaultBranch     default main    ref used when the panel triggers a workflow\n#   buildWorkflow     default ci.yml  the workflow the 构建 button dispatches\n#   releaseWorkflow   default release.yml\n#   ghPath            default ''      empty = resolve from PATH and common installs\n#   requestTimeoutMs  default 20000   per `gh` invocation\n#   overviewTtlMs     default 15000   cache window; the panel polls through it\n#   logTailLines      default 120     how much of `--log-failed` the panel shows\n#   pollSeconds       default 30      how often the panel refreshes itself\n#   bilibiliEnabled   default true    the whole Bilibili update-note feature\n#   bilibiliAuto      default true    post automatically when a release goes public;\n#                                     false leaves only the panel's button\n#   bilibiliWatchSeconds\n#                     default 90      how often the Host looks for a newly published\n#                                     release; 0 stops the clock (the sweep after\n#                                     publishing a draft still runs)\n#   bilibiliTemplate  default ''      '' = 【更新 {tag}】{summary}. Placeholders:\n#                                     {tag} {version} {label} {repo} {title}\n#                                     {summary} {url} {date}\n#   bilibiliCookieFile\n#                     default ''      '' = the plugin's own file, which the panel's\n#                                     sign-in writes. Point it at biliup's\n#                                     cookies.json to read that instead — but note\n#                                     that biliup logs in as BiliTV, and a comment is\n#                                     a WEB API, so a TV credential answers -101.\n#   bilibiliVerifyTtlMs\n#                     default 300000  how long a credential/video answer is reused\n#   enabled           default true\n- insert:\n    - id: dsh-plugin-cicd\n      name: 'dsh-plugin-cicd'\n      config:\n        owner: ''\n        repos: []\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:548"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "index.js:548"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "index.js:548"
+    },
+    {
+      "name": "DSH_GH_PATH",
+      "kind": "env",
+      "where": "index.js:684"
+    },
+    {
+      "name": "DSH_GITHUB_CLI",
+      "kind": "env",
+      "where": "index.js:684"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:696"
+    },
+    {
+      "name": "ProgramFiles",
+      "kind": "env",
+      "where": "index.js:697"
+    },
+    {
+      "name": "DSH_PNPM",
+      "kind": "env",
+      "where": "index.js:1837"
+    },
+    {
+      "name": "DSH_PROFILE",
+      "kind": "env",
+      "where": "index.js:2154"
+    },
+    {
+      "name": "DSH_CICD_CONFIG",
+      "kind": "env",
+      "where": "scripts/configure.mjs:59"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/configure.mjs:60"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/configure.mjs:61"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "scripts/configure.mjs:62"
+    },
+    {
+      "name": "DSH_WEB_URL",
+      "kind": "env",
+      "where": "scripts/configure.mjs:166"
+    },
+    {
+      "name": "DSH_CICD_LIVE",
+      "kind": "env",
+      "where": "tests/host-checks.mjs:569"
+    },
+    {
+      "name": "DSH_CICD_LIVE",
+      "kind": "env",
+      "where": "tests/mount-check.mjs:306"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/signup",
+      "where": "client.js:75"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/settings/~/tokens",
+      "where": "client.js:76"
+    },
+    {
+      "host": "docs.npmjs.com",
+      "url": "https://docs.npmjs.com/creating-and-viewing-access-tokens",
+      "where": "client.js:77"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo.git",
+      "where": "client.js:214"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo.git",
+      "where": "client.js:624"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/login/device",
+      "where": "client.js:1345"
+    },
+    {
+      "host": "cli.github.com",
+      "url": "https://cli.github.com/",
+      "where": "client.js:1410"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/login/device",
+      "where": "client.js:1424"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "index.js:182"
+    },
+    {
+      "host": "${value",
+      "url": "http://${value",
+      "where": "index.js:323"
+    },
+    {
+      "host": "${server",
+      "url": "http://${server",
+      "where": "index.js:335"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:7897`",
+      "where": "index.js:481"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${name.replace(/^\\/+|\\/+$/g",
+      "where": "index.js:771"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${login",
+      "where": "index.js:773"
+    },
+    {
+      "host": "${authority",
+      "url": "http://${authority",
+      "where": "index.js:1019"
+    },
+    {
+      "host": "registry.npmjs.org`",
+      "url": "https://registry.npmjs.org`",
+      "where": "index.js:1554"
+    },
+    {
+      "host": "${authority",
+      "url": "http://${authority",
+      "where": "index.js:3261"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/${binding.bvid",
+      "where": "index.js:4399"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/${binding.bvid",
+      "where": "index.js:5081"
+    },
+    {
+      "host": "…",
+      "url": "https://…",
+      "where": "lib/bilibili.mjs:270"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/",
+      "where": "lib/bilibili.mjs:768"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com",
+      "where": "lib/bilibili.mjs:770"
+    },
+    {
+      "host": "api.bilibili.com",
+      "url": "https://api.bilibili.com/x/member/web/account",
+      "where": "lib/bilibili.mjs:797"
+    },
+    {
+      "host": "api.bilibili.com",
+      "url": "https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid",
+      "where": "lib/bilibili.mjs:821"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/${bvid",
+      "where": "lib/bilibili.mjs:823"
+    },
+    {
+      "host": "api.bilibili.com",
+      "url": "https://api.bilibili.com/x/v2/reply/add?csrf=${encodeURIComponent(csrf",
+      "where": "lib/bilibili.mjs:862"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/${bvid",
+      "where": "lib/bilibili.mjs:866"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com",
+      "where": "lib/bilibili.mjs:867"
+    },
+    {
+      "host": "api.bilibili.com",
+      "url": "https://api.bilibili.com/x/v2/reply/reply?${query",
+      "where": "lib/bilibili.mjs:914"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/",
+      "where": "lib/bilibili.mjs:916"
+    },
+    {
+      "host": "api.bilibili.com",
+      "url": "https://api.bilibili.com/x/frontend/finger/spi",
+      "where": "lib/bilibili.mjs:945"
+    },
+    {
+      "host": "passport.bilibili.com",
+      "url": "https://passport.bilibili.com/x/passport-login/web/qrcode/generate",
+      "where": "lib/bilibili.mjs:954"
+    },
+    {
+      "host": "passport.bilibili.com",
+      "url": "https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${encodeURIComponent(key",
+      "where": "lib/bilibili.mjs:973"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SOH4C4759/dsh-plugin-cicd.git",
+      "where": "package.json:59"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SOH4C4759/dsh-plugin-cicd#readme",
+      "where": "package.json:61"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SOH4C4759/dsh-plugin-cicd/issues",
+      "where": "package.json:63"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:19387",
+      "where": "scripts/configure.mjs:21"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:19387",
+      "where": "scripts/configure.mjs:32"
+    },
+    {
+      "host": "x",
+      "url": "https://x/y",
+      "where": "tests/bilibili-check.mjs:103"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r/pull/1\\n\\n**Full",
+      "where": "tests/bilibili-check.mjs:107"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/o/r/compare/v1.0.0...v1.0.1",
+      "where": "tests/bilibili-check.mjs:147"
+    },
+    {
+      "host": "example.invalid",
+      "url": "https://example.invalid/v0.5.1",
+      "where": "tests/bilibili-check.mjs:167"
+    },
+    {
+      "host": "example.invalid",
+      "url": "https://example.invalid/1",
+      "where": "tests/bilibili-check.mjs:172"
+    },
+    {
+      "host": "example.invalid",
+      "url": "https://example.invalid/1",
+      "where": "tests/bilibili-check.mjs:173"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/BV1RopP6FEJp/",
+      "where": "tests/bilibili-check.mjs:269"
+    },
+    {
+      "host": "account.bilibili.com",
+      "url": "https://account.bilibili.com/h5/x?qrcode_key=k",
+      "where": "tests/bilibili-check.mjs:278"
+    },
+    {
+      "host": "passport.biligame.com",
+      "url": "https://passport.biligame.com/crossDomain?DedeUserID=42&SESSDATA=sess%2Cfrom%2Curl&bili_jct=jct-from-url&gourl=https%3A%2F%2Fwww.bilibili.com&Expires=1806856570",
+      "where": "tests/bilibili-check.mjs:303"
+    },
+    {
+      "host": "passport.biligame.com",
+      "url": "https://passport.biligame.com/crossDomain?SESSDATA=from-url&bili_jct=from-url",
+      "where": "tests/bilibili-check.mjs:311"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "tests/bilibili-check.mjs:371"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "tests/bilibili-check.mjs:381"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "tests/bump-e2e.mjs:120"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${String(port",
+      "where": "tests/bump-e2e.mjs:132"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${String(port",
+      "where": "tests/bump-e2e.mjs:134"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/client-render.mjs:463"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/dsh-plugin-restart",
+      "where": "tests/client-render.mjs:464"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/client-render.mjs:474"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/client-render.mjs:814"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/client-render.mjs:835"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/client-render.mjs:886"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/client-render.mjs:920"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/client-render.mjs:971"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/BV1RopP6FEJp/",
+      "where": "tests/client-render.mjs:1081"
+    },
+    {
+      "host": "example.invalid",
+      "url": "https://example.invalid/v1.0.1",
+      "where": "tests/client-render.mjs:1195"
+    },
+    {
+      "host": "account.bilibili.com",
+      "url": "https://account.bilibili.com/h5/account-h5/auth/scan-web?navhide=1&callback=close&qrcode_key=fda852ed16a061fae96dd764c797168f&from=",
+      "where": "tests/client-render.mjs:1383"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/${",
+      "where": "tests/client-render.mjs:1435"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SOH4C4759/dsh-plugin-restart.git",
+      "where": "tests/client-render.mjs:1457"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SOH4C4759/dsh-plugin-restart.git",
+      "where": "tests/client-render.mjs:1466"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SOH4C4759/dsh-plugin-restart.git",
+      "where": "tests/client-render.mjs:1470"
+    },
+    {
+      "host": "www.bilibili.com",
+      "url": "https://www.bilibili.com/video/BV1RopP6FEJp/#reply316418818849",
+      "where": "tests/client-render.mjs:1503"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SOH4C4759/dsh-plugin-restart/actions/runs/42",
+      "where": "tests/client-render.mjs:1564"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "tests/host-checks.mjs:372"
+    },
+    {
+      "host": "npm.pkg.github.com",
+      "url": "https://npm.pkg.github.com/",
+      "where": "tests/host-checks.mjs:373"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/npm",
+      "where": "tests/host-checks.mjs:374"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:375"
+    },
+    {
+      "host": "example.com",
+      "url": "https://user:pass@example.com/",
+      "where": "tests/host-checks.mjs:377"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:377"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:378"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:379"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "tests/host-checks.mjs:380"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:382"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:383"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:384"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:385"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:386"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/\\n//registry.npmjs.org/:_authToken=old\\n//npm.pkg.github.com/:_authToken=other\\n",
+      "where": "tests/host-checks.mjs:388"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:389"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:392"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/\\n",
+      "where": "tests/host-checks.mjs:395"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:399"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:400"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/x",
+      "where": "tests/host-checks.mjs:463"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/x",
+      "where": "tests/host-checks.mjs:464"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "tests/host-checks.mjs:467"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:475"
+    },
+    {
+      "host": "r.example",
+      "url": "https://r.example/npm/?a=1",
+      "where": "tests/host-checks.mjs:485"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SOH4C4759/dsh-ui-sound.git",
+      "where": "tests/host-checks.mjs:490"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/octocat/Hello-World.git",
+      "where": "tests/host-checks.mjs:491"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/octocat/Hello-World.git",
+      "where": "tests/host-checks.mjs:494"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "tests/host-checks.mjs:547"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/dsh-plugin-restart",
+      "where": "tests/host-checks.mjs:548"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/dsh-plugin-restart",
+      "where": "tests/host-checks.mjs:550"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "tests/mount-check.mjs:128"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${server.address(",
+      "where": "tests/mount-check.mjs:140"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/run/4242",
+      "where": "tests/pipeline-check.mjs:145"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 58,
+    "pushed_at": "2026-10-18T14:19:35Z",
+    "created_at": "2026-10-06T17:43:12Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "lib/bilibili.mjs",
+    "lib/config-store.mjs",
+    "lib/pipeline.mjs",
+    "package.json",
+    "scripts/configure.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-cicd（DSH 插件发布台）",
+      "text": "把 **DSH 插件的持续构建与发布（CI/CD）**搬进 DeepSeek Harness：侧边栏一个图标，点开是一个占满主区域的独立面板。\n\n> **名字**：界面显示名为「DSH 插件发布台」（副标题「持续构建与发布（CI/CD）」；英文界面为 `DSH Plugin CI/CD`）。包名与仓库 id 保持 `dsh-plugin-cicd` —— 它们只是技术标识，改名会破坏已有安装（profile 的 `link:` 路径、bundles 条目、patch 里的 row id、配置文件路径）。\n\n它回答四个 GitHub 页面各自只说了一部分的问题："
+    },
+    {
+      "section": "dsh-plugin-cicd（DSH 插件发布台）",
+      "text": "- **构建过了吗** —— 每个仓库最近一次运行的状态、耗时、触发事件。\n- **发布了吗** —— 已发布的 Release、还在草稿箱里的 Release、资产清单。\n- **本地领先于发布吗** —— 本地 `package.json` 版本、领先/落后提交数、未提交文件数。\n- **装的是发布出去的那份吗** —— 本机 profile 里这份是 `link:` 的本地检出、还是 Release 上的 tgz；差几号版本。\n- **npm 上是哪一版** —— 这个版本在不在公开源上；不在的话，一次点击就能推上去。\n\n也就是说：**一个包，两条分发渠道**。GitHub Release 给人下载与审阅，npm 让 `dsh plugin add <名字>` 一条命令装完。"
+    },
+    {
+      "section": "dsh-plugin-cicd（DSH 插件发布台）",
+      "text": "面板上能直接做的动作，**行上的顺序就是工作的顺序**：`提交`（`git add -A` + commit + push）、`构建`（触发 `ci.yml`）、`发布`（触发 `release.yml`，默认产出草稿）、`升版本并发布`、`公开发布草稿`、`推送到 npm vX`（+ 在面板里写 npm token）、`装 Release vX` / `更新到 vX`、`重跑`、`取消`、`看失败日志`，以及更新之后的 `立即重启 DSH`。\n\n**`提交` 为什么排在最前面**：`构建` 和 `发布` 都作用于 **GitHub 上的那个提交**——workflow 跑的是推送上去的 commit。所以只存在于工作区、或只存在于本机的改动，它们**都看不见**。面板一直在警告这件事（脏工作区那行、`↑N` 那个 chip），在这之前唯一的出路是开终端。它**永远不是主按钮**：它是步骤，不是目的。"
+    },
+    {
+      "section": "dsh-plugin-cicd（DSH 插件发布台）",
+      "text": "`提交` 一个按钮两种含义，因为两者是同一个陷阱的两半：**有改动** → 提交并推送；**工作区干净但领先上游** → 只推送（按钮此时显示`推送`）；**两者皆无** → 按钮禁用并写明原因。`git add -A` 是刻意的（发布也需要新增文件），所以确认框会把**待提交的文件名列出来**——\"7 个改动\"可能是你要的 3 个加上你没见过的 4 个。提交信息为空时确认按钮保持禁用。"
+    },
+    {
+      "section": "安装",
+      "text": "本机 profile 用 `link:` 指向检出目录，和其它插件一致：\n\n```powershell\ndsh plugin --profile desktop add \"link:F:\\CodeProj\\dsh-plugin-cicd\"\n```\n\n装完需要重启 DSH 才会被组合进运行时（宿主半边与浏览器半边都要）。"
+    },
+    {
+      "section": "零代码操作（给不写程序的人）",
+      "text": "| 要做的事 | 怎么做 | 需要命令行吗 |\n|---|---|---|\n| 登录 GitHub | 面板顶部的「用浏览器登录 GitHub」→ 打开授权页 → 输入面板显示的一次性代码 | **不需要**（Host 替你跑 `gh auth login --web`，把码显示出来） |\n| 补齐权限 | 同一处的「补齐权限」，走同样的浏览器流程 | **不需要** |\n| 添加仓库 | 「管理仓库」→ 从你的仓库列表勾选（本地检出自动匹配） | **不需要** |\n| 移除仓库 | 取消勾选 | **不需要** |\n| 触发构建 | 仓库那一行的「构建」 | **不需要** |\n| 发布（一键：代码推送 + Release + npm） | 仓库那一行的「一键发布」→ 确认框（脏工作区就填提交信息，2FA 就填一次性密码）→「确认发布」 | **不需要**（Host 起一条流水线，跟着 CI 走完：升版本、推 npm、公开 Release、B 站播报都由它自己接着做） |\n| 只出草稿（不要一键） | 配置里关掉 `oneClickRelease`，「发布」回到只触发构建 | **不需要** |\n| 公开草稿（手动路径） | 展开行 →「公开草稿」→「确认公开？」（两次点击） | **不需要** |\n| 给 npm 一个 token | 面板顶部（未登录时才出现）粘贴 Access Token →「写入并验证」 | **不需要**（Host 写进 npm 自己读的 `~/.npmrc`，插件不保存 token） |\n| 单独推送到 npm（手动路径） | 展开行 →「推送到 npm vX」→「确认推送」（两次点击；开了 2FA 就在同一行填一次性密码） | **不需要**（Host 用 DSH 自带的 pnpm 发布，复用同一个包管理器） |\n| 更新已装的那份 | 行上的「更新到 vX」（**只有 profile 装的是更旧的发布包时才有**；`link:` 检出与\"装它会降级\"两种情况的按钮在展开处）→ 展开处「确认更新」 | **不需要**（Host 把 tgz 交给 DSH 自己的插件管理器安装） |\n| 让新版生效 | 更新后面板直接问「现在重启？」→「立即重启 DSH」 | **不需要**（转发给 `dsh-plugin-restart`；没装它会明确说） |\n| 看失败日志 / 重跑 / 取消 | 展开行里的对应按钮 | **不需要** |\n| 账号、权限、仓库清单 | 设置 → **插件** → **DSH 插件发布台** → **GitHub** | **不需要** |"
+    },
+    {
+      "section": "零代码操作（给不写程序的人）",
+      "text": "**仍然需要命令行的两件事**，如实列出，不假装不需要：\n\n1. **安装这个插件本身**（一次性）——见下一节。\n2. **打 tag**（只有想走 tag 触发那条路时）——版本号由【一键发布】自己升（版本已被别的提交占用时），但 `git tag vX && git push origin vX` 仍是**发布之外**的动作，面板不做。\n\n「更新」装完要重启才生效，这一步**面板会主动问**（见下文《更新已安装的插件》）；重启由 `dsh-plugin-restart` 执行，发布台自己不碰进程。\n\n「更新」装完要重启才生效，这一步**面板会主动问**（见下文《更新已安装的插件》）；重启由 `dsh-plugin-restart` 执行，发布台自己不碰进程。\n\n连 `gh` 都没装时，面板给下载页链接；而安装 `gh` 这一步在 Windows 上目前仍需一次终端（或用安装包）。"
+    },
+    {
+      "section": "别人怎么装（下载即用）",
+      "text": "Release 里有两个资产，回答两个不同的问题：\n\n| 资产 | 用途 |\n|---|---|\n| `dsh-plugin-cicd-<version>.tgz` | **可安装的那份**：一条命令装，不用解压、不需要本地检出 |\n| `dsh-plugin-cicd-<version>.zip` | 整棵仓库树，给人看/审/做 diff |\n| `SHA256SUMS.txt` | 上面两个的校验和（用途是\"确认你下载的没坏\"，不是防篡改——见 [RELEASING.md](RELEASING.md)） |\n\n```powershell"
+    },
+    {
+      "section": "1. 下载 tgz（或从 Release 页面直接下）",
+      "text": "gh release download v0.1.0 -R SOH4C4759/dsh-plugin-cicd -p '*.tgz'"
+    },
+    {
+      "section": "2. 装进你的 profile（把 desktop 换成你自己的）",
+      "text": "dsh plugin --profile desktop add \"file:$PWD\\dsh-plugin-cicd-0.1.0.tgz\""
+    },
+    {
+      "section": "3. 重启 DSH，侧边栏出现「发布台」图标",
+      "text": "```\n\n`file:` 指向本地的 tgz，pnpm 会解包进 profile 的 `node_modules`。这条路径已经在发布资产上实测过：解包后 `scripts/verify-bundle.mjs` 与 `tests/host-checks.mjs` 都能跑通，`cordis.patch.yml` 与 `scripts/configure.mjs` 都在包里（`npm pack` 只带 `files` 白名单，CI 每次都验这两点）。"
+    },
+    {
+      "section": "更新已安装的插件（把上一条从终端搬进面板）",
+      "text": "上面那三行命令，现在就是面板上一个按钮：**「装 Release vX」/「更新到 vX」**。它做的正是那三行的前两步，第三步（重启）由面板接着问。\n\n每一行都会先回答\"这个 profile 里现在装的是什么\"，因为**版本号相等不代表同一份代码**："
+    },
+    {
+      "section": "更新已安装的插件（把上一条从终端搬进面板）",
+      "text": "| profile 里的依赖 | 面板的判断 | 行上有没有按钮 |\n|---|---|---|\n| `link:F:\\...`（本地检出） | **本地检出** —— 跑的不是发布出去的那份，即使版本号与 Release 完全相同 | **没有**。展开处有次要按钮【装 Release vX】（+ 说明会替换掉什么），因为这台机器是**开发这份插件的地方**，行上的按钮只会把正在改的代码换成 tgz |\n| `file:...\\x-1.2.0.tgz`，装的是 1.2.0，Release 是 1.3.0 | **可更新** —— 行上出现「可更新 v1.3.0」标记 | **有**，【更新到 v1.3.0】——这是行上唯一会被摆出来的安装动作 |\n| 装的是 2.0.0，Release 是 1.3.0 | 面板明说**装它会往回退**，不假装是\"更新\" | **没有**（等于把降级当日常维护）。展开处仍可点，但只是次要按钮 |"
+    },
+    {
+      "section": "更新已安装的插件（把上一条从终端搬进面板）",
+      "text": "**为什么把行让出来**：面板的行是\"你现在要做的事\"。对**插件作者自己**来说，`link:` 是常态，装 Release 不是要做的事，而是**取消掉让开发能进行的那套设置**；而 `ahead`（profile 里更新）那种情况，行上摆按钮等于**把降级摆在最显眼的位置**。这个能力保留在展开处——\"发布出去的那份到底装不装得起来\"仍然要能在这里回答——只是不再叫卖。\n| 装的是 1.2.0-rc.1 | 两边**无法比较**，如实说不能比较，而不是猜一个先后 |\n| 版本相同、且就是 Release 的 tgz | **已是最新**，没有按钮 |\n| 不在这个 profile 的依赖里 | **未安装** —— 没有\"已装的那份\"可以更新，并写出找的是哪个 profile |\n| 还没有已发布的 Release（草稿不算） | **没有可装的** |\n\n装的时候："
+    },
+    {
+      "section": "更新已安装的插件（把上一条从终端搬进面板）",
+      "text": "1. `gh release download <tag> -p <tgz>` 把资产下到**插件自己的目录** `<DSH_HOME>\\dsh-plugin-cicd\\downloads\\`（不是临时目录——profile 的依赖会指向这个路径，下完就删会让清单再也装不上）。\n2. 交给 **DSH 自己的插件管理器**（`ctx.get('pluginManager').installBundle`），也就是 `dsh plugin add` 走的同一条 pnpm 路径：它持有 profile 锁，失败时把 `package.json` / `pnpm-lock.yaml` 还原。发布台**不**自己起一个 `dsh plugin` 子进程——那会是对同一个 profile 的第二个写入者。\n3. 面板接着**问要不要重启**（不假设答案）。重启转发给 `dsh-plugin-restart`；没装这个插件时回一句明确的「没挂载」，而不是一个看不出所以然的失败。\n\n一次只跑一个更新（再来一个回 `409 busy`），因为插件管理器本来就会排队，而两个转圈比一个明确的拒绝更难懂。"
+    },
+    {
+      "section": "更新已安装的插件（把上一条从终端搬进面板）",
+      "text": "**没有装它就没有这部份**：`update` 路由需要 Host 提供 `pluginManager` 服务，没有就回 `501 plugin-manager-missing`，而不是假装装过。"
+    },
+    {
+      "section": "发布同台：一次点击 = 代码推送 + Release + npm",
+      "text": "**按下「发布」就是三件事一起做完**，因为分开做留下了三种\"看起来成功\"的半成品：没人公开的草稿、npm 上有版本而 GitHub 上没有 Release、Release 构建的是一个 GitHub 根本没收到过的提交（工作区里的改动、或只提交在本机的改动，两个 workflow 都看不见）。\n\n顺序不是实现细节，是这个功能的全部：\n\n```\n代码推送 → 版本号 → 触发构建 → 等待构建 → npm 推送 → 公开 Release → B 站播报\n```"
+    },
+    {
+      "section": "发布同台：一次点击 = 代码推送 + Release + npm",
+      "text": "- **代码推送最前**，因为 `ci.yml` 与 `release.yml` 跑的都是**推上去的那个提交**。有改动就 `git add -A` + commit + push（**需要一条提交信息**，确认框里填；确认框把改动文件名列出来，因为这是面板上唯一能扫进你没打算发布的东西的动作）。工作区干净但有本地提交就只 push，两者都没有就跳过这一格。\n- **版本号第二**，因为它要写一个提交，而升版本拒绝脏工作区——顺序反过来没有意义。这一格做的是「为什么点发布曾经必然失败」那件事：`release.yml` 拒绝复用属于另一个提交的版本，所以流水线**先问**（`releasePreflight`），真被占用就自己升一个补丁号、提交、推送。\n- **触发构建明确要草稿**（`-f draft=true`）。草稿只有作者看得见，这正是后面两格能成立的原因。\n- **npm 在公开 Release 之前**，这是关键：npm 推送**不可逆**（同一版本不能推第二次），而草稿**可以**。所以 npm 失败时——缺一次性密码、token 失效、源连不上——Release 仍然是草稿，对外**全有或全无**，补上原因（或选择「跳过 npm 并公开 Release」）就能继续。反过来先公开就会留下\"Release 出来了但 npm 上没有\"，那是重试也收拾不干净的中间态。\n- **B 站播报最后**，因为「这个版本上线了」只有在它真的上线之后才成立。"
+    },
+    {
+      "section": "发布同台：一次点击 = 代码推送 + Release + npm",
+      "text": "面板上看得见它走到哪一格：七格状态（待做/进行中/完成/跳过/停住/失败/已停止）随 30 秒轮询刷新，`gh run` 的链接就在旁边。**停住不是失败**——那一行会给出两条件路：【继续】（补一次性密码，或修好 token 再来）与【跳过 npm 并公开 Release】（npm 本来就不是这个仓库的渠道，或者它暂时连不上，而 Release 不该因此永远不出门）。\n\n**不需要 npm 的仓库照样能发**：`private: true`、没有 `package.json`、名字没占——这些是\"不适用\"而不是\"坏了\"，那一格记【跳过】然后继续公开 Release。版本已经在 npm 上了同理（目标状态已达成）。\n\n**关掉它**：`oneClickRelease: false` 写在 profile 的 `cordis.patch.yml` 那一行（见《配置》），面板的「发布」就回到只触发构建，npm 与公开草稿又是单独的按钮——某个仓库的 Release 必须一直是草稿时，这是那条退路。"
+    },
+    {
+      "section": "发布同台：一次点击 = 代码推送 + Release + npm",
+      "text": "流水线的记录落在 `<DSH_HOME>\\dsh-plugin-cicd\\pipelines.json`，\"跑到哪一格\"就是这个文件回答的：DSH 在构建期间关掉，重启后它会接着查那次运行、继续推 npm、继续公开 Release。**这个文件读不出来时一键发布会拒绝启动**（而不是覆盖掉一条跑到一半的记录），理由和播报台账一样：那一格里可能有一条已经建好的草稿，丢了就再也没人去公开它。\n\n**它不是什么**：不是 CI 的替代品（门禁仍然在 workflow 里），也不给 npm 带 provenance——需要可验证构建来源的包应该在 CI 里用 trusted publishing 发（见下节）。"
+    },
+    {
+      "section": "推送到 npm（第二条分发渠道）",
+      "text": "Release 是给人下载的，npm 是给 `dsh plugin add` 装的。面板把它们并排放：一行上既有 GitHub 的 tag，也有 npm 上的版本。\n\n**没有一键发布时**（`oneClickRelease: false`），npm 是**独立按钮，不和「发布」绑在一起**——推送不可逆，不该搭在另一个动作上顺带发生。一键发布之所以能把它带上，是因为顺序：npm 排在公开 Release **之前**，所以拒一次推送不会留下任何公开的东西。\n\n每一行先说清 npm 现在是什么状态：\n\n| 面板看到 | 判定 | 按钮 |\n|---|---|---|\n| 这个版本已在 npm 上 | **已发布** | 没有按钮（npm 不允许同一版本推第二次） |\n| 名字在 npm 上还没人占 | **未注册** | 【推送到 npm vX】——这次就是**首次发布** |\n| 名字已存在，但这个版本没推过 | **未发布** | 【推送到 npm vX】 |\n| 问不到源（离线/被拦） | **未知** | **没有按钮**——宁可不给，也不给一个注定失败的 |"
+    },
+    {
+      "section": "推送到 npm（第二条分发渠道）",
+      "text": "推送前会逐条拒绝，且**每一条都发生在任何字节上传之前**：\n\n- **`private: true`** —— 作者的决定，不是这里能绕过的（本仓库集里的 `dsh-knowledge-console` 就是这种）。\n- **工作区有未提交改动** —— `publish` 打包的是**工作目录**；`files` 白名单挡不住\"白名单目录里的新文件\"。\n- **这个版本已经在 npm 上** —— npm 不接受同一版本推两次，撤回也只在很短的时间内可行。\n- **没有登录 npm** —— 面板直接给出解决路径（见下）。\n- **没有本地检出 / 没有版本号 / 读不到源**。"
+    },
+    {
+      "section": "凭据：和复用 `gh` 同一个原则",
+      "text": "插件**不保存任何 token**。它用 DSH 自带的 pnpm（`profileContext.packageManager`，也就是插件管理器安装时用的那个），凭据来自 npm 自己读的用户级 `.npmrc`。\n\n`gh` 那侧不需要教：它自己开浏览器设备码流程。npm 这侧不一样——token 得**手动在网站上建**，而且那条路的 UI 在 2025 年 11 月变过。所以未登录时面板给的是**从零开始的四步**，不是一句话："
+    },
+    {
+      "section": "凭据：和复用 `gh` 同一个原则",
+      "text": "| 步 | 面板说什么 |\n|---|---|\n| ① 没有账号 | 「打开 npmjs.com 注册」按钮 + **注册后必须到邮箱点确认链接**（未验证邮箱的账号发不出去） |\n| ② 建 token | 「打开 token 页面」→ `npmjs.com/settings/~/tokens`。**类型只有 Granular Access Token 一种可选**：Classic token 已于 **2025-11-19 被 npm 全部撤销**，现在也建不出来。Permissions 选 `Read and write`，Packages 选全部或只勾这个包 |\n| ②a 有效期 | **最长 90 天**，这是 npm 对可写 token 的硬限制。到期就静默失效，回到第 ② 步再建一个 |\n| ②b 2FA | 只有\"给 CI 用、没人能输一次性密码\"时才勾 **Bypass 2FA**。在这里推**不要勾** |\n| ③ 粘贴 | 写进 `%USERPROFILE%\\.npmrc`（**就是 `npm login` 会写的那个文件**；其他行原样保留，旧版本留一份 `.bak`），然后立刻用 `whoami` 验证 |\n| ④ 2FA | 推送的确认行里会出现一次性密码输入框 |"
+    },
+    {
+      "section": "凭据：和复用 `gh` 同一个原则",
+      "text": "token 不回显、不落插件、不进日志；页面在请求返回的那一刻就清空输入框。token 被拒时，面板直接把**排查清单**摊在同一块里（复制不全 / 权限不是 Read and write / 已撤销或超过 90 天 / 范围是别的包 / 邮箱未验证），而不是只回一句 `ERR_PNPM_WHOAMI_UNAUTHORIZED`。\n\n**如果 npmjs.com 在你这台机器上打不开**——实测过：整站被 Cloudflare 挑战拦下（`/`、`/signup`、`/settings/~/tokens` 一起回 **403 `Just a moment...`**，走本地代理也一样）——那就**换一台设备或换一个网络**（手机流量最省事）生成 token，再粘到第 ③ 步。**面板只认这个 token，不在乎它在哪里生成**，这一步和你本机的浏览器无关。"
+    },
+    {
+      "section": "凭据：和复用 `gh` 同一个原则",
+      "text": "同时**别再指望命令行**：`POST registry.npmjs.org/-/user/org.couchdb.user:*` 现在回 **405 Method Not Allowed**，也就是 `npm login --auth-type=legacy` / `pnpm login` 这条路已被 npm 移除；而建 token 的 `POST /-/npm/v1/tokens` 虽然还活着并真在认证（假凭据回 `404 User not found`），但 npm 公告写明新 classic token 不能再经 API 创建。所以**网站（或在另一台设备上打开它）是唯一的路**。发布本身不受影响：`registry.npmjs.org` 一直是通的。"
+    },
+    {
+      "section": "凭据：和复用 `gh` 同一个原则",
+      "text": "**凭据是三个状态，不是一个布尔值**（`npmAuthState`）。`whoami` 是用户级端点，而 granular token 是**包级范围**的——它完全可能在 `whoami` 上被拒、却发布得好好的。把这种拒绝读成\"没登录\"，就会正好挡住引导让用户去建的那种 token，还会对刚做完第 ③ 步的人说\"你还没开始\"。所以：\n\n| 状态 | 面板 |\n|---|---|\n| `signed-in`（`whoami` 答了） | 顶部显示 `npm <账号>`，不出引导 |\n| `credential-present`（`.npmrc` 里有 token，但 `whoami` 不确认） | 一句说明 + 原样显示 `whoami` 的拒绝，**照着可以推**；真伪由推送来判 |\n| `none`（两者都没有） | 四步引导 |\n| 没有答案（`/npm-status` 未响应） | **什么都不显示**——\"没有答案\"不等于\"没有凭据\" |"
+    },
+    {
+      "section": "凭据：和复用 `gh` 同一个原则",
+      "text": "同理，推送的闸门是\"**有没有可用来认证的东西**\"，不是\"`whoami` 答没答\"：token 不对的话推送本来就会失败，而失败已经被归类成下一步。\n\n推送失败也**归类**成下一步做什么，而不是把 npm 的原话丢给用户：`otp-required`（去填一次性密码）、`email-unverified`（去点确认链接）、`not-logged-in`（重建 token）、`already-published`（先升版本）、`payment-required`（私有包要付费）、`forbidden`（检查 token 的 Packages 范围）、`not-found`、`rate-limited`、`registry-error`、`network`、`timeout`、`unknown`。npm 的原话仍然原样显示在下面——归类是补充，不是替换。\n\n开了 2FA 的账号，推送时 npm 要一次性密码：确认行里就有那个输入框。子进程的 stdin 是关闭的（`ignore`），所以它**不会**挂着等一个没人持有的 stdin——失败会明说是要 OTP，而不是转圈到超时。"
+    },
+    {
+      "section": "另一条路：完全不用 token（trusted publishing）",
+      "text": "如果你的目标是\"CI 里自动发布\"，**不该**用上面这条路。npm 支持 **trusted publishing（GitHub Actions OIDC）**：`release.yml` 加 `id-token: write` 权限并在 npm 上登记这个仓库，发布时用 OIDC 换一次性凭据——**没有任何长期 token**，还自带 provenance。这与本插件\"不存凭据\"的原则完全一致，也是本仓库更推荐的方向。\n\n面板**不做**这件事：它是在**这台机器上推一次**的路径，不是 CI 的替代品。CI 发布需要 token 时，token 应放在仓库 secret 里（`NPM_TOKEN`），而不是这台机器上。"
+    },
+    {
+      "section": "B 站更新播报（第三条渠道）",
+      "text": "插件更新了，除了 Release 和 npm，还有一件观众真的会看的事：在**介绍这个插件的视频**下面留一句\"更新了什么\"。这一条也做进面板里——每个仓库绑一个 BV 号，Release 公开之后自动在评论区补一条更新说明。\n\n**触发条件只有一个：Release 已公开。** 草稿不算——草稿只有作者能看见，为它发\"上线了\"是对着空气说话。所以：\n\n- 面板每 `bilibiliWatchSeconds`（默认 90 秒）巡检一次每个**已绑定**的仓库；\n- 点【公开草稿】成功后立刻巡检一次（这一下就是\"发布成功\"的那一刻）；\n- DSH 启动约 15 秒后巡检一次——关机期间发布的那些版本，只有这一次能补上；\n- 幂等键是 `(仓库, tag)`，落在 `<DSH_HOME>\\dsh-plugin-cicd\\bilibili-announcements.json` 里。**同一个版本永远只发一条**；这份记录读不出来时**什么也不发**（否则会把已经发过的评论再刷一遍），面板会把原因写在最上面。"
+    },
+    {
+      "section": "B 站更新播报（第三条渠道）",
+      "text": "绑定视频时会写一条**基线**：绑定那一刻已经公开的版本不算\"这次更新\"。所以把视频接上来不会追发历史版本，只有之后的新版本会播报。\n\n**\"发送成功\"不等于\"读得到\"，所以发送后要复核。** `x/v2/reply/add` 会为一条**公开列表里根本读不到**的评论回 `code: 0` 加一个 rpid——实测有两条被记成\"已播报\"，按 rpid 查回却都是 **`12006 没有该评论`**。所以："
+    },
+    {
+      "section": "B 站更新播报（第三条渠道）",
+      "text": "- 发送后 Host **按 rpid 查回**（`x/v2/reply/reply?root=<rpid>`），把结果写成台账里的 `visible`（`true`/`false`；`null` = 发送失败没问过；字段缺失 = 早于这个功能的旧记录）与 `visibleCode`；\n- **必须重试，不能只查一次**：刚发出的评论**头几秒**查回的是 `12006`，约 **4 秒**后才可读（实测 +0s 失败 / +4s 成功），所以是\"查 → 等 3 秒 → 再查\"，默认 3 次。一次性的即时检查会把一条好好的评论判成不可见，那比不检查更糟；\n- 面板据此在\"已播报\"旁给出 warn chip【已发送但读不到】，发送后的提示也照实说；\n- **\"审核中\"与\"已被删除\"在接口上无法区分**（都是 `12006`），所以**不做自动重发**——评论可能还在审核，自动重发会变成重复评论。要重发就人工走【仍然发送】。\n- 判断某条评论在不在，**只能用 `x/v2/reply/reply` 精确查找**；`x/v2/reply` 与 `x/v2/reply/wbi/main` 这两个**列表**端点实测**只回 1 条**（`all_count=6` 却只给 1 条），拿列表判断会误判。"
+    },
+    {
+      "section": "凭据：为什么必须是\"网页登录\"",
+      "text": "发评论走的是 B 站 **Web** 接口，所以凭据必须是网页会话。这里踩过一回，记在文档里免得再踩：`biliup login` 写下的 `cookies.json` 是 **BiliTV 登录**（`platform: BiliTV`）——它能投稿（APP 接口），但所有 Web 会员接口一律回 `-101 账号未登录`。所以本插件**不假设\"文件里有 SESSDATA 就能用\"**，而是拿凭据去问一次账号接口，并把答案写在面板上；认不出来时给出的原话是\"这份凭据是 BiliTV 登录（APP/TV）……\"，不是\"你没登录\"。\n\n凭据有两种给法，面板里都能做，不需要终端：\n\n1. **【登录 B 站】**：走 passport 的网页接口拿一个二维码。**码是插件自己画的**——用手机 B 站 App 扫它，然后在手机上确认。面板轮询到确认后把 Cookie 存进插件自己的文件。"
+    },
+    {
+      "section": "凭据：为什么必须是\"网页登录\"",
+      "text": "**面板不提供\"打开登录页面\"**：那串 URL 是给**手机**看的 H5 页，在电脑浏览器上打开只会给你一个 B 站 App 的 **APK 下载**，不是登录。所以扫码是唯一的路，扫不动就用下面第 2 条的粘贴方式。"
+    },
+    {
+      "section": "凭据：为什么必须是\"网页登录\"",
+      "text": "为什么要自带一个二维码编码器：登录接口交回来的是一串**要被手机扫**的 URL，而客户端半边只有 React 等五个内建、**没有任何依赖**。用外部二维码图片服务等于把一条活的登录 URL 交给第三方（泄凭据）；加依赖则违背\"装一个 tgz、不拉依赖树\"。所以 `client.js` 里有一段 **byte 模式、纠错等级 M、版本 1–10** 的编码器，画成内联 SVG。它拿 profile 里现成的 `qrcode` 包（那是别的包的依赖，**不是**本插件的）**逐模块**验证过，并把基准矩阵冻结成测试断言——任何一个模块翻转都会让测试红。\n2. **粘贴一次**：浏览器 F12 → Application → Cookies → `bilibili.com`，把 `SESSDATA` 与 `bili_jct`（即 csrf）复制进来。B 站**当场接受才写入**——存一份已经回 `-101` 的凭据，只会让面板显示一个假的\"已登录\"。"
+    },
+    {
+      "section": "凭据：为什么必须是\"网页登录\"",
+      "text": "两者都落在 `<DSH_HOME>\\dsh-plugin-cicd\\bilibili-cookies.json`（`bilibiliCookieFile` 可以指向别处，比如 biliup 那份，作为**兜底**读取；面板自己写的永远优先）。插件不回显这个文件的内容，【退出 B 站登录】也只删自己写的这一份——外部那份属于别的工具，不动。"
+    },
+    {
+      "section": "评论内容",
+      "text": "默认模板是 `【更新 {tag}】{summary}`：`{summary}` 取 Release 标题；标题就是版本号时改取 Release 正文第一段（去掉 Markdown、去掉 GitHub 自动生成的 \"What's Changed / Full Changelog\" 和 `by @someone in https://…` 尾巴）。可用占位符：`{tag}` `{version}` `{label}` `{repo}` `{title}` `{summary}` `{url}` `{date}`；不认识的占位符**留在原地并报出来**，不会被悄悄删掉。\n\n默认模板**不带链接**：带外链的评论更容易被 B 站过滤，而被过滤和发成功在这边看起来一模一样。想要链接就把 `{url}` 写进 `bilibiliTemplate`。"
+    },
+    {
+      "section": "评论内容",
+      "text": "发之前**一定先预览**：面板上点【发更新评论】会先问 Host \"这条会写成什么\"（`dryRun`），把即将发送的原文和 Host 的判决一起显示出来，确认后才真的发。预览由 Host 组装，不是浏览器——否则会出现\"看到的是一句、发出去的是另一句\"。"
+    },
+    {
+      "section": "失败怎么处理",
+      "text": "B 站的拒绝会被归类，而不是原样抛给用户：`-101` 未登录、`-400` 被拒、`-403` 无权限、`-412` 风控拦截、`-509` 频率限制、`12061` 内容被过滤……每一类给的是下一步做法。失败会记进播报记录；同一个版本失败 3 次后就停下等人工判断——风控拦下来的东西，连续重试只会更糟。"
+    },
+    {
+      "section": "配置：用脚本，不要手改 YAML",
+      "text": "包本身**不带仓库列表**——哪些仓库被监视是部署状态，不是包状态；把某个人的私有仓库名打进公开包，每个安装者都得先去拆它。\n\n列表放在一个由脚本管理的 JSON 文件里（默认 `%USERPROFILE%\\.dsh\\dsh-plugin-cicd\\repos.json`），profile patch 只留两行机器相关的配置：\n\n```yaml\n- id: dsh-plugin-cicd\n  config:\n    owner: SOH4C4759\n    ghPath: 'C:\\Program Files\\GitHub CLI\\gh.exe'\n\n日常操作全走插件自带的脚本：\n\n```powershell\n$cfg = \"$env:USERPROFILE\\.dsh\\profiles\\desktop\\node_modules\\dsh-plugin-cicd\\scripts\\configure.mjs\""
+    },
+    {
+      "section": "或直接用你的检出目录：F:\\CodeProj\\dsh-plugin-cicd\\scripts\\configure.mjs",
+      "text": "node $cfg list                                             # 现在登记了什么\nnode $cfg add dsh-plugin-restart --path F:\\CodeProj\\dsh-plugin-restart\nnode $cfg add someone-else/their-plugin                    # 别人的仓库，只读\nnode $cfg remove dsh-plugin-restart\nnode $cfg owner SOH4C4759\nnode $cfg check                                            # 面板此刻会显示什么\n```"
+    },
+    {
+      "section": "或直接用你的检出目录：F:\\CodeProj\\dsh-plugin-cicd\\scripts\\configure.mjs",
+      "text": "- 插件**每次请求都重读这个文件**，所以 `add` 在面板下一次轮询（默认 30 秒）就生效，**不需要重启**。\n- 写入是原子的（临时文件 + rename），旧版本留一份 `.bak`。\n- 校验与宿主同规则：仓库名必须是 `name` 或 `owner/name`，`--path` 必须是绝对路径——相对路径会按宿主进程的目录解析，那不是你的 shell 目录。\n- 文件读不了或格式错时，面板会**明确报错**而不是假装\"没有仓库\"，并回退到 patch 里的 `repos`。\n\npatch 里仍可用的选项（每个都有默认值）："
+    },
+    {
+      "section": "或直接用你的检出目录：F:\\CodeProj\\dsh-plugin-cicd\\scripts\\configure.mjs",
+      "text": "| 键 | 默认 | 含义 |\n|---|---|---|\n| `owner` | `''` | 裸 `repo` 名用的 GitHub 账号；配置文件里的同名值优先 |\n| `repos` | `[]` | 手写兜底；配置文件存在时以文件为准 |\n| `configFile` | `<DSH_HOME>\\dsh-plugin-cicd\\repos.json` | 受管列表的位置 |\n| `projectsRoot` | `''` | 本地检出所在根目录；面板添加仓库时据此自动填 `localPath`（按各目录 `package.json` 的 `name` 匹配，所以目录名与仓库名不同也能找到），克隆【克隆】的落点也是这里。**这是行配置（`cordis.patch.yml`），不是 `repos.json` 的键**——写进后者会被忽略 |\n| `defaultBranch` | `main` | 面板触发 workflow 用的 ref |\n| `buildWorkflow` | `ci.yml` | `构建` 按钮触发的 workflow |\n| `releaseWorkflow` | `release.yml` | 一键发布触发的 workflow；关掉一键发布后是 `发布` 按钮触发的那个 |\n| `oneClickRelease` | `true` | **发布同台**：`发布` = 代码推送 + Release + npm 一条流水线。设 `false` 就回到\"只触发构建（出草稿）\"，npm 与公开草稿各自是独立按钮 |\n| `pipelineWatchSeconds` | `20` | 一键发布流水线的推进间隔（每次最多一次 `gh run list`）；`0` 停掉时钟，只保留按需推进（DSH 重启后的补跑也会停） |\n| `ghPath` | `''` | 空 = 从 PATH 与 `%ProgramFiles%\\GitHub CLI\\gh.exe` 等位置解析 |\n| `requestTimeoutMs` | `20000` | 单次 `gh` 调用的硬超时 |\n| `overviewTtlMs` | `15000` | 概览缓存窗口；面板轮询会走缓存 |\n| `logTailLines` | `120` | 失败日志取最后多少行 |\n| `pollSeconds` | `30` | 面板自动刷新间隔 |\n| `npmRegistry` | `https://registry.npmjs.org/` | 推送目标源。改成私有源即可（只能 http/https，且 URL 里带凭据会被拒绝）；`.npmrc` 里的 token 行按这个源的 host 匹配 |\n| `enabled` | `true` | 关掉后路由只回「已停用」，"
+    },
+    {
+      "section": "或直接用你的检出目录：F:\\CodeProj\\dsh-plugin-cicd\\scripts\\configure.mjs",
+      "text": "所有值都做**夹取**而不是拒绝：手写的 patch 不该能让宿主起不来，最坏情况是某个路由报告「未配置」。"
+    },
+    {
+      "section": "首次使用：授权引导",
+      "text": "面板不自己存凭据，它用你机器上的 `gh`。所以第一次打开时它可能无事可做——这时面板不会只显示一句\"读不到\"，而是**按缺什么给什么**：\n\n| 状态 | 面板给出 |\n|---|---|\n| 找不到 `gh` | `winget install --id GitHub.cli`（可一键复制）+ cli.github.com 链接 |\n| 装了但没登录 | `gh auth login`，并说明选 GitHub.com → HTTPS → 浏览器登录，完成后点「重新检测」 |\n| 登录了但缺 scope | `gh auth refresh -h github.com -s repo,workflow`，缺哪个补哪个 |\n| 没有任何仓库 | `configure.mjs add ...` 的实际命令 + 配置文件路径 |\n\nscope 是从 `gh auth status` 真读出来的：缺 `repo` 读不到私有仓库，缺 `workflow` 无法触发构建——这两种情况在按钮按下去之前就会说明白。细粒度 token 不报 scope 行时按\"未知\"处理，不会误报成\"全都缺\"。"
+    },
+    {
+      "section": "为什么复用 `gh` 而不是自带 token",
+      "text": "本机 `gh` 已经登录、已经带好了 token scope。复用它意味着：插件**不存任何凭据**，不需要你再走一次 OAuth/PAT，而面板执行的命令就是你会手敲的那条（`gh run list` / `gh workflow run` / `gh release edit`）。反过来，任何要求你再输一次 token 的方案，都是把同一条权限链复制了第二份。\n\nnpm 这一侧是同一条原则的两个面：**包管理器**复用 Host 自己的 pnpm（`profileContext.packageManager`——插件管理器安装插件时用的就是它，第二个答案早晚会和第一个不一致），**凭据**放在 npm 自己读的 `.npmrc` 里。面板提供了一个写 token 的入口，但写的是那个文件，不是插件的任何存储：这与\"面板能登录 GitHub 但插件不存 token\"是同一句话。"
+    },
+    {
+      "section": "为什么复用 `gh` 而不是自带 token",
+      "text": "调用一律用 `execFile` 传 argv、**不经 shell**；仓库名、workflow 名、tag 在进入 `gh` 之前都按 slug 形状校验过。子进程带 `GH_PROMPT_DISABLED=1`，否则一个想提问的 `gh` 会挂在没人持有的 stdin 上，面板只会转圈到超时。"
+    },
+    {
+      "section": "安全边界",
+      "text": "- 所有路由都是 **POST + 仅回环 + 同源**（`isTrustedRequest`），与宿主设置桥对自家回环路由的信任策略一致：只有「来自本机」且「来自这个 Host 服务的文档」的请求能过。这些路由以本机 GitHub 凭据行事，所以不能只按端口放行。\n- 只读部分：状态、概览、运行、日志、npm 状态。**有副作用的是十条**：`dispatch`、`run-action`、`release-action`、`version-bump`、`commit`、`clone`、`update`、`restart`、`npm-login`、`npm-publish`。\n- `clone` 是唯一会**从网络拉一个新目录**的路由，服务\"仓库已登记但没有本地检出\"这个状态——那种状态下本页每个动作都用不了（提交没东西可提交，构建与发布作用于 GitHub 上的提交而不是这份磁盘）。地址由仓库名**推导**（`owner/repo` 自带，裸名用配置里的 `owner`），面板把它预填好、可改（fork、私有远端都是真实需求）；落点是 `projectsRoot/<仓库名>`，也就是 `findLocalCheckout` 之后会去找的地方。已有可用检出回 `409 already-cloned`，目标目录非空回 `409 target-exists`，没有 `projectsRoot` 回 `409 no-projects-root`（并点名这个配置键）。\n- `version-bump` 只改 `package.json` 的版本行，然后 `git commit` **只提交这一个文件**并推送当前分支。工作区不干净、分支没有上游、或落后于上游时它直接拒绝，不做任何写入。\n- `commit` 是**唯一会提交整个工作区**的路由（`git add -A` + commit + push）。工作区干净且与上游同步时回 `409 nothing-to-commit`；`message` 为空且确实有改动时回 `400 message-required`（先拒绝，不写任何东西）；分支没有上游时回 `409 no-upstream`——发布构建的是 GitHub 上的提交，推不上去就等于没提交。**提交信息为空但工作区干净**是合法用法，含义是「把已经提交的推上去」。\n- `update` 是唯一会**改 profile 依赖**的路由：下载 Release 里的 tgz，再交给 Host 的插件管理器安装；失败时由管理器还原 `package.json` 与 lockfile。\n- `restart` 自己不重启任何东西：它把请求转发到同一个 Host 上的 `/api/dsh-restart/restart`，由 `dsh-plugin-restart"
+    },
+    {
+      "section": "HTTP 接口",
+      "text": "| 路由 | 作用 |\n|---|---|\n| `POST /api/dsh-cicd/status` | `gh` 身份与解析后的仓库列表 |\n| `POST /api/dsh-cicd/overview` | 每个仓库的运行 + Release + 本地 git 状态（`{force:true}` 绕过缓存） |\n| `POST /api/dsh-cicd/runs` | `{repo, limit}` 单仓库运行列表 |\n| `POST /api/dsh-cicd/dispatch` | `{repo, workflow?, ref?, inputs?}` 触发 workflow_dispatch；触发**发布流程**时会先做发布预检（见下节） |\n| `POST /api/dsh-cicd/run-action` | `{repo, runId, action}`，action ∈ `rerun` / `rerun-failed` / `cancel` |\n| `POST /api/dsh-cicd/release-action` | `{repo, tag, action}`，action ∈ `publish` / `delete`（`delete` 有意不给按钮） |\n| `POST /api/dsh-cicd/version-bump` | `{repo, release?}`，release ∈ `patch`（默认）/ `minor` / `major`：升 `package.json`、提交、推送当前分支 |\n| `POST /api/dsh-cicd/release-all` | `{repo, message?, otp?}`：**一键发布**——代码推送 → 版本号 → 触发构建（草稿）→（流水线自己继续）等 CI → 推 npm → 公开 Release → B 站播报。开工前能本地判定的全部判定完（无检出 / 无上游 / 落后上游 / 脏工作区没给信息 → `400`/`409` 且**一个字节都没写**）；已经开跑的失败用 `200`+`value.pipeline` 如实回报，`status` 是 `blocked` 时 Release 仍是草稿 |\n| `POST /api/dsh-cicd/release-all-resume` | `{repo, otp?, skipNpm?}`：继续一条停在 npm 的流水线。`skipNpm: true` = 不管 npm 了，直接公开 Release。没有停住的流水线回 `409 nothing-to-resume` |\n| `POST /api/dsh-cicd/release-all-cancel` | `{repo}`：不再跟进这条流水线（GitHub 上的运行不会被它停"
+    },
+    {
+      "section": "HTTP 接口",
+      "text": "`npm-status` 的每条仓库记录：`{ repo, label, localPath, packageName, version, dirty, privatePackage, state, latest, blockers, canPublish, registryProblem, registry, pageUrl }`。`state` ∈ `unregistered` / `unpublished` / `published` / `unknown`；`blockers` 是**具名原因**（`private-package`、`dirty-tree`、`not-logged-in`、`already-published`、`registry-unreachable`、`no-checkout`、`no-version`、`no-package-name`）——\"没有按钮\"是最没用的一句话，`private: true` 和\"没登录\"在屏幕上同样是空白，修法却完全不同。"
+    },
+    {
+      "section": "HTTP 接口",
+      "text": "`overview` 的每一行多一个 `install` 块：`{ profile, profileDir, profileReadable, packageName, present, spec, kind, installedVersion, latestTag, latestVersion, latestAsset, state }`。`state` ∈ `not-installed` / `no-release` / `current` / `update` / `ahead` / `differs` / `checkout`——判决在 Host 上做，所以面板和 `update` 路由不会各说一套。"
+    },
+    {
+      "section": "HTTP 接口",
+      "text": "`overview` 的每一行还多一个 `pipeline` 块（`null` = 这个仓库从没跑过一键发布）：`{ id, repo, slug, tag, version, headSha, startedAt, updatedAt, status, message, blockedCode, runId, runUrl, runConclusion, skipNpm, stages }`。`status` ∈ `running` / `blocked` / `done` / `failed` / `cancelled`；`stages` 是固定七格 `[{ id, status, detail, at }]`，`id` 依次是 `push` / `version` / `dispatch` / `build` / `npm` / `release` / `announce`，`status` ∈ `pending` / `active` / `done` / `skipped` / `blocked` / `failed` / `cancelled`。`blockedCode` 是停住的原因（`otp-required`、`not-logged-in`、`registry-unreachable`、`timeout` …），面板按它给出下一步。`overview` 顶层另有 `pipelineProblem`：记录文件读不出来时**一键发布会拒绝启动**，原因写在这里。"
+    },
+    {
+      "section": "HTTP 接口",
+      "text": "`status` 另外报出 `profile: { name, dir, readable }`：更新写的是哪个 profile，是**报出来**的而不是假设的——「没装」和「面板看错了 profile」是两句不同的话，只有路径能把它们分开。"
+    },
+    {
+      "section": "为什么「发布」曾经必然失败，以及现在的做法",
+      "text": "**根因**：发布用的是 `package.json` 里的版本号，而 `release.yml` 有意拒绝覆盖**属于另一个提交的同号 Release**（否则公开草稿会创建旧提交上的 tag，tag 与资产从此不一致，而且整个过程静默）。于是只要树往前走了而版本没升，点「发布」触发的运行一定在第一步失败，约 10 秒后红掉；面板却提前宣告「已产出草稿」，真正的原因还藏在两层点击之后。实测有四个失败运行属于这一类（`dsh-plugin-restart` ×3、`dsh-plugin-cicd` ×1）。\n\n**现在**："
+    },
+    {
+      "section": "为什么「发布」曾经必然失败，以及现在的做法",
+      "text": "1. **概览行先给出判决**（`releaseCheck`）。宿主拿 `releases[].target_commitish` 与「这次发布会构建的提交」对比：只有**能证明**版本已被另一个提交占用时才判 `blocked`（脏工作区、分支名 target、读不到远端提交都算「证明不了」，一律放行）——预检拦下一个本来能成功的发布，比没有预检更糟。行上出现【版本被占用】标记，展开即写明 `v1.0.0 已属于 48ce81c，而这次发布会构建 e6a1cc1`。\n2. **`dispatch` 会拒绝注定失败的发布**，返回 `409 version-taken`，不再浪费一次运行。\n3. **面板给出解法**：被占用时按钮变成【升版本并发布】，确认框里写明「从 1.0.1 升到 1.0.2、提交并推送到 main」——一次点击完成 `version-bump` + 发布触发。\n4. **文案不再替运行结果打包票**：触发后说的是「是否真的产出草稿要看这次运行的结果，失败时展开点【日志】」。"
+    },
+    {
+      "section": "为什么「发布」曾经必然失败，以及现在的做法",
+      "text": "`version-bump` 的拒绝清单（都保证**一个字节都没写**）：工作区有未提交改动（发布构建的是已推送的提交，这些文件会**静默缺席**于发布包）、分支没有上游、落后于上游、版本号不是 `major.minor.patch`、清单里出现第二个 `version` 键。推送失败**不回滚**：提交是真的，失败通常是 `github.com:443` 的老问题，所以如实回「本地已提交 X，推送失败」并让你重试推送。"
+    },
+    {
+      "section": "设计取舍",
+      "text": "- **UI 落在 `sidebar.panellist` + `main`**，不是浮层：侧边栏拿按钮，主区域拿页面，点开顶开内容而不是遮住它。\n- **颜色只取 `--dsw-alias-*` 主题 token**，没有自带调色板——面板跟随亮/暗主题，而不是自带一套深色。\n- **后台轮询失败不清空、不弹错**：合盖的笔记本不会产生一个不是用户造成的错误横幅，只是停止更新。\n- **HTML/CSS/JS 三处都没有 `position: absolute` 的浮窗**：`main` 面板是布局里的一列。"
+    },
+    {
+      "section": "本仓库自身的 CI/CD",
+      "text": "它自己也用同一套：[`ci.yml`](.github/workflows/ci.yml) 每次 push 跑 [`tests/host-checks.mjs`](tests/host-checks.mjs)（167 条离线检查，覆盖入口校验/配置夹取/降级路径/发布预检与版本号运算/安装态与更新判决/npm 源与 token 与每条拒绝）、[`tests/mount-check.mjs`](tests/mount-check.mjs)（35 条：真挂载、真起 HTTP、真走路由，含更新、转发重启与 npm 三条拒绝路径）、[`tests/bump-e2e.mjs`](tests/bump-e2e.mjs)（29 条：真 git 仓库、真提交、真推送，以及每条拒绝都不留半截改动）与 [`tests/client-render.mjs`](tests/client-render.mjs)（71 条：用桩 React 真渲染面板，证明「发布」与【升版本并发布】确实按判决切换、被拦的原因真的到了屏幕上、一次更新真的 POST 了 `/update` 并接着问要不要重启、以及一次 npm 推送真的 POST 了 `/npm-publish` 且未登录时真的能只靠粘贴 token 完成），并真造一个发布包；[`release.yml`](.github/workflows/release.yml) 在 `v*` tag 上构建并上传 Release，**对解包后的资产**再跑一遍这几套。发布流程见 [RELEASING.md](RELEASING.md)。"
+    },
+    {
+      "section": "本仓库自身的 CI/CD",
+      "text": "`tests/host-checks.mjs` 里另有一半检查需要真实的 `gh` 与特定的仓库状态，用 `DSH_CICD_LIVE=1` 打开：\n\n```powershell\nnode tests/host-checks.mjs                    # 离线，CI 跑的就是这个\n$env:DSH_CICD_LIVE = 1; node tests/host-checks.mjs\n```"
+    },
+    {
+      "section": "推送通道被阻断时",
+      "text": "本机实测：`github.com:443` 会被间歇阻断（`git push` 报 `Connection was reset` 或直接连不上），而 `api.github.com:443` 一直可达——所以 `git` 挂了但 `gh` 一切正常。\n\n[`scripts/push-via-api.ps1`](scripts/push-via-api.ps1) 走 API 造出**逐字节相同 SHA** 的提交对象再移动 ref，因此本地与远程不会分叉，不需要事后 `git reset --hard`：\n\n```powershell\npwsh -File scripts/push-via-api.ps1 -RepoPath 'F:\\CodeProj\\dsh-plugin-cicd'\n```\n\n它在每一步比对重建出的 blob / tree / commit SHA 与本地提交，任何一处不一致就中止并**不移动 ref**；成功后连同 `refs/remotes/origin/main` 一起更新，否则 `git status` 会显示一个并不存在的「领先」。仓库已经同步时它什么都不做。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- 路径按 Windows 书写（`F:\\...`），`ghPath` 的默认候选也是 Windows 安装位置；其它平台请显式配 `ghPath`。\n- 私有仓库要求 `gh` 已登录且 token 有 `repo` scope。\n- 只观察 GitHub 上的仓库；本地没有远程的仓库（例如还在本地开发的）不在范围内。\n- **更新需要 Host 提供 `pluginManager` 服务**（DSH 自带）。没有它时 `update` 回 `501`，不会退化成自己起一个 `dsh` 子进程去写 profile。\n- **重启需要装了 `dsh-plugin-restart`**。发布台不自己杀进程——停哪个、怎么拉起来是那个插件的契约。\n- 更新的判定读的是 `node_modules/<name>/package.json` 的版本，不是依赖字符串。`link:` 时它等于本地检出的版本，所以\"版本一样\"绝不能被当成\"装的是发布的那份\"——那正是 `checkout` 这个状态存在的理由。\n- **npm 推送复用 Host 自己的包管理器**：优先 `profileContext.packageManager`（DSH 自带的 pnpm），其次 `DSH_PNPM`，再其次打包应用自带的 `resources/runtime/pnpm`，最后才是 PATH 上的 `pnpm`。走到最后一步而机器上没有 pnpm 时，报错会明说 `ENOENT` 与它找的是什么。源码里 `npm-status` 只做 `whoami`，网络那一侧是 HTTPS `fetch`（**不走** `HTTP_PROXY`，本机实测直连可达）。\n- **npm 推送没有 provenance**，而且用的是长期 token（可写 token 最长 90 天）。真需要 `--provenance`（构建来源可验证）或不想在机器上放任何 token 的包，应当走 **trusted publishing（GitHub Actions OIDC）**——那才是 CI 的正路，面板这条路是\"在这台机器上推一次\"。\n- npm 在 2025-11 之后**只有 Granular Access Token**：Classic token 已全部撤销且不能再创建。可写 token 默认强制 2FA、最长 90 天。任何还写着\"建一个 Classic Automation token\"的文档都已经过期了。\n- `private: true` 的包（例如 `dsh-knowledge-console`）面板**不会**提供推送按钮，这是有意的：那行字段是作者的决定。"
+    },
+    {
+      "section": "License",
+      "text": "MIT，见 [LICENSE](LICENSE)。"
+    }
+  ],
+  "skipped": []
+}

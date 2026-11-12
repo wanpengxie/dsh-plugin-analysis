@@ -1,0 +1,189 @@
+{
+  "repo": "Luokaikai1/dsh-local-first-router",
+  "commit": "687aa36bc25c4cffbcb752c49b8835e821af9833",
+  "extracted_at": "2026-11-11T12:22:19.826560+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 74859,
+    "lines_by_language": {
+      "JSON": 38,
+      "JavaScript": 1393,
+      "Markdown": 214,
+      "Other": 113,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/peak.js",
+      "lib/policy.js",
+      "package.json",
+      "test/policy.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-local-first-router",
+    "version": "0.2.0",
+    "description": "DSH 插件：先跑本地 Ollama，本地不行再按额度策略走云端兜底（三层路由：执行体 / 顾问 / 云端兜底）",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "ollama",
+      "local-first",
+      "model-router",
+      "cordis"
+    ],
+    "engines": {
+      "node": ">=22"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*",
+      "@deepseek-ai/schemastery": "*"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-local-first-router: local-first routing with an advisor, an optional\n# widened local context, and a quota-aware cloud fallback.\n# The profile layer targets `id: local-first-router` to override the config.\n- insert:\n    - id: local-first-router\n      name: dsh-local-first-router\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:166"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:11434",
+      "where": "lib/index.js:87"
+    },
+    {
+      "host": "api-docs.deepseek.com",
+      "url": "https://api-docs.deepseek.com/quick_start/pricing",
+      "where": "lib/peak.js:4"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:11434",
+      "where": "lib/policy.js:22"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 21,
+    "pushed_at": "2026-11-02T23:49:02Z",
+    "created_at": "2026-10-27T23:38:24Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/peak.js",
+    "lib/policy.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-local-first-router",
+      "text": "一个 DeepSeek Harness（DSH）插件：**先跑本地 Ollama 模型，第一次启动会询问要不要扩展上下文；本地不行才自动走云端兜底**，并且云端只在谷期、额度够、且你允许付费时才会用。\n\n> A DSH plugin that runs a local Ollama model first, asks once whether to widen its context, and only falls back to the cloud when the local route is stuck — gated by off-peak hours, remaining credits, and your consent."
+    },
+    {
+      "section": "它做什么",
+      "text": "三层路由：\n\n| 层 | 默认 | 用途 |\n|---|---|---|\n| 执行体 | `qwen2.5:7b-24k` | 新会话的所有常规任务与工具调用 |\n| 顾问 | `deepseek-r1:8b-8k` | 数学/逻辑/证明类难题出思路（通过 `consult_advisor`） |\n| 云端兜底 | `deepseek-flash` → 可配置兜底（如 GLM） | 本地卡住或上下文超窗时，按额度策略升级 |\n\n关键行为："
+    },
+    {
+      "section": "它做什么",
+      "text": "- **本地优先**：新会话默认落在本地执行体；手动选过别的模型的会话不会被强切。\n- **上下文守卫**：会话 token 超过 `localContextTokens - contextReserveTokens` 时不再往本地切；本地会话会升级云端，老会话保持原路由（guard 模式）。\n- **升级触发**：本地报错、工具失败 ≥ N、重复调用、步数 ≥ M、上下文超窗。\n- **云端闸门**：谷期（工作日 09:00–12:00、14:00–18:00 之外，周末/法定节假日全天）+ 余额门槛。\n- **额度策略**：优先用 DeepSeek 赠送余额；赠送不足时询问是否用付费余额；可配置兜底 provider（云端失败自动切）。\n- **首次启动**：会注入一条提示，让 agent 询问你是否开启“自动上下文扩展”（自动创建 `<base>-<ctx>k` 模型变体）。\n- **全部本地**：插件本身不联网（除你配置的 Ollama / 云端 provider），日志与状态都在 `~/.dsh/` 下。"
+    },
+    {
+      "section": "工具",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `consult_advisor` | 向本地推理顾问请教思路（只返回文字，不执行工具） |\n| `model_quota` | 展示当前接入的模型、上下文窗口、赠送/充值余额、峰谷、兜底配置 |\n| `set_cloud_policy` | 允许/禁止付费余额、切换兜底、可持久化 |\n\n`model_quota` 示例输出：\n\n```\n本地执行: local-ollama/qwen2.5:7b-24k (24576 ctx)\n本地顾问: deepseek-r1:8b-8k\n云端主用: deepseek-account/deepseek-flash  赠送余额 2.40 元 / 充值余额 0 元\n云端兜底: (未配置)  (额度未知，按错误或询问切换)"
+    },
+    {
+      "section": "路由策略（自选优先）",
+      "text": "`policy` 是配置项，可选：\n\n| 值 | 行为 |\n|---|---|\n| `local-first`（默认） | 先本地；本地卡住才按闸门升级 |\n| `local-only` | 永远本地 |\n| `cloud-first` | 云端优先 |\n| `cloud-first-sensitive-local` | 云端优先，敏感词回合留本地 |\n| `paid-allowed` | 本轮允许使用付费余额 |\n\n运行时还可以用 `set_cloud_policy` 工具临时调整：\n\n- `allowCloud`：允许当前会话使用云端；\n- `allowPaid`：允许使用充值余额；\n- `useFallback`：优先使用兜底 provider；\n- `scope: turn | always`：只本轮或持久化。"
+    },
+    {
+      "section": "兜底可用时间窗（可选）",
+      "text": "`fallbackWindow` 是给**自动兜底**用的可选时段，格式 `\"HH:MM-HH:MM\"`（北京时间，可跨午夜），留空表示不限；周末默认全天放行。它只限制自动 fallback，手动在会话里选模型不受影响。\n\n```yaml\nfallbackProvider: <your-fallback-provider>\nfallbackModel: <your-fallback-model>\nfallbackWindow: \"HH:MM-HH:MM\"   # 例：只在夜间低成本时段使用；留空=不限\n```\n\n如果不需要兜底，三项都留空即可；这是默认行为。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile <profile> add github:<owner>/dsh-local-first-router\n```\n\n或本地目录：\n\n```bash\ndsh plugin --profile <profile> add file:<path-to-this-repo>\n```\n\n安装后在该 profile 的 `cordis.patch.yml` 里配置（示例，不含任何密钥）：\n\n```yaml\n- id: local-first-router\n  config:\n    localProvider: local-ollama\n    localModel: qwen2.5:7b-24k\n\n同时把本地 provider 加进 `llm-pi-ai`：\n\n```yaml\n- id: llm-pi-ai\n  config:\n    providers:\n      local-ollama:"
+    },
+    {
+      "section": "安装",
+      "text": "云端 provider（DeepSeek 账户、智谱等）用 DSH 自带的「设置 → 模型」接入即可；**密钥由 DSH 凭据系统保存，插件不读取也不写入任何密钥**。"
+    },
+    {
+      "section": "聊天会话默认本地（QQ 等）",
+      "text": "按会话 id 前缀识别聊天会话，默认只走本地；需要云端兜底时必须先征得用户同意：\n\n```yaml\n- id: local-first-router\n  config:\n    localSessionPrefixes:\n      - onebot-group-\n\n- 命中前缀的会话默认本地，不自动升级。\n- 触发升级时插件会注入一条询问，用户同意后调用\n  `set_cloud_policy(allowCloud=true, scope=turn)` 才允许本轮云端兜底。\n- 手动切换到云端模型视为用户已同意，插件不拦截。\n- 工作/编码会话不受影响，仍按“本地优先，卡住才升级”的策略走。"
+    },
+    {
+      "section": "把任务委派给本地/免费云端模型",
+      "text": "委派用 DSH 内置的 `workflow`（常驻工具，无需额外插件）：给每个子任务单独指定 `provider`/`model`，子任务在独立会话里跑完把结果带回来。\n\n```js\nconst r = await agent('把这段日志总结成三条', {\n  provider: 'local-ollama',\n  model: 'qwen2.5:7b-24k',\n  label: 'local-summary',\n\n- 本地：`local-ollama/qwen2.5:7b-24k`\n- 免费云端：`zhipu-glm/glm-4.7-flash`\n- 付费云端：`deepseek-account/deepseek-flash`（受余额与审批约束）\n\n`subagent` 工具默认继承父会话模型；它的“按调用选模型”需要额外的 host 设置服务，默认部署没有，不要依赖它做选型。"
+    },
+    {
+      "section": "敏感信息",
+      "text": "仓库不包含 API Key、QQ 号、个人目录；示例中的 `127.0.0.1:11434` 是 Ollama 的默认本地地址，可按需替换。云端密钥由 DSH 凭据系统保存，插件不读取也不写入任何密钥。"
+    },
+    {
+      "section": "人设防丢（长会话截断）",
+      "text": "本地窗口小于会话长度时，Ollama 会**从开头截断**，把系统提示连同人格一起切掉。配置一条近端提醒即可：\n\n```yaml\nforceLocalPersonaReminder: '【人设】你是……，回复 1-3 句、口语化、不用 Markdown。'\n```\n\n上下文超过本地窗口 70% 时，插件会在本轮末尾补发这条提醒，保证截断后模型仍能看到人设。长聊仍建议定期 `/new` 或压缩，避免细节丢失。"
+    },
+    {
+      "section": "本地上下文",
+      "text": "Ollama 默认 `num_ctx` 往往只有 4096，而 DSH 的系统提示 + 工具定义就可能到 9k，直接截断。插件提供两种处理：\n\n1. `autoContextExpansion: true`：启动时检测 `localModel`，不存在就用 `/api/create` 按 `localContextTokens` 创建派生模型；\n2. 手动创建：\n\n```text\nFROM qwen2.5:7b\nPARAMETER num_ctx 24576\n```\n\n8GB 显存的经验值：16k 约 5.5GB、24k 约 6.0GB（均可 100% GPU）；32k 会溢出到 CPU 且只剩约 0.7GB 显存，不建议。请按自己的显存调整 `localContextTokens`。"
+    },
+    {
+      "section": "数据与日志",
+      "text": "- 决策日志：`~/.dsh/logs/local-first-router.jsonl`\n- 首次启动/付费策略状态：`~/.dsh/local-first-router/state.json`\n- 本地模型对话不会上传到云端；云端调用只在你配置的 provider 上发生。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 没有图形化额度面板（用 `model_quota` 工具展示）；`policy` 也只能改配置，没有插件页下拉。\n- `fallbackWindow` 只限制自动兜底；手动在会话里选中某个模型时不会拦截。\n- 上下文将满时不会自动 `/compact`；目前是提示你先压缩再切（自动总结需要确认，避免意外改写历史）。\n- 顾问模型不支持工具调用，只作为“出思路”的第二意见。"
+    },
+    {
+      "section": "License",
+      "text": "MIT，见 [LICENSE](LICENSE)。"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,146 @@
+{
+  "repo": "Martlet-Tech/dsh-open-folder-fix",
+  "commit": "c96e3ded00ff78fd88020b1b09b8370a5b6c27bb",
+  "extracted_at": "2026-11-11T12:35:45.257960+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 33643,
+    "lines_by_language": {
+      "JSON": 24,
+      "JavaScript": 651,
+      "Markdown": 148,
+      "Other": 42,
+      "YAML": 38
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-open-folder-fix",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Host fix for the Windows workspace-open action: open the workspace directory with explorer.exe /e,<dir>, because the shipped explorer.exe <file:// URI> invocation reports success without raising a window on some hosts",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-conversation",
+          "@deepseek-ai/dsh-client-ui-session"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Windows workspace-open fix.\n#\n# Why this bundle exists: the shipped `explorer` catalog entry launches through\n# `shell-open`, which on Windows ends at `@deepseek-ai/dsh-native-command`\n# running `explorer.exe \"<file:// URI>\"` (0.1.7-rc.1; earlier releases used a\n# powershell `Invoke-Item` command, same symptom). That open reports SUCCESS\n# while raising nothing on some Windows hosts — the package's own README\n# records it: in a non-interactive session `explorer.exe` invokes no file\n# association yet still exits 1 after about a second, so \"an open reports\n# success having opened nothing\". The host reads the exit code as the verdict\n# (`runExplorer` swallows exit 1 as a delegated handoff and `runShellOpen`\n# backs it with a `launchWatchMs` watchdog), so a window that never appeared\n# looks exactly like one that did.\n#\n# `explorer.exe /e,<dir>` raises a window for that directory (measured: 6/6\n# fresh windows, and again for the already-open case).\n#\n# `open-in-app` (the host half) STAYS MOUNTED: this bundle reuses its\n# `/open-in-app/apps` and `/open-in-app/open` routes for every non-Explorer\n# entry in the menu, so VS Code / Windows Terminal / Git Bash keep the shipped\n# resolution and launch path unchanged.\n#\n# `ui-open-in-app` (the browser half) is disabled so this bundle's client half\n# is the only registrant of the Session-header cell. Both halves would\n# otherwise claim the shared `open-in-app` cell id, and which one won would\n# depend on activation order.\n\n- id: ui-open-in-app\n  disabled: true\n\n- insert:\n    - id: open-folder-fix\n      name: '@local/dsh-open-folder-fix'\n      config:\n        # Early-failure watch window for the explorer.exe handoff. Launch\n        # success is decoupled from process exit because Explorer exits\n        # immediately after delegating to the running shell.\n        launchWatchMs: 1500\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "client.js:45"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-24T03:24:45Z",
+    "created_at": "2026-09-22T18:12:51Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-open-folder-fix",
+      "text": "修正 DSH Web GUI 里「打开工作区」按钮在 Windows 上的行为。"
+    },
+    {
+      "section": "问题",
+      "text": "DSH 的 Session 头部有一个「在应用中打开工作目录」的分裂按钮。在 Windows 上，\n它走 `shell-open` 通道，最终由 `@deepseek-ai/dsh-native-command` 执行：\n\n```\nexplorer.exe \"<目录的 file:// URI>\"        ← 0.1.7-rc.1 的写法\n```\n\n更早的版本走的是另一条命令（`powershell.exe -NoProfile -Command\n\"Invoke-Item -LiteralPath '<目录>'\"`）；两者症状相同，见下。\n\n**上游的 explorer 调用在某些 Windows 主机上不起作用，而且不报错。** 这是上游\n自己记录在案的已知限制（`dsh-native-command/README.md`，Known Limitations）：\n\n> 非交互会话（服务、或无交互登录的计划任务）里，`explorer.exe` 不调用任何文件\n> 关联，并在约 1 秒后仍然以退出码 1 返回……于是「打开」**报告成功却什么都没打开**。"
+    },
+    {
+      "section": "问题",
+      "text": "上游的成功判据就是退出码：`runExplorer` 把退出码 1 当作\"已交接给桌面进程\"而\n吞掉，`runShellOpen` 再用 `launchWatchMs` 看门狗兜底。于是\"窗口开了\"和\"什么都\n没发生\"在 DSH 看来完全一样，按钮照常变回空闲、不报错。"
+    },
+    {
+      "section": "实测：上游写法在本机失败",
+      "text": "Windows 10 19045.7663，直接用上游模块的真实代码路径调用：\n\n| 调用 | 报告结果 | Explorer 窗口数变化 |\n| --- | --- | --- |\n| `openNativePath('D:\\Projects\\dshell')`（上游 0.1.7-rc.1） | **成功** | **5 → 5（Δ0）** |\n| `explorer.exe /e,D:\\Projects\\dshell`（本插件） | — | **6 → 7（Δ1）** |\n\n两者都用 `execFile` 调用 `explorer.exe`，唯一差别是参数。上游那次**报告成功、\n一个窗口都没开**——正是上面那段 Known Limitation 描述的情形。"
+    },
+    {
+      "section": "修法",
+      "text": "改用 `explorer.exe /e,<目录>`，实测能稳定新开窗口。`explorer.exe` 交出控制权后\n一律返回退出码 1，这是委派交接而非失败（上游 `runExplorer` 也按此处理）：\n\n| 命令 | 行为 |\n| --- | --- |\n| `explorer.exe <file:// URI>`（上游现状） | 本机不弹窗，但报告成功 |\n| `explorer.exe /e,<目录>`（本插件） | 连续 6 次均新建窗口；目录已开着时同样新建 |\n| `explorer.exe <目录>` | 也新建窗口 |\n| `explorer.exe /select,<父目录>` | 新建并选中目标 |\n\n`Invoke-Item`（更早版本的上游写法）的表现记录在此备查：它执行该目录的默认\nshell 动词，把请求交给 shell 后立刻返回退出码 0，多数情况新建、偶尔复用，且\n成功与否没有信号。"
+    },
+    {
+      "section": "结构",
+      "text": "```\npackage.json        bundle 清单：声明 dsh.bundle.patch 与 dsh.client\ncordis.patch.yml    禁用上游 ui-open-in-app，插入本插件的 Host 行\nindex.js            Host 半边：注册 POST /open-folder-fix/open\nclient.js           浏览器半边：接管 Session 头部的分裂按钮\n\n两半的分工："
+    },
+    {
+      "section": "结构",
+      "text": "- **Host** 只加一个路由，路径刻意**不**与上游 `/open-in-app/*` 重叠。\n  `webServer.register` 对重复的 (kind, path) 会直接抛错，所以覆盖上游路由\n  会让插件在加载时炸掉。\n- **浏览器** 自己从 `/open-in-app/apps` 读取已安装应用列表，对\n  `explorer` 这一个 id 路由到本插件的路由，其余应用（VS Code、Windows\n  Terminal、Git Bash 等）**原样转发给上游** `/open-in-app/open`，\n  因此上游的应用探测、图标和启动策略都不受影响。\n\n上游 `@deepseek-ai/dsh-host-open-in-app` **保持挂载**，因为本插件需要它提供\n应用目录与图标。"
+    },
+    {
+      "section": "为什么要禁用上游的浏览器半边",
+      "text": "上游 `ui-open-in-app` 与本插件会争抢同一个 slot cell id（`open-in-app`）。\n插槽文档说明复用 id 会替换那个 cell，但两个注册者的胜出取决于激活顺序，\n不确定。因此 patch 显式禁用上游浏览器半边，保证只有一个注册者：\n\n```yaml\n- id: ui-open-in-app\n  disabled: true\n```"
+    },
+    {
+      "section": "配置",
+      "text": "`launchWatchMs`（默认 1500）：`explorer.exe` 交接的早期失败观察窗口。\n启动成功与否不与进程退出绑定——Explorer 把请求交给正在运行的 shell 后就退出，\n所以只有 spawn 错误（如 ENOENT）才算失败。"
+    },
+    {
+      "section": "`Config` 必须导出 Standard Schema",
+      "text": "**这是本项目踩过的坑，改 `Config` 前务必读完。**\n\ncordis 的 `resolveConfig` 只要发现插件导出了 `Config`，就**无条件**读\n`Config['~standard'].validate(config)`：\n\n```js\n// @deepseek-ai/cordis  lib/index.js\nfunction resolveConfig(runtime, config) {\n  if (!runtime.Config) return config\n  const result = runtime.Config['~standard'].validate(config)  // ← 无保护的属性读取\n\n因此 `Config` 必须是符合 [Standard Schema](https://standardschema.dev) 的对象\n（含 `~standard.validate`）。如果写成看起来更自然的样子："
+    },
+    {
+      "section": "`Config` 必须导出 Standard Schema",
+      "text": "```js\n// ✗ 错误：会让整个 dsh 起不来\nexport const Config = {\n  launchWatchMs: { type: 'number', min: 1, max: 600000, default: 1500 },\n}\n\n普通对象没有 `~standard`，上面那行读出 `undefined`，紧接着 `.validate(...)`\n抛 `TypeError`。这个异常发生在**组合树启动阶段**，结果是整个 dsh 无法启动，\n而不只是本插件失效——排查时会以为坏的是别处。\n\n正确写法见 [index.js](index.js) 的 `Config`：自带 `validate`，负责填默认值、\n校验范围，并返回 `{ value }` 或 `{ issues }`。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **仅 Windows 有意义**。非 win32 上路由返回 501；macOS/Linux 请沿用上游行为。\n- 图标沿用上游 `/open-in-app/icon/explorer`。上游的目录表里本来就有\n  `explorer` 条目，因此图标正常解析。\n- 与上游 `@deepseek-ai/dsh-native-command` 的 `revealNativePath`\n  （`explorer.exe /select,`，用于\"在资源管理器中显示某个文件\"）无关：\n  那条路径是按文件定位，不是打开工作目录，本次未改动。"
+    },
+    {
+      "section": "依赖说明",
+      "text": "本插件只用 Node 内置模块。**不要**在这里 import\n`@deepseek-ai/dsh-host-open-in-app`：该包只导出 `Config`、`apply`、`inject`、\n`name`，目录解析不在公开面上，依赖它等于依赖 alpha 版本的内部实现。\n与上游的全部交互都走公开 HTTP 路由。"
+    },
+    {
+      "section": "重新安装",
+      "text": "同路径重复 `install_bundle` 会因上游 plugin-manager 的判定逻辑报\n`ambiguous-install`（它靠\"dependencies 是否变化\"来识别装了哪个包，\n包已存在时识别不到）。包在 profile 里是**符号链接**，所以改完代码刷新页面\n即可生效，不需要重装。"
+    }
+  ],
+  "skipped": []
+}

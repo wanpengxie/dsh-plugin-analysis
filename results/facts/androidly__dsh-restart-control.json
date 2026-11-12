@@ -1,0 +1,159 @@
+{
+  "repo": "androidly/dsh-restart-control",
+  "commit": "ffeb4f8bb4f758b434ceabd9d1412df15eeb7610",
+  "extracted_at": "2026-11-11T17:18:44.667948+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 31632,
+    "lines_by_language": {
+      "JSON": 49,
+      "JavaScript": 571,
+      "Markdown": 68,
+      "Other": 31,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-restart-control",
+    "version": "1.0.0",
+    "description": "Adds a restart control at the DSH Web sidebar foot: the host exits through its own graceful path and a detected supervisor boots the replacement, or the plugin starts one directly; a frame-wide notice polls the host pid until a new process answers.",
+    "license": "MIT",
+    "type": "module",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/androidly/dsh-restart-control.git"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-sidebar",
+          "@deepseek-ai/dsh-client-locale"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: restart-dsh\n      name: dsh-restart-control\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "INVOCATION_ID",
+      "kind": "env",
+      "where": "index.js:48"
+    },
+    {
+      "name": "KUBERNETES_SERVICE_HOST",
+      "kind": "env",
+      "where": "index.js:49"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/androidly/dsh-restart-control.git",
+      "where": "package.json:9"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-22T08:18:47Z",
+    "created_at": "2026-10-22T08:18:36Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-restart-control",
+      "text": "A DSH Web plugin that restarts the running host from the sidebar, and keeps reporting until a new process answers."
+    },
+    {
+      "section": "What it does",
+      "text": "- **A control at the sidebar foot.** One click arms it (`Click again to restart`), a second click sends the request. Arming expires after five seconds.\n- **The host exits through its own graceful path.** The plugin calls the launcher's `appExit` (`ctx.get('appExit')`), so the Cordis fiber tree disposes before the process leaves — it does not kill the process outright.\n- **A supervisor boots the replacement.** systemd (`INVOCATION_ID`), Kubernetes (`KUBERNETES_SERVICE_HOST`) and Docker (`/.dockerenv`) are detected; when one is present the plugin only exits and lets it restart the unit/container. With no supervisor detected, the plugin starts a detached successor itself: a shell waits two seconds for the port to be released, then `exec`s the same executable and arguments with the same cwd and environment.\n- **A frame-wide notice follows the restart.** A bottom-right card reports `Restarting…`, then `Restarted` or the failure reason, with `Reload page` / `Retry` / `Dismiss`. The attempt is stored in `localStorage`, so it survives the shell remounting during the reconnect, a page reload, and a second tab opened by the restarted process.\n- **Completion is verified by pid, not by the res"
+    },
+    {
+      "section": "Requirements",
+      "text": "- DSH with the Web app (`dsh web`), version `0.2.x`.\n- The plugin needs the `webServer` and `connection` services, which the shipped Web composition provides.\n- Restarting only makes sense when something can start the host again: a supervisor, or the plugin's own relaunch path."
+    },
+    {
+      "section": "Install",
+      "text": "Install it as a bundle from the DSH Web plugin manager (Plugin Manager → install bundle → this package or its directory).\n\nFor a manual profile install:\n\n```sh\ndsh plugin --profile <profile> add <path-or-git-url>\n```\n\nthen add `dsh-restart-control` to `dsh.profile.bundles` in `$DSH_HOME/profiles/<profile>/package.json` and restart the host. A bundle is only composed when it is listed there; adding the dependency alone does not start it."
+    },
+    {
+      "section": "The route",
+      "text": "The Host half registers one exact route on the composition's `webServer`:\n\n| Method | Path | Result |\n| --- | --- | --- |\n| `GET` | `/restart-dsh` | `{ pid, startedAt, pending }` — the live process identity |\n| `POST` | `/restart-dsh` | `202 { pid, startedAt, pending, supervisor, relaunch }`, then the shutdown; `409` while a restart is already pending |"
+    },
+    {
+      "section": "The route",
+      "text": "Every request first passes `ctx.connection.requestRejection(req)`: the Host/Origin fence and the browser login cookie gate the caller before any state is read or any restart is scheduled. An unauthenticated request gets `401` and changes nothing."
+    },
+    {
+      "section": "Limits",
+      "text": "- The control restarts the host; it does not reload the page for you. The notice offers a reload button because the WebSocket drops during the restart.\n- A restart is process-wide: every live session in that host reconnects, and a turn in flight is interrupted.\n- The supervisor detection is a heuristic. If you run the host under something else that restarts it, the exit path is still correct; if nothing would restart it, the relaunch path takes over."
+    },
+    {
+      "section": "License",
+      "text": "MIT\n\n---"
+    },
+    {
+      "section": "中文",
+      "text": "在 DSH Web 侧边栏底部添加重启控件，并持续汇报进度直到新进程应答。\n\n- 点击一次进入确认态（5 秒后自动撤销），再次点击才发出重启请求。\n- 宿主经自身的优雅退出通道（`ctx.get('appExit')`）退出，先 dispose 插件树再退出进程。\n- 检测 systemd / Kubernetes / Docker：有守护时只退出，由守护拉起；没有守护时插件自己起一个分离进程，等端口释放后以同样的命令行、cwd 与环境 `exec`。\n- 右下角全帧提示条显示「正在重启 → 已重启 / 失败原因」，记录写入 `localStorage`，重连导致外壳重挂载、刷新页面、乃至重启后新开的标签页都能看到结果。\n- 成功与否以 pid 判定：发请求前先读宿主 pid，轮询到**不同**的 pid 才算成功，120 秒未等到则报超时。"
+    },
+    {
+      "section": "中文",
+      "text": "安装：在 DSH Web 的插件管理器里按 bundle 安装本包；或 `dsh plugin --profile <profile> add <路径或 git 地址>` 后，把 `dsh-restart-control` 加入 `$DSH_HOME/profiles/<profile>/package.json` 的 `dsh.profile.bundles`，再重启宿主。\n\n路由 `/restart-dsh` 的每个请求都先过 `ctx.connection.requestRejection`：未通过 Host/Origin 围栏与登录 cookie 的请求返回 401，不读取任何状态、不触发重启。"
+    }
+  ],
+  "skipped": []
+}

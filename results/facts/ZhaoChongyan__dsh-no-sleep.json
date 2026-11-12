@@ -1,0 +1,154 @@
+{
+  "repo": "ZhaoChongyan/dsh-no-sleep",
+  "commit": "abd35370f09db76ecbc263e5001bb9c70d2194d3",
+  "extracted_at": "2026-11-11T16:44:14.703177+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 58330,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 716,
+      "Markdown": 163,
+      "Other": 526,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "native/build.ps1",
+      "native/no-sleep.cs",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@local/no-sleep",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Keep the computer awake while DeepSeek Harness is running, with a preference row in Settings → General.",
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "native/build.ps1",
+      "native/no-sleep.cs"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-no-sleep\n      name: '@local/no-sleep'\n      config:\n        enabled: true\n        mode: display\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "WINDIR",
+      "kind": "env",
+      "where": "index.js:45"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-28T10:21:24Z",
+    "created_at": "2026-10-28T10:19:17Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "no-sleep",
+      "text": "English | [中文](README.zh.md)\n\nA DeepSeek Harness plugin that keeps the computer awake while the Harness is\nrunning, so a long agent task is not cut off by the screen turning off or the\nmachine going to sleep. One preference row appears in **Settings → General**."
+    },
+    {
+      "section": "no-sleep",
+      "text": "| | |\n|---|---|\n| Switch | Turn wake-holding on or off (persisted per profile) |\n| Keep awake | *Screen and system* or *System only* (screen off, work continues) |\n| Status | Live state read from the Host: holding / starting / off / error, plus the helper process id |"
+    },
+    {
+      "section": "How it works",
+      "text": "The hold is one `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED\n[| ES_DISPLAY_REQUIRED])` request, made from a dedicated thread inside a small\nhelper process that the Host half starts with Windows PowerShell's `Add-Type`.\nWindows keeps the request for as long as that thread is alive and drops it with\nthe process, so:"
+    },
+    {
+      "section": "How it works",
+      "text": "- **quitting the Harness** releases the request immediately (the helper is a\n  child of the Host and ends with it);\n- **turning the switch off** releases it immediately;\n- **a crashed helper** is reported in the settings row and restarted by the\n  Host's 30-second supervisor."
+    },
+    {
+      "section": "How it works",
+      "text": "The helper is a separate process because a Host plugin only receives Harness\nAPIs — no Electron or process-level native bridge — and the Desktop ships no\nnative Node addon. A child process is the native surface a Host plugin does\nhave. It is spawned hidden, so no console window flashes."
+    },
+    {
+      "section": "How it works",
+      "text": "Windows exposes no reliable user-mode query for \"is a wake request currently\napplied\" (`powercfg /requests` requires elevation and runs in another session),\nso the row reports what the Host can verify: the helper is alive with the\nrequested flags."
+    },
+    {
+      "section": "Configuration",
+      "text": "Preferences are written to `<profile>/no-sleep.json` next to the profile's\n`cordis.patch.yml`. The bundle's row seeds the first run:\n\n```yaml\n- insert:\n    - id: dsh-no-sleep\n      name: '@local/no-sleep'\n      config:"
+    },
+    {
+      "section": "HTTP route (loopback only)",
+      "text": "| Method | Path | Body | Result |\n|---|---|---|---|\n| `GET` | `/no-sleep/api` | — | status JSON |\n| `POST` | `/no-sleep/api` | `{ \"enabled\"?: bool, \"mode\"?: \"display\"\\|\"system\" }` | saves, applies, returns status |\n\nRequests from anything but this machine's loopback interfaces are answered\n`403`: the route changes host power state."
+    },
+    {
+      "section": "Install and layout",
+      "text": "```\nplugin_manager { action: \"install_bundle\", target: \"<abs path>/no-sleep\" }\n```\n\n```\nindex.js           Host: route, preference file, helper process lifecycle\nclient.js          Browser: the Settings → General row\ncordis.patch.yml   Loader row that inserts the package\npackage.json       dsh.bundle.patch + dsh.client metadata"
+    },
+    {
+      "section": "Reference: the in-process helper",
+      "text": "`native/` holds a .NET helper (`no-sleep.cs`, built by `native/build.ps1`) that\nmakes the same request from a thread inside the Host itself. It works when a\nHost can load an assembly into its own runtime, and it is the version to switch\nto if a future release exposes that surface to plugins — the current Desktop\nHost loads plugin rows inside its cordis runner and does not. The plugin does\nnot use it today; `native/build.ps1` is kept because it also documents what the\nhold looks like at the Win32 level."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

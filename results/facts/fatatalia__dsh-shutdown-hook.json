@@ -1,0 +1,123 @@
+{
+  "repo": "fatatalia/dsh-shutdown-hook",
+  "commit": "66a516379f01e5cd3ac44f010f34b07fd67accef",
+  "extracted_at": "2026-11-11T19:51:51.448041+00:00",
+  "tree": {
+    "files": 5,
+    "bytes": 10180,
+    "lines_by_language": {
+      "JSON": 25,
+      "JavaScript": 128,
+      "Markdown": 100,
+      "Other": 9,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-shutdown-hook",
+    "version": "0.1.0",
+    "private": true,
+    "description": "dsh 统一退出屏障插件：唯一 SIGTERM/SIGINT 拦截点，其他插件注册退出前检查（drain/flush/落盘），退出时统一并行调度，全部完成才 process.exit。解决重启/停止时异步投递丢消息问题。",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-shutdown-hook bundle patch\n# 插入 host 插件行：统一退出屏障（SIGTERM/SIGINT 拦截 + 退出前检查调度）。\n- insert:\n    - id: dsh-shutdown-hook\n      name: dsh-shutdown-hook\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-10-18T14:15:30Z",
+    "created_at": "2026-08-28T09:06:25Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-shutdown-hook",
+      "text": "dsh 统一退出屏障插件：**唯一 SIGTERM/SIGINT 拦截点**，其他插件注册\"退出前检查\"（drain / flush / 落盘），进程退出时统一并行调度，全部完成才 `process.exit(0)`。"
+    },
+    {
+      "section": "解决的问题",
+      "text": "dsh 中 agent 回复经 iMessage 等渠道是**异步投递**的（`assistant/message` 事件 → 排队 → imsg 子进程）。进程被杀（重启 / 停止）时，未完成的投递直接丢失——表现为 Web 会话可见消息，但 iMessage 收不到。\n\n本插件在**进程层强制**\"退出前等投递完成\"：由插件统一拦截信号并调度检查，**不依赖模型自觉调用工具、不依赖 agent 纪律**。"
+    },
+    {
+      "section": "工作原理",
+      "text": "```\nlaunchctl kickstart / stop / Ctrl+C\n        │  SIGTERM / SIGINT\n        ▼\n┌─────────────────────────────────────────┐"
+    },
+    {
+      "section": "用法（其他插件）",
+      "text": "**硬依赖模式**（服务必在，shutdown-hook 缺失时插件不激活）：\n\n```js\nexport const inject = [\"shutdownHook\"];  // cordis 保证本插件先加载\n\nctx.shutdownHook.register(\"imessage-drain\", async () => {\n  await core.drain();  // 等投递链清空\n\n**软依赖模式**（推荐：独立插件不强绑，服务缺失时优雅降级，延迟加载/重载自动补注册）：\n\n```js\n// 不要 inject \"shutdownHook\"\nlet registered = false;\nconst register = (barrier) => {\n  if (registered || !barrier) return;\n\n服务 API："
+    },
+    {
+      "section": "用法（其他插件）",
+      "text": "| 方法 | 说明 |\n|---|---|\n| `register(name, fn, { timeoutMs })` | 注册退出前检查（超时默认 5000ms） |\n| `unregister(name)` | 注销检查 |\n| `list()` | 当前已注册的检查名列表 |"
+    },
+    {
+      "section": "调度逻辑",
+      "text": "```\n收到 SIGTERM/SIGINT\n  → 幂等检查（多次信号只执行一次）\n  → 并行执行所有检查（Promise.allSettled，互不阻塞）\n  → 每个检查独立超时（默认 5s），全局 10s 兜底"
+    },
+    {
+      "section": "边界",
+      "text": "- **SIGKILL（kill -9）/ 进程崩溃**：无法保证（进程直接死，任何方案都保证不了）\n- **检查超时**：超时强制继续退出，避免进程悬挂\n- **dsh 未来版本**：若 dsh 核心自己注册 SIGTERM handler 并立即退出，本插件拦截会失效（当前 dsh 版本无）"
+    },
+    {
+      "section": "已注册检查",
+      "text": "| 插件 | 检查名 | 作用 |\n|---|---|---|\n| dsh-imessage | `imessage-drain` | 等 iMessage 投递链清空（重启不丢消息） |"
+    },
+    {
+      "section": "实战验证",
+      "text": "- 2026-08-28：两次 `launchctl kickstart -k` 重启均被拦截，`imessage-drain` 正常执行，重启前消息完整送达，新进程 2 秒内恢复。"
+    },
+    {
+      "section": "日志示例",
+      "text": "```\n[2026-08-28 16:21:27] [sh] 收到 SIGTERM，执行 1 个退出前检查...\n[2026-08-28 16:21:27] [sh] 检查完成: imessage-drain（17ms）\n[2026-08-28 16:21:27] [sh] 退出前检查完成 1/1，总耗时 85ms，退出\n```"
+    }
+  ],
+  "skipped": []
+}

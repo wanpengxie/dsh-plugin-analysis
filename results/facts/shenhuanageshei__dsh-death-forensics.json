@@ -1,0 +1,168 @@
+{
+  "repo": "shenhuanageshei/dsh-death-forensics",
+  "commit": "ee3ec2e18d3ee2d29b37c1211234e7a54fea50c6",
+  "extracted_at": "2026-11-12T04:27:13.408530+00:00",
+  "tree": {
+    "files": 15,
+    "bytes": 53702,
+    "lines_by_language": {
+      "JSON": 50,
+      "JavaScript": 395,
+      "Markdown": 203,
+      "Other": 32,
+      "Shell": 154,
+      "TypeScript": 500,
+      "YAML": 30
+    },
+    "outline": [
+      ".gitignore",
+      "DESIGN.md",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/forensics.js",
+      "lib/index.js",
+      "lib/selftest.js",
+      "package.json",
+      "pnpm-lock.yaml",
+      "scripts/build.sh",
+      "src/forensics.ts",
+      "src/index.ts",
+      "src/selftest.ts",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-death-forensics",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "scripts/build.sh",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.0-rc <5",
+      "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
+      "@deepseek-ai/schemastery": ">=3.18.0 <4"
+    },
+    "devDependencies": {
+      "typescript": "^5.7.3"
+    },
+    "scripts": {
+      "build": "bash scripts/build.sh",
+      "selftest": "node lib/selftest.js",
+      "typecheck": "tsc -p tsconfig.json --noEmit"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-death-forensics bundle patch — applied when this package is listed in\n# a profile's dsh.profile.bundles. Mounts the death-forensics plugin as one\n# loader entry; the plugin injects the base `timer` and `tools` services.\n- insert:\n    - id: death-forensics\n      name: 'dsh-death-forensics'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:17"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/index.ts:61"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "typescript": "^5.7.3"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 2,
+    "pushed_at": "2026-09-02T12:35:59Z",
+    "created_at": "2026-09-02T03:55:18Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/forensics.js",
+    "lib/index.js",
+    "lib/selftest.js",
+    "package.json",
+    "src/index.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-death-forensics",
+      "text": "In-process death black box for a DeepSeek Harness (dsh) host. A Cordis plugin\n(bundle format) that records **what happened before the host died** — heartbeat\nwindows, crash stacks, and an end-kind self-check at the next boot."
+    },
+    {
+      "section": "Why",
+      "text": "dsh web processes can die without a trace (external kills, frozen event loops,\ncrashes). An external launcher can record *how* the process died (exit code /\nstderr / uptime), but only something **inside** the process can record *what\nhappened before*: when the last heartbeat was, what the crash stack was, and\nwhether the previous boot ended gracefully.\n\nThis plugin is the in-process half. Pair it with an external launcher (see\nDESIGN.md) for a complete picture."
+    },
+    {
+      "section": "Features",
+      "text": "| Feature | Mechanism |\n|---|---|\n| Heartbeat | append JSONL to `<DSH_HOME>/death-forensics/heartbeat.log` every `heartbeatIntervalMs` (default 15s, bounded file) |\n| End-kind self-check | SIGTERM/SIGINT record `graceful`; `exit` event records neutral `exit`; crash/kill leaves `running` → next boot detects a **non-graceful end** and appends a record to `crash.log` |\n| Crash stacks | `uncaughtException` (incl. unhandled rejections via Node's default throw chain) records the full stack, then reprints it and exits(1) — host behavior is byte-identical to the no-plugin case |\n| Report tool | `death_forensics_report` — current boot, previous end kind, death window (last heartbeat → next boot), crash log tail, external launcher log tail (if present) |"
+    },
+    {
+      "section": "Data files (`<DSH_HOME>/death-forensics/`)",
+      "text": "- `state.json` — current boot identity + last end kind (single source of truth)\n- `heartbeat.log` — append-only JSONL, truncated at `maxHeartbeatLines`\n- `crash.log` — append-only JSONL records (crashes + detected non-graceful ends)"
+    },
+    {
+      "section": "Safety contract",
+      "text": "- **Zero child processes** — never spawns anything; only file writes.\n- Hot paths are synchronous writes with try/catch degrade — failures disable\n  the black box, never the host.\n- Hooks are additive listeners only, cleaned up on plugin dispose.\n- No monkey-patching of host services."
+    },
+    {
+      "section": "Install",
+      "text": "Add to a dsh profile (e.g. `profile/profiles/web/package.json`):\n\n```json\n\"dependencies\": {\n  \"dsh-death-forensics\": \"link:/path/to/dsh-death-forensics\"\n},\n\"dsh\": {\n\nThen restart dsh. The bundle patch inserts entry id `death-forensics`.\n\nAlternatively, via CLI: `dsh plugin --profile web add /path/to/dsh-death-forensics`."
+    },
+    {
+      "section": "Build",
+      "text": "Requires a dsh checkout or profile install carrying `@deepseek-ai/*` packages\n(resolved via `$DSH_CHECKOUT`, or `$HOME/dsh-harness`, `$HOME/dsh`,\n`$HOME/.dsh/dsh-harness`), plus `typescript`:\n\n```sh"
+    },
+    {
+      "section": "install devDependency offline (from any pnpm store)",
+      "text": "node <pnpm.mjs> install --store-dir=<pnpm-store-dir> --prefer-offline \\\n  --config.node-linker=hoisted --config.auto-install-peers=false"
+    },
+    {
+      "section": "compile src/ → lib/",
+      "text": "bash scripts/build.sh        # Git Bash on Windows; node must be on PATH\nnode lib/selftest.js         # 17 pure-logic assertions\n```\n\nThe published `lib/` is committed so the plugin works from a plain clone."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Description |\n|---|---|---|\n| `heartbeatIntervalMs` | 15000 | heartbeat interval (min 5000) |\n| `maxHeartbeatLines` | 20000 | heartbeat file line cap |\n| `reportTailLines` | 40 | tails shown by the report tool |\n| `dataDir` | `<DSH_HOME>/death-forensics` | data directory override |"
+    },
+    {
+      "section": "Docs",
+      "text": "- `DESIGN.md` — full design (Chinese): state machine, hook semantics, acceptance criteria.\n- Death-window interpretation: `[last heartbeat of previous boot, this boot's start]`."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](LICENSE)."
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,395 @@
+{
+  "repo": "zxh21149-commits/dsh-attention-center",
+  "commit": "0701a32511916fcb93a68f8d82c0c4c567a1a21e",
+  "extracted_at": "2026-11-12T15:07:53.361665+00:00",
+  "tree": {
+    "files": 34,
+    "bytes": 169155,
+    "lines_by_language": {
+      "JSON": 427,
+      "JavaScript": 3152,
+      "Markdown": 387,
+      "Other": 37,
+      "YAML": 174
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/PTC-OPS.md",
+      "icon.svg",
+      "index.js",
+      "inquiry/banks/en.json",
+      "inquiry/banks/zh.json",
+      "inquiry/icon.svg",
+      "inquiry/index.js",
+      "inquiry/lib/bank.js",
+      "inquiry/lib/commands.js",
+      "inquiry/lib/config-schema.js",
+      "inquiry/lib/config.js",
+      "inquiry/lib/prompt.js",
+      "inquiry/locale/en.json",
+      "inquiry/locale/zh.json",
+      "inquiry/test/apply.test.js",
+      "inquiry/test/bank.test.js",
+      "inquiry/test/commands.test.js",
+      "inquiry/test/config.test.js",
+      "inquiry/test/prompt.test.js",
+      "lib/notify.js",
+      "lib/projection.js",
+      "lib/providers.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/notify.test.js",
+      "test/projection.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-attention-center",
+    "version": "0.3.3",
+    "type": "module",
+    "description": "PTC 增强套件（注意力中心 + 刨根问底）：跑在 run_code/SDK 上的 PTC 预设、跨会话答题与失败提醒、与 dsh-ops 取证工具对齐。PTC suite for DeepSeek Harness: inquiry preset on run_code, attention center, ops pairing.",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./inquiry": "./inquiry/index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "lib",
+      "inquiry",
+      "locale",
+      "icon.svg",
+      "cordis.patch.yml",
+      "docs",
+      "README.md",
+      "README.en.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "ptc",
+      "run-code",
+      "attention",
+      "notification",
+      "questions",
+      "inquiry",
+      "ops"
+    ],
+    "engines": {
+      "node": ">=22",
+      "dsh": ">=0.2.0-0"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.5",
+      "zod": "^4.4.3"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-api-session-controller",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-layout",
+          "@deepseek-ai/dsh-client-ui-renderer",
+          "@deepseek-ai/dsh-client-ui-session",
+          "@deepseek-ai/dsh-client-ui-workspace"
+        ]
+      }
+    },
+    "scripts": {
+      "test": "node --test"
+    },
+    "author": "zxh21149-commits",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/zxh21149-commits/dsh-attention-center.git"
+    },
+    "homepage": "https://github.com/zxh21149-commits/dsh-attention-center#readme",
+    "bugs": {
+      "url": "https://github.com/zxh21149-commits/dsh-attention-center/issues"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-attention-center 0.3.x —— PTC 增强套件（一个安装包，三块能力）\n#\n#   1) attention-core  注意力中心：运行中计数 / 失败·完成提醒 / 跨会话答题弹窗 / 手机推送\n#   2) inquiry-core    刨根问底：注册 inquiry-mode 技能与 /pao /pau /inquiry 命令\n#   3) preset-inquiry  「刨根问底 · Inquiry」预设，跑在 PTC 上（tool-presentation mode:ptc）\n#\n# 为什么预设要走 PTC：原生模式下每个工具都是一条独立 schema + 一次往返；PTC 下模型只看到\n# run_code + 生成的 SDK，所有工具（含 dsh-ops 的 ops_bash / ops_grep / ops_glob /\n# ops_inspect_local_file / ops_replace）都变成 tools.xxx() 在 TypeScript 程序里调用 ——\n# 一次程序里可以并发取证，中间结果不进上下文，只把要用的那几行 return 出来。\n#\n# 提问为什么是 timed：PTC 下 run_code 有自己的执行期限（默认 120s，见下面 ptc-runtime 覆盖）。\n# 阻塞式提问一旦被期限打断，官方 README 写明「该问题可能丢失」；timed 到点先返回 pending，\n# 题还留着、随时可答，答案随后作为用户消息回来。\n#\n# 回退：删掉下面所有行（或整份替换回旧 patch）后重启。\n\n# 5 分钟等待 > 默认 120s，必须把 run_code 的默认期限抬到 330s（比 ask 的 300s 多 30s 余量）。\n# 这一条是全局的：所有 PTC 预设的 run_code 默认期限都会变成 5.5 分钟。\n- id: ptc-runtime\n  name: '@deepseek-ai/dsh-ptc-runtime-node'\n  config:\n    timeoutMs: 330000\n    maxTimeoutMs: 600000\n\n- insert:\n    - id: attention-core\n      name: 'dsh-attention-center'\n      config:\n        notifyProvider: none\n        notifyPushplusToken: ''\n        notifyWecomWebhook: ''\n        notifyOnError: true\n        notifyOnQuestion: true\n        notifyQuestionTimeoutMinutes: 5\n        notifyOnDone: true\n        notifyMinRunSeconds: 300\n        notifyTestOnStart: false\n\n    - id: inquiry-core\n      name: 'dsh-attention-center/inquiry'\n      config:\n        rounds: 4\n        questionsPerRound: 6\n        language: zh\n        questionBankPath: ''\n        briefDir: ~/.dsh/inquiry\n        autoLoadSkill: true\n\n    - id: preset-inquiry\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: inquiry\n        order: 5\n        name: 刨根问底 · Inquiry\n        description: 问答式澄清模式（PTC / run_code）：先问 20~30 个问题、每轮复述理解，把方向钉住再动手。适合\"我有个想法但说不清楚\"的创造/探索任务。\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: >\n                你是「刨根问底 · Inquiry（PTC）」模式下的创造伙伴，由 {{model}}\n                驱动。这个模式只做一件事：在动手之前，用成串的具体问题把方向钉死，再开工。\n\n\n                本模式跑在 PTC 上：没有原生函数调用，所有工具都在 run_code 里经 SDK 调用（`await tools.<名字>(参数)`）。装了 dsh-ops 时，取证件工具就是\n                `ops_bash` / `ops_grep` / `ops_glob` / `ops_inspect_local_file` / `ops_replace` —— 一次 run_code 里并发取证，只把要用的那几行 return 出来，中间结果不进上下文。\n\n\n                开始前先在 run_code 里用 `tools.skill` 加载 `inquiry-mode` 技能——完整协议、轮数/题数、问题库与《需求简报》模板都在里面，按技能里的配置执行。\n                如果技能加载失败：先复述三栏，再给 3 个方向，每轮 5-7 题，收口给《需求简报》，用户确认前不动手。\n\n\n                提问纪律：一轮的题放在同一次 `tools.ask_user_question` 里，每题给稳定的 id（q1…q6），推荐项放第一并加 (Recommended)。\n                它是 timed 模式：5 分钟内答完就直接拿到答案；返回 `pending` 说明用户还在答——立刻结束本回合，不要自答、不要替用户选、不要继续推进；答案会作为下一条用户消息回来，从那里接着做。\n\n\n                用户只给种子、说不清需求时，不要先给方案，也不要先写代码；用具体选项逼出信息。用户说「够了 / 直接做」立即收口。用用户的语言回复。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                disabled: true\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n                disabled: true\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n            config:\n              mode: timed\n              timeout: 300\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: tool-presentation\n            name: '@deepseek-ai/dsh-agent-tool-presentation'\n            config:\n              mode: ptc\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "inquiry/index.js",
+    "client.js",
+    "icon.svg",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:47"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "www.pushplus.plus",
+      "url": "https://www.pushplus.plus/send",
+      "where": "lib/providers.js:45"
+    },
+    {
+      "host": "qmsg.zendee.cn",
+      "url": "https://qmsg.zendee.cn/v3/send/${encodeURIComponent(text(config.qmsgKey",
+      "where": "lib/providers.js:55"
+    },
+    {
+      "host": "sctapi.ftqq.com",
+      "url": "https://sctapi.ftqq.com/${encodeURIComponent(text(config.serverchanKey",
+      "where": "lib/providers.js:73"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zxh21149-commits/dsh-attention-center.git",
+      "where": "package.json:72"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zxh21149-commits/dsh-attention-center#readme",
+      "where": "package.json:74"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zxh21149-commits/dsh-attention-center/issues",
+      "where": "package.json:76"
+    },
+    {
+      "host": "qyapi.weixin.qq.com",
+      "url": "https://qyapi.weixin.qq.com/x",
+      "where": "test/notify.test.js:44"
+    },
+    {
+      "host": "www.pushplus.plus",
+      "url": "https://www.pushplus.plus/send",
+      "where": "test/notify.test.js:51"
+    },
+    {
+      "host": "qmsg.zendee.cn",
+      "url": "https://qmsg.zendee.cn/v3/send/my%20key",
+      "where": "test/notify.test.js:59"
+    },
+    {
+      "host": "qyapi.weixin.qq.com",
+      "url": "https://qyapi.weixin.qq.com/hook?key=1",
+      "where": "test/notify.test.js:62"
+    },
+    {
+      "host": "qyapi.weixin.qq.com",
+      "url": "https://qyapi.weixin.qq.com/hook?key=1",
+      "where": "test/notify.test.js:63"
+    },
+    {
+      "host": "sctapi.ftqq.com",
+      "url": "https://sctapi.ftqq.com/SCT1.send",
+      "where": "test/notify.test.js:67"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/hook",
+      "where": "test/notify.test.js:70"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.5",
+      "zod": "^4.4.3"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 7,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-10-22T00:31:29Z",
+    "created_at": "2026-10-20T02:05:50Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-10-22T00:31:29Z",
+      "inactive_days": 21,
+      "commit_count": 6,
+      "checked_at": "2026-11-12T15:07:53.361665+00:00",
+      "signals": [
+        "list:pushed_at=2026-10-22T00:31:29Z",
+        "list:commits=6"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "inquiry/index.js",
+    "inquiry/lib/bank.js",
+    "inquiry/lib/commands.js",
+    "inquiry/lib/config-schema.js",
+    "inquiry/lib/config.js",
+    "inquiry/lib/prompt.js",
+    "lib/notify.js",
+    "lib/projection.js",
+    "lib/providers.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-attention-center · PTC 增强套件",
+      "text": "一个安装包，三块能力：\n\n| 能力 | 挂在哪 | 干什么 |\n|---|---|---|\n| **刨根问底 · Inquiry（PTC）** | `preset-inquiry` | 新会话选这个模式：先问 20~30 个问题把方向钉住，再动手。跑在 PTC 上——模型只看到 `run_code` + 自动生成的 SDK |\n| **注意力中心** | `attention-core` + `client.js` | 右下角运行中计数、失败/完成提醒、**跨会话答题弹窗**（不用切过去）、可选手机推送 |\n| **OPS / PTC 对齐** | 预设内的 `tool-presentation` | PTC 下 `dsh-ops` 的 `ops_*` 工具全部降为 SDK 绑定：一次 `run_code` 里并发取证，中间结果不进上下文 |"
+    },
+    {
+      "section": "这是什么",
+      "text": "给 **DeepSeek Harness** 用的一套「先问清楚、再动手」的工作台：\n\n- 一个 **PTC 预设**（刨根问底 · Inquiry）：模型只拿到 `run_code` + 生成的 SDK，用问题把模糊想法钉成方向；\n- 一套 **注意力中心**：跨会话的答题弹窗、运行中计数、失败 / 完成提醒，不用在对话之间来回切；\n- 一层 **OPS / PTC 对齐**：`dsh-ops` 的 `ops_*` 工具在 PTC 下变成 `tools.ops_*`，一次程序里并发取证、只把要用的几行返回。\n\n开源、MIT、无遥测、不含任何凭据。仓库：<https://github.com/zxh21149-commits/dsh-attention-center>\n\n> 为什么放一起：刨根问底最怕「问了没人答」——它每轮要等你 5 分钟；注意力中心正好负责把问题递到你眼前、答完自动续上。而 PTC 让每轮取证（读文件 / 查目录 / 看仓库）压进一次 `run_code`，问出来的题才带着证据。"
+    },
+    {
+      "section": "装",
+      "text": "```text\nplugin_manager install_bundle   target = github:zxh21149-commits/dsh-attention-center\n```\n\n装完重启 DSH（Host 半要注册投影、技能与预设）；客户端半刷新页面即可。\n\n**依赖**：DSH ≥ 0.2.0；PTC 需要宿主侧 `ptc-runtime`（官方发行版自带，本包会覆盖它的 `timeoutMs`）。\n`dsh-ops` 是**可选**的第三方插件（Rust 实现、Windows x64），装了就会以 SDK 绑定出现在 `run_code` 里；没装也能跑，取证换成原生 `bash` / 文件工具。"
+    },
+    {
+      "section": "1. 刨根问底 · Inquiry（PTC）",
+      "text": "新会话选预设「刨根问底 · Inquiry」，或在任意会话敲 `/pao`、`/pau`、`/inquiry`（`/pao 补充文字` 算种子）。\n\n- 先猜方向给 3 条 → 每轮 6 题、一题一页、可跳过可自填，**推荐项排第一并带 `(Recommended)`**\n- 每轮收尾复述三栏：**【已确认】【我的推断】【还差的】**\n- 收口出《需求简报》存 `~/.dsh/inquiry/`，你点头才动手\n- 你说「够了 / 直接做」立即收口\n\n提问是 **timed** 模式：5 分钟内答完直接拿答案；超时返回 `pending`，题还留着、答案随后作为用户消息回来（PTC 下 `run_code` 有执行期限，阻塞式等待被打断可能丢题）。"
+    },
+    {
+      "section": "2. 注意力中心",
+      "text": "| 场景 | 表现 |\n|---|---|\n| 有会话在跑 | 右下角常驻气泡「运行中 N」（点开看是哪几个，点一下跳过去） |\n| 某轮失败 | 失败卡：会话名 + 错误摘要；**打开 / 重试 / 忽略** |\n| 某轮完成 | 完成卡：哪个会话完成了 + 「看结果」 |\n| 别的对话在等你答题 | 居中弹窗，题目从上往下排，**就地选/填/提交**，不用切会话 |\n| 没操作 | 默认 **10 分钟**后自动提交推荐项（可切 5/10/20/30/60 或永不）；气泡上有 `⏳N分` 倒计时 |\n| 人不在电脑旁 | 手机推送：PushPlus / 企业微信群机器人 / Qmsg / Server酱 / webhook |\n\n自动选择有三道闸，专治「没弹窗却自己选了」：\n\n1. **只对弹窗真正显示过的题生效**——没显示过就一直等；\n2. **计时从「第一次显示给你看」开始**，不是从问题创建开始；\n3. 自动提交后留一张黄边卡片：**哪个会话 + 每题选了什么** + 打开会话 / 知道了。"
+    },
+    {
+      "section": "3. PTC × OPS",
+      "text": "同一个任务的两条路：\n\n```text\n原生：model → ops_glob → 结果进上下文\n      model → ops_grep → 结果进上下文\n      model → ops_inspect ×3 → 三份结果进上下文     （5 次往返）\n\n`dsh-ops` 的 README 原话：「PTC 模式经 SDK 调用底层工具，权限门不变」——工具还在、权限门不变，变的只是「怎么调」。"
+    },
+    {
+      "section": "`attention-core`（插件页可编辑）",
+      "text": "| 键 | 默认 | 说明 |\n|---|---|---|\n| `notifyProvider` | `none` | `none` / `pushplus` / `qmsg` / `wecom` / `serverchan` / `webhook` |\n| `notifyPushplusToken` / `notifyWecomWebhook` | 空 | 对应渠道凭据（**别贴聊天**，明文存本机） |\n| `notifyOnError` / `notifyOnQuestion` / `notifyOnDone` | `true` | 失败 / 提问超时 / 完成是否推 |\n| `notifyQuestionTimeoutMinutes` | `5` | 提问多久没人答就推一次 |\n| `notifyMinRunSeconds` | `300` | 完成推送的运行时长门槛 |\n| `notifyTestOnStart` | `false` | 开一次立刻发测试消息，验完关掉 |"
+    },
+    {
+      "section": "`attention-core`（插件页可编辑）",
+      "text": "> 推送只在**电脑开机 + DSH 在运行**时发生；睡眠不推。\n> 配置也可以写在 `~/.dsh/attention-notify.json`（文件优先，`fs.watch` 热载，保存即生效）。"
+    },
+    {
+      "section": "`inquiry-core`",
+      "text": "`rounds`（默认 4）、`questionsPerRound`（6）、`language`（zh）、`questionBankPath`（自定义题库）、`briefDir`（`~/.dsh/inquiry`）、`autoLoadSkill`。技能正文按这些配置生成，改完即重建。"
+    },
+    {
+      "section": "`ptc-runtime`（全局）",
+      "text": "本包把 `run_code` 默认期限调到 `330000`ms、上限 `600000`ms：提问要等 300s，不抬期限的话 `run_code` 会先在默认 120s 掐断它。**这一条对所有 PTC 预设生效**，不想要就删掉 patch 里那一行。"
+    },
+    {
+      "section": "从旧包迁移",
+      "text": "之前是三个独立东西（`dsh-inquiry-mode` 包、`dsh-attention-center` 本地插件、手写的 profile patch）：\n\n1. 卸载旧的：插件管理里移除 `dsh-inquiry-mode` 与旧的 `dsh-attention-center`（否则技能 / 命令 / 覆盖层会重复注册）；\n2. 装本包；\n3. **删掉**你 profile `cordis.patch.yml` 里手写的 `preset-inquiry` / `ptc-runtime` 覆盖（本包自带，留着会互相覆盖）；\n4. 重启 DSH，开新会话选「刨根问底 · Inquiry」。"
+    },
+    {
+      "section": "回退",
+      "text": "删掉 `cordis.patch.yml` 里本套件插入的行 → 重启。客户端半刷新页面即卸。"
+    },
+    {
+      "section": "结构",
+      "text": "```text\nindex.js              Host：attention 投影 + 推送接线（client.js 是它的浏览器半）\nclient.js             浏览器半：角栈气泡 / 答题弹窗 / 提醒卡 / 自动选择\nlib/                  projection · notify · providers\ninquiry/index.js      刨根问底 Host：技能 + /pao /pau /inquiry"
+    },
+    {
+      "section": "测试与验证",
+      "text": "| 类别 | 内容 | 结果 |\n|---|---|---|\n| 单元测试 · 注意力 | 15 条：失败投影折叠、通知事件折叠与去重、5 个推送渠道的请求体、提问超时、完成推送门槛 | ✅ 15/15 |\n| 单元测试 · 刨根问底 | 26 条：配置边界、题库校验与回退、技能正文生成、`/pao` 命令 followup、`apply` 组装 | ✅ 26/26 |\n| 服务端渲染探针 | 六场景：答题卡、失败卡（打开/重试/忽略）、失焦不弹、缺 slot props 不崩、对象型 status 兼容、完成卡；另断言气泡出现 `⏳10分` | ✅ 全绿 |\n| 真实交互 | 使用者本机实测跨会话答题弹窗：能选、能提交、能续上原对话 | ✅ |\n| 真实失败链路 | 会话 `59a3953c` 的 `upstream request timed out` → 失败卡正确出现 | ✅ |\n| 远程推送 | 渠道请求构造有单测；未配凭据，真机没收到过消息 | ⚠️ 未验证 |\n| PTC 预设 | 配置与 `ptc-runtime` 期限已写入；尚未在真浏览器跑一轮确认工具面板只剩 `run_code` | ⚠️ 未验证 |\n| 自动选择记录卡 | 三道闸逻辑与渲染已测，真触发一次「超时自动提交」尚未发生 | ⚠️ 未验证 |"
+    },
+    {
+      "section": "测试与验证",
+      "text": "> 「未验证」三项是发布时的真实状态，不粉饰：它们需要凭据 / 真浏览器 / 真实空闲超时才会出现。"
+    },
+    {
+      "section": "能做到什么",
+      "text": "- **把模糊想法问成方案**：4 轮 × 6 题，每题给可选项 + 自填；每轮复述【已确认】【我的推断】【还差的】；收口《需求简报》。\n- **不切对话也能答题**：任何会话在等你回答时，弹窗里就地选、就地提交。\n- **知道别的会话在发生什么**：运行中 N、失败卡（打开/重试/忽略）、完成卡（看结果）。\n- **自动选择不背着你**：只对弹窗真正显示过的题生效，计时从首次显示起算，事后留可归因的记录卡。\n- **PTC 取证**：一次 `run_code` 里并发读文件 / 搜仓库 / 看目录，中间结果不进上下文，只返回要用的那几行。\n- **手机提醒（可选）**：PushPlus / 企业微信群机器人 / Qmsg / Server酱 / 通用 webhook，五选一。"
+    },
+    {
+      "section": "已知限制",
+      "text": "| 限制 | 说明 |\n|---|---|\n| 远程推送要自备凭据 | 仓库不带任何 key；不配就是纯本地提醒 |\n| 不打包 `dsh-ops` 本体 | 它是第三方 Windows x64 原生插件（Rust 二进制）；不装照样能用，取证换成原生 bash/文件工具 |\n| PTC 的等待受 `run_code` 期限约束 | 本包把提问设 300s、`run_code` 默认期限设 330s；自行改动时两者要一起改 |\n| `/compact` 无重试 | DSH 自身行为，与本插件无关；撞上网络窗口失败就再按一次 |\n| 客户端刷新、Host 重启 | `client.js` 改动刷新页面即可；Host 行 / 预设 / 技能的改动要重启 DSH |"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。"
+    },
+    {
+      "section": "dsh-attention-center · PTC suite",
+      "text": "| Piece | Row | What it does |\n|---|---|---|\n| **Inquiry (PTC)** | `preset-inquiry` | A preset that asks 20-30 concrete questions before building. Runs on PTC: the model only sees `run_code` plus a generated SDK |\n| **Attention center** | `attention-core` + `client.js` | Running-session pill, failure/done toasts, **cross-session answer popup**, optional phone push |\n| **OPS / PTC pairing** | `tool-presentation` | Under PTC, `dsh-ops` tools become SDK bindings: one `run_code` program can probe several things concurrently and return only the lines that matter |"
+    },
+    {
+      "section": "Install",
+      "text": "```text\nplugin_manager install_bundle   target = github:zxh21149-commits/dsh-attention-center\n```\n\nRestart DSH afterwards (host rows + preset + skill); the client half only needs a page refresh.\n\nRequirements: DSH >= 0.2.0 and the host `ptc-runtime` (shipped in official builds; this bundle overrides its `timeoutMs`).\n`dsh-ops` is optional (third-party, Rust, Windows x64). Without it the preset still works; probing falls back to bash/file tools."
+    },
+    {
+      "section": "Notes",
+      "text": "- Asking is **timed**: 5 minutes to answer; after that the tool returns `pending` and the answer arrives later as a user message. A blocking wait inside `run_code` can be cut by the program deadline, and the official docs warn an interrupted PTC wait may lose the question.\n- Auto-pick only applies to questions the popup actually showed; the idle clock starts when it was first shown; every auto-submit leaves a card naming the conversation and every pick.\n- `/compact` has no retry of its own in DSH. If it fails mid-window, run it again later."
+    },
+    {
+      "section": "Notes",
+      "text": "Tests: `node --test` (41 passing). License: MIT."
+    },
+    {
+      "section": "What was tested",
+      "text": "| Area | Coverage | Result |\n|---|---|---|\n| Attention: 15 unit tests | failure projection fold, notify folding + dedupe, the five push providers' request bodies, question timeout, done threshold | pass |\n| Inquiry: 26 unit tests | config bounds, bank validation/fallback, skill prompt generation, `/pao` followup, `apply` wiring | pass |\n| SSR probe (6 scenes) | answer card, failure card (open/retry/dismiss), no modal while unfocused, no crash without slot props, object status map, done card, `⏳10分` badge | pass |\n| Real interaction | cross-session answer popup was used for real (choose, submit, resume) | pass |\n| Remote push | request builders are unit-tested; no credential is shipped, **no real message ever received** | unverified |\n| PTC preset | wiring + `ptc-runtime` deadline configured; **not yet run in a real browser** | unverified |"
+    },
+    {
+      "section": "Known limits",
+      "text": "- Remote push needs your own credential (WeCom robot / PushPlus / Qmsg / ServerChan / webhook).\n- `dsh-ops` is not vendored: it is a third-party Windows x64 native plugin. Without it the preset still works with bash/file tools.\n- Inside PTC the answer wait is bounded by the `run_code` deadline; this bundle ships 300s ask / 330s program.\n- `/compact` has no retry of its own in DSH; run it again if it hits a network window."
+    }
+  ],
+  "skipped": []
+}

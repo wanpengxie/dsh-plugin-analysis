@@ -1,0 +1,207 @@
+{
+  "repo": "dungcsnd1133/dsh-tlpro-models",
+  "commit": "3abe618eaabef0372a102a60eeceb90d07e2cde4",
+  "extracted_at": "2026-11-11T19:30:35.202244+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 25130,
+    "lines_by_language": {
+      "JSON": 30,
+      "JavaScript": 260,
+      "Markdown": 144,
+      "Other": 37,
+      "YAML": 174
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "test/host.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tlpro-models",
+    "version": "1.0.1",
+    "private": true,
+    "description": "TLPro gateway routes and model catalog for DSH, as a bundle patch layer. Ships no code and never edits the DSH checkout.",
+    "type": "module",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/dungcsnd1133/dsh-tlpro-models.git"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "lib"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "scripts": {
+      "test": "node --test"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tlpro-models — declares the TLPro gateway and its model catalog.\n#\n# This is a bundle patch layer, the composition mechanism DSH documents for\n# profiles: the loader applies it in `dsh.profile.bundles` order, then the\n# profile's own cordis.patch.yml, with the last write winning per row id.\n#\n# It declares nothing but configuration, so it never edits the DSH checkout and\n# never shadows a plugin implementation. Removing the package from the profile\n# removes every route it adds.\n#\n# A patch REPLACES the targeted row's whole `config`, so this entry must restate\n# everything the `llm-pi-ai` row needs. Keep it that way: a partial config here\n# would silently drop the fields it omits.\n#\n# ── Where these numbers come from ────────────────────────────────────────────\n# 9router 0.5.112 ships the authoritative capability table in\n# app/.next-cli-build/server/chunks/24.js. Its `thinkingFormat` field decides\n# which wire parameter the router sends upstream, and that is what the levels\n# below must match:\n#\n#   glm-5.3        thinkingFormat \"openai\" -> `reasoning_effort` sent verbatim\n#   glm-5.3-flash  thinkingFormat \"openai\" -> `reasoning_effort` sent verbatim\n#   deepseek-v4.1  thinkingFormat \"deepseek\" -> router REMAPS: xhigh|max -> max,\n#                  low|minimal -> low (only if the provider lists \"low\"),\n#                  everything else -> high. An unsupported \"max\" degrades to high.\n#\n# The zai branch (which collapses levels to low/high/max) does NOT apply to\n# these models: that only runs for thinkingFormat \"zai\". Verified in\n# chunks/2380.js `case\"zai\"` vs `case\"openai\"`.\n#\n# `maxOutput` in that table is authoritative for the output ceiling, and the\n# router clamps to it (`Math.min(requested, caps.maxOutput)`), so a value above\n# it is silently reduced — it is not evidence the gateway accepts more.\n# Measured rejection boundary: glm-5.3 accepts 131072 and rejects 131073.\n#\n# `/v1/models` on this gateway returns ids only, no context/output metadata, so\n# the plugin cannot discover these numbers at runtime; they are declared here.\n\n# Row entry của chính bundle này. Một bundle patch CHỈ override row đã tồn tại —\n# nó không tự mount plugin. Không có row insert này, profile không nạp được\n# lib/index.js và plugin manager sẽ báo \"verification failed\" / \"not active\"\n# dù phần patch vẫn được áp dụng (đó chính là trạng thái sai từng xảy ra).\n- insert:\n    - id: tlpro-models\n      name: dsh-tlpro-models\n\n- id: llm-pi-ai\n  config:\n    providers:\n\n      # ── GLM served by the ZCode CLI ─────────────────────────────────────────\n      # A GLM Coding Plan bought for ZCode is account-bound and exposes no usable\n      # API key, so it reaches DSH through a local OpenAI-compatible bridge that\n      # shells out to `zcode -p`. Start it with `glm-bridge start`; the route\n      # answers 502 until then. See /data/dsh-plugins/dsh-glm-zcode.\n      #\n      # The bridge ignores the key, but the field is required, so it names a var\n      # that is always set rather than one an operator must remember to export.\n      # ── Z.ai (GLM Coding Plan, API key) ────────────────────────────────────\n      # Khác với route `glm-zcode` từng thử: đây là API key thật, gọi thẳng\n      # endpoint OpenAI-compatible của z.ai — không mượn CLI, nên không có chi phí\n      # ~17.5k token mỗi lượt và không phụ thuộc phiên OAuth hết hạn mỗi giờ.\n      #\n      # Chỉ khai báo 2 model ĐÃ KIỂM CHỨNG gọi được bằng key này. Hai biến thể\n      # flashx trả lỗi 1311/1113 (gói không bao gồm) nên cố tình không có mặt:\n      # hiện model không gọi được trong picker còn tệ hơn không hiện.\n      zai:\n        displayName: Z.ai (GLM)\n        apiKeyEnv: ZAI_API_KEY\n        api: openai-completions\n        baseURL: https://api.z.ai/api/coding/paas/v4\n        models:\n          # contextWindow 1M, không phải 200K: tài liệu z.ai ghi GLM-5.3 có\n          # \"stable 1M context\". Con số này KHÔNG được đoán — nó quyết định ngân\n          # sách compaction: threshold = (contextWindow - maxTokens) - headroom\n          # (65536 mặc định), và retain = ngân sách đó × 0.16. Với 200K thì\n          # retain (11028) vượt threshold (3392) và MỌI lượt đổi sang model này\n          # chết với \"context compaction failed\". Với 1M: retain 139028 <\n          # threshold 803392, đủ dư.\n          #\n          # thinkingFormat \"openai\": `reasoning_effort` forward nguyên văn, đã\n          # kiểm chứng endpoint chấp nhận. GLM-5.3 mặc định suy luận rất sâu —\n          # có lượt dùng hết token vào reasoning_content và để content rỗng — nên\n          # maxTokens phải rộng rãi, và mức suy luận nên đặt được.\n          - id: glm-5.3\n            name: GLM-5.3\n            reasoningEfforts:\n              low: low\n              medium: medium\n              high: high\n              max: high\n            compat:\n              supportsReasoningEffort: true\n              thinkingFormat: openai\n            contextWindow: 1000000\n            maxTokens: 131072\n            input:\n              - text\n          - id: glm-5.3-flash\n            name: GLM-5.3 Flash\n            reasoningEfforts:\n              low: low\n              medium: medium\n              high: high\n              max: high\n            compat:\n              supportsReasoningEffort: true\n              thinkingFormat: openai\n            contextWindow: 1000000\n            maxTokens: 131072\n            input:\n              - text\n      tlpro:\n        displayName: TLPro\n        apiKeyEnv: TLPRO_API_KEY\n        api: openai-completions\n        baseURL: https://hoantienmuasam.net/llmtlpro/v1\n        models:\n          # thinkingFormat \"deepseek\": the router owns the level mapping, so the\n          # declared set is exactly what survives that remap. low and max are the\n          # only levels deepseek-v4.1-flash distinguishes; medium has nowhere to\n          # go (it lands on high).\n          - id: deepseek-v4.1-flash\n            name: DeepSeek V4.1 Flash\n            reasoningEfforts:\n              low: low\n              high: high\n              max: max\n            compat:\n              supportsReasoningEffort: true\n              thinkingFormat: deepseek\n            contextWindow: 1000000\n            maxTokens: 393216\n            input:\n              - text\n              - image\n          # thinkingFormat \"openai\": `reasoning_effort` is forwarded verbatim, so\n          # every level the model accepts is usable. GLM exposes low/high/max.\n          # Its caps table marks thinkingEffortSupported false for the flash\n          # variant, meaning level changes may not alter behaviour — the levels\n          # are still accepted and forwarded, so they are declared, but do not\n          # expect the reasoning-token count to move with them.\n          - id: glm-5.3-flash\n            name: GLM 5.3 Flash\n            reasoningEfforts:\n              low: low\n              high: high\n              max: max\n            compat:\n              supportsReasoningEffort: true\n              thinkingFormat: openai\n            contextWindow: 1000000\n            maxTokens: 131072\n            input:\n              - text\n              - image\n          # thinkingFormat \"openai\"; caps table maxOutput 131072 (hard: 131073 is\n          # rejected upstream). thinkingCanDisable is false for this model, so no\n          # \"off\" level: reasoning cannot be turned off.\n          - id: glm-5.3\n            name: GLM 5.3\n            reasoningEfforts:\n              low: low\n              high: high\n              max: max\n            compat:\n              supportsReasoningEffort: true\n              thinkingFormat: openai\n            contextWindow: 1000000\n            maxTokens: 131072\n            input:\n              - text\n              - image\n\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "TLPRO_API_KEY",
+      "kind": "env",
+      "where": "test/host.test.mjs:46"
+    },
+    {
+      "name": "ZAI_API_KEY",
+      "kind": "env",
+      "where": "test/host.test.mjs:47"
+    },
+    {
+      "name": "TLPRO_API_KEY",
+      "kind": "env",
+      "where": "test/host.test.mjs:68"
+    },
+    {
+      "name": "ZAI_API_KEY",
+      "kind": "env",
+      "where": "test/host.test.mjs:69"
+    },
+    {
+      "name": "TLPRO_API_KEY",
+      "kind": "env",
+      "where": "test/host.test.mjs:87"
+    },
+    {
+      "name": "ZAI_API_KEY",
+      "kind": "env",
+      "where": "test/host.test.mjs:88"
+    },
+    {
+      "name": "TLPRO_API_KEY",
+      "kind": "env",
+      "where": "test/host.test.mjs:101"
+    },
+    {
+      "name": "ZAI_API_KEY",
+      "kind": "env",
+      "where": "test/host.test.mjs:102"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "api.z.ai",
+      "url": "https://api.z.ai/api/coding/paas/v4",
+      "where": "cordis.patch.yml:71"
+    },
+    {
+      "host": "hoantienmuasam.net",
+      "url": "https://hoantienmuasam.net/llmtlpro/v1",
+      "where": "cordis.patch.yml:117"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/dungcsnd1133/dsh-tlpro-models.git",
+      "where": "package.json:10"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-11-06T05:29:18Z",
+    "created_at": "2026-11-05T17:39:46Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tlpro-models",
+      "text": "Khai báo gateway **TLPro** và catalog model của nó cho DeepSeek Harness.\n\nĐây là một **bundle patch layer** — đúng cơ chế composition DSH dùng cho profile:\nloader áp các lớp trong `dsh.profile.bundles` theo thứ tự, rồi tới\n`cordis.patch.yml` của profile, **ghi đè theo row id, lớp sau thắng**.\n\nPackage này không có code, chỉ có cấu hình. Nó **không sửa repo/checkout DSH**,\nkhông patch file nào trong `node_modules`, không require plugin nào. Gỡ package\nkhỏi profile là mọi route nó thêm biến mất."
+    },
+    {
+      "section": "Nó khai báo gì",
+      "text": "Một route `tlpro`:\n\n| Trường | Giá trị |\n|---|---|\n| `api` | `openai-completions` |\n| `baseURL` | `https://hoantienmuasam.net/llmtlpro/v1` |\n| `apiKeyEnv` | `TLPRO_API_KEY` (credential reference, không phải secret) |\n\nCatalog hiện có 3 model, khớp đúng `/v1/models` của gateway:"
+    },
+    {
+      "section": "Nó khai báo gì",
+      "text": "| Model | Context | Max output | Reasoning |\n|---|---|---|---|\n| `deepseek-v4.1-flash` | 1,000,000 | 393,216 | low / high / max |\n| `glm-5.3-flash` | 1,000,000 | 131,072 | low / high / max |\n| `glm-5.3` | 1,000,000 | 131,072 | low / high / max |"
+    },
+    {
+      "section": "Cài vào một profile",
+      "text": "Có hai cách, tuỳ bạn muốn dùng bản sao cục bộ hay kéo thẳng từ GitHub.\n\n**Từ GitHub** (khuyến nghị khi dùng trên máy khác):\n\n```json\n{\n  \"dependencies\": {\n    \"dsh-tlpro-models\": \"github:dungcsnd1133/dsh-tlpro-models\"\n  },\n\n**Từ thư mục cục bộ** (khi đang sửa catalog):\n\n```json\n\"dependencies\": { \"dsh-tlpro-models\": \"link:/data/dsh-plugins/dsh-tlpro-models\" }\n```"
+    },
+    {
+      "section": "Cài vào một profile",
+      "text": "Thứ tự quan trọng: bundle này phải đứng **sau** `@deepseek-ai/dsh-base`, vì\n`dsh-base` là lớp mount row `llm-pi-ai`; lớp sau ghi đè `config` của row đó.\n\nRồi cài dependency:\n\n```bash\ndsh plugin --profile <tên-profile> install\n```\n\nKiểm tra lớp đã áp:\n\n```bash\ndsh <tên-profile> --dump-config | grep 'patched by dsh-tlpro-models'\n```"
+    },
+    {
+      "section": "Cập nhật catalog khi gateway thêm model",
+      "text": "Sửa danh sách `models:` trong `cordis.patch.yml`, restart profile. Không cần\npublish, không cần đụng DSH.\n\nMuốn tự lấy danh sách mới nhất từ gateway:\n\n```bash\ncurl -s -H \"Authorization: Bearer $TLPRO_API_KEY\" \\\n  https://hoantienmuasam.net/llmtlpro/v1/models | jq -r '.data[].id'\n```"
+    },
+    {
+      "section": "Ghi chú",
+      "text": "- Patch **thay thế toàn bộ `config`** của row, không merge. Nếu profile khác\n  cũng khai báo `llm-pi-ai` thì lớp đứng sau thắng toàn bộ — đừng khai báo nửa vời.\n- `apiKeyEnv` là *tên biến*, không phải key. Secret vẫn nằm trong env container\n  (`/proc/1/environ`) hoặc credential store, không vào file cấu hình.\n- Catalog ở đây chỉ khai báo những model gateway thực sự trả về. Khai báo model\n  không tồn tại sẽ lỗi lúc gọi, không lỗi lúc boot."
+    },
+    {
+      "section": "Nguồn của các con số (đã kiểm chứng 2026-11-05)",
+      "text": "Bảng capability gốc nằm trong `9router@0.5.112`:\n`app/.next-cli-build/server/chunks/24.js`. Trường `thinkingFormat` quyết định\nrouter gửi tham số nào lên upstream — và đó là thứ các mức trong đây phải khớp."
+    },
+    {
+      "section": "Nguồn của các con số (đã kiểm chứng 2026-11-05)",
+      "text": "| Model | thinkingFormat | Router làm gì với mức |\n|---|---|---|\n| `glm-5.3` | `openai` | gửi `reasoning_effort` nguyên văn |\n| `glm-5.3-flash` | `openai` | gửi `reasoning_effort` nguyên văn |\n| `deepseek-v4.1-flash` | `deepseek` | **remap**: `xhigh\\|max`→`max`, `low\\|minimal`→`low`, còn lại→`high` |"
+    },
+    {
+      "section": "Nguồn của các con số (đã kiểm chứng 2026-11-05)",
+      "text": "Nhánh `zai` (nhánh gộp mức thành low/high/max) **không áp dụng** cho ba model\nnày — nhánh đó chỉ chạy khi `thinkingFormat` là `zai`. Đã đối chiếu\n`chunks/2380.js`: `case\"zai\"` và `case\"openai\"` là hai nhánh riêng."
+    },
+    {
+      "section": "Vì sao probe `max_tokens` trước đây không có giá trị",
+      "text": "Router **âm thầm hạ** giá trị vượt trần trước khi gửi upstream:\n\n```js\nif (a.max_tokens) { let b = s.maxOutput || l.Uc; a.max_tokens > b && (a.max_tokens = b) ... }\n```\n\nNên gửi `max_tokens: 800000` rồi nhận một câu trả lời ngắn **không** chứng minh\nđược điều gì: request đã bị cắt về `maxOutput` trước khi rời router. Trần thật\nphải đọc từ bảng capability, không phải từ việc gateway \"nhận\" request."
+    },
+    {
+      "section": "Vì sao probe `max_tokens` trước đây không có giá trị",
+      "text": "Ranh giới đo được: `glm-5.3` nhận 131072 và **từ chối 131073** → trần đúng là\n131072, không phải 128000."
+    },
+    {
+      "section": "`thinkingEffortSupported: false` ở glm-5.3-flash",
+      "text": "Bảng capability đánh dấu cờ này `false` cho bản flash ở một số provider. Nghĩa\nlà mức gửi lên vẫn được chấp nhận nhưng **không chắc tạo khác biệt thực sự**.\nVì vậy đừng kỳ vọng số reasoning token thay đổi theo mức ở model này."
+    },
+    {
+      "section": "Không thêm `xhigh`",
+      "text": "`xhigh` chưa được xác minh là từng nguồn hỗ trợ hay quy đổi thế nào. Với GLM bộ\nmức đang được xử lý rõ ràng là `low/high/max`. Thêm `xhigh` lúc này chỉ tạo một\nlựa chọn trong UI mà không có bằng chứng nó có tác dụng."
+    },
+    {
+      "section": "Giới hạn chung của TLPRO (không phải token)",
+      "text": "- Body văn bản: 4.000.000 byte; có ảnh: 20.000.000 byte\n- Timeout upstream văn bản: 600 giây (proxy có thể ngắt sớm hơn)\n- `/v1/models` chỉ trả id, **không** trả context/output → plugin không tự đọc được"
+    }
+  ],
+  "skipped": []
+}

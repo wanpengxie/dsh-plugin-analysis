@@ -1,0 +1,1257 @@
+{
+  "repo": "wtwgo114514/dsh-cf-handoff",
+  "commit": "34a4e0c2b32c778d5b6ed6f77cb09a695fee50bf",
+  "extracted_at": "2026-11-12T11:14:58.636872+00:00",
+  "tree": {
+    "files": 27,
+    "bytes": 250512,
+    "lines_by_language": {
+      "JSON": 185,
+      "JavaScript": 4448,
+      "Markdown": 1023,
+      "Other": 29,
+      "YAML": 114
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "cordis.patch.yml",
+      "lib/agent-correlation.js",
+      "lib/agent-scope.js",
+      "lib/browser-open.js",
+      "lib/cf-detect.js",
+      "lib/handoff.js",
+      "lib/index.js",
+      "lib/native-open.js",
+      "lib/provider.js",
+      "package-lock.json",
+      "package.json",
+      "test/acceptance-browser.mjs",
+      "test/acceptance-headless.mjs",
+      "test/agent-correlation.test.mjs",
+      "test/browser-open.test.mjs",
+      "test/detect.test.mjs",
+      "test/handoff.test.mjs",
+      "test/live-smoke.mjs",
+      "test/native-open.test.mjs",
+      "test/provider.test.mjs",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-cf-handoff",
+    "version": "0.1.0",
+    "description": "Cloudflare human-handoff layer for DSH web_fetch: when a fetch hits a Cloudflare interstitial, open the URL in the user's own browser, pause the agent, and resume from the human's answer.",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cloudflare",
+      "web-fetch",
+      "human-in-the-loop"
+    ],
+    "license": "MIT",
+    "author": "wtwgo114514",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/wtwgo114514/dsh-cf-handoff.git"
+    },
+    "bugs": {
+      "url": "https://github.com/wtwgo114514/dsh-cf-handoff/issues"
+    },
+    "homepage": "https://github.com/wtwgo114514/dsh-cf-handoff#readme",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./agent-correlation": "./lib/agent-correlation.js",
+      "./agent-scope": "./lib/agent-scope.js",
+      "./detect": "./lib/cf-detect.js",
+      "./browser-open": "./lib/browser-open.js",
+      "./native-open": "./lib/native-open.js",
+      "./handoff": "./lib/handoff.js",
+      "./provider": "./lib/provider.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "node": ">=22.0.0"
+    },
+    "scripts": {
+      "test": "node --test \"test/*.test.mjs\"",
+      "test:smoke": "node test/live-smoke.mjs",
+      "test:all": "node --test \"test/*.test.mjs\" && node test/live-smoke.mjs",
+      "acceptance:headless": "node test/acceptance-headless.mjs",
+      "acceptance:browser": "node test/acceptance-browser.mjs"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-web": "^0.1.5-rc.2",
+      "@deepseek-ai/dsh-user-questions": "^0.1.5-rc.2",
+      "@deepseek-ai/dsh-tools": "^0.1.5-rc.2"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-web": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-user-questions": {
+        "optional": true
+      },
+      "@deepseek-ai/dsh-tools": {
+        "optional": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The dsh-cf-handoff bundle patch: one row, mounted into a live profile.\n#\n# The package is a single self-contained plugin - every row resolves inside the\n# package itself - so the whole thing installs from one tarball via\n# `dsh plugin add`, and the patch contributes exactly one row.\n#\n# WHAT THE ROW DOES\n# `dsh-cf-handoff` wraps `ctx.web.fetch` and watches the responses for a\n# Cloudflare interstitial. Row order carries no load semantics in DSH\n# (activation is service-availability driven), so this row needs no position\n# relative to `web`, `web-fetch-http`, or `tool-web`: it declares\n# `inject: ['web', 'userQuestions', 'tools']` and the loader mounts it once those\n# services exist. Placing it after the web rows below is for readers only.\n#\n# `tools` is injected for `tools/pre-execute` alone, and only to learn *which*\n# agent a fetch belongs to: the Web GUI's question answerer is composed on the\n# Agent-scoped waterfall, so a question asked without an agent never reaches the\n# browser. See the \"one thing that makes the handoff actually work\" section of\n# README.md.\n#\n# WHY IT IS NOT A FETCH PROVIDER\n# It deliberately does NOT register a second `WebFetchProvider`. `dsh-web`'s\n# resolver requires exactly one available provider when `fetchProvider` is\n# unconfigured and fails with `WEB_PROVIDER_AMBIGUOUS` otherwise, and a\n# duplicate provider id throws `WEB_DUPLICATE_PROVIDER` - so registering one\n# would permanently change provider selection for every unrelated fetch. The\n# wrapper decorates the service method instead, which is disposable and leaves\n# the provider registry untouched.\n#\n# PER-PRESET NOTE\n# `tool-web` composes `web_fetch` per agent preset, and the `pentest` preset\n# ships `fetch: false`. This row is preset-independent: with `web_fetch` off,\n# nothing calls the seam and the plugin stays idle. The `openBrowser` and\n# `enabled` config keys below turn each half off without touching the host rows.\n\n- insert:\n    - id: cf-handoff\n      name: dsh-cf-handoff\n      config:\n        # Detection threshold. A title-only \"Just a moment...\" interstitial at\n        # HTTP 403 scores 14; an ordinary page that merely mentions Cloudflare\n        # scores 0. Raise to 16+ to hand off only on URL markers and the full\n        # JavaScript shell; lower to ~6 for maximum recall at the cost of false\n        # positives. See the \"Detection\" section of README.md for the score table.\n        minScore: 12\n\n        # Per-fetch handoff budget. 1 means: ask once, retry once, then fail with\n        # the URL. This is what stops a page that keeps re-challenging from\n        # looping forever; a value of 0 is legal and makes the plugin report the\n        # challenge without ever asking.\n        maxAttempts: 1\n\n        # Open the challenged URL in the user's default browser. The opener is a\n        # *path* opener (`openNativePath`), so the plugin writes a small local\n        # bootstrap page that links the real URL and opens that file. Set false\n        # on a headless deployment: the handoff notice still carries the URL.\n        openBrowser: true\n\n        # How the plugin treats the fetch call it is sitting inside.\n        #\n        # notify (default) - report the challenge and return. The fetch does not\n        #   wait for anyone; the agent is told to await the human with\n        #   `ask_user_question`, which declares no tool budget and is skipped by\n        #   the timeout policy. Correct wherever `web_fetch` keeps its default\n        #   30 s budget: that policy aborts the call and substitutes\n        #   `tool call timed out after Nms`, so an in-call wait is not merely slow,\n        #   it deletes the explanation.\n        #\n        # inline - ask from inside the fetch and retry after the answer. Only works\n        #   when the calling tool's budget is at least `minHumanBudgetMs`; otherwise\n        #   the plugin refuses the wait instead of being killed mid-question. Raise\n        #   `tool-web`'s `fetchTimeoutMs` to enable this on `web_fetch`.\n        mode: notify\n\n        # Smallest tool-call budget an in-call wait is allowed to start inside, in\n        # milliseconds. Ignored in notify mode.\n        minHumanBudgetMs: 120000\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/agent-correlation.js",
+    "lib/agent-scope.js",
+    "lib/cf-detect.js",
+    "lib/browser-open.js",
+    "lib/native-open.js",
+    "lib/handoff.js",
+    "lib/provider.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_CF_HANDOFF_ACCEPTANCE_PROFILE",
+      "kind": "env",
+      "where": "test/acceptance-headless.mjs:35"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "example.com`",
+      "url": "https://example.com`",
+      "where": "lib/browser-open.js:9"
+    },
+    {
+      "host": "`",
+      "url": "https://`",
+      "where": "lib/native-open.js:24"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "lib/native-open.js:55"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wtwgo114514/dsh-cf-handoff.git",
+      "where": "package.json:17"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wtwgo114514/dsh-cf-handoff/issues",
+      "where": "package.json:20"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wtwgo114514/dsh-cf-handoff#readme",
+      "where": "package.json:22"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/acceptance-browser.mjs:52"
+    },
+    {
+      "host": "community.cloudflare.com",
+      "url": "https://community.cloudflare.com/",
+      "where": "test/acceptance-headless.mjs:37"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/acceptance-headless.mjs:39"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:181"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:185"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:194"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:196"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:205"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:206"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:208"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:218"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:219"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:221"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "test/agent-correlation.test.mjs:228"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/b",
+      "where": "test/agent-correlation.test.mjs:230"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:238"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:242"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:265"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:268"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/y",
+      "where": "test/agent-correlation.test.mjs:269"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/x",
+      "where": "test/agent-correlation.test.mjs:278"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a?b=1&c=2",
+      "where": "test/browser-open.test.mjs:89"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a?b=1&amp;c=2",
+      "where": "test/browser-open.test.mjs:90"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a?b=1&c=2",
+      "where": "test/browser-open.test.mjs:91"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:97"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:99"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:103"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:110"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:122"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:124"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:132"
+    },
+    {
+      "host": "other.example",
+      "url": "https://other.example/",
+      "where": "test/browser-open.test.mjs:133"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:140"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:142"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:149"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:150"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:157"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:163"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:177"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "test/browser-open.test.mjs:182"
+    },
+    {
+      "host": "other.example",
+      "url": "https://other.example/",
+      "where": "test/browser-open.test.mjs:183"
+    },
+    {
+      "host": "challenges.cloudflare.com",
+      "url": "https://challenges.cloudflare.com/turnstile/v0/api.js",
+      "where": "test/detect.test.mjs:65"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/login",
+      "where": "test/detect.test.mjs:174"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/detect.test.mjs:232"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/blog",
+      "where": "test/detect.test.mjs:233"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/detect.test.mjs:234"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/detect.test.mjs:235"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/cdn-cgi/challenge-platform/h/b/flow/ov1/abc",
+      "where": "test/detect.test.mjs:239"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/?__cf_chl_tk=abc",
+      "where": "test/detect.test.mjs:240"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/blog",
+      "where": "test/detect.test.mjs:241"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/?__cf_chl_tk=abc",
+      "where": "test/detect.test.mjs:242"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/detect.test.mjs:246"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/detect.test.mjs:247"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/blog",
+      "where": "test/detect.test.mjs:248"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/blog",
+      "where": "test/detect.test.mjs:249"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/?__cf_chl_rt_tk=1",
+      "where": "test/detect.test.mjs:266"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/secret",
+      "where": "test/handoff.test.mjs:124"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:149"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:150"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:159"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:163"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:171"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:179"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:186"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:193"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:207"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:224"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:230"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:232"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:234"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:241"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:260"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:272"
+    },
+    {
+      "host": "x.test",
+      "url": "https://x.test/",
+      "where": "test/handoff.test.mjs:281"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:321"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:323"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:331"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/handoff.test.mjs:342"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/protected",
+      "where": "test/live-smoke.mjs:56"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:26"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:36"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:95"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/secret",
+      "where": "test/provider.test.mjs:106"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/secret",
+      "where": "test/provider.test.mjs:111"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/secret",
+      "where": "test/provider.test.mjs:119"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/secret",
+      "where": "test/provider.test.mjs:134"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:148"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:158"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/secret",
+      "where": "test/provider.test.mjs:179"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:194"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/guarded",
+      "where": "test/provider.test.mjs:267"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:285"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:293"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:296"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:307"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:340"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:352"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:356"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:367"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:398"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/blog",
+      "where": "test/provider.test.mjs:407"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:429"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/x",
+      "where": "test/provider.test.mjs:453"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/x",
+      "where": "test/provider.test.mjs:454"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/x",
+      "where": "test/provider.test.mjs:469"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:486"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/",
+      "where": "test/provider.test.mjs:508"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 9,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-10-17T06:33:55Z",
+    "created_at": "2026-10-17T06:14:53Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-10-17T06:33:55Z",
+      "inactive_days": 26,
+      "commit_count": 6,
+      "checked_at": "2026-11-12T11:14:58.636872+00:00",
+      "signals": [
+        "list:pushed_at=2026-10-17T06:33:55Z",
+        "list:commits=6"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/agent-correlation.js",
+    "lib/agent-scope.js",
+    "lib/browser-open.js",
+    "lib/cf-detect.js",
+    "lib/handoff.js",
+    "lib/index.js",
+    "lib/native-open.js",
+    "lib/provider.js",
+    "package.json",
+    "test/acceptance-browser.mjs",
+    "test/acceptance-headless.mjs",
+    "test/live-smoke.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-cf-handoff",
+      "text": "[](https://github.com/wtwgo114514/dsh-cf-handoff/actions/workflows/ci.yml)\n\n🇨🇳 **[中文说明在这里 — README.zh-CN.md](README.zh-CN.md)**（讲清它干什么、怎么装、怎么用，\n不要求读完全文）\n\nA Cloudflare human-handoff layer for DeepSeek Harness `web_fetch`."
+    },
+    {
+      "section": "dsh-cf-handoff",
+      "text": "When a fetch hits a Cloudflare interstitial, the agent cannot get through by\nretrying — a human has to open the URL once in a real browser. This plugin\ndetects the interstitial, opens the URL in the user's own default browser,\npauses the agent on a question in the DSH Web GUI, and resumes the same fetch\ncall from the human's answer."
+    },
+    {
+      "section": "dsh-cf-handoff",
+      "text": "**Non-goal, stated up front:** this plugin never tries to *solve* a challenge. It\ncontains no solver, no CAPTCHA service, no browser automation, and no cookie\ntheft. It detects, it hands off, it resumes. The human is the mechanism.\n\n**最近核对：2026-10-17**（DSH `0.1.5-rc.2`）。检测特征来自对真实站点的实测\n响应，不是从文档推测的；见下文 \"Verified against real responses\"。\nCloudflare 的特征会变，所以这一行是这份文档里最需要定期更新的一行。\n\n---"
+    },
+    {
+      "section": "1. What the original spec assumed, and what the source actually says",
+      "text": "The design brief for this plugin was written from **推测的 API** and marked six\nassumptions `待核实`. All six were checked against the installed source. **Four\nwere wrong, and two of those four were wrong in a way that invalidated the\nintended design** — the plugin could not have been built as written."
+    },
+    {
+      "section": "1. What the original spec assumed, and what the source actually says",
+      "text": "| # | Assumption in the brief | Verdict | What the source actually provides |\n|---|---|---|---|\n| 1 | `agent/pre-step` exists and can intercept tool results | ⚠️ exists, wrong role | It is a **step-admission** waterfall, not a tool-result node. See below. |\n| 2 | Signature `(session, step, next)`, `step` carries `toolCalls`/`toolResults` | ❌ wrong | `(payload: { agent, messages, turn, step, signal }, next)`. **No tool results anywhere in it.** |\n| 3 | `next()` supports `{ kind: 'skip' \\| 'reject' \\| 'replace' }` | ❌ wrong | `PreStepDecision` is `{ kind: 'reject' } \\| { kind: 'enter', messages }`. Input rewriting is deliberately excluded. |\n| 4 | `ctx.userQuestions.ask(session, {...})` | ✅ exists, different call shape | `ask(request)` — a **single object**. The signature was wrong, the seam is real and is the correct one. |\n| 5 | `ctx.browser` exposes `navigate`/`read`/`isHeadless`/`setHeadless`/`currentUrl` | ❌ **does not exist** | There is no browser capability in DSH at all. `ctx.web` is request/response HTTP only. |\n| 6 | browser tools are named `browser_*` | ❌ **does not exist** | The only web tools are `web_search` and `web_fetch`. |"
+    },
+    {
+      "section": "1.1 Assumption 5 and 6 are the load-bearing failures",
+      "text": "DSH ships **no browser control layer**: no Playwright, no Puppeteer, no CDP, no\nWebDriver dependency, and no `browser_*` tool registration. The brief's\n\"if headless, switch to a visible window and re-navigate\" step is therefore\n**physically unimplementable** — there is no window to switch, and\n`dsh-web-fetch-http` keeps no cookie jar or session, so a challenge cleared in\nsome other browser would not be reused by the provider anyway.\n\n`ctx.web` is the whole network capability:"
+    },
+    {
+      "section": "1.1 Assumption 5 and 6 are the load-bearing failures",
+      "text": "```ts\n// @deepseek-ai/dsh-web/lib/types/index.d.ts\nfetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>;\nsearch(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>;\n```"
+    },
+    {
+      "section": "1.1 Assumption 5 and 6 are the load-bearing failures",
+      "text": "`WebFetchResult` is `{ url, statusCode, body, truncated }`. **There is no\n`headers` field**, so `cf-mitigated`, `server: cloudflare`, and `cf-ray` — the\ncanonical header signals — are *not observable at this layer*. That single fact\ndictates the whole detection design: detection must work from the status code\nand the decoded body alone."
+    },
+    {
+      "section": "1.2 Assumption 1–3: the right seam is not `agent/pre-step`",
+      "text": "`agent/pre-step` is dispatched with `Scoped<Agent>` and a payload of\n`{ agent, messages, turn, step, signal }`, and its decision type is:\n\n```ts\n// @deepseek-ai/dsh-agent/lib/types/runtime-types.d.ts\nexport type PreStepDecision = { kind: 'reject' } | {\n  kind: 'enter';\n  messages: UserMessage[];\n\nIt decides **which messages enter a step**. It never sees a tool result. The\nbrief's assumption 3 (`skip`/`reject`/`replace` over tool results) does not exist\nin any form there."
+    },
+    {
+      "section": "1.2 Assumption 1–3: the right seam is not `agent/pre-step`",
+      "text": "The real tool-result seam is in `dsh-tools`:\n\n```ts\n'tools/pre-execute'(this: Scoped<ToolRuntime>, exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision>;\n'tools/post-execute'(this: Scoped<ToolRuntime>, exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>): Promise<PostToolDecision>;\n```\n\nwith"
+    },
+    {
+      "section": "1.2 Assumption 1–3: the right seam is not `agent/pre-step`",
+      "text": "```ts\nexport type PreToolDecision =\n  | { kind: 'allow' }\n  | { kind: 'deny'; reason: string }\n  | { kind: 'ask'; reason?: string };\n\nThe `PreToolDecision` doc comment explains why rewriting is missing:\n*\"Input rewriting is excluded because arguments are already logged and presented.\"*"
+    },
+    {
+      "section": "1.3 Why this plugin wraps `ctx.web.fetch` instead of using `tools/post-execute`",
+      "text": "`tools/post-execute` can replace a *finished* result — including the one\nprojection the model sees — but it **cannot make the tool run again**. The\nbrief's recovery requirement is \"resume from the breakpoint, don't re-run the\nprobe\", and for a blocked page the only way to obtain content is to fetch again\nafter the human acted. A post-execute listener would have to re-issue the fetch\nitself and could only ever *fake* resumption."
+    },
+    {
+      "section": "1.3 Why this plugin wraps `ctx.web.fetch` instead of using `tools/post-execute`",
+      "text": "Wrapping `ctx.web.fetch` puts the pause-and-retry **inside the original call**:\n`web_fetch` awaits `ctx.web.fetch(...)`, that await is suspended while the human\nanswers, and the same call returns the real post-verification content. No second\ntool invocation, no fabricated result. That is what makes this a resumption\nrather than a retry loop."
+    },
+    {
+      "section": "1.4 It is deliberately not a second fetch provider",
+      "text": "The obvious-looking approach — register a `WebFetchProvider` — is a trap.\n`dsh-web`'s resolver (`dsh-web/lib/index.js`) fails with\n`WEB_PROVIDER_AMBIGUOUS` when `fetchProvider` is unconfigured and more than one\nprovider is available, and `registerProvider` throws\n`WEB_DUPLICATE_PROVIDER` for a repeated id. Adding a provider would therefore\nchange provider selection for **every unrelated fetch in the process**, and the\nchange would outlive the plugin's usefulness. Decorating the service method is\ndisposable and leaves the registry untouched."
+    },
+    {
+      "section": "1.4 It is deliberately not a second fetch provider",
+      "text": "---"
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "`ctx.userQuestions.ask()` is a scope-filtered waterfall. From\n`dsh-user-questions/lib/index.js`:\n\n```js\nreturn await (agent === void 0\n  ? this.ctx.waterfall(\"user-questions/request\", request, noAnswerer)\n  : this.ctx.waterfall(scopeTarget(agent, agent), \"user-questions/request\", { ...request, agent }, noAnswerer));\n```"
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "The Web GUI answerer is composed on the **Agent-scoped** waterfall, and\n`user-questions/request` is a `mode: waterfall` remote event in\n`dsh-api-remotes`. So **a question asked without an agent never reaches the\nbrowser** — it falls through to `noAnswerer` and rejects with `NO_PROVIDER`.\n\nBut `WebRuntime.fetch(request, signal)` receives only `{ url }` and a signal.\nThe agent is nowhere in that call, and `WebRuntime` is a root-level service, so\ncontext probing cannot recover it either."
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "The agent loop publishes it exactly one layer up. `ToolExecution.agent` is\ndocumented as *\"The agent on whose behalf the call runs (set by the agent\nloop)\"*, and `tools/pre-execute` is dispatched with\n`scopeTarget(this, exec.agent)`. So `lib/agent-correlation.js` observes that\nevent and remembers which agent owns each in-flight call.\n\n**The signal is not a reliable key, and this is the one place where the\nobvious design is wrong.** `dsh-tool-web` does hand `exec.signal` straight\nthrough:"
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "```js\nconst result = await ctx.web.fetch({ url: input.url }, exec.signal);\n```\n\nbut by the time the tool body runs, `exec.signal` is no longer the signal\n`tools/pre-execute` saw. `ToolRegistry.dispatchToolBody` fuses the caller's\nsignal with whatever an around-wrapper installed and **overwrites the field**:"
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "```js\nconst wrapperSignal = exec.signal;\nconst fused = fuseToolSignals(state.callerSignal, wrapperSignal);\nexec.signal = fused.signal;              // ← a brand-new AbortController signal\nconst returned = await tool.execute(exec.arguments, exec);"
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "`fuseToolSignals` returns the caller's signal unchanged only when\n`caller === wrapper`. With any around-wrapper in play — and the real Web\ndeployment has one — the tool body receives a fresh signal that nothing outside\nthat call ever saw. Measured on a real run:\n\n```\nagent associated; matched by URL only (1 record(s), signal present);\nscoped ask: NO_PROVIDER; unscoped ask: NO_PROVIDER\n```"
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "Identity missed while the call was plainly in flight. So correlation is two\ntiered, and the **URL tier is the one that works**:"
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "1. **signal identity** — exact, and the only key that is provably about this\n   call. Cheap to keep, and it is what a deployment without around-wrappers\n   gets.\n2. **URL, only when unambiguous** — one URL names exactly one agent. Two agents\n   fetching the same URL resolve to nothing rather than to the wrong session: a\n   question about one page must never pop up in another agent's conversation."
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "A miss returns nothing, and the controller then reports the fetch as\nunavailable (coded `web_cloudflare_handoff_unavailable`) rather than pretending\nto have asked a question nobody saw. The coded message carries the\ncorrelation diagnostic, so \"the observer never fired\" and \"the observer fired\nbut no tier matched\" are distinguishable without another restart — those two\nfaults used to look identical from the fetch side.\n\nTwo consequences worth knowing:"
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "- If the agent cannot be recovered, the question would be asked into a void. The\n  controller does **not** silently proceed: it returns a coded error naming the\n  URL so the agent can surface it to the user through `ask_user_question`\n  instead.\n- A fetch made by an **owned child agent** throws `DELEGATED_CALLER`. Falling\n  back to an unscoped question there would pop a question about a subagent's URL\n  into the parent's session, so that case is reported as unavailable rather than\n  quietly redirected."
+    },
+    {
+      "section": "2. The one thing that makes the handoff actually work",
+      "text": "---"
+    },
+    {
+      "section": "3. Using the user's own browser",
+      "text": "DSH has no browser, but the user is *already* running one — they are reading the\nDSH Web GUI in it. The handoff uses two real host capabilities, and neither is a\nbrowser control layer:"
+    },
+    {
+      "section": "3. Using the user's own browser",
+      "text": "1. **The platform's \"open with the default application\" verb**, invoked by\n   `lib/native-open.js`. On Windows that is\n   `powershell.exe -NoProfile -Command \"Invoke-Item -LiteralPath <path>\"`, which\n   hands the file to the `.html` association → the default browser.\n2. **The question card in the Web GUI**, which renders markdown."
+    },
+    {
+      "section": "3.1 Why a staged bootstrap page, and not just \"open the URL\"",
+      "text": "The opener takes a **path**. On Windows it runs\n`powershell.exe -NoProfile -Command \"Invoke-Item -LiteralPath <path>\"`, and\n`Invoke-Item` resolves its argument as a *provider path*. Measured on the target\nmachine:"
+    },
+    {
+      "section": "3.1 Why a staged bootstrap page, and not just \"open the URL\"",
+      "text": "| Argument | Result |\n|---|---|\n| a real `.html` file | exit 0, silent, opens via the `.html` file association → default browser |\n| `file:///C:/Users/.../x.html` | `Cannot find drive. A drive with the name 'file' does not exist.` — exit 1 |\n| `https://example.com` | `Cannot find drive. A drive with the name 'https' does not exist.` — exit 1 |"
+    },
+    {
+      "section": "3.1 Why a staged bootstrap page, and not just \"open the URL\"",
+      "text": "A URL cannot be opened. So `lib/browser-open.js` writes a small local HTML page\nthat links the real URL (and, when `autoNavigate` is on, navigates to it\nimmediately), then opens *that file*. The staged page is created under the OS\ntemp directory with a `dsh-cf-handoff-` prefix and is removed by the plugin's\ndisposer."
+    },
+    {
+      "section": "3.1.1 Why the opener is not `openNativePath`",
+      "text": "The first version imported `@deepseek-ai/dsh-native-command` and called its\n`openNativePath`. In the real deployment — a plugin installed with `link:` — that\nthrows on every handoff:\n\n```\nError: Cloudflare challenge on https://community.cloudflare.com/ — the page content was NOT retrieved.\n...\nThe browser could not be opened automatically (Cannot find package\n'@deepseek-ai/dsh-native-command' imported from D:\\桌面\\工作区\\dsh-cf-handoff\\lib\\index.js)."
+    },
+    {
+      "section": "3.1.1 Why the opener is not `openNativePath`",
+      "text": "Bare-specifier resolution walks up from the *importing* file. A `link:`-installed\nplugin sits outside the profile's `node_modules`, so the harness package is not\nreachable from it; declaring it a dependency would only produce a second copy and\nstill not the profile's instance. The behaviour is therefore reproduced in\n`lib/native-open.js` — twenty lines, no runtime dependency, same commands — and\n`test/acceptance-browser.mjs` is what checks the replacement against this machine.\n`test/native-open.test.mjs` pins the exact argument vectors so the table above\nkeeps applying to the shipped code."
+    },
+    {
+      "section": "3.1.1 Why the opener is not `openNativePath`",
+      "text": "Writing the replacement turned up a second measurement worth keeping. `spawn`\noptions change what \"the launch failed\" even means:\n\n| spawn options | exit code for a URL argument |\n|---|---|\n| `stdio: 'pipe'` | 1 (stderr carries `Cannot find drive`) |\n| `stdio: 'ignore'` | 1 |\n| `stdio: 'ignore', detached: true` | **0** |"
+    },
+    {
+      "section": "3.1.1 Why the opener is not `openNativePath`",
+      "text": "`detached: true` looks like the harmless choice — \"let the opener outlive the\ncaller\" — and it silently turns a failed launch into an apparent success, so the\ncontrol assertion in `test/acceptance-browser.mjs` passed while no window opened.\nThe shipped opener does not detach, and a test pins `options.detached` to\n`undefined` with that reason attached. It does not need to detach: it awaits the\nlauncher's exit, and the browser is started by the shell association, not by this\nprocess."
+    },
+    {
+      "section": "3.2 The browser is an accelerator, never a dependency",
+      "text": "Every failure path keeps the handoff alive, because the question itself always\ncarries the URL:\n\n- opener unavailable or throws → the notice says so, and the URL is still handed\n  over in the question;\n- `openBrowser: false` → no browser attempt at all;\n- headless deployment → set `openBrowser: false`; the user opens the URL from\n  the question card in whatever browser they have."
+    },
+    {
+      "section": "3.2 The browser is an accelerator, never a dependency",
+      "text": "A second handoff for the **same URL within five minutes** reuses the tab that is\nalready on screen instead of spawning another. That window exists because of what\nthe first real acceptance run looked like: the user cleared the check, chose\n*verified*, the retry was challenged again (see §5.3 — that is expected), and the\nnext fetch opened a *third* tab for a page the user was already looking at. One\ntab per page, not one tab per attempt. A different URL, or the same URL after the\nwindow, stages its own page; `reopenAfterMs: 0` disables the reuse."
+    },
+    {
+      "section": "3.2 The browser is an accelerator, never a dependency",
+      "text": "Staged pages live in `%TEMP%/dsh-cf-handoff-*` (`os.tmpdir()` on POSIX) and are\nremoved when the plugin is disposed. A hard kill leaves the directory behind — it\nis one ~2 KB HTML file, and the OS temp sweeper will eventually take it. If you\nrestart DSH a lot, sweep them yourself; the plugin deliberately does not delete\ndirectories at startup, because a second running instance may have a live page in\nthere.\n\n---"
+    },
+    {
+      "section": "4. Detection",
+      "text": "`lib/cf-detect.js` is pure, dependency-free, and I/O-free, so it is unit-testable\nagainst recorded responses.\n\n```js\ndetectCfInterstitial({ statusCode, body }, { minScore }) // → { kind, score, signals, summary }\nisCloudflareChallenge(html, url)\nisCloudflareChallengeUrl(url)\ncouldBeCloudflareInterstitial(url, body)\n\nVerdict kinds, ordered from \"worth a human\" to \"not Cloudflare's doing\":"
+    },
+    {
+      "section": "4. Detection",
+      "text": "| kind | meaning | handoff? |\n|---|---|---|\n| `challenge` | an interactive interstitial a human can clear | **yes** |\n| `block` | Cloudflare refused outright (1020 / firewall rule) | no — no human clears it |\n| `page-error` | an edge error page that merely mentions Cloudflare | no |\n| `none` | no signal | no |"
+    },
+    {
+      "section": "4. Detection",
+      "text": "Scoring: each matching rule adds a weight; `DEFAULT_MIN_SCORE = 12`, and an\ninterstitial status code (`403`/`429`/`503`) adds a bonus **only when the body\nalready carries a signal**. Strong markers (`_cf_chl_opt`,\n`/cdn-cgi/challenge-platform`) are worth 8–10; the phrasal evidence\n(`Just a moment...`, `checking your browser`, Turnstile embeds) 6–8; weak hints\n(`Attention Required!`) 4–5."
+    },
+    {
+      "section": "4.1 Verified against real responses",
+      "text": "| URL | Response | Required verdict |\n|---|---|---|\n| `https://community.cloudflare.com/` | HTTP 403, body is the bare `Just a moment...` shell — **no JavaScript runs, so only the title remains** | `challenge` (scores 14) |\n| `https://www.g2.com/` | HTTP 403, `Please enable JS and disable any ad blocker` | `challenge` |\n| `https://developers.cloudflare.com/fundamentals/reference/error-codes/` | HTTP 404, a large real document that says \"Cloudflare\" hundreds of times | **`none` — this is the false-positive test** |\n| `https://discord.com/api/v10/gateway` | transport failure | not a Cloudflare matter |"
+    },
+    {
+      "section": "4.2 Avoiding false positives",
+      "text": "The dangerous failure is stalling a turn on a page that never needed a human, so\nthe rules are written to require *structural* evidence:"
+    },
+    {
+      "section": "4.2 Avoiding false positives",
+      "text": "- Title-derived rules require a blocked status code by default. A blog post\n  titled \"Just a moment...\" or prose explaining *\"checking your browser\"* must\n  not trip detection — a case that is explicitly unit-tested.\n- The mere presence of the word \"Cloudflare\" scores nothing.\n- A **truncated** body is never inspected: a truncated interstitial shell can be\n  missing the very marker that identifies it, so classifying it would be a\n  guess. The plugin warns and passes the response through.\n- `isCloudflareChallenge(html, url)` returns true **only** for a `challenge`\n  verdict. The recall-oriented `couldBeCloudflareInterstitial` is a separate\n  function, so a URL-only hit can never be mistaken for a confirmed challenge."
+    },
+    {
+      "section": "4.3 Extending the markers",
+      "text": "Feature lists age: Cloudflare changes its interstitial markup. Rules live in one\nexported table at the top of `lib/cf-detect.js`; add an entry with a `weight` and\na `kind`, and cover it in `test/detect.test.mjs`. Prefer a **structural**\nselector (an element id, a script path) over a sentence — sentences get\ntranslated and reworded.\n\n---"
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "An in-call wait is the obvious design, and on `web_fetch` it does not work. The\nfirst version of this plugin did exactly that, and a real GUI session produced\nthis instead of a question card:\n\n```\nError: tool call timed out after 30000ms\n```\n\nThe cause is a host row, `@deepseek-ai/dsh-tool-call-timeout-policy`:"
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "```js\n// @deepseek-ai/dsh-tool-call-timeout-policy/lib/index.js:123-130\nconst timeoutMs = ctx.tools.get(exec.name, exec.agent)?.timeoutMs;\nif (timeoutMs === void 0) return next();\nconst d = /* ... */ deadline(exec.signal, timeoutMs, TOOL_TIMEOUT) /* ... */;"
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "`toolTimeoutResult` (`:93-94`) renders `tool call timed out after ${timeoutMs}ms`.\n`web_fetch` takes its budget from `fetchTimeoutMs`, default\n`DEFAULT_WEB_TOOL_TIMEOUT_MS = 30000` (`@deepseek-ai/dsh-tool-web/lib/index.js:850`,\nattached as `ToolDefinition.timeoutMs` at `:801`)."
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "So 30 seconds is a hard ceiling, and exceeding it does not merely fail: the policy\n**aborts the call and substitutes its own message**, discarding whatever the plugin\nwanted to say — including the URL the user needs. A handoff that waits ~90 s for a\nperson therefore produces strictly less information than no handoff at all."
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "`ask_user_question` is not subject to this, because `@deepseek-ai/dsh-tool-ask-user`\ndeclares no `timeoutMs` and the policy returns `next()` for an undefined budget.\nThat asymmetry *is* the design:"
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "| `mode` | who waits for the human | when to use it |\n|---|---|---|\n| `notify` (default) | nobody inside the fetch — the agent then awaits the human with `ask_user_question`, which has no budget | anywhere `web_fetch` keeps its default 30 s budget |\n| `inline` | the fetch itself, then retries once after the answer | only when the calling tool's budget is raised above `minHumanBudgetMs` |"
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "In `notify` mode the fetch still does everything it can: it stages the bootstrap\npage, opens the browser, and throws a coded notice carrying the URL and telling the\nagent to await the human. It just refuses to *be* the wait.\n\n`inline` mode is guarded rather than trusted. Before asking, it reads the budget the\npolicy will enforce and refuses to start a wait it cannot finish:"
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "```\nthe tool call is budgeted at 30000ms but a human round trip needs at least 120000ms,\nso an in-call wait would be killed by the timeout policy and its generic message\nwould replace this one (raise tool-web's fetchTimeoutMs to allow it)\n```\n\nRefusing early is strictly better than being killed mid-question, because an early\nrefusal still carries the URL."
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "The table below lists `inline` mode's outcomes. In `notify` mode the fetch never\nasks: it reaches the top of the table's *report* path and hands the human to the\nagent."
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "| Situation | Behaviour |\n|---|---|\n| User says the check is clear | the **same** fetch call retries once; if the content now arrives, that content is returned |\n| Still challenged after the retry | fails with code `web_cloudflare_challenge` and the URL, telling the agent the page *is* the verification step |\n| User pastes the page content | returned immediately as a synthesized result — the network is not re-queried |\n| User declines | fails with code `web_cloudflare_handoff_refused` and their reason |\n| No answerer reachable | fails with code `web_cloudflare_handoff_unavailable` plus the URL |\n| Cloudflare hard-blocks | fails with code `web_blocked_by_cloudflare`; **the user is never asked**, because no human action clears a firewall rule |\n| Turn cancelled | `ASK_ABORTED` propagates untouched; staged files are cleaned up |"
+    },
+    {
+      "section": "5.1 The 30-second ceiling that decides the whole architecture",
+      "text": "**The retry budget is per fetch call** (`maxAttempts`, default 1), so a page that\nre-challenges cannot be reset into a loop by re-triggering the interstitial. A\nbudget of `0` is legal and produces a report-only plugin.\n\nThe distinction that matters: `skip` never yields empty content that the model\nmight misread as \"the page was blank\". Every non-recovery path is a **coded\nerror carrying the URL**."
+    },
+    {
+      "section": "5.2 A code the agent cannot read is not a code",
+      "text": "Those codes are only useful if the agent actually sees them, and the first\nend-to-end run proved it did not. A thrown tool error reaches the model as the\nliteral text:\n\n```js\n// @deepseek-ai/dsh-tools/lib/index.js:3496\ntext: `Error: ${message}`\n```"
+    },
+    {
+      "section": "5.2 A code the agent cannot read is not a code",
+      "text": "The `code` survives only as a structured field (`result.error.info.code`,\n`:3496`–`:3501`); it is **never interpolated into that text**. Handed a real\nchallenge, the agent quoted this plugin's message and reported the *inner*\n`NO_PROVIDER` as the failure code, because that was the only code-shaped string\nit could see — `web_cloudflare_handoff_unavailable` was invisible to it.\n\nSo `fail()` in `lib/provider.js` appends the code to the message text as well as\nsetting it on the error:"
+    },
+    {
+      "section": "5.2 A code the agent cannot read is not a code",
+      "text": "```js\nconst text = message.includes(code) ? message : `${message} [${code}]`;\n```\n\nEvery documented code therefore appears twice: machine-readable on the error\nobject, and readable in the text the model gets. The table above describes what\nthe agent can actually read, which is the only version of that promise worth\nmaking.\n\nThe two headless runs, verbatim, are the whole argument — the only difference\nbetween them is that one line of `fail()`:\n\n```text"
+    },
+    {
+      "section": "before — asked for \"its exact error code\", the agent answered:",
+      "text": "| `NO_PROVIDER` | … the harness-level code for the failed handoff |"
+    },
+    {
+      "section": "after — the same task, same site, same challenge:",
+      "text": "Error: Cloudflare handoff could not reach the user: … [web_cloudflare_handoff_unavailable]\nNotes for interpretation: … the bracketed tag `[web_cloudflare_handoff_unavailable]`\nis the failure code.\n```\n\nSame detection, same fallback, same URL. The code became *actionable* only when\nit moved into the text. `test/acceptance-headless.mjs` now asserts it stays there."
+    },
+    {
+      "section": "5.3 Why \"verified, retry\" is not always enough — and why pasting is the primary path",
+      "text": "This layer does **not** transfer the clearance the human earned. It cannot:\n`dsh-web-fetch-http` builds an Undici request with no cookie jar and no session\n(*\"Requests carry no browser cookies or ambient credentials\"*), and the\nchallenge clearance lives in a `cf_clearance` cookie plus a browser fingerprint,\nin the user's browser profile — not in DSH. So the retry is a fresh, stateless\nrequest that may itself be challenged again."
+    },
+    {
+      "section": "5.3 Why \"verified, retry\" is not always enough — and why pasting is the primary path",
+      "text": "The README is explicit about this rather than hiding it, because it decides which\nanswer the user should give:\n\n- **A page that only gates the first load** (a one-time interstitial, a redirect\n  that stamps a query parameter) clears on the retry. That is the happy path.\n- **A page that challenges every cold request** — which is most `Just a moment...`\n  interstitials — will keep being challenged no matter how many times the human\n  clears it in their own browser."
+    },
+    {
+      "section": "5.3 Why \"verified, retry\" is not always enough — and why pasting is the primary path",
+      "text": "For the second case the paste path is not a fallback, it is the answer: the human\nis already looking at the real page in the real browser, so the content they can\ncopy is content this layer can never fetch. The question is worded to make that\nthe obvious move (*\"paste the page content as your answer\"*), and\n`classifyPastedBody` sends markup back down the same rendering path the network\nresult would have taken."
+    },
+    {
+      "section": "5.3 Why \"verified, retry\" is not always enough — and why pasting is the primary path",
+      "text": "This is also why the plugin refuses to \"solve\" Cloudflare: a solver would have to\nforge exactly the fingerprint and cookie it is honest about not having.\n\n---"
+    },
+    {
+      "section": "6. Install",
+      "text": "The package ships its own `cordis.patch.yml` and declares `dsh.bundle.patch`, so\nit mounts as a **profile layer** rather than needing a hand-written row:\n\n```bash\ndsh plugin add <path-or-tarball> --profile web\n```\n\nFrom a clone, that is just `dsh plugin add ./dsh-cf-handoff --profile web`; the\nprofile records the spec verbatim, so a `link:`-style development checkout keeps\npicking up edits without reinstalling."
+    },
+    {
+      "section": "6. Install",
+      "text": "`dsh plugin add` reconciles `dsh.profile.bundles` against the installed state and\nappends this package automatically, because the resolved manifest declares\n`dsh.bundle`. Verify with:\n\n```bash\ndsh plugin list --profile web     # dsh-cf-handoff must appear under bundles\n```\n\nIf you would rather mount it by hand, the row is:\n\n```yaml"
+    },
+    {
+      "section": "profile cordis.patch.yml",
+      "text": "- insert:\n    - id: cf-handoff\n      name: dsh-cf-handoff\n```\n\nThe row needs no particular position: DSH activates rows by service\navailability, and the plugin declares `inject: ['web', 'userQuestions', 'tools']`.\nyaml"
+    },
+    {
+      "section": "profile cordis.patch.yml — headless deployment, all three keys restated",
+      "text": "- id: cf-handoff\n  config:\n    minScore: 12\n    maxAttempts: 1\n    openBrowser: false\n```"
+    },
+    {
+      "section": "profile cordis.patch.yml — headless deployment, all three keys restated",
+      "text": "Every file in the layer is read live from the installed directory, so a `link:`\ninstall needs no reinstall after an edit. A `lib/*.js` edit still needs a **process\nrestart**: `patchReload: live` reloads the patch layer, not the ESM module graph,\nand Node caches imported modules for the life of the process. This one was learned\nby measuring it — a diagnostic string added to `handoff.js` did not show up in the\nnext fetch until the process bounced, which is exactly the kind of \"it must have\nhot-reloaded\" assumption this document exists to avoid."
+    },
+    {
+      "section": "Configuration",
+      "text": "| key | default | meaning |\n|---|---|---|\n| `enabled` | `true` | master switch |\n| `minScore` | `12` | detection threshold; raise to `16`+ for fewer handoffs, lower to `~6` for maximum recall |\n| `mode` | `notify` | `notify` = report and return, agent awaits the human; `inline` = wait inside the fetch (needs a raised tool budget — see §5.1) |\n| `minHumanBudgetMs` | `120000` | smallest tool-call budget an `inline` wait may start inside |\n| `maxAttempts` | `1` | handoffs allowed per fetch call; `0` = report only (`inline` mode) |\n| `openBrowser` | `true` | open a staged bootstrap page in the default browser |\n| `autoNavigate` | `true` | the staged page navigates to the URL on load instead of waiting for a click |\n| `reopenAfterMs` | `300000` | reuse the tab already open for this URL instead of staging another page (§3.2); `0` disables the reuse |\n| `tmpRoot` | OS temp | where staged pages are written |"
+    },
+    {
+      "section": "Configuration",
+      "text": "Both modes stage and open the browser; the difference is only who waits."
+    },
+    {
+      "section": "Per-preset note",
+      "text": "`tool-web` composes `web_fetch` per agent preset, and the `pentest` preset ships\n`fetch: false`. The plugin is preset-independent: with `web_fetch` off, nothing\nreaches the seam and it stays idle.\n\n---"
+    },
+    {
+      "section": "7. Module map",
+      "text": "| file | responsibility |\n|---|---|\n| `lib/index.js` | Cordis plugin: config, wiring, lifecycle |\n| `lib/cf-detect.js` | pure detection — rules, scoring, verdicts |\n| `lib/agent-correlation.js` | remembers the agent behind each in-flight fetch, by signal then by unambiguous URL |\n| `lib/agent-scope.js` | scope probing, used as a fallback for agent recovery |\n| `lib/browser-open.js` | staged bootstrap page + opener call |\n| `lib/native-open.js` | the opener itself: platform \"open with the default application\" verbs |\n| `lib/handoff.js` | the pause: question construction, answer parsing, retry budget |\n| `lib/provider.js` | `ctx.web.fetch` decorator, error surface, disposer |"
+    },
+    {
+      "section": "7. Module map",
+      "text": "The split is deliberate: `cf-detect.js` is pure so detection can be tested from\nrecorded fixtures without a runtime, while `handoff.js`/`provider.js` own\neverything that needs one. `native-open.js` is separate from `browser-open.js`\nbecause only the former touches the host."
+    },
+    {
+      "section": "8. Tests",
+      "text": "```bash\nnpm test                        # node --test \"test/*.test.mjs\" — 114 tests, no network, no runtime\nnpm run test:smoke              # live wiring against the installed Cordis / WebRuntime / UserQuestionService\nnpm run acceptance:headless     # a real headless DSH run against a real Cloudflare site\nnpm run acceptance:browser      # the real opener on this machine — OPENS ONE BROWSER WINDOW"
+    },
+    {
+      "section": "8. Tests",
+      "text": "`detect.test.mjs` covers the four recorded real responses above, the\nfalse-positive regression, URL markers, truncation, and rule weighting.\n`handoff.test.mjs` covers answer parsing, pasted-body classification, question\nconstruction, and the `DELEGATED_CALLER` / `NO_PROVIDER` branches.\n`provider.test.mjs` covers the intercept end to end over a fake runtime: retry\nbudget, pasted short-circuit, coded failures, idempotent install, and disposal.\n`agent-correlation.test.mjs` covers both correlation tiers, parallel fetches, the\nambiguity refusal, the aborted-call eviction, and the observer's disposer.\n`native-open.test.mjs` pins the opener to the exact platform command vectors and\nto the spawn options (`stdio: 'ignore'`, no `detached`), so the §3.1 and §3.1.1\ntables stay true of the shipped code — not just of the harness package it was\ncopied from. `browser-open.test.mjs` covers the bootstrap page (escaping, the\noptional self-navigation, a hostile detection reason) and the tab-reuse rule of\n§3.2, over an injected opener and a fake clock."
+    },
+    {
+      "section": "8. Tests",
+      "text": "`test/live-smoke.mjs` is the one that matters for the claims this design rests\non, because the unit tests fake both sides of every seam. It loads the real\n`@deepseek-ai/cordis`, `dsh-web`, `dsh-user-questions` and `dsh-scope` from the\ninstalled profile and asserts:"
+    },
+    {
+      "section": "8. Tests",
+      "text": "- `ctx.web.fetch` really is a replaceable own method on the live `WebRuntime`,\n  and the wrapper still runs `dsh-web`'s own provider resolution.\n- `scopeTarget(agent, agent)` really does admit an answerer registered on that\n  agent's scope, and `carrierKeyOf` on that carrier returns the agent — which is\n  what `lib/agent-scope.js`'s fallback depends on.\n- `tools/pre-execute` observed from a plain context really does reach the\n  correlation table, keyed by the signal the tool hands to `web.fetch`. If that\n  admission rule went the other way the observer would record nothing and every\n  handoff would degrade to \"no answerer\" — a failure that looks like the network,\n  not like a bug.\n- The question the handoff builds survives to the answerer with its id, header,\n  both option labels and the clickable URL link intact."
+    },
+    {
+      "section": "8. Tests",
+      "text": "Two facts it pinned down that a fake cannot show, both of which changed the code:"
+    },
+    {
+      "section": "8. Tests",
+      "text": "- **A question asked without an agent does not reach the browser.** The GUI\n  answerer is composed on the Agent-scoped waterfall, so `ask({ questions })`\n  with no `agent` falls through to `noAnswerer`. This is why\n  `lib/agent-correlation.js` exists at all.\n- **`exec.signal` at `tools/pre-execute` is not the signal the tool body\n  receives.** `dispatchToolBody` overwrites the field with a fused signal. This\n  is not visible from any seam above the tool body, which is why the code\n  shipped first with a signal-only key and then failed on a real page while\n  every fake-based test passed. Correlation now falls back to the URL, and the\n  coded failure reports which tier matched.\n- **`request.questions` arrives as the live service's own array proxy.** Indexing\n  it works; reading named fields off the elements later does not. Anything that\n  wants to inspect a question must read it while the request is in hand."
+    },
+    {
+      "section": "8. Tests",
+      "text": "Neither the smoke test nor the unit tests reach the network or open a window;\n`openBrowser: false` exercises exactly the headless path that must work with no\nopener available."
+    },
+    {
+      "section": "8. Tests",
+      "text": "CI (`.github/workflows/ci.yml`) runs `npm test` on Node 22 and 24, on both Linux\nand Windows. Node 20 is deliberately out of the matrix: `npm test` hands a glob\nto `node --test`, which Node 20 reads as a literal path\n(`Could not find '.../test/*.test.mjs'`) because glob expansion in the test\nrunner only arrived in Node 21 — and 20 is past end of life anyway."
+    },
+    {
+      "section": "8. Tests",
+      "text": "The other three commands stay local by design: they need an installed DSH\nprofile, a real `dsh` binary, and — for the last one — a desktop session."
+    },
+    {
+      "section": "8.1 The two acceptance scenarios",
+      "text": "These are the only tests that use the real world. Both are opt-in because one\nspends model calls and the other opens a window."
+    },
+    {
+      "section": "8.1 The two acceptance scenarios",
+      "text": "**`test/acceptance-headless.mjs`** runs `dsh --profile headless` twice against\nlive sites — a guarded one that serves a genuine interstitial, and a plain one —\nand asserts on what the agent could actually read. It needs the plugin installed\ninto that profile first (`dsh plugin add <dir> --profile headless`). A headless\nrun has **no GUI answerer**, so it exercises the branch that must report rather\nthan hang, and that is the only branch reachable without a human at the keyboard.\nIt is also the regression guard for §5.2 — remove the code from the message and\nthis script fails while every unit test still passes."
+    },
+    {
+      "section": "8.1 The two acceptance scenarios",
+      "text": "**`test/acceptance-browser.mjs`** calls the plugin's own shipped opener\n(`lib/native-open.js`, the exact function `lib/index.js` wires) and opens one\nbrowser window. It exists because every other test injects a fake opener, so none\nof them show that \"the user's default browser opens the blocked URL\" is true of\nthe code that actually runs. It also asserts the control: handing a URL straight\nto the opener fails, which is what pins the staged-file design to execution rather\nthan to reading. §3.1.1 explains why this file stopped importing\n`@deepseek-ai/dsh-native-command`: the import is what failed in the real install."
+    },
+    {
+      "section": "8.2 What is still unverified",
+      "text": "**One live round trip has now been done**, by hand, in the Web GUI. It went: a\nreal `web_fetch` of a guarded site → challenge detected → a browser tab opened\nfrom the staged page → the notice returned with the code and the URL → the agent\nasked, with the URL as a clickable `detail` link → the human chose *verified* →\nthe retry ran → **the retry was challenged again**, which is exactly what §5.3\npredicts for a stateless fetch. So the mechanical loop closes; what it cannot do\nis carry a clearance it never had."
+    },
+    {
+      "section": "8.2 What is still unverified",
+      "text": "- **The paste path.** It has never been exercised end to end by a human. Everything\n  up to and including `classifyPastedBody` is covered by unit tests, but no live\n  run has pasted a real page into the answer box.\n- **The model following the instruction is still model behaviour.** The notice is\n  asserted word-for-word (`test/provider.test.mjs`) and `ask_user_question` with an\n  agent is proven to reach the Web GUI answerer (`test/live-smoke.mjs`); whether a\n  given model actually asks is not something a test here can force.\n- **A page that stops challenging.** No fixture can promise it, so the \"verified →\n  content\" branch is verified only against a fixture provider in\n  `test/live-smoke.mjs`, never against a live site."
+    },
+    {
+      "section": "8.2 What is still unverified",
+      "text": "`inline` mode's human round trip is likewise only partly observable from a script:\nthe plugin side is covered (ask → answer → retry), but a real *clear* requires a\npage that stops challenging.\n\n---"
+    },
+    {
+      "section": "9. Files",
+      "text": "| path | role |\n|---|---|\n| `lib/` | the plugin (see §7) |\n| `test/` | unit, smoke and acceptance suites (§8) |\n| `cordis.patch.yml` | the profile-layer row (§6) |\n| `tsconfig.json` | editor/opt-in JSDoc checking only — **there is no build step**, and TypeScript is not a dependency |\n| `package.json` | the `dsh.bundle.patch` declaration is what makes §6's one-liner mount the layer |\n| `LICENSE` | MIT |"
+    },
+    {
+      "section": "10. Localization",
+      "text": "All human-facing text is hard-coded English in 0.1.0. That is the obvious\ncontribution if this is going to fit a non-English deployment, so here is the map."
+    },
+    {
+      "section": "10. Localization",
+      "text": "| where | what | constraint |\n|---|---|---|\n| `lib/handoff.js` `buildHandoffQuestions()` | the question's `header`, `question`, and the three option labels `verified` / `paste` / `skip` | the labels **are** the answer protocol — the GUI returns the selected label |\n| `lib/handoff.js` `parseAnswer()` | accepts those labels and tolerant synonyms (`done`, `passed`, `ok`, `verified`, `skip`, `refused`, …) | add translated labels here, keep the English ones. It already recognizes a few Chinese *done* words (`完成` `好了` `过了` `通过` `重试`) but **no Chinese refusal words** — that is the first gap to close |\n| `lib/handoff.js` `classifyPastedBody()` | decides whether a pasted body is a real page or a challenge again | it reads page structure, not language; no translation needed |\n| `lib/handoff.js` `buildChallengeNotice()` | the instruction the **agent** reads before it asks | model-facing, not human-facing — translate only if your models do better that way |\n| `lib/provider.js` | coded failure messages | the bracketed code must survive translation (§5.2) |"
+    },
+    {
+      "section": "10. Localization",
+      "text": "1. **Never translate the bracketed codes.** `web_cloudflare_challenge`,\n   `web_cloudflare_handoff_refused`, `web_blocked_by_cloudflare` and friends are\n   contract: the model reads them and `test/provider.test.mjs` matches them.\n2. **Translate a label and its parser in the same commit.** An option whose label\n   no parser recognizes does not fail loudly — it degrades every handoff to \"the\n   channel returned an empty answer\", which reads like a transport bug."
+    },
+    {
+      "section": "10. Localization",
+      "text": "`detail` carries the blocked URL as a markdown link, and the DSH Web GUI renders\nmarkdown, so the click-through needs no translation at all."
+    },
+    {
+      "section": "dsh-cf-handoff — Cloudflare 人机验证的人工交接层",
+      "text": "**中文** ｜ [English](README.md)\n\n给 [DSH](https://github.com/deepseek-ai/deepseek-harness)（DeepSeek Harness）的 `web_fetch` 工具加一层\n「撞到 Cloudflare 验证就交给真人」的补丁。\n\n---"
+    },
+    {
+      "section": "这个插件干什么",
+      "text": "`web_fetch` 抓一个被 Cloudflare 保护的页面时，拿回来的不是网页内容，而是一小段\n`Just a moment...`（HTTP 403）。模型看到的是一段「正文」，它不会知道自己其实什么都没读到 ——\n于是要么编内容，要么把那段 JS 壳子当真。\n\n这个插件在两者之间插一层：\n\n```\n模型调用 web_fetch\n      ↓\n抓取 → 判定这是不是 Cloudflare 拦截\n      ↓ 是\n\n**核心原则：任何分支都不会卡死，也不会拿空内容骗模型。** 每一条没恢复的路径都是一个\n**带网址的错误码**，而不是一段空白。"
+    },
+    {
+      "section": "它不干什么（非目标）",
+      "text": "- ❌ **不自动过验证**。没有 solver，不接打码平台，不逆向 Turnstile。\n- ❌ **不偷 cookie**。`dsh-web-fetch-http` 本身没有 cookie jar，插件也不去翻你的浏览器档案。\n- ❌ **不控制浏览器**。DSH 根本没有浏览器层（详见下面「为什么用你自己的浏览器」）。\n\n它的价值在于：**承认有些页面只有人能过，然后把这一步干净地交出去。**"
+    },
+    {
+      "section": "为什么用你自己的浏览器",
+      "text": "原设计假设 DSH 有 `ctx.browser` 服务（`navigate` / `isHeadless` / `setHeadless` …）。\n**核实源码后确认：这个服务不存在。** 没有 playwright、没有 CDP、没有 `browser_*` 工具，\n全仓搜不到任何浏览器控制能力。\n\n所以「让人去点验证」只能这样落地：\n\n1. 插件写一个**本地引导页**到系统临时目录；\n2. 用系统默认方式打开它（Windows 走 `Invoke-Item`，macOS 走 `open`，Linux 走 `xdg-open`）—— 于是它落到你的默认浏览器里；\n3. 引导页自动跳转到被拦的网址，你正常过验证；\n4. 过完，你回到 DSH 的会话里点一下/粘贴一下。\n\n顺带记一个坑：**直接把 `https://…` 交给「打开路径」的接口是打不开的**（Windows 上会报\n`Cannot find drive. A drive with the name 'https' does not exist.`）。必须落盘成真实文件再打开。\n这就是那个引导页存在的唯一原因。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ngit clone https://github.com/wtwgo114514/dsh-cf-handoff\ndsh plugin add ./dsh-cf-handoff --profile web\n```\n\n`dsh plugin add` 会自动认领包里的 `cordis.patch.yml`（清单声明了 `dsh.bundle.patch`），\n所以你不用手写任何配置行。确认一下：\n\n```bash\ndsh plugin list --profile web     # bundles 里应该出现 dsh-cf-handoff\n```\n\n**改完 `lib/*.js` 必须重启 DSH。** `patchReload: live` 只重载 patch 层，不会重新 import\n已经加载的模块 —— 这个插件第一版就是被这一点坑过。"
+    },
+    {
+      "section": "怎么用",
+      "text": "装好、重启，然后让模型抓一个被 Cloudflare 保护的页面即可，不需要额外指令。\n默认行为是「报告 + 告诉模型下一步」，你会在会话里看到类似：\n\n```\nError: Cloudflare challenge on https://example.com/ — the page content was NOT retrieved.\nCloudflare challenge (\"Just a moment...\"): HTTP 403, score 41 [...signals...].\n\nAwait the human with ask_user_question, then follow their answer — ...\n\n模型应该接着问你，你选一个即可。"
+    },
+    {
+      "section": "两种模式：谁在等",
+      "text": "**这是理解本插件最重要的一节。**\n\n`web_fetch` 有 **30 秒硬超时**（`fetchTimeoutMs` 默认 `30000`），而这个超时不只是失败：\n它会**用自己的话替换掉结果**，把插件想说的网址和错误码一起吞掉。所以「在工具调用里等人过验证」\n在默认配置下注定失败 —— 等 90 秒只会得到一句 `tool call timed out after 30000ms`，\n比不做交接信息更少。\n\n| 模式 | 谁在等 | 什么时候用 |\n|---|---|---|\n| `notify`（默认） | 抓取本身不等；由没有超时的 `ask_user_question` 等 | 任何保持 30 秒默认预算的部署 |\n| `inline` | 抓取本身等，收到答复后重试一次 | 仅当调用方的工具预算已调高到 `minHumanBudgetMs` 以上 |\n\n`notify` 模式下抓取仍然做了所有能做的事：写引导页、开浏览器、抛出带网址和错误码的提示 ——\n它只是**拒绝亲自当那个等待**。"
+    },
+    {
+      "section": "两种模式：谁在等",
+      "text": "`inline` 模式会被**预先拦截**：发起等待前先读实际预算，不够就拒绝，并说清原因：\n\n```\nthe tool call is budgeted at 30000ms but a human round trip needs at least 120000ms,\nso an in-call wait would be killed by the timeout policy and its generic message\nwould replace this one (raise tool-web's fetchTimeoutMs to allow it)\n```"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml"
+    },
+    {
+      "section": "你的 profile 里（例如 ~/.dsh/profiles/web/cordis.patch.yml）",
+      "text": "- id: cf-handoff\n  config:\n    mode: notify\n    minScore: 12\n    openBrowser: true\n```"
+    },
+    {
+      "section": "你的 profile 里（例如 ~/.dsh/profiles/web/cordis.patch.yml）",
+      "text": "| 键 | 默认值 | 含义 |\n|---|---|---|\n| `enabled` | `true` | 总开关 |\n| `minScore` | `12` | 检测阈值。调高到 `16` 以上＝更少打扰；调到 `~6`＝最大召回 |\n| `mode` | `notify` | `notify`＝报告后返回；`inline`＝在抓取内等待（需先调高工具预算，见上节） |\n| `minHumanBudgetMs` | `120000` | `inline` 等待允许的最小工具预算 |\n| `maxAttempts` | `1` | 每次抓取允许几次交接；`0`＝只报告不等待 |\n| `openBrowser` | `true` | 是否用默认浏览器打开引导页 |\n| `autoNavigate` | `true` | 引导页是否自动跳转（关掉＝等你点链接） |\n| `reopenAfterMs` | `300000` | 同一网址在该毫秒内复用已开的标签页，避免刷一串标签 |\n| `tmpRoot` | 系统临时目录 | 引导页写在哪 |"
+    },
+    {
+      "section": "你的 profile 里（例如 ~/.dsh/profiles/web/cordis.patch.yml）",
+      "text": "⚠️ **按 id 覆盖配置是整体替换，不是逐键合并。** 只写 `minScore` 会让其他键回落到插件自己的\n默认值，而不是 bundle 层的值。**你在意的键都要重新写一遍。**\n\n`pentest` 预设里 `web_fetch` 是关着的（`fetch: false`），此时插件空转，什么都不做。"
+    },
+    {
+      "section": "错误码",
+      "text": "| 码 | 含义 | 能做点什么 |\n|---|---|---|\n| `web_cloudflare_challenge` | 检出拦截，但没恢复（默认 `notify` 的主路径） | 按提示让用户过验证或粘贴正文 |\n| `web_cloudflare_handoff_refused` | 用户明确拒绝 | 换一条路，别再试这个网址 |\n| `web_cloudflare_handoff_unavailable` | 找不到能提问的人（如 headless 部署） | 部署问题；错误里带网址 |\n| `web_blocked_by_cloudflare` | Cloudflare 硬封（1020 / 防火墙规则） | **不会问人** —— 没人能过，直接放弃 |"
+    },
+    {
+      "section": "检测是怎么做的",
+      "text": "规则表在 `lib/cf-detect.js` 里，**加新特征只要往常量数组里加一条**，不用改逻辑：\n\n- **强信号**（权重 8）：`/cdn-cgi/challenge-platform`、`cf_chl_opt`\n- **中信号**（6–8）：`cf_chl_`、turnstile、`challenge-running`、`Just a moment...`、`checking your browser`\n- **弱信号**（4–5）：`Attention Required!`、`enable javascript and cookies to continue`\n- **硬封**（不走交接）：`Sorry, you have been blocked`、`Error 1020`\n\n默认阈值 `minScore = 12`；被拦截的状态码（403/429/503）在有正文信号时额外加分。\n标题类规则**只在该状态码下计分**，防止「文档里提到这句话」被误判。\n\n实测过的四个样本（真实响应，2026-10-17）："
+    },
+    {
+      "section": "检测是怎么做的",
+      "text": "| 站点 | 结果 | 判定 |\n|---|---|---|\n| `community.cloudflare.com` | HTTP 403，正文只有 `Just a moment...` | challenge（score 41） |\n| `g2.com` | HTTP 403，正文极短 | challenge |\n| `developers.cloudflare.com/fundamentals/reference/error-codes/` | HTTP 404，超长文档 | **none（防误报的关键负样本）** |\n| `discord.com/api/v10/gateway` | 传输失败 | 与 Cloudflare 无关 |\n\n**Cloudflare 的特征会变。** 这个桌面里唯一需要定期更新的是规则表和\n`README.md` 顶部的「最近核对」日期。"
+    },
+    {
+      "section": "为什么重试经常救不回来（重要）",
+      "text": "`dsh-web-fetch-http` **无 cookie jar、无会话**（源码注释原文：*Requests carry no browser cookies\nor ambient credentials*）。你在浏览器里过验证拿到的 `cf_clearance` 和指纹都留在浏览器档案里，\n插件的重试是一次**全新的无状态请求**，很可能再次被挑战。\n\n- 只挡首次加载的页面 → 重试有时能过；\n- `Just a moment...` 这种冷请求必挑战的页面 → 重试过不了，**粘贴正文才是正解**。\n\n这不是「没做好」，是架构边界。所以插件把 `paste` 当一等公民：你粘贴的内容会直接作为结果注入，\n不会再打一次网络。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnpm test              # 114 项单测\nnpm run test:smoke    # 接线冒烟（需要已安装的 DSH profile）\nnpm run acceptance:headless   # 真机验收：真实站点、真实 dsh 进程\nnpm run acceptance:browser    # 真机验收：真的会开一个浏览器窗口\n\nCI 在 GitHub Actions 上跑 `npm test`，Linux + Windows × Node 22/24。\n**Node 20 已剔除**：它把 `node --test \"test/*.test.mjs\"` 当字面路径，glob 支持是 Node 21 才有的。"
+    },
+    {
+      "section": "模块表",
+      "text": "| 文件 | 职责 |\n|---|---|\n| `lib/index.js` | Cordis 插件：配置、接线、生命周期 |\n| `lib/cf-detect.js` | 纯检测逻辑：规则、评分、判定（可单测） |\n| `lib/agent-correlation.js` | 记住每次抓取是哪个 agent 发起的（先按 signal，再按无歧义的网址） |\n| `lib/agent-scope.js` | 作用域探测，作为找回 agent 的兜底 |\n| `lib/browser-open.js` | 引导页生成 + 去重（同一网址复用标签页） |\n| `lib/native-open.js` | 打开器本身：各平台「用默认程序打开」|\n| `lib/handoff.js` | 暂停：构造问题、解析回答、重试预算 |\n| `lib/provider.js` | `ctx.web.fetch` 装饰器、错误表面、dispose |"
+    },
+    {
+      "section": "已知边界",
+      "text": "- 卡片按钮目前是英文 `verified` / `paste` / `skip`（改中文要改 `lib/handoff.js`，会动到回答解析，\n  欢迎 PR，见下节）。\n- 无法在 `inline` 模式下等超过工具预算的时间 —— 这是 DSH 的超时策略决定的，不是插件能绕的。\n- 插件**不搬运**人工挣来的放行状态（上面「为什么重试经常救不回来」）。"
+    },
+    {
+      "section": "想要中文界面？",
+      "text": "按钮文案汉化落在 `lib/handoff.js`：`HANDOFF_ANSWERS` 常量与 `parseAnswer()` 是配对的，\n**两边必须一起改**，否则用户选了中文按钮会解析不出答案。欢迎在\n[Issues](https://github.com/wtwgo114514/dsh-cf-handoff/issues) 认领。\n\n英文版 [`README.md`](README.md) 是**权威文档**：里面逐条记录了原始规格的 6 条 API 假设中\n哪 4 条是错的、真实源码的行号引用、以及每个设计决定的理由。本文件是中文入口，取舍了篇幅。"
+    }
+  ],
+  "skipped": []
+}

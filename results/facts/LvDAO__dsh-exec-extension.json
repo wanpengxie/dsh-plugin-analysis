@@ -1,0 +1,326 @@
+{
+  "repo": "LvDAO/dsh-exec-extension",
+  "commit": "0ad741c43c55a4c0ec69443369a6c72694999401",
+  "extracted_at": "2026-11-11T12:22:56.569258+00:00",
+  "tree": {
+    "files": 40,
+    "bytes": 277292,
+    "lines_by_language": {
+      "JSON": 399,
+      "JavaScript": 2313,
+      "Markdown": 186,
+      "Other": 232,
+      "Rust": 566,
+      "Shell": 88,
+      "TOML": 24,
+      "TypeScript": 18,
+      "YAML": 132
+    },
+    "outline": [
+      ".github/dependabot.yml",
+      ".github/workflows/npm-publish.yml",
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "js/command.js",
+      "js/command.test.js",
+      "js/generated/native.d.ts",
+      "js/generated/native.js",
+      "js/generated/native_bg.wasm",
+      "js/generated/native_bg.wasm.d.ts",
+      "js/generated/package.json",
+      "js/integration.real-adm.test.js",
+      "js/native.test.js",
+      "js/output.js",
+      "js/output.test.js",
+      "js/patch.test.js",
+      "js/policy.js",
+      "js/policy.test.js",
+      "js/readme.test.js",
+      "js/startup.js",
+      "js/startup.test.js",
+      "js/task.js",
+      "package-lock.json",
+      "package.json",
+      "scripts/acceptance.sh",
+      "scripts/prepare.mjs",
+      "src/effort.rs",
+      "src/lib.rs",
+      "src/overlay.rs",
+      "src/parse.rs",
+      "src/wasm_api.rs",
+      "tests/overlay.rs",
+      "tests/parse.rs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-exec-extension",
+    "version": "0.1.3",
+    "description": "Official-pattern dsh bundle: replace headless-startup with per-invocation CLI flags without writing settings",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/LvDAO/dsh-exec-extension.git"
+    },
+    "bugs": {
+      "url": "https://github.com/LvDAO/dsh-exec-extension/issues"
+    },
+    "homepage": "https://github.com/LvDAO/dsh-exec-extension#readme",
+    "type": "module",
+    "main": "./js/startup.js",
+    "exports": {
+      ".": "./js/startup.js",
+      "./startup": "./js/startup.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "js/startup.js",
+      "js/command.js",
+      "js/policy.js",
+      "js/task.js",
+      "js/output.js",
+      "js/generated/native.js",
+      "js/generated/native.d.ts",
+      "js/generated/native_bg.wasm",
+      "js/generated/native_bg.wasm.d.ts",
+      "js/generated/package.json",
+      "cordis.patch.yml",
+      "src",
+      "Cargo.toml",
+      "Cargo.lock",
+      "README.md",
+      "README.zh.md",
+      "AGENTS.md",
+      "LICENSE",
+      "scripts/acceptance.sh",
+      "scripts/prepare.mjs"
+    ],
+    "scripts": {
+      "build": "cargo build --release --target wasm32-unknown-unknown && wasm-bindgen --target nodejs --out-dir js/generated --out-name native target/wasm32-unknown-unknown/release/dsh_exec_extension.wasm && node -e \"require('fs').writeFileSync('js/gene...",
+      "test": "cargo test && node --test js/*.test.js",
+      "acceptance": "bash scripts/acceptance.sh",
+      "prepare": "node scripts/prepare.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/dsh-cmdline": "^0.1.0-rc.7",
+      "@deepseek-ai/dsh-headless": "^0.1.0-rc.7",
+      "commander": "^15.0.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-headless": "^0.1.0-rc.7"
+    },
+    "engines": {
+      "node": ">=22.19"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "headless",
+      "cordis",
+      "dsh-extension"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-exec-extension: replace stock headless-startup so per-invocation flags\n# are a known app command. Extra `headlessStartup` fields are read by later\n# rows via `!!js ctx.headlessStartup.*` (the same pattern as web `--port`).\n#\n# Cordis skips an id-targeted patch when `name` does not match the existing\n# row (`patch: name mismatch ... skipping`). Changing this row's module by\n# restating `name:` therefore does not work. Disable the stock commander\n# (it only declares `[task...]` and would reject `--model`) and insert a\n# replacement that still provides `headlessStartup` for headless-runner.\n#\n# An id-targeted patch replaces the named keys entirely, so sandbox/approval\n# restates the full `config` they need. Yaml `inject` is merged into the\n# plugin's own inject list (sessions stays on sandbox-policy).\n\n- id: headless-startup\n  disabled: true\n\n- insert:\n    - id: exec-extension-startup\n      name: dsh-exec-extension/startup\n\n- id: sandbox-policy\n  inject: [headlessStartup]\n  config:\n    mode: !!js ctx.headlessStartup.permissionMode ?? process.env.DSH_PERMISSION_MODE ?? 'workspace-write'\n    workspaceRoot: !!js ctx.headlessStartup.cwd ?? process.cwd()\n\n- id: approval\n  inject: [headlessStartup]\n  config:\n    policy: !!js \"ctx.headlessStartup.approvalPolicy ?? ((process.env.DSH_PERMISSION_MODE ?? 'workspace-write') === 'danger-full-access' ? 'never' : 'ask')\"\n\n- id: tools\n  inject: [headlessStartup]\n  config:\n    mode: !!js ctx.headlessStartup.toolsMode ?? process.env.DSH_TOOLS_MODE\n"
+    }
+  ],
+  "entries": [
+    "js/startup.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_PERMISSION_MODE",
+      "kind": "env",
+      "where": "cordis.patch.yml:25"
+    },
+    {
+      "name": "DSH_PERMISSION_MODE",
+      "kind": "env",
+      "where": "cordis.patch.yml:31"
+    },
+    {
+      "name": "DSH_TOOLS_MODE",
+      "kind": "env",
+      "where": "cordis.patch.yml:36"
+    },
+    {
+      "name": "NODE_TEST_CONTEXT",
+      "kind": "env",
+      "where": "js/command.js:28"
+    },
+    {
+      "name": "NODE_TEST_CONTEXT",
+      "kind": "env",
+      "where": "js/command.test.js:341"
+    },
+    {
+      "name": "DSH_NODE_MODULES",
+      "kind": "env",
+      "where": "js/integration.real-adm.test.js:15"
+    },
+    {
+      "name": "NODE_PATH",
+      "kind": "env",
+      "where": "js/integration.real-adm.test.js:16"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "js/startup.test.js:282"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "js/startup.test.js:283"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "js/startup.test.js:287"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "js/startup.test.js:289"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "js/startup.test.js:291"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "js/startup.test.js:292"
+    },
+    {
+      "name": "DSH_EXEC_FORCE_WASM_BUILD",
+      "kind": "env",
+      "where": "scripts/prepare.mjs:16"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/npm-publish.yml:30"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LvDAO/dsh-exec-extension",
+      "where": "Cargo.toml:7"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LvDAO/dsh-exec-extension.git",
+      "where": "package.json:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LvDAO/dsh-exec-extension/issues",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/LvDAO/dsh-exec-extension#readme",
+      "where": "package.json:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-cmdline": "^0.1.0-rc.7",
+      "@deepseek-ai/dsh-headless": "^0.1.0-rc.7",
+      "commander": "^15.0.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 10,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 25,
+    "pushed_at": "2026-10-15T13:05:14Z",
+    "created_at": "2026-08-19T15:25:52Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "js/command.js",
+    "js/generated/native.d.ts",
+    "js/generated/native.js",
+    "js/generated/native_bg.wasm.d.ts",
+    "js/output.js",
+    "js/policy.js",
+    "js/startup.js",
+    "js/task.js",
+    "package.json",
+    "scripts/prepare.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-exec-extension",
+      "text": "[npm](https://www.npmjs.com/package/dsh-exec-extension) · [中文文档](https://github.com/LvDAO/dsh-exec-extension/blob/main/README.zh.md)\n\nA DeepSeek Harness **bundle** for one-shot exec, in the same shape as official surface plugins (`dsh.bundle.patch` + `parseCmdline` + commander). Stock `headless-startup` only declares `[task...]`; this bundle disables that row and inserts a replacement that still provides `headlessStartup.task` for unmodified `headless-runner`."
+    },
+    {
+      "section": "dsh-exec-extension",
+      "text": "The CLI follows **OpenCode `run`** and **Pi `-p`**: piped stdin is merged into the prompt, `@file` / `-f` attaches files, `--format json` streams session events, `--dir` sets cwd, `--yolo` skips permission prompts (it does **not** disable the sandbox). Model overlay is in-process (Rust WASM) and never writes `$DSH_HOME/settings.yaml`."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile exec add @deepseek-ai/dsh-headless@$(npm view @deepseek-ai/dsh version)\ndsh plugin --profile exec add dsh-exec-extension\ndsh --profile exec --help\n```"
+    },
+    {
+      "section": "Install",
+      "text": "Follow the **same npm `latest` channel as the dsh CLI** (`npx @deepseek-ai/dsh` / `npm install --global @deepseek-ai/dsh`). Do not use `@next` unless you installed `dsh@next`. `@deepseek-ai/dsh-headless` has a stale `latest` tag, so the first line takes the CLI's `latest` version instead of headless's own. `dsh-exec-extension` uses its own `latest`. Freeze with `@<version>` only when you need a snapshot. npm install does not need a `prepare` allowlist."
+    },
+    {
+      "section": "Install",
+      "text": "Git fallback: `dsh plugin --profile exec add github:LvDAO/dsh-exec-extension`\n\nDedicated profile only. Stock `dsh --profile headless --model x \"t\"` must still fail."
+    },
+    {
+      "section": "CLI",
+      "text": "```text\ndsh --profile exec [options] [--] [task|-]\ncat README.md | dsh --profile exec \"summarize this\"\ndsh --profile exec @notes.md --full-auto \"use the notes\"\n```"
+    },
+    {
+      "section": "CLI",
+      "text": "| Flag | Meaning |\n|------|---------|\n| `-m, --model` | This-process model (never part of the task) |\n| `--effort`, `--reasoning-effort` | `off\\|high\\|max` |\n| `--thinking` | Pi thinking tiers; `xhigh`/`max` → `max`, `minimal`/`low`/`medium`/`high` → `high` |\n| `--provider` | This-process provider |\n| `-C, --cwd` / `--cd` / `--dir` | Working directory (published on `headlessStartup.cwd`) |\n| `--timeout <seconds>` | `appExit(1)` after N seconds |\n| `-s, --sandbox` / `--permission-mode` | `read-only` \\| `workspace-write` \\| `danger-full-access` |\n| `--approval ask\\|never\\|allow` | `ask` fail-closes without a UI; `never` auto-denies; `allow` auto-grants |\n| `--full-auto` | workspace-write + auto-allow (CI) |\n| `--yolo` / `--dangerously-skip-permissions` | Skip permission prompts (auto-allow). Does **not** set `danger-full-access`; default sandbox stays `workspace-write`. Unrestricted access is `--sandbox danger-full-access` |\n| `--tools-mode native\\|code\\|both` | Tools presentation |\n| `-f, --file` / `@path` | Attach file text into the task |\n| `--output-schema <path>` | Prompt-level JSON Schema constraint (**not** constrained decode) |\n| `-o, --output-last-message <path>` | Also writ"
+    },
+    {
+      "section": "CLI",
+      "text": "Unknown flags error. Overlay never calls `saveSelection()`.\n\n`--output-schema` is a **prompt constraint**, not constrained decoding. `--approval allow` and `--yolo` install a process-local auto-grant because dsh `never` auto-**denies** and headless has no UI. `--yolo` does not set `danger-full-access`; use `--sandbox danger-full-access` for unrestricted tools."
+    },
+    {
+      "section": "CLI",
+      "text": "`headlessStartup` is `{ task, cwd, permissionMode, approvalPolicy, autoApprove, toolsMode?, format }`. sandbox-policy, approval, and tools inject that service (`!!js ctx.headlessStartup.*`). Stock `headless-runner` still only reads `task`."
+    },
+    {
+      "section": "Non-goals",
+      "text": "MCP, Host, HTTP, resume, `--image`, forking `headless-runner`. Put MCP on the profile patch + process env, not on this CLI."
+    },
+    {
+      "section": "Develop",
+      "text": "Node ≥ 22.19. WASM is committed; `prepare` skips rustc.\n\n```sh\nnpm test\nDSH_BIN=/path/to/dsh npm run acceptance\n```"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,262 @@
+{
+  "repo": "PineappleTwilight/dsh-llm-retry-infinite",
+  "commit": "f35cc377190966a08a565119c27b3eec0e59e815",
+  "extracted_at": "2026-11-11T13:53:10.375100+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 68344,
+    "lines_by_language": {
+      "JSON": 53,
+      "JavaScript": 1616,
+      "Markdown": 315,
+      "Other": 2,
+      "TypeScript": 241,
+      "YAML": 59
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/display/index.js",
+      "lib/index.js",
+      "lib/types/client.d.ts",
+      "lib/types/display.d.ts",
+      "lib/types/index.d.ts",
+      "package.json",
+      "pnpm-lock.yaml",
+      "test-plugin.mjs",
+      "test-serialize.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-llm-retry-infinite",
+    "description": "DSH plugin: infinite exponential retries on LLM requests, capped at 10 minutes per wait",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/types/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/types/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./client": {
+        "types": "./lib/types/client.d.ts",
+        "default": "./lib/client.js"
+      },
+      "./display": {
+        "types": "./lib/types/display.d.ts",
+        "default": "./lib/display/index.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      }
+    },
+    "scripts": {
+      "test": "node test-plugin.mjs && node test-serialize.mjs"
+    },
+    "files": [
+      "lib/index.js",
+      "lib/client.js",
+      "lib/display/index.js",
+      "lib/types/**/*.d.ts",
+      "cordis.patch.yml"
+    ],
+    "license": "MIT",
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch: inserts infinite retry plugin into a profile's layer stack.\n- insert:\n    - id: llm-retry-infinite\n      name: 'dsh-llm-retry-infinite'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/types/index.d.ts",
+    "lib/types/client.d.ts",
+    "lib/client.js",
+    "lib/types/display.d.ts",
+    "lib/display/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 11,
+    "pushed_at": "2026-08-20T00:15:49Z",
+    "created_at": "2026-08-19T08:25:59Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/display/index.js",
+    "lib/index.js",
+    "lib/types/client.d.ts",
+    "lib/types/display.d.ts",
+    "lib/types/index.d.ts",
+    "package.json",
+    "test-plugin.mjs",
+    "test-serialize.mjs"
+  ],
+  "readme": [
+    {
+      "section": "`dsh-llm-retry-infinite`",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that replaces the built-in LLM retry behavior with **infinite exponential retries**. Every failed LLM request is retried indefinitely with an exponential backoff that caps each individual wait at **10 minutes**."
+    },
+    {
+      "section": "Why this exists",
+      "text": "The built-in `@deepseek-ai/dsh-llm-retry` defaults to `mode: 'normal'` with a hard cap of **2 retries**. For environments with transient rate limits, flaky connectivity, or provider instability, you may want the harness to keep trying until the request succeeds — without a retry ceiling. This plugin takes over the entire retry chain and never gives up."
+    },
+    {
+      "section": "How it works",
+      "text": "1. Intercepts every `agent/request-error` event from the DSH agent loop.\n2. Computes an exponential backoff: `min(initialDelayMs × 2^retry, 600 000)`.\n3. Waits the computed delay (symmetric jitter, cancellable on abort or session close).\n4. Returns `{ kind: 'retry' }` to re-attempt the request.\n5. Repeats **forever** until success, cancellation, or plugin disposal.\n\nThe plugin **does not delegate** to the built-in retry handler — it fully replaces it."
+    },
+    {
+      "section": "Backoff schedule (default config)",
+      "text": "| Retry # | Delay      | Approx. |\n|---------|------------|---------|\n| 1       | 1000 ms    | 1 s     |\n| 2       | 2000 ms    | 2 s     |\n| 3       | 4000 ms    | 4 s     |\n| 4       | 8000 ms    | 8 s     |\n| 5       | 16 000 ms  | 16 s    |\n| 6       | 32 000 ms  | 32 s    |\n| 7       | 64 000 ms  | ~1 m    |\n| 8       | 128 000 ms | ~2 m    |\n| 9       | 256 000 ms | ~4 m    |\n| 10      | 512 000 ms | ~8.5 m  |\n| 11+     | 600 000 ms | **10 m** (cap) |"
+    },
+    {
+      "section": "Backoff schedule (default config)",
+      "text": "Each value includes ±10 % symmetric jitter by default.\n\n---"
+    },
+    {
+      "section": "1. Install the package",
+      "text": "```bash\ncd ~/.dsh/profiles/<your-profile>\npnpm add dsh-llm-retry-infinite\n```\n\nFor a local / development copy:\n\n```bash\ncd ~/.dsh/profiles/<your-profile>\npnpm add \"link:/absolute/path/to/dsh-llm-retry-infinite\"\n```"
+    },
+    {
+      "section": "2. Register as a bundle",
+      "text": "Open `package.json` in your profile directory and add `\"dsh-llm-retry-infinite\"` to the `dsh.profile.bundles` array:\n\n```jsonc\n{\n  \"dsh\": {\n    \"profile\": {\n      \"bundles\": ["
+    },
+    {
+      "section": "3. Disable the built-in retry plugin",
+      "text": "The built-in `@deepseek-ai/dsh-llm-retry` (id: `llm-retry`) is loaded by `dsh-base` and runs **before** any later bundle in the waterfall chain. It must be disabled or it will intercept retries with its 2-attempt cap.\n\nOpen `~/.dsh/profiles/<your-profile>/cordis.patch.yml` and add a disable entry:\n\n```yaml\n[\n  {\n    id: \"llm-retry\",\n    disabled: true\n\nThis tells the Cordis loader to skip the built-in retry plugin entirely, leaving `dsh-llm-retry-infinite` as the sole retry handler."
+    },
+    {
+      "section": "4. (Optional) Restart DSH",
+      "text": "If DSH is already running, restart it to pick up the new plugin and patch:\n\n```bash"
+    },
+    {
+      "section": "Stop the existing process, then:",
+      "text": "dsh web\n```\n\n---"
+    },
+    {
+      "section": "Configuration",
+      "text": "All fields are optional. You can pass config through `cordis.patch.yml` or through the bundle's own `config` block:\n\n```yaml"
+    },
+    {
+      "section": "In cordis.patch.yml — override config for the plugin entry",
+      "text": "[\n  {\n    id: \"llm-retry\",\n    disabled: true\n  },\n  {\n    insert: [\n      {\n        id: \"llm-retry-infinite\",\n        name: \"dsh-llm-retry-infinite\",\n        config: {\n          initialDelayMs: 2000    # base delay for first retry (default: 1000)\n          maxDelayMs: 300000      # cap per wait — 5 min (default: 600000)\n          jitterRatio: 0.15       # symmetric jitter ±15% (default: 0.1)\n        }\n      }\n    ]\n  }\n]\n```"
+    },
+    {
+      "section": "In cordis.patch.yml — override config for the plugin entry",
+      "text": "Or if you rely on the auto-insert from `cordis.patch.yml` inside the plugin package itself, you can override via the profile-level patch:\n\n```yaml\n[\n  {\n    id: \"llm-retry\",\n    disabled: true\n  },\n  {\n    id: \"llm-retry-infinite\",\n    config: {\n      initialDelayMs: 500\n      maxDelayMs: 600000\n      jitterRatio: 0.1\n    }\n  }\n]\n```"
+    },
+    {
+      "section": "Parameter constraints",
+      "text": "| Parameter | Type | Default | Range |\n|-----------|------|---------|-------|\n| `initialDelayMs` | number | 1000 | (0, 600 000] |\n| `maxDelayMs` | number | 600 000 | (0, 600 000] |\n| `jitterRatio` | number | 0.1 | [0, 1] |\n\nAdditional rules:\n- `initialDelayMs` must be ≤ `maxDelayMs`.\n- The hard ceiling of **600 000 ms (10 minutes)** cannot be exceeded regardless of configuration.\n\n---"
+    },
+    {
+      "section": "Session events",
+      "text": "The plugin emits durable, non-surface session events for observability and UI display:"
+    },
+    {
+      "section": "Session events",
+      "text": "| Event | When | Payload |\n|-------|------|---------|\n| `llm/retry-infinite` | Before each wait | `turn`, `step`, `provider`, `retry`, `delayMs`, `delayFormatted`, `statusCode`, `statusText`, `statusMessage`, `deadline`, `cumulativeWaitMs`, `failure` |\n| `llm/retry-infinite-started` | After wait completes, just before the retry fires | `turn`, `step`, `retry`, `provider`, `deadline` |\n| `llm/retry-infinite-cancelled` | When a retry is aborted (session close, disposal) | `turn`, `step`, `retry`, `provider`, `cumulativeWaitMs` |"
+    },
+    {
+      "section": "Session events",
+      "text": "These events are **not visible to the model** and do not contribute to token billing. They are available in the session event log for debugging and UI status display."
+    },
+    {
+      "section": "Enriched event fields",
+      "text": "| Field | Type | Description |\n|-------|------|-------------|\n| `statusCode` | `number \\| undefined` | HTTP status code from the failure (429, 500, 503, etc.) |\n| `statusText` | `string` | Human-readable status label (e.g. \"rate limited\", \"server error\") |\n| `statusMessage` | `string` | Full display message: `\"Retrying — rate limited (429), attempt #3, waiting 16s\"` |\n| `deadline` | `number` | Absolute timestamp (ms since epoch) when the wait ends |\n| `delayFormatted` | `string` | Human-readable delay (e.g. `\"16s\"`, `\"2m 8s\"`) |\n| `cumulativeWaitMs` | `number` | Total time spent waiting across all retries for this turn+step |"
+    },
+    {
+      "section": "Enriched event fields",
+      "text": "---"
+    },
+    {
+      "section": "UI visual indicator",
+      "text": "The plugin provides two mechanisms for building retry status UIs:"
+    },
+    {
+      "section": "1. Live retry state accessor",
+      "text": "Use `ctx.retryState()` to get the current retry state at any time. This is ideal for reactive UIs that poll or subscribe to state changes.\n\n```javascript\n// In any component or event handler:\nconst state = ctx.retryState();\n\nif (state.active) {\n\nThe `remainingMs` and `remainingFormatted` fields are **computed on read** — they reflect the live countdown as the wait progresses."
+    },
+    {
+      "section": "2. Display helpers (`dsh-llm-retry-infinite/display`)",
+      "text": "Import from the `/display` subpath for rendering utilities:\n\n```javascript\nimport {\n  renderTerminalStatus,\n  renderHTMLIndicator,\n  renderMarkdownStatus,"
+    },
+    {
+      "section": "Terminal status",
+      "text": "```javascript\nconst state = ctx.retryState();\nconst line = renderTerminalStatus(state);\n// → \"⏳ Retrying #3 — rate limited (429), waiting 16s (4s remaining)\"\n```"
+    },
+    {
+      "section": "HTML indicator",
+      "text": "```javascript\nconst state = ctx.retryState();\nconst html = renderHTMLIndicator(state);\n// Returns a self-contained <div> with classes for CSS styling.\n// Inject RETRY_INDICATOR_CSS for default styling."
+    },
+    {
+      "section": "Markdown status",
+      "text": "```javascript\nconst state = ctx.retryState();\nconst md = renderMarkdownStatus(state);\n// → \"⏳ **Retrying #3** — rate limited `429` · waiting 16s · 4s left\"\n```"
+    },
+    {
+      "section": "Status indicator lookup",
+      "text": "```javascript\nconst info = statusIndicator(429);\n// → { color: \"yellow\", emoji: \"⏳\", label: \"Rate Limited\" }\n```"
+    },
+    {
+      "section": "Status code visual mapping",
+      "text": "| Code | Emoji | Color | Label |\n|------|-------|-------|-------|\n| 429 | ⏳ | yellow | Rate Limited |\n| 500 | 💥 | red | Server Error |\n| 502 | 🔴 | red | Bad Gateway |\n| 503 | 🔴 | red | Service Unavailable |\n| 408 | ⏱️ | orange | Timeout |\n| 401 | 🔒 | red | Unauthorized |\n| 403 | 🚫 | red | Forbidden |\n| other | ❓ | gray | Unknown Error |\n\n---"
+    },
+    {
+      "section": "How it differs from the built-in `dsh-llm-retry`",
+      "text": "| | `dsh-llm-retry-infinite` | `@deepseek-ai/dsh-llm-retry` |\n|---|---|---|\n| **Retry limit** | ∞ (none) | 2 (default), configurable |\n| **Scope** | Global — all providers | Per-provider via `retryPolicy` |\n| **Configuration** | Plugin-level in `cordis.patch.yml` | Each provider adapter's `retryPolicy` field |\n| **Modes** | Always retries | `normal` (bounded) or `always` (unbounded) |\n| **Replaces built-in?** | Yes — disables it via patch | N/A (is the built-in) |\n| **Backoff** | Exponential, 10 min cap | Exponential, 10 s default cap |"
+    },
+    {
+      "section": "How it differs from the built-in `dsh-llm-retry`",
+      "text": "---"
+    },
+    {
+      "section": "Why disable the built-in?",
+      "text": "DSH loads bundles in order. `dsh-base` (which contains `dsh-llm-retry`) is always first. In Cordis's waterfall event dispatch, handlers run **outermost-first** — the first-registered handler intercepts before later ones. If the built-in is not disabled, it handles the first 2 retries with its own backoff, then exhausts and passes control downstream. Disabling it via `cordis.patch.yml` ensures our plugin is the only handler."
+    },
+    {
+      "section": "Plugin structure",
+      "text": "```\ndsh-llm-retry-infinite/\n├── cordis.patch.yml        # Auto-insert entry for the Cordis loader\n├── lib/\n│   ├── index.js            # Plugin implementation\n\nThe `dsh.bundle.patch` field in `package.json` points to `cordis.patch.yml`, which tells the loader how to insert the plugin into the layer stack.\n\n---"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

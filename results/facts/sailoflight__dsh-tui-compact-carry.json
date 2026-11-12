@@ -1,0 +1,205 @@
+{
+  "repo": "sailoflight/dsh-tui-compact-carry",
+  "commit": "6bf0b2ee8a5a304f51889fe462983bbbcf4d367a",
+  "extracted_at": "2026-11-12T04:03:24.256693+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 76458,
+    "lines_by_language": {
+      "JSON": 43,
+      "JavaScript": 1096,
+      "Markdown": 231,
+      "Other": 33,
+      "YAML": 11
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "PRIVACY.md",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "smoke.mock.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tui-compact-carry",
+    "version": "0.6.0",
+    "description": "TUI-only DeepSeek Harness plugin: compaction count and live progress in the status line, plus /carry to bring a cached compaction summary into the current session.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "dsh-tui",
+      "compaction",
+      "context-management",
+      "session"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/sailoflight/dsh-tui-compact-carry.git"
+    },
+    "scripts": {
+      "test": "node smoke.mock.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tui-compact-carry 的 bundle 配置层（顶层必须是数组）。\n#\n# 三处名字必须逐字一致，否则插件会静默不生效：\n#   ① package.json 的 \"name\"            = dsh-tui-compact-carry\n#   ② 本行的 \"name\"（包名）              = dsh-tui-compact-carry\n#   ③ index.js 的 export const name      = dsh-tui-compact-carry\n# \"id\" 是这一行的条目 id，也必须与 ③ 一致。\n- insert:\n    - id: dsh-tui-compact-carry\n      name: dsh-tui-compact-carry\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "smoke.mock.mjs:359"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/sailoflight/dsh-tui-compact-carry.git",
+      "where": "package.json:38"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-24T10:59:17Z",
+    "created_at": "2026-10-05T04:58:17Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "smoke.mock.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tui-compact-carry",
+      "text": "> A **TUI-only** plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`):\n> compaction count + live progress in the status line, and `/carry` to bring a cached\n> compaction summary into the **current** session.\n\n> ⚠️ **只支持 TUI**（`@deepseek-harness-tui/dsh-tui`）。状态行依赖 `ctx.tuiStatus`，\n> **Web / headless 没有这个服务**，装上去不会报错但也没有状态行。命令本身在两端都能跑，\n> 但本插件刻意只面向 TUI 场景。\n\n一个零依赖的小插件（只用 Node 内置模块），解决 TUI 里压缩体验的三个痛点："
+    },
+    {
+      "section": "dsh-tui-compact-carry",
+      "text": "1. **看不到压缩在跑** —— 自动压缩在 TUI 主界面完全无声，十几秒里没有任何指示。\n2. **数不清压过几次** —— 一屏之外的历史压缩次数没有地方可看。\n3. **`/new` 之后上下文归零** —— 刚压缩出来的完整摘要带不到新会话里。"
+    },
+    {
+      "section": "它做什么",
+      "text": "| 能力 | 实现 |\n|---|---|\n| 状态行实时显示**已压缩次数**（+ 最近一次回收 token） | `ctx.on('session/event')` 数 `compaction/summary` → `ctx.tuiStatus.set('compact-carry', …)` |\n| 压缩**进行中**显示「压缩中…（第 N 次 · Ns）」 | `compaction/start` 进进度态、`summary`/`end` 退出；1 秒一跳，`progressMaxMs` 兜底 |\n| **手动 `/compact` 后自动缓存摘要** | 认签名 `sourceCommandId === undefined && turn == null`（出回合 + 非命令驱动）→ `compaction/end` 时置 `pending`，状态行出现「· 摘要待带出」，弹 toast 提示敲 `/carry` |\n| `/carry`：把缓存的摘要写进**当前会话** | `invocation.agent.session` → `append('user/message', …, {surfaceOp:'append'})` → `ctx.sessions.flush()`；带官方 checkpoint 标记 → TUI 渲染成折叠的「压缩检查点」行 |\n| `/carry show`：先看要带什么 | 打印来源会话、回收量、正文前 400 字 |\n| `/carry all` / `merged` / `last` | `all` = 每一次压缩记录按序拼接；默认只带最后一条（官方已把上一份 checkpoint 合并进新摘要 = 全量） |\n| `/carry now`：另建一个独立会话 | `ctx.sessions.create('carry-<uuid>')` → `append` → `flush`；之后 `/resume` 选第 1 条 |\n| `/carry off`：清掉待带出摘要 | 清 `pending`（不删已有的会话记录） |\n| `/compactstats`：看账目 | 次数 + 累计回收 + 待带出/已带出状态 |\n| 关键节点弹一条 toast | `ctx.get('tuiToast', false)`（拿不到该服务就静默跳过） |"
+    },
+    {
+      "section": "它做什么",
+      "text": "**为什么要进度行**：自动压缩在 TUI 主界面是无声的——`channel.compact()` 里的「正在压缩会话…」\n只属于手动 `/compact`；全包响应 `compaction/start|end` 的只有轨迹页投影\n（`trajectory/projection.js`）。所以插件把这两个事件搬到了状态行上。"
+    },
+    {
+      "section": "安装",
+      "text": "要求：Node.js `^22.19.0 || >=24.0.0`，`dsh` 已在 PATH 上。"
+    },
+    {
+      "section": "方式 A：按 bundle 安装（推荐）",
+      "text": "```bash\ndsh plugin --profile dsh-tui add github:sailoflight/dsh-tui-compact-carry\n```\n\n`package.json` 里声明了 `dsh.bundle`，所以 `dsh plugin add` 会把它作为一层配置装进 profile。\n装完**重启**该 profile 才生效（manifest/包元数据不热更新；只有用户自己的\n`cordis.patch.yml` 才热重载）。"
+    },
+    {
+      "section": "方式 B：绝对路径挂载（零依赖，不需要 pnpm）",
+      "text": "本插件零外部依赖，所以也可以直接把 `index.js` 放到插件目录，再用绝对路径挂一行：\n\n```bash\nmkdir -p \"$HOME/.dsh/plugins/dsh-tui-compact-carry\"\ncp index.js \"$HOME/.dsh/plugins/dsh-tui-compact-carry/\"\n```\n\n在 `$DSH_HOME/profiles/dsh-tui/cordis.patch.yml`（默认 `$DSH_HOME` = `~/.dsh`）里加：\n\n```yaml\n- insert:\n    - id: dsh-tui-compact-carry\n      name: /home/<you>/.dsh/plugins/dsh-tui-compact-carry/index.js\n      config: {}\n\n⚠️ **方式 A 与方式 B 二选一**，别同时用（同一个 `id` 挂两次会报 duplicate loader entry id）。"
+    },
+    {
+      "section": "用法（三步）",
+      "text": "```\n/compact        # ① 官方手动压缩一次（拿到含最近几轮的最新全量摘要）\n/new            # ② 起新会话 —— dsh-tui 原生行为，插件不参与\n/carry          # ③ 在**新会话里**敲：把刚缓存的摘要写进本会话（首条是折叠的「压缩检查点」）\n```\n\n- ②③ 之间的顺序不重要，重要的是 ③ 要在**你希望摘要落在的那个会话**里敲——插件写的是\n  \"当前 agent 的会话\"，不猜、不追、不抢。\n- 想先看内容：`/carry show`；想带全部压缩记录：`/carry all`；改主意：`/carry off`。\n- 摘要缓存默认 30 分钟内有效（`autoArmWindowMs`），过期就提示\"过期\"并要求重新 `/compact`。\n- 没有摘要可带时 `/carry` 直接报错，让你先按官方 `/compact`（不猜测、不虚报、绝不自己动手压）。\n- 摘要缓存是**进程内**的：`/compact` 之后没敲 `/carry` 就重启了 TUI，缓存就没了，重新压一次即可。"
+    },
+    {
+      "section": "一、不订阅任何 TUI 决策事件",
+      "text": "`tui/session-switched`、`tui/input`、`tui/compact` 等属于 **TUI 决策事件**\n（`TUI_DECISION_EVENT_NAMES`）。TUI 装了全局钩子 `ctx.on('internal/listener', …)`\n（`dsh-adapter/decision-guard.js` 的 `installDecisionGuard`），cordis 对**每一次**订阅都会触发它。\n插件用裸 `ctx.on` 注册决策事件时：\n\n- 若插件没有 Component 身份 → 记 warn 并返回 `() => false`（空 disposer），监听器**根本没注册**；\n- 若有身份但没有 `tui.dsh/v1alpha1#DecisionEvents` 契约 → `registerDecisionHandler` 抛错，\n  同样被捕获、告警、拒绝。"
+    },
+    {
+      "section": "一、不订阅任何 TUI 决策事件",
+      "text": "`dsh-adapter/extension-events.js` 也写得很明白：*\"Handlers come from the host-mediated\nDecisionEvents registry. Raw Cordis `ctx.on` listeners are intentionally absent from this path.\"*\n\n⇒ 普通插件订阅决策事件是**死代码**。要用决策事件，得把一个完整 TUI 扩展组件\n（manifest + `DecisionEvents` 契约 + 权限声明 + 授权文件）装进 dsh-tui 自己的扩展宿主里——\n那是另一量级的工程，而且正好是\"插件深度介入 `/new` 切换\"的高风险区。\n本插件的选择是**退出这条路径**：计数/进度/缓存全部走 `session/event`\n（**普通事件**，决策守卫不管）。\n\n> 排查提示：如果你看到\"状态行更新了、但新会话里什么都没发生\"，八成就是踩了这个区别——\n> 普通事件能用，决策事件被静默拒绝。"
+    },
+    {
+      "section": "二、插件绝不自己触发压缩",
+      "text": "TUI 把「手动压缩」做成了一个**必须在会话切换前结算**的事务\n（`dsh-adapter/channel/compaction.js`：*\"Owns the one manual compaction transaction that must\nsettle before a switch.\"*），`settleCompaction` 被注入 `newSessionAction` / `fork` / `rewind` /\n`session-tree`。\n\n插件绕过这个事务直接触发压缩 → `/new` 的 settle 无事可等 → 切换与压缩赛跑，会卡在半路\n（表现为：压缩完成后输入栏不再接受输入、盲打 `/new` 后卡在选择界面、方向键以 `[[A`\n之类的原始序列堆进输入行）。"
+    },
+    {
+      "section": "二、插件绝不自己触发压缩",
+      "text": "⇒ TUI 没有给插件留\"安全触发官方压缩\"的入口（`tui/compact` 是给插件用的**否决**钩子，\n不是触发器）。所以：**压缩只由用户按官方 `/compact`，插件只负责\"取现成的摘要 + 搬运\"。**\n离线冒烟的最后一道门就是 `engineCalls.length === 0`。"
+    },
+    {
+      "section": "三、完全不参与 `/new` 的切换事务",
+      "text": "插件连\"新会话出现了\"这件事都不需要知道：`/carry` 是在**新会话里**敲的，写的是\n`invocation.agent.session`（就是\"当前会话\"），不依赖任何切换通知。\n`/new` 的建会话/清屏流程逐字保持 dsh-tui 原样。\n\n有一个**默认关闭**的可选自动版（`autoCarryOnNew`）：新会话出现后延迟\n`autoCarryDelayMs` 自动写入。它走的是普通事件 `session/created`，刻意绕开 `/new` 的切换事务；\n那条监听器**抛错会让 attach 回滚**，所以全程 `try/catch`，里面只做\"读字段 + 调度定时器\"。\n默认选择仍是手动 `/carry`。"
+    },
+    {
+      "section": "与宿主版本的耦合：session format V4（0.6.0）",
+      "text": "DSH 的会话格式升到 **V4** 之后，`/carry` 会报\n`format v4 message requires a producer-owned source kind`。原因是 `0.5.0` 写的是 V3 时代的\n泛型包装 `source: { kind: 'plugin', plugin: 'compact' }`；V4 的准入校验**直接拒绝**\n`kind: 'plugin'`，要求消息源报出「生产者自己的 kind」：\n\n| 形状 | 结果 |\n|---|---|\n| `{ kind: 'plugin', plugin: 'compact' }` | ❌ 抛错 |\n| `{ kind: 'compact-checkpoint', compactionId }` | ✅ 通过（官方 checkpoint 标记） |\n| `{ kind: 'plugin:dsh-tui-compact-carry', compactionId }` | ✅ 通过（第三方插件的生产者 kind 约定） |"
+    },
+    {
+      "section": "与宿主版本的耦合：session format V4（0.6.0）",
+      "text": "判据在 `dsh-session-format-v3-to-v4/lib/index.js` 的 `assertV4SourceRowAdmission` /\n`assertV4MessageSources`，**编码与解码两条路径都调用**——所以既是写不进去、也是读不出来。\n`compact-checkpoint` 与 `dsh-compaction` 的 `COMPACT_CHECKPOINT_MARKER` 逐字一致；\nTUI/客户端用 `isCompactCheckpointSource` 只比对它。压缩不变量只作用于「替换型 surface 事件」，\n而本插件用 `surfaceOp: 'append'`，不受 `compactionId` 配对约束。\n\n同一版还删掉了 `Session.events`（只剩 `snapshotEvents()` / `ownEvents()`），\n所以 `0.5.0` 里遍历 `session.events` 的兜底读取会 `TypeError`；`0.6.0` 改用 `snapshotEvents()`。"
+    },
+    {
+      "section": "与宿主版本的耦合：session format V4（0.6.0）",
+      "text": "> 提示：这类耦合会随宿主升级漂移。升级 `dsh` / `dsh-tui` 之后先跑一遍离线冒烟。"
+    },
+    {
+      "section": "离线冒烟",
+      "text": "```bash\nnode smoke.mock.mjs      # 或 npm test\n```\n\n**60 项硬断言，失败则 exit≠0**，不需要装进任何 profile（用假 ctx）。四道核心回归门："
+    },
+    {
+      "section": "离线冒烟",
+      "text": "- **引擎门**：假压缩引擎当陷阱，整场跑完断言 `engineCalls.length === 0`（插件一次都没碰引擎）。\n- **决策事件门**：断言 `listeners` 里**没有** `tui/session-switched`。\n- **V4 生产者 kind 门**：本地镜像规则扫过每一条注入消息（`kind` 非空、≠ `plugin`、无 `plugin`\n  字段、`compactionId` 非空）；若本机装了 `@deepseek-ai/dsh`，还会加载宿主**真实**的\n  `assertV4RowAdmission` 复核同样这批消息，并做一次「旧形状必须被拒」的反向对照（防止假绿）。\n- **会话快照门**：假 session **不暴露** `events`，并构造一条\"只存在于会话日志里、插件从没观察到\"\n  的压缩记录，验证 `/compactstats`、`/carry show` 能从 `snapshotEvents()` 补出历史。"
+    },
+    {
+      "section": "离线冒烟",
+      "text": "其余覆盖：状态行的计数/进度/待带出/已带出流转、`/new` 纯净性（没有任何写入动作）、\n不重复注入、`/carry all|show|off|now`、非法参数、`carry-<uuid>` 的全局唯一 id、\n可选自动版（fork/子会话不注入、延迟调度、监听器绝不抛错）。"
+    },
+    {
+      "section": "已知限制",
+      "text": "| # | 限制 | 说明 |\n|---|---|---|\n| 1 | `/carry now` 建的新会话不 attach 到 TUI 的 workspace registry（只写了 `meta.cwd`） | `/resume` 读的是持久化后端的全量会话，同 cwd 归到同一项目 → 仍会出现在列表里 |\n| 2 | 伪造的 `compactionId`（`carry-<uuid>`）没有对应的 `compaction/summary` 事件 | 纯显示层影响；把 `useCheckpointMarker` 设为 `false` 可完全规避（代价：不折叠成「压缩检查点」行） |\n| 3 | 摘要缓存只覆盖**本进程** | 有 live 会话回读兜底；重启 TUI 后对**已 dispose 的旧会话**取不到记录 → 就不带（保守） |\n| 4 | 注入行是否\"立刻\"渲染未逐一验证（写入是确定的：`flush` 完就在持久化里） | 状态行「已带 N 条摘要」是立刻可见的确认；万一首条没马上显示，`/resume` 重进一次即可 |\n| 5 | 压缩不由插件触发 → 要自己按 `/compact`，且多了一条 `/carry` | TUI 侧硬约束（见「设计约束 二」） |\n| 6 | 自动缓存靠**事件签名**判定（`sourceCommandId === undefined && turn == null`） | 若将来 payload 形状变了，**降级是安全的**：不会误带，只是要手动 `/compact` 后重压 |\n| 7 | 贴住了两个会随宿主升级漂移的契约（消息源 `kind`、`Session` 快照读法） | 都写进了离线冒烟；升级后先 `npm test` |"
+    },
+    {
+      "section": "配置项（`index.js` 顶部 `CONFIG`）",
+      "text": "| 键 | 默认 | 含义 |\n|---|---|---|\n| `carryMode` | `'merged'` | 命令参数可覆盖；`'merged'`=最后一条全量，`'all'`=每一次压缩按序 |\n| `maxCarryChars` | `0` | 注入正文字符上限，0=不截断 |\n| `maxKeepSessions` / `maxItemsPerSession` | `8` / `64` | 内存缓存上限 |\n| `statusKey` / `showStatus` | `'compact-carry'` / `true` | 状态行 key 与开关 |\n| `showProgress` / `progressElapsed` | `true` / `true` | 压缩进行中的进度态；是否带秒数 |\n| `progressMaxMs` | `900000`（15 min） | 进度兜底上限：超过视为 `compaction/end` 丢失，回到计数行 |\n| `useCheckpointMarker` | `true` | 用官方 `kind:'compact-checkpoint'` 标记（渲染成原生压缩检查点行）。设为 `false` 则改用 `plugin:dsh-tui-compact-carry`（代价：不折叠成检查点行） |\n| `showNextStepToast` | `true` | 关键节点弹一条 tuiToast（拿不到该服务则静默跳过） |\n| `autoArmOnManualCompact` | `true` | 用户按官方 `/compact` 后自动**缓存**摘要（等 `/carry` 带入） |\n| `autoArmWindowMs` | `1800000`（30 min） | 缓存的有效窗口；超过就不带。`0`/负数 = 不过期 |\n| `autoCarryOnNew` | **`false`** | 自动版：新会话出现后自动写入。默认关 |\n| `autoCarryDelayMs` | `1500` | 自动版的延迟：等 `/new` 的切换事务落定后再写 |"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

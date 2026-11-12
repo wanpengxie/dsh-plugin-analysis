@@ -1,0 +1,174 @@
+{
+  "repo": "frozo-ai/dsh-budget",
+  "commit": "f847d8455a8119a194ae0210c29858387e915b5f",
+  "extracted_at": "2026-11-11T20:19:08.033983+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 23795,
+    "lines_by_language": {
+      "JSON": 71,
+      "JavaScript": 256,
+      "Markdown": 107,
+      "Other": 2,
+      "TypeScript": 126,
+      "YAML": 14
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "adapter/ledger.d.ts",
+      "adapter/plugin.ts",
+      "adapter/tsconfig.json",
+      "cordis.patch.yml",
+      "package.json",
+      "src/ledger.mjs",
+      "test/ledger.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-cost-gate",
+    "version": "0.2.0",
+    "description": "Spend gate for DeepSeek Harness: refuses over-budget model calls on the llm/stream waterfall, before they are billed. Auto-downgrade past a soft limit.",
+    "type": "module",
+    "license": "MIT",
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "exports": {
+      ".": "./adapter/plugin.ts",
+      "./plugin": "./adapter/plugin.ts",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "adapter/plugin.ts",
+      "adapter/ledger.d.ts"
+    ],
+    "scripts": {
+      "test": "node test/ledger.test.mjs"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "budget",
+      "cost",
+      "finops",
+      "enterprise"
+    ],
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/frozo-ai/dsh-budget.git"
+    },
+    "homepage": "https://github.com/frozo-ai/dsh-budget#readme"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-budget: hard spend caps for a dsh deployment.\n# Enforcement is OPT-IN -- with no limitUsd it only meters.\n- insert:\n    - id: budget\n      name: 'dsh-cost-gate/plugin'\n      config:\n        limitUsd: 50\n        period: monthly\n        softFraction: 0.8\n        downgradeModel: 'deepseek/deepseek-chat'\n        # USD per MILLION tokens, as providers publish them.\n        rates:\n          'deepseek/deepseek-chat': { input: 0.28, output: 0.42 }\n          'anthropic/claude-3.5-sonnet': { input: 3, output: 15 }\n"
+    }
+  ],
+  "entries": [
+    "adapter/plugin.ts",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "MY_USER",
+      "kind": "env",
+      "where": "test/ledger.test.mjs:100"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/frozo-ai/dsh-budget.git",
+      "where": "package.json:44"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/frozo-ai/dsh-budget#readme",
+      "where": "package.json:46"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 3,
+    "pushed_at": "2026-08-19T05:14:48Z",
+    "created_at": "2026-08-18T12:52:29Z"
+  },
+  "runtime_files": [
+    "adapter/ledger.d.ts",
+    "adapter/plugin.ts",
+    "cordis.patch.yml",
+    "package.json",
+    "src/ledger.mjs",
+    "test/ledger.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-cost-gate",
+      "text": "**Spend enforcement for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — not another dashboard.**\n\nThe dsh ecosystem has plenty of cost plugins. Every one of them *measures*:\nledgers, statistics, heatmaps, balance widgets. They tell you what you spent\n**after you spent it**.\n\nThis one **stops the call**."
+    },
+    {
+      "section": "dsh-cost-gate",
+      "text": "```\n        ┌─ over budget? ──> throw, before a single token is billed\nllm/stream waterfall ─┼─ past 80%? ────> silently route to the cheap model\n        └─ fine? ────────> pass through, then meter the usage chunk\n```\n\n`llm/stream` is a cordis **waterfall** — the decision happens *before* `next()`\nruns, which is the only place enforcement can actually work."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add github:frozo-ai/dsh-budget   # npm: dsh-cost-gate\n```\n\n```yaml\n- insert:\n    - id: budget\n      name: 'dsh-cost-gate/plugin'\n      config:\n\nSet `dryRun: true` to log decisions without blocking — roll out safely, then\nturn it on."
+    },
+    {
+      "section": "Design notes",
+      "text": "**Integer micro-dollars.** Costs accumulate as integers, never floats. A test\nruns 10,000 calls and asserts zero drift, because this decides whether people\nget blocked.\n\n**Cache tokens are disjoint.** Per dsh's `TokenUsage` contract, `cacheRead` and\n`cacheWrite` are *not* included in `inputTokens`, so they're added at their own\nrates rather than folded in.\n\n**Atomic ledger writes.** Temp file plus rename — a torn write must not lose\nbudget state."
+    },
+    {
+      "section": "Design notes",
+      "text": "**UTC period boundaries**, so a daily budget resets at a time everyone agrees on.\n\n**Fails open, deliberately.** No `limitUsd` means metering only. Enforcement is\nopt-in: a budget plugin that accidentally blocks your whole team is worse than\none that doesn't block at all."
+    },
+    {
+      "section": "Related work",
+      "text": "[`PerryLink/dsh-budget`](https://github.com/PerryLink/dsh-budget) covers similar\nground — metering, caps, alerts, carbon estimates, a Settings tab. If you want\ndashboards and reporting, look there first. This plugin is narrower on purpose:\nit gates the `llm/stream` waterfall so an over-budget call is refused *before*\nit is billed, and does little else."
+    },
+    {
+      "section": "Attribution",
+      "text": "```yaml\nscopeBy: session          # deployment (default) | session | user\nperScopeLimitUsd:\n  'system:compaction': null    # unlimited — overhead must never block the agent\n  'user:alice': 100\n\n**`session`** uses `GenerateOptions.sessionId`, which dsh genuinely provides."
+    },
+    {
+      "section": "Attribution",
+      "text": "**`user`** needs a mapping dsh cannot supply — there is no user identity at the\nllm seam. So it is given, never guessed:\n- `userEnv: 'DSH_USER'` — one dsh instance per user\n- `sessionUsers: { <sessionId>: 'alice' }` — an operator-supplied map\n\nAn unattributable call lands in `user:unattributed`. It is never charged to\nwhoever happens to be handy — a chargeback report that invents attributions is\nworse than one that admits gaps."
+    },
+    {
+      "section": "Attribution",
+      "text": "**System overhead is separated.** Compaction and session-title calls carry a\n`purpose` and are billed to `system:*`, so background work can never exhaust a\nperson's budget. Give them a `null` limit so they cannot be blocked."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **Per-user requires operator setup** — see Attribution above. dsh has no user\n  concept at the llm seam, so nothing can infer it.\n- **Unknown models price as $0** rather than crashing. Add them to `rates`.\n- Pricing tables are yours to maintain; providers change rates."
+    },
+    {
+      "section": "Test",
+      "text": "```sh\nnpm test   # 29 checks: pricing, drift, periods, durability, decisions, attribution\n```\n\nMIT. Not affiliated with DeepSeek AI."
+    }
+  ],
+  "skipped": []
+}

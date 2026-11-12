@@ -1,0 +1,146 @@
+{
+  "repo": "XZDYM/dsh-experience-flywheel",
+  "commit": "795b09ebaf4cf0a7a7cab7ce574dbec96326753d",
+  "extracted_at": "2026-11-11T16:03:03.951558+00:00",
+  "tree": {
+    "files": 22,
+    "bytes": 102960,
+    "lines_by_language": {
+      "JSON": 15,
+      "JavaScript": 1099,
+      "Markdown": 319,
+      "Other": 524,
+      "YAML": 25
+    },
+    "outline": [
+      ".gitignore",
+      "DESIGN.md",
+      "README.md",
+      "SKILL.md",
+      "cordis.patch.yml",
+      "lib/claims.js",
+      "lib/cli.mjs",
+      "lib/gates.js",
+      "lib/index.js",
+      "lib/search.js",
+      "lib/store.js",
+      "package.json",
+      "scripts/check-sync.mjs",
+      "scripts/close-gate.ps1",
+      "scripts/ov-remember.ps1",
+      "scripts/ov-search.ps1",
+      "scripts/plan-gate.ps1",
+      "scripts/verify-claims.ps1",
+      "store/patterns/README.md",
+      "test/probe-dev-installed-consistency.mjs",
+      "test/probe-plugin-id.js",
+      "test/probe.ps1"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-experience-flywheel",
+    "version": "0.1.0-dev",
+    "description": "dsh-experience-flywheel · DSH 经验飞轮插件 — agent cross-session experience memory + dual-acceptance gates (auto query/inject via agent/pre-step middleware; exit-1 gate scripts)",
+    "main": "lib/index.js",
+    "type": "module",
+    "files": [
+      "lib",
+      "scripts",
+      "store",
+      "SKILL.md",
+      "cordis.patch.yml"
+    ],
+    "scripts": {
+      "check-sync": "node scripts/check-sync.mjs",
+      "prepublishOnly": "node scripts/check-sync.mjs"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "agent-memory",
+      "flywheel",
+      "experience",
+      "gate",
+      "verification"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {}
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-experience-flywheel bundle patch\n# Inserts one service that registers the agent/pre-step + tools/post-execute\n# middlewares and slash commands. Installed via:\n#   dsh plugin --profile web add github:<owner>/dsh-experience-flywheel\n# Applies after dsh-base + dsh-web-app layers; last-write-wins on row ids.\n- insert:\n    - id: experience-flywheel\n      name: 'dsh-experience-flywheel'\n      config:\n        # 后端：'auto' = OPENVIKING_URL 非空走向量，否则本地 markdown\n        backend: auto\n        # 本地 markdown 经验库根（相对插件包根）\n        storePath: ./store\n        # OpenViking 端点；留空则用 markdown。也可读环境变量 OPENVIKING_URL\n        openvikingUrl: ''\n        # actor-peer（OpenViking 写入用），默认 'dsh'\n        openvikingPeer: dsh\n        # 日志目录（留空 → 插件包下 logs/）\n        logDir: ''\n        # pre-step 自动查经验注入的命中条数上限\n        injectTopK: 3\n        # 是否注册闸门 slash 命令（/plan-gate /close-gate /verify /flywheel-*）\n        registerCommands: true\n        # 是否启用 tools/post-execute 自动校核\n        autoVerify: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "OPENVIKING_URL",
+      "kind": "env",
+      "where": "lib/cli.mjs:29"
+    },
+    {
+      "name": "OPENVIKING_URL",
+      "kind": "env",
+      "where": "lib/store.js:217"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 5,
+    "pushed_at": "2026-08-16T15:05:14Z",
+    "created_at": "2026-08-16T08:15:53Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/claims.js",
+    "lib/gates.js",
+    "lib/index.js",
+    "lib/search.js",
+    "lib/store.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-experience-flywheel · DSH 经验飞轮插件",
+      "text": "> Give your DeepSeek Harness agent a cross-session \"muscle memory\":\n> it **automatically** queries past lessons before each step and injects hits,\n> **automatically** verifies claimed file writes, and wraps deterministic\n> exit-1 gate scripts (plan-gate / close-gate / verify-claims) as slash commands.\n>\n> 给 DeepSeek Harness agent 装上跨会话\"经验肌肉记忆\":每轮动手前**自动**查经验并注入命中，\n> 写完文件**自动**校核\"声称写了\"是否真写了,并把确定性的 exit-1 闸门脚本\n> (plan-gate / close-gate / verify-claims)包成 slash 命令。\n>\n> Status: **v0.1.0 released** — see [DESIGN.md](./DESIGN.md)."
+    },
+    {
+      "section": "Why / 为什么造它",
+      "text": "Pure-text LLM agents wake up fresh every session: yesterday's pitfalls, preferences,\ndecisions are gone. This plugin turns \"learn from experience\" from \"hope the model\nremembers\" into **server-side automation**: the `agent/pre-step` middleware runs the\nexperience query every turn **without the model choosing to**, the same seam\n`dsh-repeat-tool-reminder` already uses."
+    },
+    {
+      "section": "How / 怎么工作",
+      "text": "- `ctx.on(\"agent/pre-step\")` → auto query store, inject top-K hits as a system message.\n- `ctx.on(\"tools/post-execute\")` → after file-write tools, auto-run `verify-claims`.\n- **Claims hygiene (F2/F3)**: per-agent claimed-write set is bounded — verified paths are\n  removed after a PASS, capped at `maxClaimsPerAgent` (default 50), and pruned by\n  `claimsTtlMs` (default 24h), so long sessions never re-verify history forever. Claimed\n  paths are extracted by tool-name whitelist + path-shape checks (`extractClaimedPaths`),\n  so non-write tools (e.g. browser element refs) never trigger false-positive verifies.\n- **Session-safety (F4)**: injected plugin messages carry a UUID `message.id` (local\n  `createUserMessage` factory mirroring `@deepseek-ai/dsh-llm`), because DSH session\n  events of type `user/message` must satisfy `assertMessageEventShape` (data.message.id\n  required, dsh-session lib/index.js:1248) — bare messages corrupt the whole session log.\n- **Search quality (F1)**: markdown search is word-boundary aware — standalone tokens\n  (独立词) score 1.0, embedded-only matches (e.g. 经验 inside 经验库) are demoted to 0.3,\n  so noisy substring hits rank below precise ones while recall is preser"
+    },
+    {
+      "section": "Install / 安装",
+      "text": "```\ndsh plugin --profile web add github:<owner>/dsh-experience-flywheel\n```\nThen restart DSH web. GitHub topic: `dsh-plugin`."
+    },
+    {
+      "section": "Decoupled / 去私货",
+      "text": "No OpenViking hard-binding, no hardcoded paths, no personal rules. The kernel is the\n**flywheel protocol + gate contracts**; your private AGENTS.md stays yours. An optional\n`examples/agents.md.fragment` is provided for users who want to wire the protocol into their own instructions."
+    },
+    {
+      "section": "License",
+      "text": "MIT."
+    }
+  ],
+  "skipped": []
+}

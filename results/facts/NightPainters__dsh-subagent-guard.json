@@ -1,0 +1,492 @@
+{
+  "repo": "NightPainters/dsh-subagent-guard",
+  "commit": "bc9bd279ddf527500e8319792afec91a912f34af",
+  "extracted_at": "2026-11-11T13:17:24.805852+00:00",
+  "tree": {
+    "files": 22,
+    "bytes": 348630,
+    "lines_by_language": {
+      "JSON": 84,
+      "JavaScript": 4685,
+      "Markdown": 2257,
+      "Other": 37,
+      "YAML": 163
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "cordis.patch.yml",
+      "docs/incidents/2026-10-29-cancel-cause-fatal.md",
+      "docs/research/2026-10-24-external-audit.md",
+      "docs/verification/2026-10-29-realhost-0.4.0.md",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/policy.js",
+      "lib/rules.js",
+      "package.json",
+      "tests/apply.test.mjs",
+      "tests/audit-20261028.test.mjs",
+      "tests/delegate.test.mjs",
+      "tests/guard.test.mjs",
+      "tests/policy.test.mjs",
+      "tests/regressions.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-subagent-guard",
+    "version": "0.5.1",
+    "description": "Three gates for DeepSeek Harness subagents: sandbox ceiling, destructive-command denylist, and a delegation tool that pins each child's tool surface and system prompt",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "subagent",
+      "sandbox",
+      "security",
+      "guard",
+      "permission",
+      "delegation",
+      "tool-filter",
+      "persona"
+    ],
+    "license": "MIT",
+    "author": "NightPainters",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "./lib/index.js",
+      "./lib/client.js",
+      "AGENTS.md",
+      "./lib/rules.js",
+      "./lib/policy.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh-CN.md",
+      "LICENSE",
+      "tests",
+      "docs/research",
+      "docs/incidents",
+      "docs/verification",
+      "CHANGELOG.md"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/NightPainters/dsh-subagent-guard.git"
+    },
+    "homepage": "https://github.com/NightPainters/dsh-subagent-guard#readme",
+    "bugs": {
+      "url": "https://github.com/NightPainters/dsh-subagent-guard/issues"
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.4"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "~3.18.5"
+    },
+    "scripts": {
+      "test": "node tests/guard.test.mjs && node tests/policy.test.mjs && node tests/apply.test.mjs && node tests/delegate.test.mjs && node tests/regressions.test.mjs && node tests/audit-20261028.test.mjs",
+      "test:rules": "node tests/guard.test.mjs",
+      "test:policy": "node tests/policy.test.mjs",
+      "test:apply": "node tests/apply.test.mjs",
+      "test:delegate": "node tests/delegate.test.mjs",
+      "test:regressions": "node tests/regressions.test.mjs",
+      "test:audit": "node tests/audit-20261028.test.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-subagent-guard bundle patch\n#\n# 注册行：`id` 是身份键（Loader 用它折叠与覆盖，别改），`name` 必须是 npm 包名\n# （它同时是被 import 的模块说明符）。\n- insert:\n    - id: dsh-subagent-guard\n      name: dsh-subagent-guard\n      config:\n        enabled: true\n        # 配置页（插件页 → dsh-subagent-guard）上的两个开关。它们由人切换，\n        # **不要**交给 Agent 改；Agent 改的是下面的规则与工具清单。\n        # 关掉「工具面拦截」= 父 Agent 指定的 tools 一般不再生效（显式 tools: [] 例外，\n        # 零工具永远照办）。本文件下面开了 enforceMaxTools，所以关掉后子代理拿到的仍是\n        # maxTools 那份白名单、派生通道也仍被挡；只有 enforceMaxTools: false 时才是\n        # 「继承父会话完整面」。\n        enforceToolFace: true\n        # 关掉「权限拦截」= 沙箱硬顶整个跳过（连同三条 fail-closed 分支一起短路），\n        # 子代理的沙箱档位完全跟随父会话。\n        enforceSandbox: true\n        # 子代理沙箱硬顶：inherit | read-only | workspace-write | danger-full-access\n        # 父会话的档位是子代理的原始上限；这里再补一层硬顶，只降不升。\n        subagentSandboxCap: workspace-write\n        # all = 父会话与子代理都拦\n        # subagent = 只拦子代理（父会话保留完整执行能力，只锁子代理）\n        denyScope: subagent\n        # 携带命令文本的参数名。闸二按**参数形状**识别命令类工具：任何工具的\n        # 参数里有这个字段就会被检查，与它叫什么名字无关（第三方 shell 自动覆盖）。\n        commandArg: command\n        # 额外纳入的工具名（不是全集，只补参数名不叫 command 的特殊 shell）。\n        shellTools:\n          - bash\n          - pwsh\n          - win_bash\n        # 对 `pwsh -File x.ps1` 这类间接执行，读取脚本内容再匹配一遍同一套规则。\n        scriptInspection: true\n        # denyPatterns 不写就用内置默认值（卷影副本/还原点/分区表/引导/关机重启）。\n        # 自定义时是**整体替换**，别只写新增的那条。\n        #\n        # ---- 闸三：委派策略（工具面 + prompt）----\n        # 关掉后闸一、闸二照常工作，只是不注册 delegate 工具。\n        enableDelegateTool: true\n        # 委派工具名。\n        toolName: delegate\n        # 子代理 backend 的**注册名**（不是包名）：spawn | fork\n        provider: spawn\n        # 部署级工具上限。开启后，子代理最终工具面 = 模型传的 tools ∩ maxTools，\n        # 模型永远不能自己放宽。\n        #\n        # 取向（2026-10-29 部署决策）：这里放\"除记忆写入类之外的全部工具\"作天花板，\n        # 具体每次派发时再由父模型按任务性质挑（`delegate(tools: [...])` 只能更窄）。\n        # 记忆写入类（deep_item / memory_forget / memory_backfill / branch_edit /\n        # rule_add / habit_propose / habit_resolve）不在表里 —— 而且子代理本来就\n        # 拿不到它们（dsh-ling 不往子代理会话注入工具）。列在这里是为了把意图写死：\n        # 将来 l-ling 若开始注入，也仍然会被上限挡住。\n        enforceMaxTools: true\n        maxTools:\n          - ask_user_question\n          - calc\n          - canvas_state\n          - create_goal\n          - edit\n          - edit_image\n          - ego_auth_flush\n          - ego_captcha\n          - ego_cdp\n          - ego_check\n          - ego_cli\n          - ego_click\n          - ego_dialog\n          - ego_doctor\n          - ego_download\n          - ego_drag\n          - ego_fill\n          - ego_help\n          - ego_hover\n          - ego_http\n          - ego_js\n          - ego_key\n          - ego_login_import\n          - ego_navigate\n          - ego_page_info\n          - ego_read_element\n          - ego_screenshot\n          - ego_script\n          - ego_scroll\n          - ego_select\n          - ego_snapshot\n          - ego_space_close\n          - ego_space_open\n          - ego_status\n          - ego_upload\n          - ego_wait\n          - ego_wait_for_response\n          - ego_wait_for_selector\n          - ego_wait_for_url\n          - exit_plan_mode\n          - find_inspiration\n          - fold_recall\n          - generate_image\n          - generate_images\n          - get_goal\n          - glob\n          - grep\n          - interrupt_agent\n          - job_kill\n          - job_list\n          - job_output\n          - library_search\n          - list_agents\n          - list_folds\n          - present\n          - pwsh\n          - read\n          - read_image\n          - read_page\n          - recall\n          - schedule_create\n          - schedule_delete\n          - schedule_list\n          - schedule_update\n          - send_message\n          - skill\n          - task_board_create\n          - task_board_get\n          - task_board_github_close_issue\n          - task_board_github_comment\n          - task_board_github_create_pr\n          - task_board_github_get\n          - task_board_github_link_pr\n          - task_board_github_list\n          - task_board_github_refresh\n          - task_board_github_repositories\n          - task_board_github_setup\n          - task_board_list\n          - task_board_manage\n          - task_board_schedule\n          - task_board_set_parent\n          - task_board_update\n          - todo_write\n          - tree_read\n          - update_goal\n          - view_canvas\n          - web_fetch\n          - web_search\n          - working_directory\n          - write\n          - x_search\n        # 刻意不在上限里、且执行期被 guard 拒掉的：`subagent` / `subagent_fork` /\n        # `delegate`（派生通道：留着等于给自己发钥匙）、`plugin_manager`\n        # （能装卸插件 = 改写宿主，与\"限制子代理\"直接冲突，2026-10-29 主动排除）。\n        # `list_subagent_models` 是 scoped 注册，`restrict()` 管不到，代码里放行\n        # （见 lib/index.js 的 SAFE_SCOPED_TOOLS）。\n        # `task_begin` / `task_end` 曾经也在豁免集里，2026-10-29 真机实测推翻：\n        # 子代理**没有注册**这两个工具（调用返回 unknown tool），豁免它们的唯一\n        # 效果是让拒绝消息把幽灵工具说成\"可用\"。已移除。\n        # `recall` / `tree_read` / `library_search`（读记忆与图书馆）已补进上限：\n        # 子代理该能查资料，但不该写记忆 —— 写入类工具仍在下面刻意排除之外。\n        # persona 段落在 system prompt 里的位置与名字（同名会遮蔽全局同名段落）。\n        sectionOrder: 120\n        sectionName: \"subagent-guard:persona\"\n        # 把「登记策略 → 创建子代理 → 核对认领」串行化。并发子代理默认上限 8（maxActiveSubagents 可配），\n        # 策略按父会话 FIFO 认领；不串行可能把 A 的策略绑到 B 的子代理上。\n        serializeBind: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_GUARD_CONFIG_DUMP",
+      "kind": "env",
+      "where": "lib/index.js:322"
+    },
+    {
+      "name": "DSH_GUARD_CONFIG_DUMP",
+      "kind": "env",
+      "where": "lib/index.js:327"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/NightPainters/dsh-subagent-guard.git",
+      "where": "package.json:45"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/NightPainters/dsh-subagent-guard#readme",
+      "where": "package.json:47"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/NightPainters/dsh-subagent-guard/issues",
+      "where": "package.json:49"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "~3.18.5"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 17,
+    "pushed_at": "2026-11-03T00:17:08Z",
+    "created_at": "2026-10-20T01:55:09Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/policy.js",
+    "lib/rules.js",
+    "package.json",
+    "tests/apply.test.mjs",
+    "tests/audit-20261028.test.mjs",
+    "tests/delegate.test.mjs",
+    "tests/guard.test.mjs",
+    "tests/policy.test.mjs",
+    "tests/regressions.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-subagent-guard",
+      "text": "Three gates for subagents in [DeepSeek Harness][dsh]: a **sandbox ceiling**, a **destructive-command denylist**, and a **delegation tool** that pins each child's tool surface and system prompt.\n\n> 中文说明见 [README.zh-CN.md](./README.zh-CN.md)。\n\n[dsh]: https://github.com/deepseek-ai/deepseek-harness"
+    },
+    {
+      "section": "The gap",
+      "text": "When DSH creates a subagent it captures a **snapshot** of the parent session's policy\n(`captureDelegatedPolicyOverrides` in `@deepseek-ai/dsh-subagent`):\n\n- the child's approval policy is pinned to `never` — anything requiring approval is\n  rejected inside the child, never escalated to a human;\n- the child inherits the parent's **explicit** sandbox override — if the parent runs\n  `danger-full-access`, so does the child, unsandboxed;\n- nothing on the model side can widen it again."
+    },
+    {
+      "section": "The gap",
+      "text": "This is a [deliberate design decision][note], not a bug: *\"Snapshot-at-delegation is the\nsemantic: the child keeps the policy it was handed.\"* The consequence is that a\nsubagent gets exactly the privileges the parent handed over at spawn time, while having\nnone of the parent's context, history, or judgement.\n\nThis plugin adds an operator-controlled ceiling on top of that snapshot — something the\nharness intentionally does not provide."
+    },
+    {
+      "section": "The gap",
+      "text": "[note]: https://github.com/jasonkneen/deepseek-harness-plus/blob/master/.agents/notes/implemented/feature/2026-07-25-subagent-policy-inheritance.md"
+    },
+    {
+      "section": "Gate 1 — sandbox ceiling (`agent/created`)",
+      "text": "On subagent creation the plugin reads the effective sandbox mode (session override or\ndeployment default) and, if it is wider than `subagentSandboxCap`, appends a\n`sandbox/mode` event lowering it. **Downgrade only**: a `read-only` child is never\nraised to `workspace-write`."
+    },
+    {
+      "section": "Gate 1 — sandbox ceiling (`agent/created`)",
+      "text": "The mode is read **when `agent/created` fires**, not inside the plugin's `apply()`.\nThrough 0.4.2 the service snapshot was taken in `apply()` — where the service is usually\nnot registered yet (a real-host probe measured every relevant service as `undefined` in\n`apply`, becoming visible ~300 ms later). The snapshot was therefore always empty, the\nfail-closed branch always won, and a **narrower** child was raised to the cap. 0.4.3\nreads the service inside the event."
+    },
+    {
+      "section": "Gate 1 — sandbox ceiling (`agent/created`)",
+      "text": "If the mode still **cannot be read** at event time, the child is forced to\n`subagentSandboxCap` and an error is logged (fail-closed). This matters because gate 1 is\noften the only thing standing between a subagent and `danger-full-access`.\n\nApplies to subagents created *after* the plugin loads."
+    },
+    {
+      "section": "Gate 2 — command denylist (`ctx.tools.guard`)",
+      "text": "`ctx.tools.guard()` is a **monotonic gate**: it runs after the `tools/pre-execute`\nwaterfall and *cannot be overridden in the allow direction* by any other plugin. A\nreturned string denies the call; there is no `ask` path around it and no approval\npolicy (`never` included) can bypass it."
+    },
+    {
+      "section": "Gate 2 — command denylist (`ctx.tools.guard`)",
+      "text": "Which tools does it inspect? **Any tool whose arguments carry a command string**, keyed\nby `commandArg` (default `command`). This is deliberately *not* a tool-name allowlist —\nan earlier version enumerated `shellTools: [bash, pwsh]` and silently skipped every\nthird-party shell (e.g. `win_bash`) that registered under a different name. Tool names\nchange per deployment; argument shape does not.\n\nDefault rules cover operations that cannot be undone without external media:"
+    },
+    {
+      "section": "Gate 2 — command denylist (`ctx.tools.guard`)",
+      "text": "| Category | Examples |\n|---|---|\n| Shadow copies | `vssadmin delete shadows`, `wmic shadowcopy delete`, `Get-WmiObject Win32_ShadowCopy … Delete` |\n| Restore points | `Remove-ComputerRestorePoint`, `Disable-ComputerRestore` |\n| Disks / partitions | `diskpart`, `Format-Volume`, `Clear-Disk`, `Initialize-Disk`, `Remove-Partition`, `format C:` |\n| Boot configuration | `bcdedit`, `reg delete HKLM…` |\n| Host availability | `Stop-Computer`, `Restart-Computer`, `shutdown /…` |\n| Irreversible erase | `cipher /w`, `sdelete` |"
+    },
+    {
+      "section": "Gate 2 — command denylist (`ctx.tools.guard`)",
+      "text": "Command text is **normalized** before matching (0.4.5): PowerShell's backtick+newline, cmd's\ncaret+newline and bash's backslash+newline continuations are folded to a space, quotes are\nstripped, and all whitespace/newlines collapse to a single space. The same action written\ndifferently therefore lands on the same rule: `shutdown` + newline + `/s`,\n`\"C:\\Windows\\System32\\shutdown.exe\" /s`, and `Start-Process shutdown -ArgumentList \"-s\"` all\nmatch \"shutdown with a power flag\"; `format.com C:` and `reg delete HKEY_LOCAL_MACHINE\\…` are\nequivalent to `format C:` and `HKLM`. Power flags are matched against the real letter set\n(`/s` `/r` `/g` `/p` `/h` `/l` `/a`, dashes included), so `Get-Help shutdown -examples` and\n`shutdown /?` are untouched."
+    },
+    {
+      "section": "Gate 2 — command denylist (`ctx.tools.guard`)",
+      "text": "**Deliberately not blocked**: `Remove-Item`, `del`, `rmdir` and friends — blocking\neveryday file operations makes the agent useless. Add your own patterns if you need\nmore."
+    },
+    {
+      "section": "Indirect execution",
+      "text": "`pwsh -File build.ps1` puts nothing dangerous in the command string. With\n`scriptInspection: true` (the default) the plugin extracts the target path of explicit\nscript-execution forms (`-File` / `-f`, `bash|sh|zsh|source`, `& 'x.ps1'`, `.\\x.ps1`)\nand runs the same rules against the file contents.\n\n0.4.5 closed four fail-open paths here:"
+    },
+    {
+      "section": "Indirect execution",
+      "text": "- **Every script in a command is inspected**: the text is split on `;` `&` `|` and newlines\n  (no surrounding whitespace required) and each segment is parsed. `pwsh -File a.ps1;pwsh\n  -File b.ps1` used to check only `b.ps1`.\n- **BOM-aware decoding**: `FF FE` → UTF-16LE, `FE FF` → UTF-16BE (byte-swapped manually),\n  `EF BB BF` → UTF-8 without the BOM; without a BOM, a high NUL ratio triggers a UTF-16LE\n  retry. Fixed `utf8` decoding turned UTF-16 scripts into `\\u0000`-laden garbage that no\n  rule could match.\n- **Session cwd first, and every existing candidate is checked**: a relative path resolves\n  against the child session's `cwd`, then the process cwd, then as given; any candidate that\n  matches a rule denies the call. Previously the first readable file won, so a same-named\n  file in the process cwd could shadow the one that actually runs.\n- **Extension-less targets of explicit interpreters are inspected**: `bash ./payload`,\n  `sh /opt/run` — any path-shaped target (contains `/`, `\\`, or starts with `.`) is read."
+    },
+    {
+      "section": "Indirect execution",
+      "text": "If the file cannot be read, the call is **allowed** with a warning — an unreadable path\nnormally means a typo, and the script would fail to run anyway. A file that exceeds\n`maxScriptBytes` (256 KiB by default), however, is **refused**: a script whose contents were\nnever inspected must not run. Raise the limit if you really need a larger one. Trailing dots\nin the path (`evil.ps1.`, which Windows ignores) are normalized before classification and\nreading. One level deep only — a script that runs another script is not followed."
+    },
+    {
+      "section": "Gate 3 — delegation policy (`delegate` tool)",
+      "text": "DSH 0.2 closed the `persona` and `toolFilter` parameters\n(`dsh-tool-subagent/lib/index.js:355` rejects them outright), leaving `agentPreset` as\nthe only way to change a child's composition. But the harness still uses both mechanisms\ninternally on the cold-resume path (`dsh-subagent/lib/types/child-agent.js:153-167`):\n\n```js\nchildCtx.systemPrompt.section(...)   // shadows a same-named global section\nchildCtx.tools.restrict(...)         // removes inherited tools\n```"
+    },
+    {
+      "section": "Gate 3 — delegation policy (`delegate` tool)",
+      "text": "Gate 3 routes that path back into **fresh delegation**. It registers a `delegate` tool\nthat takes `prompt`, an optional `persona`, and an optional `tools` list:"
+    },
+    {
+      "section": "Gate 3 — delegation policy (`delegate` tool)",
+      "text": "1. the policy is registered under the **parent session id** before anything is created;\n2. `subagents.startActivation()` creates the child;\n3. in `agent/created` (serial, and awaited before any queued input) the policy is claimed\n   by parent session and applied to the child's own context;\n4. after `startActivation` returns, the plugin **verifies the child actually consumed its\n   policy** — if it did not, the child is cancelled and the call throws."
+    },
+    {
+      "section": "Gate 3 — delegation policy (`delegate` tool)",
+      "text": "Step 4 is what makes the binding `fail-closed`: a child whose scope could not be applied\ndoes not get to run unpoliced."
+    },
+    {
+      "section": "Why two enforcement layers, not one",
+      "text": "`restrict()` masks only the **inherited** tool surface. Its own documentation\n(`dsh-tools/lib/index.js:2985-2987`) says *\"Restrictions intersect; scoped registrations\nremain visible\"*. Meanwhile the official `dsh-tool-subagent:605-607` registers `subagent`\nand `list_subagent_models` directly on the child's context from `agent/created`."
+    },
+    {
+      "section": "Why two enforcement layers, not one",
+      "text": "Measured on a live deployment before this was fixed: a child handed **only `read`** called\n`subagent`, spawned a grandchild, and that grandchild ran with `delegationDepth: 2` and\n**97 tools** including `pwsh`, `write`, `edit` and `workflow` — the policy never applied\nbecause the grandchild was not registered by a `delegate` call.\n\nSo gate 3 installs both:"
+    },
+    {
+      "section": "Why two enforcement layers, not one",
+      "text": "| Layer | Mechanism | Covers |\n|---|---|---|\n| visible surface | `childCtx.tools.restrict({ allow })` | inherited tools |\n| execution surface | agent-scoped `childCtx.tools.guard()` | scoped tools that `restrict` cannot see |\n\nThe second layer denies any tool outside the allowlist with:\n`Tool \"subagent\" is not in this subagent's authorized tool surface (delegate policy); available: read`."
+    },
+    {
+      "section": "Deployment cap",
+      "text": "`tools` is passed by the model, so it cannot be trusted as an upper bound. With\n`enforceMaxTools: true` the effective scope is:\n\n```\nchild tool surface = tools (from the model) ∩ maxTools (from deployment config)\n```\n\nThe model may narrow the surface, never widen it. `maxTools: []` with\n`enforceMaxTools: true` means the child gets no tools at all."
+    },
+    {
+      "section": "Concurrency",
+      "text": "Policies are claimed per parent session, and `maxActiveSubagents` defaults to 8. Two\ninterleaved `delegate` calls could therefore bind child A's policy to child B — the exact\nfailure this gate exists to prevent. The claim → create → verify sequence is serialized\n(`serializeBind`, default on)."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin add dsh-subagent-guard\n```\n\nOr declare it in your profile as a `file:` / `link:` dependency and add\n`dsh-subagent-guard` to `dsh.profile.bundles`. The bundle ships its own\n`cordis.patch.yml`, so the row is inserted automatically."
+    },
+    {
+      "section": "The card (the only two things a person needs)",
+      "text": "Open **Plugins → dsh-subagent-guard**. Between the description and the component list the plugin\nrenders two switches:"
+    },
+    {
+      "section": "The card (the only two things a person needs)",
+      "text": "| Switch | Field | Off means |\n|---|---|---|\n| Tool-face interception | `enforceToolFace` | The `tools` a parent passes to `delegate` are ignored, except an explicit `tools: []` (zero tools is the strictest request and is always honoured). Without a deployment ceiling the child inherits the parent's full surface; **with `enforceMaxTools: true` the deployment whitelist still applies**. `persona` and the guidance section still apply. The derived-channel block is only lifted when there is no deployment ceiling — an unrestricted child can spawn grandchildren again, so turn this off only when you trust the whole chain. |\n| Permission interception | `enforceSandbox` | The sandbox ceiling is skipped entirely; the child follows the parent's own mode. |"
+    },
+    {
+      "section": "The card (the only two things a person needs)",
+      "text": "Both are `volatile`, so flipping one writes the profile patch and takes effect immediately — no\nrestart. To disable the plugin altogether use the bundle switch above the card, not a third\nsetting.\n\nEverything else — deny patterns, tool lists, script inspection — is deliberately **not** on the\ncard. Those belong to the Agent working in your session; `AGENTS.md` documents the split and the\nfile layout."
+    },
+    {
+      "section": "The file layer",
+      "text": "Override by `id` in your profile, or edit the bundled patch:\n\n```yaml\n- insert:\n    - id: dsh-subagent-guard\n      name: dsh-subagent-guard\n      config:\n\nThe effective configuration is logged once at startup\n(`生效配置：subagentSandboxCap=… denyScope=… 规则=18 条 …`), so drift between the\ndocumented default and the deployed one is visible instead of silent.\n\nInvalid configuration (unknown mode, unknown scope, uncompilable regex, non-positive\nsize limit) throws at load time rather than failing silently."
+    },
+    {
+      "section": "Version warning",
+      "text": "**Versions `0.3.6` and earlier can take the whole host process down with them.**"
+    },
+    {
+      "section": "Version warning",
+      "text": "Their fail-closed path in `delegate` cancelled the child with a bare string\n(`target.cancel('delegation-policy-unbound')`) instead of a well-formed\n`AgentCancelCause`. The bad value propagated into `turn/end { reason: null }` in the\nsession log; replaying that session then read `reason.kind` on `null` and threw, which\nmade the *entire* DSH process fatal — every sibling process in the same Job Object\ndied with it, not just the subagent."
+    },
+    {
+      "section": "Version warning",
+      "text": "The trigger is narrow: a `delegate` call whose tool binding fails (for example tool\nnames not in your configured `maxTools`), followed by a restart that replays the\nsession. It is not reachable from ordinary delegation.\n\n**`0.3.7` fixes the cause.** Upgrade before enabling gate 3 on a host you care about.\nFull write-up: [`docs/incidents/2026-10-29-cancel-cause-fatal.md`](docs/incidents/2026-10-29-cancel-cause-fatal.md)."
+    },
+    {
+      "section": "Version warning",
+      "text": "If you cannot upgrade yet, keep `enforceMaxTools: false` and pass no `tools` to\n`delegate` — the binding then cannot fail, so that path is never entered."
+    },
+    {
+      "section": "Known limits",
+      "text": "- **The switches are a human decision, not a privilege boundary.** Whoever holds a logged-in Web\n  session can flip them, and a subagent granted browser-driving tools (`ego_*`) runs inside that\n  same session — so an agent with browser control can turn the interception off. The gates are\n  enforced per tool call; the switches are not protected against the agent they are meant to\n  confine. Grant `ego_*` to subagents only with that in mind.\n- **Turning off permission interception short-circuits more than the ceiling.** The early return\n  also skips the three fail-closed branches (missing `sandboxPolicy`, throwing `overrideOf`,\n  unregistered mode), and it does not change approval handling. \"Follow the parent\" describes the\n  sandbox mode only.\n- **Switch flips are not written to the session log.** The plugin logs the effective values once at\n  startup and warns when it skips the ceiling, but the loader's volatile update leaves no audit\n  event.\n- **The card binds to the bundle's profile entry id.** The page looks up the settings namespace\n  `dsh-subagent-guard` (the id in the bundled patch). If you re-register the plugin under a\n  different row id, the card renders but cannot read o"
+    },
+    {
+      "section": "Known limits",
+      "text": "It then re-applies `restrict`, re-registers the scope section, and re-pins the child.\n  DSH gives third-party plugins no way to append a custom session event (an unknown type\n  without `ignorable` makes the **whole session unreadable**), so this is the only\n  recovery path that adds no state and still works across processes."
+    },
+    {
+      "section": "Known limits",
+      "text": "0.4.5 tightened three more things: parsing is anchored to the fixed scope paragraph (only\n  the **last** `可用工具：` line *before* the marker counts; host sections ordered 1000+ come\n  after it and cannot displace it); the paragraph surface is **intersected** with the\n  `request/header` surface, so either source can veto, and `subagent` / `subagent_fork` —\n  installed scoped by the host — are dropped on both sides (a parent can no longer put them\n  in `tools` and let its child spawn an unconstrained grandchild); and a child whose session\n  id cannot be read is **not** pinned at all — binding fails closed instead of writing a\n  literal `\"undefined\"` key that would make the whole side table allow everything."
+    },
+    {
+      "section": "Known limits",
+      "text": "Known limits: a caller-supplied `persona` cannot be separated from the same\n  `system/message`, so the restored section only states the tool surface; a **marked** log\n  with neither the `可用工具` line nor a request header is treated as an empty surface\n  (fail-closed). Conversely, a child with **no marker at all** — it died before its first\n  request and never ran a turn — cannot be identified as this plugin's, so it is not restored\n  and keeps the inherited surface. That window is narrow and was observed zero times among\n  real delegations. Intersecting is the safe direction but can **over-narrow**: an\n  agent-scoped tool that was absent from that particular request header is dropped (fewer\n  tools, never more).\n- **Cold resume has exactly one trigger: `agent/created`.** If a future host stops emitting\n  it from `agents.resume()`, the whole fallback silently allows. The plugin probes cheaply at\n  startup (warns when the `agents` service has no `resume`) and documents the precondition;\n  deeper verification is a real-host regression. `0.2.1-rc.2` emits it before the first\n  request of the resumed child.\n- **Gate 2 cannot see dynamically built commands.** String concatenation, base64 /"
+    },
+    {
+      "section": "Known limits",
+      "text": "[cve]: https://www.ox.security/blog/cve-2026-82533-deepseek-harness-ai-agent-sandbox-escape/"
+    },
+    {
+      "section": "Compatibility",
+      "text": "Verified against `@deepseek-ai/dsh-*` **0.2.1-rc.2** (0.3.3, 2026-10-29 — gates 1 and 2\nchecked on a real `danger-full-access` parent, gate 3 on both a test bench and the same\nhost). The plugin copies two small helpers instead of importing sibling `dsh-*` packages,\nbecause a profile's `node_modules` usually contains only `schemastery` and a static import\nwould fail at load time. If DSH renames `subagentDepth`, `delegationDepth` or the\n`sandbox/mode` event, these copies fail **silently** — the plugin tries to `import()` the\nofficial package at runtime and warns when the two disagree, but that check only fires when\nthe package happens to be resolvable."
+    },
+    {
+      "section": "Tests",
+      "text": "| suite | cases | covers |\n|---|---|---|\n| `guard.test.mjs` | 19 | rules layer: regex, command normalization, script paths (incl. quoted separators and `cmd /c` sub-commands), depth, mode ranking |\n| `policy.test.mjs` | 21 | delegation policy: caps, derived-tool rejection, sections, pending queue |\n| `apply.test.mjs` | 29 | wiring: gates 1 and 2 against a stub context (incl. F-A, R3, R5, BOM, session-cwd, F-06 unknown-mode regressions) |\n| `delegate.test.mjs` | 43 | gate 3 wiring, concurrency, fail-closed claim, F-B/R1-01/C1/T1 cold resume, F1 derived-channel filter, F2 forced serialization, F8 window |\n| `regressions.test.mjs` | 7 | YAML quoting, pending cleanup, cap intersection |\n| `audit-20261028.test.mjs` | 10 | every audit finding that can be pinned host-free |"
+    },
+    {
+      "section": "External audits",
+      "text": "- [2026-10-24 — subagent guard coverage audit](./docs/research/2026-10-24-external-audit.md):\n  five gaps found by a user on a real deployment, with maintainer responses and the\n  fixes that landed in 0.2.0.\n- **2026-10-28 — internal adversarial audit (three red-team paths, 8 planted canaries,\n  recall 8/8).** Twenty-two findings across five categories (silent no-ops, receipts that\n  lie, boundary flips, half-fixes, gates with missing upper layers). Fixes landed in 0.3.1\n  and 0.3.2; 0.3.3 came from the test bench, which caught a regression introduced by the\n  0.3.1 fix itself. Records live in the private maintainer workspace, not in this repo."
+    },
+    {
+      "section": "License",
+      "text": "MIT — see [LICENSE](./LICENSE)."
+    },
+    {
+      "section": "dsh-subagent-guard",
+      "text": "给 [DeepSeek Harness][dsh] 的子代理上三道闸：**沙箱档位硬顶** + **破坏性命令黑名单** + **可精确设定工具面与 prompt 的委派工具**。\n\n> English: [README.md](./README.md)\n\n[dsh]: https://github.com/deepseek-ai/deepseek-harness"
+    },
+    {
+      "section": "为什么需要",
+      "text": "DSH 在创建子代理时捕获父会话的权限**快照**（`@deepseek-ai/dsh-subagent` 的\n`captureDelegatedPolicyOverrides`）：\n\n- 子代理的 approval 策略**恒为 `never`**：需要审批的操作在子代理内自动拒绝，\n  不会转人工；\n- 子代理的沙箱档位**只继承父会话的显式 override**：父会话是 `danger-full-access`\n  时，子代理同档且不套沙箱；\n- 模型侧没有任何放宽通道。\n\n这是官方的[设计决定][note]，不是 bug：*\"Snapshot-at-delegation is the semantic:\nthe child keeps the policy it was handed.\"* 后果是——子代理拿到的是父会话在\n派发那一刻交出去的那份权限，而它没有运营者的全局观、记忆和判断力。\n\n本插件在那份快照之上再加一层运营者可调的**天花板**，也就是 harness 刻意不提供\n的那一层。"
+    },
+    {
+      "section": "为什么需要",
+      "text": "[note]: https://github.com/jasonkneen/deepseek-harness-plus/blob/master/.agents/notes/implemented/feature/2026-07-25-subagent-policy-inheritance.md"
+    },
+    {
+      "section": "闸一：沙箱档位硬顶（`agent/created`）",
+      "text": "子代理创建时读自己的生效档位（会话 override 或部署默认），比\n`subagentSandboxCap` 宽就追加一条 `sandbox/mode` 事件把它压下去。**只降不升**：\n`read-only` 的子代理不会被抬到 `workspace-write`。\n\n**档位在 `agent/created` 触发时才读**，不在插件 `apply()` 时读。0.4.2 及更早版本在\n`apply()` 里取 `sandboxPolicy` 服务的快照——那一刻服务往往还没注册（真机探针实测\napply 时相关服务全为 `undefined`，约 300ms 后才可见），于是快照恒为空，每次都走\nfail-closed 分支，把**更窄**的子代理抬到 cap。安全方向相反，0.4.3 起改为事件内取服务。\n\n**事件发生时仍读不到当前档位**，直接把子代理压到 `subagentSandboxCap` 并记一条\nerror（fail-closed）。这条重要：在很多部署里，闸一是子代理与 `danger-full-access`\n之间唯一的一道线。"
+    },
+    {
+      "section": "闸一：沙箱档位硬顶（`agent/created`）",
+      "text": "只对**插件加载之后创建**的子代理生效。"
+    },
+    {
+      "section": "闸二：命令黑名单（`ctx.tools.guard`）",
+      "text": "`ctx.tools.guard()` 是**单调门**：它在 `tools/pre-execute` 瀑布之后运行，任何插件\n都**无法再把它放行**。返回字符串即拒绝；没有 `ask` 档位可以绕过，任何审批策略\n（包括 `never`）也绕不过。\n\n**检查哪些工具？** 任何参数里带命令串的工具，参数名由 `commandArg` 指定（默认\n`command`）。这**刻意不是**工具名白名单——早期版本用\n`shellTools: [bash, pwsh]` 枚举，结果第三方 shell（例如 `win_bash`）注册成别的\n名字就被静默跳过。工具名逐部署而变，参数形状不变。\n\n默认拦这些（删了就要靠外部介质才能恢复的）："
+    },
+    {
+      "section": "闸二：命令黑名单（`ctx.tools.guard`）",
+      "text": "| 类别 | 例子 |\n|---|---|\n| 卷影副本 | `vssadmin delete shadows`、`wmic shadowcopy delete`、`Get-WmiObject Win32_ShadowCopy … Delete` |\n| 还原点 | `Remove-ComputerRestorePoint`、`Disable-ComputerRestore` |\n| 磁盘/分区 | `diskpart`、`Format-Volume`、`Clear-Disk`、`Initialize-Disk`、`Remove-Partition`、`format C:` |\n| 引导配置 | `bcdedit`、`reg delete HKLM…` |\n| 宿主可用性 | `Stop-Computer`、`Restart-Computer`、`shutdown /…` |\n| 不可恢复擦除 | `cipher /w`、`sdelete` |"
+    },
+    {
+      "section": "闸二：命令黑名单（`ctx.tools.guard`）",
+      "text": "匹配之前先把命令文本**归一化**：折掉 PowerShell 的「反引号 + 换行」、cmd 的「caret +\n换行」、bash 的「反斜杠 + 换行」，剥掉引号，把空白与换行压成单个空格（0.4.5）。于是\n同一个动作的不同写法落在同一套规则上：`shutdown` 后跟换行再 `/s`、\n`\"C:\\Windows\\System32\\shutdown.exe\" /s`、`Start-Process shutdown -ArgumentList \"-s\"`\n都按「shutdown 且带关机开关」命中；`format.com C:`、`reg delete HKEY_LOCAL_MACHINE\\…`\n分别与 `format C:`、`HKLM` 等价。关机开关按真实字母集合匹配（`/s` `/r` `/g` `/p` `/h`\n`/l` `/a`，破折号同理），`Get-Help shutdown -examples`、`shutdown /?` 不受影响。"
+    },
+    {
+      "section": "闸二：命令黑名单（`ctx.tools.guard`）",
+      "text": "**故意不拦** `Remove-Item`、`del`、`rmdir` 这类日常操作——全拦等于把 agent 废掉。\n需要更严的话自己往 `denyPatterns` 里加。"
+    },
+    {
+      "section": "间接执行",
+      "text": "`pwsh -File build.ps1` 的命令行里没有危险字样。开着 `scriptInspection: true`\n（默认）时，插件会把明确的脚本执行形式（`-File` / `-f`、`bash|sh|zsh|source`、\n`& 'x.ps1'`、`.\\x.ps1`）的目标路径抠出来，读文件内容再过一遍同一套规则。\n\n0.4.5 补齐了四处 fail-open："
+    },
+    {
+      "section": "间接执行",
+      "text": "- **一条命令里的**全部**脚本都要查**：先按 `;` `&` `|` 与换行切段（不要求分隔符两侧\n  有空格），再逐段解析。`pwsh -File a.ps1;pwsh -File b.ps1` 以前只查到 `b.ps1`。\n- **按 BOM 解码**：`FF FE` → UTF-16LE、`FE FF` → UTF-16BE（手工换序）、`EF BB BF` →\n  去 BOM 的 UTF-8；无 BOM 时若 NUL 字节比例高，按 UTF-16LE 再试一次。固定 `utf8`\n  解码会把 UTF-16 脚本读成夹着 `\\u0000` 的乱码，规则全部失配。\n- **会话 cwd 优先，且所有存在的候选文件都查**：相对路径先按子代理会话的 `cwd` 解析，\n  再按进程 cwd、最后按原样；任一候选命中规则即拒绝。以前是「读到第一个就查那一个」，\n  进程 cwd 下的同名文件可以遮蔽真正会被执行的那份。\n- **显式解释器的无扩展名目标也要查**：`bash ./payload`、`sh /opt/run` 这类没有已知\n  扩展名的目标，只要形如路径（含 `/` `\\` 或以 `.` 开头）就读进去检查。"
+    },
+    {
+      "section": "间接执行",
+      "text": "读不到时**放行并告警**（通常就是路径写错，那种脚本本来也执行不起来）；但文件\n超过 `maxScriptBytes`（默认 256 KiB）时**拒绝执行**——内容没看过的脚本不能放过，\n确实需要跑就调大这个值。路径里的尾随点（`evil.ps1.`，Windows 会忽略）会先归一化\n再判定与读取。只查一层——脚本里再调脚本，不跟。"
+    },
+    {
+      "section": "闸三：委派策略（`delegate` 工具）",
+      "text": "DSH 0.2 关掉了 `persona` / `toolFilter` 两个参数\n（`dsh-tool-subagent/lib/index.js:355` 明文拒绝），只剩 `agentPreset` 一条路能改\n子代理的组合。但 harness 自己在**冷恢复**路径上仍然用着这两个机制\n（`dsh-subagent/lib/types/child-agent.js:153-167`）：\n\n```js\nchildCtx.systemPrompt.section(...)   // 遮蔽同名的全局段落\nchildCtx.tools.restrict(...)         // 移除继承面工具\n```\n\n闸三把这条路接回**新派发**：注册一个 `delegate` 工具，参数是 `prompt` +\n可选的 `persona` + 可选的 `tools`："
+    },
+    {
+      "section": "闸三：委派策略（`delegate` 工具）",
+      "text": "1. 先把策略登记在**父会话 id** 下，再创建任何东西；\n2. `subagents.startActivation()` 创建子代理；\n3. `agent/created`（serial，且 await 在排队输入之前）里按父会话认领策略并施加到\n   子代理自己的上下文；\n4. `startActivation` 返回后**核对子代理确实消费了策略**——没消费就取消它并抛错。\n\n第 4 步是 fail-closed 的落点：**收不住工具面的子代理，不许它带着未知权限跑**。"
+    },
+    {
+      "section": "为什么必须两层，而不是一层",
+      "text": "`restrict()` 只遮**继承面**。它自己的文档\n（`dsh-tools/lib/index.js:2985-2987`）写着：*\"Restrictions intersect; scoped\nregistrations remain visible\"*。而官方 `dsh-tool-subagent:605-607` 会在\n`agent/created` 里把 `subagent`、`list_subagent_models` 直接注册到子代理自己的\n上下文上。\n\n修复前在真机实测到的形状：一个只被授予 **`read`** 的子代理调用 `subagent`，\n派出一个孙代理，孙代理带着 `delegationDepth: 2` 和 **97 个工具**（含 `pwsh`、\n`write`、`edit`、`workflow`）跑起来了——因为孙代理不是 `delegate` 派发的，策略\n从未施加。\n\n所以闸三两层的分工："
+    },
+    {
+      "section": "为什么必须两层，而不是一层",
+      "text": "| 层 | 机制 | 覆盖 |\n|---|---|---|\n| 可见面 | `childCtx.tools.restrict({ allow })` | 继承来的工具 |\n| 执行面 | agent-scoped `childCtx.tools.guard()` | `restrict` 看不见的 scoped 工具 |\n\n第二层对任何不在白名单里的工具都拒绝：\n`工具 \"subagent\" 不在该子代理的授权工具面内（delegate 策略）；可用工具：read`。"
+    },
+    {
+      "section": "部署级上限",
+      "text": "`tools` 是模型传的，不能当上限信任。开 `enforceMaxTools: true` 后：\n\n```\n子代理最终工具面 = 模型传的 tools ∩ 部署的 maxTools\n```\n\n模型只能收窄，永远不能放宽。`maxTools: []` 配 `enforceMaxTools: true` 等于\n一个工具都不给。"
+    },
+    {
+      "section": "并发",
+      "text": "策略按父会话认领，而 `maxActiveSubagents` 默认 8。两次 `delegate` 交错就可能把\nA 的策略绑到 B 的子代理上——正是这道闸要防的事。所以「登记 → 创建 → 核对」整段\n串行化（`serializeBind`，默认开）。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin add dsh-subagent-guard\n```\n\n或者在 profile 里声明为 `file:` / `link:` 依赖，并把 `dsh-subagent-guard` 加进\n`dsh.profile.bundles`。bundle 自带 `cordis.patch.yml`，注册行会自动插入。"
+    },
+    {
+      "section": "卡片：人只需要碰这两个开关",
+      "text": "打开 **插件 → dsh-subagent-guard**，在「描述」和「包含的组件」之间有这张卡片：\n\n| 开关 | 字段 | 关掉之后 |\n|---|---|---|\n| 工具面拦截 | `enforceToolFace` | 父 Agent 传给 `delegate` 的 `tools` 不再生效——但显式的 `tools: []` 除外（零工具是最严的请求，永远照办）。没有部署上限时子代理继承父会话完整工具面；**有 `enforceMaxTools: true` 时部署白名单照样生效**。`persona` 与说明段落照常施加。派生通道的封锁只在「没有部署上限」时才会一起放开：不受限的子代理可以再派孙代理，所以只在你信任整条链时关它。 |\n| 权限拦截 | `enforceSandbox` | 沙箱硬顶整个跳过，子代理完全跟随父会话档位。 |\n\n两个字段都是 `volatile`：点一下就把值写进 profile patch 并**立即生效**，不用重启。要彻底停用\n这个插件，用卡片上方的 bundle 开关，而不是第三个设置项。"
+    },
+    {
+      "section": "卡片：人只需要碰这两个开关",
+      "text": "其余细节（黑名单规则、工具清单、脚本检查）**故意不放上卡片**——那是 Agent 在你的会话里改的\n东西，分工与文件位置写在 `AGENTS.md`。"
+    },
+    {
+      "section": "文件层",
+      "text": "写在 bundle 的 `cordis.patch.yml` 里，或在 profile 里按 `id` 覆盖：\n\n```yaml\n- insert:\n    - id: dsh-subagent-guard\n      name: dsh-subagent-guard\n      config:\n\n启动时会打一行**生效配置**（`生效配置：subagentSandboxCap=… denyScope=… 规则=18 条 …`），\n所以\"文档默认值\"与\"实际部署值\"不一致会当场可见，而不是静默降级。\n\n非法配置（未知档位、未知作用域、编译不过的正则、非正的体积上限）在**加载期抛错**，\n不会静默失效。"
+    },
+    {
+      "section": "版本警告",
+      "text": "**`0.3.6` 及更早版本有可能把整个宿主进程一起带走。**\n\n它们在 `delegate` 的 fail-closed 路径上用裸字符串\n（`target.cancel('delegation-policy-unbound')`）取消子代理，而不是一个完整的\n`AgentCancelCause`。这个坏值会被写成会话日志里的 `turn/end { reason: null }`；下次\n回放该会话时，代码在 `null` 上读 `reason.kind` 抛错，导致**整个** DSH 进程 fatal\n——同一个 Job Object 里的兄弟进程全部陪葬，死的不是一个子代理。\n\n触发条件很窄：`delegate` 调用的工具绑定失败（例如工具名不在你配置的 `maxTools`\n里），然后重启、让会话被回放。日常委派走不到这条路径。"
+    },
+    {
+      "section": "版本警告",
+      "text": "**`0.3.7` 修掉了这个成因。** 在你真正在意的宿主上启用闸三之前，请先升级。\n完整复盘：[`docs/incidents/2026-10-29-cancel-cause-fatal.md`](docs/incidents/2026-10-29-cancel-cause-fatal.md)。\n\n暂时无法升级的话，保持 `enforceMaxTools: false` 且不要给 `delegate` 传 `tools`\n——绑定就不会失败，那条路径也就进不去。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **两个开关是人的决定，不是权限边界。** 任何持有已登录 Web 会话的人都能改；而拿到了浏览器\n  操作工具（`ego_*`）的子代理就跑在同一个会话里——所以这类 Agent 可以自己去把拦截关掉。三道闸\n  是逐次工具调用执行的，开关本身并不防「被闸关住的那个 Agent」。给子代理授 `ego_*` 前请想清楚。\n- **关掉「权限拦截」不只是跳过硬顶。** 那次提前返回同时跳过三条 fail-closed 分支（`sandboxPolicy`\n  缺失、`overrideOf` 抛错、未登记档位），也不改变审批口径。「完全跟随父会话」只描述沙箱档位。\n- **开关翻转不落会话日志。** 插件在启动时打一次生效值、跳过硬顶时告警，但 Loader 的 volatile\n  更新不产生审计事件。\n- **卡片绑的是 bundle 的 profile entry id。** 页面按 settings 命名空间 `dsh-subagent-guard`\n  （也就是 bundle patch 里的那行 id）去找配置；把插件注册成别的 row id 时，卡片会显示但读不到\n  也写不进两个开关。保持自带的 id。\n- **一次设置写入会把整份生效配置落进你的 profile patch。** 这是宿主的 settings 写入行为，不是\n  本插件：第一次点开关之后，patch 里可能出现所有默认值（包括一台机器专属的 `maxTools` 清单）。\n  不影响功能，但噪音大，提交 profile 前值得看一眼。\n- **文本匹配，不是系统调用沙箱。** `run_code`、`node -e`、内联求值（`pwsh -c \"…\"`）、\n  多层脚本链都不在检查范围——闸一（沙箱档位）才是这层的兜底。\n- **间接执行是尽力而为。** 0.4.7 起路径提取也能认出 `cmd /c \"pwsh -File x.ps1\"`、\n  `Start-Process pwsh -ArgumentList \"-File x.ps1\"` 以及 `'-NoProfile','-File','x.ps1'`\n  数组形态，脚本**内容**会按同一套规则匹配。参数在运行时拼接的写法\n  （`Start-Process -ArgumentList @('-File', $p)`、`Invoke-Expression`、变量）无法从文本解析，\n  不做检查。\n- **`serializeBind: false` 已弃用并被忽略（0.4.7）。** 策略认领按父会话 FIFO，而\n  `agent/created` 的触发顺序由宿主决定；允许两个绑定窗口重叠，就会让子代理领走另一次调用的\n  策略。现在绑定一律串行，这个闸只覆盖「登记 → 创建 → 核对」窗口，子代理执行的并"
+    },
+    {
+      "section": "已知边界",
+      "text": "据此重新 `restrict`、重新注册说明段落、重新填充兜底表。DSH 没有给第三方插件写自定义\n  会话事件的入口（未知类型未带 `ignorable` 会让**整条会话打不开**），所以这是唯一不新增\n  状态、又能跨进程生效的路径。\n\n0.4.5 又收了三处：解析锚定到固定说明段落（只认标记**之前、最靠后**的那行\n  `可用工具：`，宿主 order 1000+ 的段落文本排在标记之后，不能拿来顶替）；段落面与\n  `request/header` 面**取交集**——任一来源说不许就不许，`subagent` / `subagent_fork`\n  这类宿主 scoped 装上的派生工具在两侧都被剔除，父会话也无法再把它们写进 `tools`\n  让子代理派无约束孙代理；拿不到子会话 id 的子代理**不登记**兜底表，绑定直接\n  fail-closed（否则会写进一个 `\"undefined\"` 字面量键，等于整个兜底层放行）。"
+    },
+    {
+      "section": "已知边界",
+      "text": "已知边界：调用方自定义的 `persona` 无法从同一条 `system/message` 里分离，恢复后的段落\n  只含工具面说明；**有标记**但既没有 `可用工具` 行也没有请求头时按空面 fail-closed。\n  反过来，**连标记都没有**的子代理（第一回合之前就死了、没跑过任何请求）认不出是本插件\n  派的，不恢复、继续继承父面——这个窗口很窄（它一回合都没跑过），真实委派里样本为 0。\n  取交集是安全方向，但可能**过度收窄**：若某个 agent-scoped 注册的工具没有出现在当时\n  那条请求头里，它会被交集剔掉（工具变少，不是变多）。\n- **冷恢复的触发点只有 `agent/created`。** 宿主哪天在 `agents.resume()` 时不再派发它，\n  整条兜底链会静默放行。插件在启动期只做一次廉价探测（`agents` 服务没有 `resume` 就告警），\n  更深的验证只能靠真机回归；`0.2.1-rc.2` 实测会在恢复后首个请求之前派发。\n- **闸二拦不住动态构造的命令。** 字符串拼接、base64 / `-EncodedCommand`、变量路径、\n  无扩展名的解释器目标（不形如路径时）、`node -e` 内联求值、脚本里再调脚本——静态正则\n  做不到语义等价，这些是明确边界（2026-10-31 异质红队 A2/A5/A7 同结论）。\n- **闸二也拦审计者自己。** 只读的子代理去 `Get-Help shutdown` 这类查询不会中，但真正跑\n  敏感命令的审计脚本会被拒绝；这是预期行为，不给豁免——豁免逻辑本身就是绕过面。\n- **`provider: 'fork'` 的子代理按父历史的段落面恢复**，可能比它实际该有的更窄\n  （过度限制，非放宽）。\n- **`serializeBind: false` 时两路并发委派可能互换策略**（DoS 形态，非越权）；默认 `true`。\n- **兜底表（`pinned`）是进程内闭包 Map**，只覆盖本插件派的子代理：其他插件或官方\n  `subagent` 派出的子代理不在其中，它们靠闸一压沙箱。\n- **未登记的沙箱档位按最宽处理**，并压到 `read-only`（与「读不到档位」一致）。**不能**压到\n  `subagentSandboxCap`：那个 cap 默认是 `workspace-write`，宿主若新增一个比它更严格的档位，\n  压到 cap 反而是一次放宽。\n  加一条告警。宿主新增档位对本插件是一次迁移事件：否则闸一会把它当成\"本来就不宽\"而放过去。\n- 改写子代理档位靠追加 `sandbox/mode` 事件（会话日志是唯一存储），重启后可通过\n  replay 复现；子代理会话被归档后不再重放。"
+    },
+    {
+      "section": "已知边界",
+      "text": "[cve]: https://www.ox.security/blog/cve-2026-82533-deepseek-harness-ai-agent-sandbox-escape/"
+    },
+    {
+      "section": "兼容性",
+      "text": "已核对到 `@deepseek-ai/dsh-*` **0.2.1-rc.2**（0.3.3，2026-10-29——闸一闸二在一台真实的\n`danger-full-access` 父会话上验过，闸三在测试台与同一台真机上都验过）。插件**复制**了\n两小段官方实现，而不是 import 兄弟 `dsh-*` 包——因为 profile 的 `node_modules` 通常只有\n`schemastery`，静态 import 会在加载期解析失败。代价是：如果 DSH 改了 `subagentDepth`、\n`delegationDepth` 或 `sandbox/mode` 事件，这两份副本会**静默失配**。插件会在运行时尝试\n`import()` 官方包做比对，不一致时告警——但这个检查只在官方包恰好可解析时才生效。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnpm test   # 六个套件，129 条用例，全部脱离宿主\n```\n\n| 套件 | 条数 | 覆盖面 |\n|---|---|---|\n| `guard.test.mjs` | 19 | 规则层：正则、命令归一化、脚本路径（含引号内分隔符与 `cmd /c` 子命令）、深度、档位强弱 |\n| `policy.test.mjs` | 21 | 委派策略：上限裁剪、派生工具拒绝、段落渲染、待认领队列 |\n| `apply.test.mjs` | 29 | 接线：闸一闸二（假 ctx，含 F-A、R3、R5、BOM、会话 cwd、F-06 未知档位回归） |\n| `delegate.test.mjs` | 43 | 闸三接线、并发、fail-closed 认领、F-B/R1-01/C1/T1 冷恢复、F1 派生通道过滤、F2 强制串行、F8 窗口 |\n| `regressions.test.mjs` | 7 | YAML 引号、pending 清理、上限交集 |\n| `audit-20261028.test.mjs` | 10 | 审计发现里凡能脱离宿主钉住的部分 |"
+    },
+    {
+      "section": "外部审计",
+      "text": "- [2026-10-24 拦截面缺口审计](./docs/research/2026-10-24-external-audit.md)：\n  真实部署上的用户报告了五条缺口，附维护者逐条裁定，以及 0.2.0 落地的修法。\n- **2026-10-28 自建对抗审计**（三路红队、埋 8 枚金丝雀、召回 8/8）：五类共 22 条发现\n  （静默失效 / 记账说谎 / 边界翻转 / 修复不成立 / 门与旁路）。修法落在 0.3.1 与 0.3.2；\n  **0.3.3 来自测试台**——它抓到了 0.3.1 那次修复自己引入的回退。记录保存在维护者私有\n  工作区，不随本仓库分发。"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT — 见 [LICENSE](./LICENSE)。"
+    }
+  ],
+  "skipped": []
+}

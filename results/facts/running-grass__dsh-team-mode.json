@@ -1,0 +1,155 @@
+{
+  "repo": "running-grass/dsh-team-mode",
+  "commit": "15b4b7632f871868b35e99ce442c35e7433015a7",
+  "extracted_at": "2026-11-12T03:57:59.165904+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 31007,
+    "lines_by_language": {
+      "JSON": 78,
+      "JavaScript": 334,
+      "Markdown": 109,
+      "Other": 22,
+      "YAML": 182
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lead-boundary.js",
+      "package-lock.json",
+      "package.json",
+      "test/lead-boundary.test.mjs",
+      "test/patch.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-team-mode",
+    "version": "0.1.0",
+    "description": "DeepSeek Harness plugin: a `team` agent preset whose Lead decides and dispatches while short-lived workers do the writing",
+    "license": "MIT",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "plugin",
+      "agent-preset",
+      "agent-team",
+      "multi-agent",
+      "orchestration",
+      "subagent",
+      "workflow"
+    ],
+    "type": "module",
+    "main": "./lead-boundary.js",
+    "engines": {
+      "node": ">=20"
+    },
+    "files": [
+      "lead-boundary.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "exports": {
+      ".": "./lead-boundary.js",
+      "./package.json": "./package.json"
+    },
+    "scripts": {
+      "test": "node --test \"test/*.test.mjs\""
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "devDependencies": {
+      "yaml": "^2.9.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The dsh-team-mode bundle patch: the Lead write boundary plus the `team`\n# agent preset.\n#\n# The preset's plugin list derives from the shipped `standard` preset of the\n# DSH version this package targets. Upstream changes reach it by re-deriving:\n# compare with `packages/bundle/web-app/presets/standard.patch.yml` in a DSH\n# checkout and carry over what the mode needs. See \"Staying in step with\n# `standard`\" in README.md.\n- insert:\n    - id: team-lead-boundary\n      name: dsh-team-mode\n    - id: preset-team\n      name: \"@deepseek-ai/dsh-agent-preset\"\n      config:\n        id: team\n        name: 团队模式\n        description: Lead 只决策与验收，具体工作交给临时派发的 worker：不占员工列表，每次全新上下文。\n        order: 5\n        plugins:\n          - id: persona\n            name: \"@deepseek-ai/dsh-persona\"\n            config:\n              suffix: Your working directory is {{cwd}}.\n              prefix: |-\n                You are the Team Lead of a small agent team, working in {{cwd}}.\n\n                Your job is to decide, dispatch, and accept — not to do the work yourself.\n\n                Turn work into roles, then dispatch each role as a one-shot worker:\n                - Do discovery by delegation. Send a worker to read, search, or investigate; do not read the whole tree yourself.\n                - Send a worker to run tests, build, or reproduce a failure, and report back.\n                - Send a worker to make the change whenever the change is discoverable by reading the repository.\n                - Keep only the final call: what to do, who does it, and whether the delivered result is acceptable.\n\n                Only one thing is yours alone: the last verification. Once the workers report, check the delivered result against the request before you answer. If a claim is not supported by evidence you can see, dispatch another worker instead of accepting it.\n\n                Default every worker to the cheapest model that can finish the task. Reach for a stronger model only when a dispatch already failed for lack of capability.\n\n                ## Worker roles\n\n                Dispatch a role by writing it into the worker's prompt. Add only the task-specific detail: paths, the exact question, the acceptance check.\n\n                **scout** — read-only reconnaissance. Use for \"where is X\", \"how does Y work\", \"which files touch Z\". Report findings with file paths and line numbers; quote the decisive snippet. Never propose edits.\n\n                **explorer** — bounded investigation with a decision. Use when the answer needs judgement: compare two designs, trace a bug to its cause, decide whether a change is safe. Report the decision, the evidence, and what would falsify it.\n\n                **builder** — makes a change. Give the exact file scope and the acceptance check. Report the diff summary, the command you ran, and its result. Never widen the scope beyond what was asked.\n\n                **verifier** — adversarially checks work someone else did. Give it the change and the claim. It must try to falsify: run the tests, read the code, look for the case the author missed. Report pass/fail with the exact evidence, and say \"unproven\" when it could not check.\n\n                **sweeper** — mechanical fan-out over many items: rename across files, audit a pattern, collect facts from N files. Use workflow `pipeline`/`parallel` for this, not a single worker.\n\n                ## Dispatching\n\n                Dispatch through the `workflow` tool: call `agent()` inside the script. Pass `provider` and `model` explicitly on every dispatch so cost stays under your control. Each `agent()` starts a fresh worker with no memory of your conversation and leaves nothing behind when it finishes, so temporary work costs no roster slot. The prompt must be self-contained: the role, the task, the exact paths, and what to return.\n\n                `spawn_teammate` creates a named teammate that keeps its identity and conversation in the roster. Use it only when work must accumulate across several dispatches; a name is permanent once taken, so a one-off task wastes a slot that can never be reused.\n\n                Run independent dispatches concurrently with `parallel`; chain dependent ones with `pipeline`. Read the returned value before you act on it.\n          - id: agent-instructions\n            name: \"@deepseek-ai/dsh-agent-instructions\"\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: \"@deepseek-ai/dsh-time-context\"\n          - id: tool-bash\n            name: \"@deepseek-ai/dsh-tool-bash\"\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: \"@deepseek-ai/dsh-tool-pwsh\"\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: \"@deepseek-ai/dsh-tool-fs\"\n          - id: tool-fs-search\n            name: \"@deepseek-ai/dsh-tool-fs-search\"\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: \"@deepseek-ai/dsh-tool-jobs\"\n          - id: tool-schedule\n            name: \"@deepseek-ai/dsh-tool-schedule\"\n          - id: skill-filesystem\n            name: \"@deepseek-ai/dsh-skill-filesystem\"\n          - id: tool-skill\n            name: \"@deepseek-ai/dsh-tool-skill\"\n          - id: command-goal\n            name: \"@deepseek-ai/dsh-command-goal\"\n          - id: tool-goal\n            name: \"@deepseek-ai/dsh-tool-goal\"\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: \"@deepseek-ai/dsh-plan-mode\"\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: \"@deepseek-ai/dsh-compaction-basic\"\n              - id: command-compact\n                name: \"@deepseek-ai/dsh-command-compact\"\n              - id: tool-result-pruner\n                name: \"@deepseek-ai/dsh-compaction-tool-result-pruner\"\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-agent-team\n                name: \"@deepseek-ai/dsh-experimental-tool-agent-team\"\n                config:\n                  freshProvider: spawn\n                  forkProvider: fork\n              - id: tool-subagent-codex\n                name: \"@deepseek-ai/dsh-tool-subagent\"\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: \"@deepseek-ai/dsh-tool-subagent\"\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: \"@deepseek-ai/dsh-workflow-ptc\"\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: \"@deepseek-ai/dsh-tool-workflow\"\n              - id: tool-ralph\n                name: \"@deepseek-ai/dsh-tool-ralph\"\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n          - id: tool-ask-user\n            name: \"@deepseek-ai/dsh-tool-ask-user\"\n          - id: tool-todo\n            name: \"@deepseek-ai/dsh-tool-todo\"\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: \"@deepseek-ai/dsh-tool-web\"\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: \"@deepseek-ai/dsh-tool-present\"\n          - id: tool-plugin-manager\n            name: \"@deepseek-ai/dsh-plugin-manager/tools\"\n            disabled: true\n"
+    }
+  ],
+  "entries": [
+    "lead-boundary.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "yaml": "^2.9.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-07T17:25:27Z",
+    "created_at": "2026-10-07T17:25:10Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lead-boundary.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-team-mode",
+      "text": "DeepSeek Harness (DSH) 插件：一个 **`team`（团队模式）agent preset**——Lead 只做决策、派发和验收，具体工作交给一次性 worker。\n\n装上这个插件后，在 DSH 的**模式选择器**里会多出一个「团队模式」。选中它的会话里：\n\n- **派发面干净**：没有匿名的 `subagent` / `subagent_fork`，委派只有两条路——`workflow`（临时任务）和 `spawn_teammate`（需要累积上下文的长期队友）\n- **Lead 被结构性限制**：`write` / `edit` 在**执行层**被拒绝，不是靠提示词劝阻\n- **Lead 保留只读与验收**：`read` / `glob` / `grep` / `bash` 正常可用，最终验证仍由 Lead 做"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "DSH 的 Agent Teams 机制本身很强，但它有两个实际问题：\n\n1. **它是 profile 级的**，不是可选的模式。启用后**每个**会话都拿到 Team 工具和 `subagent` 工具，两套委派面并存，模型容易选错。\n2. **\"Lead 只决策\"只是提示词**。没有任何强制——Lead 照样能 `edit` / `write`，然后整个\"分工\"就退化成单 agent。\n\n这个插件解决这两点：把 Team 面收进一个模式，并把\"Lead 不写代码\"变成机制。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile web add github:running-grass/dsh-team-mode\n```\n\n重启 DSH（插件变更需要重启进程才能加载新的 JS 模块）。然后在新建任务时从模式选择器里选「团队模式」。\n\n> 前置：这个模式组合了 DSH 的 Agent Teams 实验包。你的 profile 需要已包含\n> `@deepseek-ai/dsh-experimental-agent-team-profile`（或至少 `agent-team` +\n> `tool-agent-team` 两个包），否则 Team 工具派发的任务会一直等待 `agentTeams` 服务。"
+    },
+    {
+      "section": "手工安装（等价步骤）",
+      "text": "在 `$DSH_HOME/profiles/web/cordis.patch.yml` 里加入：\n\n```yaml\n- id: preset-team\n  name: '@deepseek-ai/dsh-agent-preset'\n  config:\n    id: team"
+    },
+    {
+      "section": "两个派发通道",
+      "text": "模式里同时保留了 `workflow` 和 `spawn_teammate`，persona 会按下面的规则选用：\n\n| 场景 | 通道 | 代价 |\n|---|---|---|\n| 临时任务：调研、改一处、跑测试、批量扫描 | `workflow` 的 `agent()` | 全新 worker，不进 roster，跑完即走，零上下文残留 |\n| 需要跨多次派发累积上下文 | `spawn_teammate` | 占用一个 roster 名额；**名字一旦占用永不释放**，一次性任务用它是浪费 |\n\nworker 的模型由 Lead 在 `agent()` 里显式传 `provider` / `model`，所以\"用便宜模型干活、贵模型只看结果\"是可以落地的。"
+    },
+    {
+      "section": "内置角色",
+      "text": "persona 里定义了 5 个角色，Lead 把角色名写进 worker 的 prompt 即可：\n\n| 角色 | 用途 |\n|---|---|\n| `scout` | 只读侦察：定位文件、回答\"X 在哪 / Y 怎么工作\" |\n| `explorer` | 带判断的调查：比较方案、定位 bug 根因、判断改动是否安全 |\n| `builder` | 执行改动，给定文件范围和验收方式 |\n| `verifier` | 对抗性复核别人的工作，必须尝试证伪 |\n| `sweeper` | 机械式批量：跨文件重命名、模式审计、从 N 个文件汇总 |"
+    },
+    {
+      "section": "边界是执行层 guard，不是提示词",
+      "text": "`lead-boundary.js` 在每个 Lead 的 Agent 上下文上注册一个 `tools.guard()`。guard 是**按名字拒绝执行**的，发生在工具调用真正执行之前。\n\n**为什么不用 `tools.restrict()`**：实测（DSH 0.2.1-alpha.1）`restrict()` 把限制追加到 agent 自己的 layer，而工具注册表**刻意豁免**\"本作用域自己的 layer\"，所以它遮不住 agent 继承来的工具。guard 没有这个问题，也不需要等工具目录就绪。"
+    },
+    {
+      "section": "双重条件，避免误伤",
+      "text": "边界**同时**要求两个条件：\n\n1. Agent 运行的是 `team` preset（读 `agentPresets.composedPreset`）\n2. Team roster 报告它是 Lead\n\n只判第 2 条是错的：**任何模式的 session 根 agent 都是 Team Lead**，那样会把你所有其他模式的 `write` / `edit` 一起禁掉。这个坑我在开发时踩过。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **Lead 仍看得见被禁工具的 schema**。guard 只拦执行，不隐藏工具。低成本模型可能浪费一轮去撞墙，然后才读到拒绝信息（已写成可操作的派发指引）。要真正隐藏需要改 DSH 的工具注册表。\n- **shell 是策略约束，不是硬约束**。`write` / `edit` 在执行层被拒，但 Lead 仍能通过 `bash` 重定向写文件。persona 禁止这么做，机制不禁止。\n- **preset 列表是派生来的快照**。它跟随某个 DSH 版本的 `standard` preset。上游改版后需要手动重新对齐（见下）。\n- **依赖实验包**。`tool-agent-team` / `agent-team` 是 `@deepseek-ai/dsh-experimental-*`，契约不承诺稳定。"
+    },
+    {
+      "section": "与 `standard` 保持同步",
+      "text": "`cordis.patch.yml` 里 preset 的 plugins 列表派生自 DSH 内置 `standard` preset，差异只有三处：preset 身份、persona、委派组。\n\n上游 DSH 更新后，在 DSH 源码里对比 `packages/bundle/web-app/presets/standard.patch.yml`，把新增/变更的行搬过来，然后跑 `npm test`——`test/patch.test.mjs` 会守住这个模式的契约（不出现匿名 subagent、保留 workflow、persona 写明两个通道等）。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\nnpm test        # 18 项测试：插件逻辑（10）+ patch 契约（8），无需 DSH 检出\n```\n\n插件本身**零运行时依赖**（纯 `ctx` 调用），测试只依赖 `yaml`（devDependency）。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

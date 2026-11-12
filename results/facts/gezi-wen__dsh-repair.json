@@ -1,0 +1,135 @@
+{
+  "repo": "gezi-wen/dsh-repair",
+  "commit": "2b8a4c44354c5f385fe7f73f2ea7f4530d1ced1a",
+  "extracted_at": "2026-11-11T20:32:52.120042+00:00",
+  "tree": {
+    "files": 15,
+    "bytes": 74209,
+    "lines_by_language": {
+      "JSON": 36,
+      "JavaScript": 941,
+      "Markdown": 376,
+      "Other": 23,
+      "YAML": 19
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "skills/dsh-repair/SKILL.md"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-repair",
+    "description": "Ships a skill that diagnoses and repairs a broken DSH deployment: boot failures before readiness, dead plugins, broken dependency bridges, and safe upgrades.",
+    "version": "0.1.0",
+    "type": "module",
+    "license": "MIT",
+    "files": [
+      "cordis.patch.yml",
+      "skills"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*",
+      "@deepseek-ai/dsh-skill-filesystem": "*"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "skill",
+      "repair",
+      "diagnostics"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/gezi-wen/dsh-repair.git"
+    },
+    "homepage": "https://github.com/gezi-wen/dsh-repair#readme"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-repair bundle patch\n#\n# Registers this package's own `skills/` directory as an extra skill root, so\n# installing the plugin is what puts the skill in place.\n#\n# `providerName` must be unique per package: the skill registry rejects a second\n# provider under the same name, so the default (\"filesystem\") collides with the\n# harness' own provider and with any other plugin built on this mechanism.\n# `includeDefaultRoots: false` keeps this provider to its own directory, since\n# the harness' default provider already scans the project and user roots.\n\n- insert:\n    - id: dsh-repair-skills\n      name: '@deepseek-ai/dsh-skill-filesystem'\n      config:\n        providerName: dsh-repair\n        includeDefaultRoots: false\n        customSkillDirs:\n          - !!js \"process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))\"\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "skills/dsh-repair/scripts/bridge-lib.js:92"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "skills/dsh-repair/scripts/inspect-session.js:38"
+    },
+    {
+      "name": "ZSTD_BIN",
+      "kind": "env",
+      "where": "skills/dsh-repair/scripts/inspect-session.js:45"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/gezi-wen/dsh-repair.git",
+      "where": "package.json:30"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/gezi-wen/dsh-repair#readme",
+      "where": "package.json:32"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-13T14:04:14Z",
+    "created_at": "2026-09-13T14:04:07Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "dsh-repair",
+      "text": "一个 DSH 插件，内容只有一份技能：安装时把包内的 `skills/` 注册为一个技能根，于是这份技能随插件进入 agent 的技能目录。\n\n```sh\ndsh plugin --profile web add dsh-repair\n```"
+    },
+    {
+      "section": "技能覆盖什么",
+      "text": "- **起不来怎么查**：boot 崩在 readiness 之前（`ERR_MODULE_NOT_FOUND`、`cannot resolve profile bundle`）、插件 `node_modules` 里 junction/symlink 穿透损坏、树外插件的依赖桥悬空\n- **活着但残废**：服务静默失效（模型页缺提供方、按钮死）、配置能解析但 `apply` 抛异常、适配器静默丢弃它目录里没有的模型 id、日志干净却功能死了\n- **依赖桥**：树外插件（`link:`）拿不到宿主核心包时的桥机制，以及 `bridge-doctor.js` / `bridge-rebuild.js` 的体检与重建\n- **升级 DSH**：升级前停实例、备份、隔离预演；升级后的三层验证与 `settings.yaml` 复查\n- **Windows 远程作业**：跨机经 SSH 收拾 Windows 上的 DSH 时的一整份坑清单（进程生命周期、引号转义、PowerShell、pnpm junction、路径漂移）"
+    },
+    {
+      "section": "技能覆盖什么",
+      "text": "`scripts/` 里六个脚本随技能一起发：`bridge-doctor.js`（只读体检）、`bridge-rebuild.js`（重建，dry-run 优先）、`bridge-lib.js`（共用探测逻辑）、`dep-diff.js`（两棵 `node_modules` 版本表 diff）、`inspect-session.js`（从会话文件取运行时证据）、`link-doctor.js`（审计/修复 symlink 与 junction）。路径一律从 `--home` 或 `$DSH_HOME` 解析，没有写死任何一台机器。"
+    },
+    {
+      "section": "布局",
+      "text": "```\npackage.json        # dsh.bundle.patch → cordis.patch.yml\ncordis.patch.yml    # 插入一行 @deepseek-ai/dsh-skill-filesystem，customSkillDirs 指向 skills/\nskills/\n  dsh-repair/\n\n`cordis.patch.yml` 用的机制和 DSH 自带 agent preset 装载自己的技能是同一套：`!!js` 里的 `baseUrl` 解析到本包，所以路径跟着安装位置走。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

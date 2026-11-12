@@ -1,0 +1,115 @@
+{
+  "repo": "Zenjibad/dsh-lan-uuid-fix",
+  "commit": "a5281c7fec4ebfbeb379a763cd4ba0f1528cd756",
+  "extracted_at": "2026-11-11T16:42:28.085937+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 5690,
+    "lines_by_language": {
+      "JSON": 22,
+      "JavaScript": 44,
+      "Markdown": 44,
+      "Other": 24,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.mjs",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-lan-uuid-fix",
+    "description": "dsh bundle: polyfill crypto.randomUUID on insecure origins so the DeepSeek Harness Web UI works over plain-HTTP LAN",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "lib/index.mjs",
+    "exports": {
+      ".": "./lib/index.mjs",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.mjs",
+      "cordis.patch.yml"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-lan-uuid-fix patch layer: mounts the LAN UUID polyfill host row.\n# The row name is this package's own name, resolved from the profile's\n# node_modules (the same self-reference pattern the shipped bundles use).\n- insert:\n    - id: lan-uuid-fix\n      name: dsh-lan-uuid-fix\n"
+    }
+  ],
+  "entries": [
+    "lib/index.mjs",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "192.168.1.66",
+      "url": "http://192.168.1.66:3080",
+      "where": "lib/index.mjs:6"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-14T07:40:21Z",
+    "created_at": "2026-08-14T07:40:17Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.mjs",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-lan-uuid-fix",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) plugin bundle that makes the Web UI work over plain-HTTP LAN addresses."
+    },
+    {
+      "section": "The bug it fixes",
+      "text": "The web client's `mintRpcId()` calls `crypto.randomUUID()`. Browsers only expose that API in **secure contexts** — HTTPS, or loopback. A plain-HTTP LAN origin like `http://192.168.1.66:3080` is not secure, so `crypto.randomUUID` is `undefined`:\n\n| Page origin | Secure context | `crypto.randomUUID` |\n| --- | --- | --- |\n| `http://127.0.0.1:3080` | yes | function |\n| `http://192.168.1.66:3080` | **no** | **undefined** |"
+    },
+    {
+      "section": "The bug it fixes",
+      "text": "When it's missing, every unary RPC (`host.describe`, `workspace.list`, `session.list`, ...) throws `TypeError: crypto.randomUUID is not a function`, the connection generation aborts, the WebSocket streams are killed mid-handshake, and the UI never loads the session/workspace baseline — the workspace browser just shows \"No sessions yet\" and the console loops `connection lost, retry #N`.\n\n`crypto.getRandomValues` **is** available on insecure origins, so a UUID-v4 backfill fixes it without HTTPS."
+    },
+    {
+      "section": "How it works",
+      "text": "A host plugin registers an **index tap** on `ctx.webServer` (the webserver's html-transform hook, applied to every served `index.html`). The tap injects an inline polyfill that defines `crypto.randomUUID` from `crypto.getRandomValues` when missing, before the app bundles execute. Loopback and HTTPS pages are untouched — the polyfill only activates when the API is absent."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile web add https://github.com/Zenjibad/dsh-lan-uuid-fix\n```\n\nThe profile patch layer is applied live (HMR), so a running `dsh web` picks it up without a restart. Hard-refresh the page on the remote device afterwards.\n\nThe plugin adds one row, `lan-uuid-fix`, which injects `webServer` and taps the index. If your profile previously added this row with a local file path, remove that row before installing the bundle to avoid a duplicate id."
+    },
+    {
+      "section": "Verify",
+      "text": "From the machine serving dsh, or any LAN client:\n\n```sh\ncurl -s http://<host>:3080/ | grep randomUUID   # polyfill present\n```\n\nThe workspace browser should list sessions instead of \"No sessions yet\", and the browser console should show no `connection lost` retry loop."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

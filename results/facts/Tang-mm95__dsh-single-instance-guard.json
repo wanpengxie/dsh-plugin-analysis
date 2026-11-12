@@ -1,0 +1,127 @@
+{
+  "repo": "Tang-mm95/dsh-single-instance-guard",
+  "commit": "666bad9ddedeb21d496ba96368bdbeb9d1752704",
+  "extracted_at": "2026-11-11T15:10:53.679981+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 15831,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 254,
+      "Markdown": 116,
+      "Other": 21,
+      "YAML": 7
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "package.json",
+      "src/index.js",
+      "tests/index.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-single-instance-guard",
+    "description": "DSH_HOME single-instance lock plugin: aborts startup loudly when another dsh server already uses the same data directory, preventing concurrent session-log writes (the 'seq gap in committed region' corruption class)",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "dsh-plugin",
+      "single-instance",
+      "lock"
+    ],
+    "engines": {
+      "node": ">=18"
+    },
+    "scripts": {
+      "test": "node --test"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-single-instance-guard bundle patch: mounts the guard plugin into a\n# profile. Put this bundle FIRST in the profile's bundle list (or this row\n# first in your own cordis.patch.yml) so the lock is taken before any\n# session-persistence backend starts appending.\n- insert:\n    - id: single-instance-guard\n      name: 'dsh-single-instance-guard'\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-16T22:55:15Z",
+    "created_at": "2026-08-16T22:55:11Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-single-instance-guard",
+      "text": "A zero-dependency [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that takes an exclusive lock on the `DSH_HOME` data directory at startup and **aborts loudly** when another live dsh server already uses it.\n\n[中文说明](README.zh.md)"
+    },
+    {
+      "section": "Why",
+      "text": "The JSONL session persistence backend documents **\"One live writer per session\"** and has no cross-process defense. Two dsh servers sharing one `DSH_HOME` (a desktop wrapper spawning its own server, or two `dsh web` processes) append batches with stale sequence cursors, corrupting session logs:\n\n```\nhistory unavailable for session \"…\": Error: corrupt session log: seq gap in committed region …\n```"
+    },
+    {
+      "section": "Why",
+      "text": "See [this report](https://github.com/deepseek-ai/deepseek-harness/discussions/2571) for the full diagnosis, a read-only scanner, and a manual repair procedure.\n\nThis plugin turns the silent corruption into a loud startup failure."
+    },
+    {
+      "section": "Install",
+      "text": "After publishing to npm:\n\n```bash\ndsh plugin --profile <profile> add dsh-single-instance-guard\n```\n\nManual (any dsh install): add the row to the profile's `cordis.patch.yml` **before** session-related bundles:\n\n```yaml\n- insert:\n    - id: single-instance-guard\n      name: 'dsh-single-instance-guard'\n```\n\nThe guard is a [profile bundle](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/bundle): its manifest declares the same patch, so the CLI installs it as a patch layer."
+    },
+    {
+      "section": "How it works",
+      "text": "1. Creates `<DSH_HOME>/.dsh-server.lock` atomically (`O_EXCL`), holding `{ pid, startedAt, hostname }`.\n2. On conflict, probes the holder's pid liveness: a live holder aborts startup with a clear bilingual error; a stale lock (dead pid or unparsable file) is removed and acquisition retried once.\n3. On process exit the lock is removed — only if still owned by this process.\n\nDSH_HOME is resolved exactly like dsh itself: `$DSH_HOME` or `~/.dsh`. Servers with different data roots never conflict."
+    },
+    {
+      "section": "Known limits",
+      "text": "- The unlink+retry path has a tiny race when two processes discover the same stale lock simultaneously; the atomic `O_EXCL` write still admits exactly one winner, and the loser fails correctly on the retry.\n- The lock protects against concurrent servers sharing one `DSH_HOME`. It does not protect against two dsh instances deliberately pointed at the same **session file** via different roots (unsupported anyway)."
+    },
+    {
+      "section": "Development",
+      "text": "```bash\nnpm test   # node --test\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

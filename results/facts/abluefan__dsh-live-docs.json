@@ -1,0 +1,129 @@
+{
+  "repo": "abluefan/dsh-live-docs",
+  "commit": "b4eb03678a9476ec21ce54fd80d0812a39e852fe",
+  "extracted_at": "2026-11-11T16:59:47.513696+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 46503,
+    "lines_by_language": {
+      "JSON": 29,
+      "JavaScript": 905,
+      "Markdown": 117,
+      "Other": 26,
+      "YAML": 21
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test-live-docs.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-live-docs",
+    "version": "0.2.0",
+    "description": "让若干绝对路径的活文档改动后自动以尾部追加的方式到达模型。机制照抄原生 dsh-agent-instructions（四态 / 状态进 source / 框架转义 / 预算降级），只把锚点从 cwd 祖先链换成绝对路径清单。0.2.1 起配置写在 profile patch 的本 entry config，三个顶层字段 volatile（改配置不 remount）。",
+    "private": true,
+    "type": "module",
+    "main": "./index.js",
+    "engines": {
+      "dsh": ">=0.2.1-rc.2"
+    },
+    "exports": {
+      ".": {
+        "default": "./index.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "//dependencies": "刻意不声明 @deepseek-ai/schemastery 与 @deepseek-ai/dsh-llm：那两个是 harness 自带的私有包，npm 上不存在，声明了 pnpm install 会失败。运行时由 dsh 的解析器从安装树提供。"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-live-docs bundle patch（0.2.1 版）\n#\n# 一条 insert 行激活这个插件。配置写在**本 entry 的 config**里，\n# 不再走 $DSH_HOME/settings.yaml（0.2.1 起旧 settings.yaml 只会被导入一次）。\n#\n# 三个顶层字段都标了 .volatile()：\n#   只改它们 → Loader 不 remount、直接提交到运行中的 fiber.config\n#   → 插件下一次 agent/pre-step 就读到新值，不拆会话。\n#\n# 生效范围不是靠卡，而是靠 presets 列表：插件自己读\n# session.header.agentPreset，只有列出来的 preset 才真的干活。\n#\n# ⚠ 本包带了这份 patch，所以**不要**同时把包加进 dsh.profile.bundles ——\n#   那样同一 id 会被插两次。\n- insert:\n    - id: live-docs\n      name: 'dsh-live-docs'\n      config:\n        presets: []\n        maxInlineBytes: 262144\n        maxBatchBytes: 524288\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-25T09:09:26Z",
+    "created_at": "2026-10-25T09:07:35Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-live-docs",
+      "text": "让若干「绝对路径的文件」改动后自动以**尾部追加**的方式到达模型。"
+    },
+    {
+      "section": "与原生 AGENTS.md 的区别",
+      "text": "跟原生 `@deepseek-ai/dsh-agent-instructions` 同等待遇，但**不绑工作区**：\n\n| | 原生 | 本插件 |\n|---|---|---|\n| 锚点 | cwd 祖先链 | **绝对路径清单** |\n| 换工作区 | 失效 | 照样跟着 |\n| 配置 | 自动发现 | 显式列清单 |"
+    },
+    {
+      "section": "机制（照抄原生，只换锚点）",
+      "text": "- **四态**：没变 / 变了 / 删了 / 读不到（★ 读不到保留上一版，不当成删了）\n- 状态写进消息 `source.changes`，重启后扫 surface 恢复\n- 自己拼 `<system-reminder>` 框架，并转义内容里的闭合标签\n- 五种措辞：baseline / additional / updated / removed / notice\n- 一次多个变化合并进一个块\n- 按字节算预算 + UTF-8 安全截断 + marker 报告\n\n挂点：`agent/pre-step`（`decision.messages` 会被 append 成 user/message ⇒ 持久、留痕、尾部追加 ⇒ **不砍前缀缓存**）。"
+    },
+    {
+      "section": "配置",
+      "text": "写在 `cordis.patch.yml` 本 entry 的 `config` 里（0.2.1 起不再走 `settings.yaml`）。\n\n```yaml\n- insert:\n    - id: live-docs\n      name: 'dsh-live-docs'\n      config:"
+    },
+    {
+      "section": "字段说明",
+      "text": "| 字段 | 说明 |\n|---|---|\n| `presets[].name` | 必须等于 `session.header.agentPreset` —— 只有列出来的 preset 才真的干活 |\n| `files[].path` | 绝对路径；含 `*` 时按 glob 展开（Node 22+ 内建 `fs.glob`，零依赖） |\n| `files[].label` | UI 显示名 |\n| `files[].mode` | `inline`（默认，全文注入）/ `notice`（只提示有这份文件，需要时再读） |\n| `maxInlineBytes` | 单份文件超过此大小 → 自动降级为 `notice` |\n| `maxBatchBytes` | 一次注入总量上限 → 超过按顺序丢弃后面的并报告 |"
+    },
+    {
+      "section": "一份清单多处引用",
+      "text": "```yaml\nsharedFiles:\n  - name: core\n    files:\n      - { path: 'D:\\notes\\*', mode: inline }\n\n消掉「两张卡各抄一遍同样的清单」造成的漂移风险。"
+    },
+    {
+      "section": "生效方式",
+      "text": "三个顶层字段标了 `.volatile()`：\n\n- 只改它们 → Loader **不 remount**、直接提交到运行中的 `fiber.config`\n- 每次 `agent/pre-step` 都用 `current()` 读最新值 ⇒ **改配置立刻生效、不拆会话**\n- 只有改**插件代码**才需要重启 DSH"
+    },
+    {
+      "section": "① 通过插件市场（推荐）",
+      "text": "在 [awesome-dsh-plugin](https://awesome-dsh-plugin.com) 的目录里找到本插件，\n或在 dsh 的 **插件 → 发现** 里搜索 `dsh-live-docs`，点安装。"
+    },
+    {
+      "section": "② 手动安装",
+      "text": "任选一种，**不要两种同时用**：\n\n**A. 复制 + 手写 insert（适合本地开发）**\n\n1. 把本目录复制到 `$DSH_HOME/profiles/web/node_modules/dsh-live-docs/`\n2. 在 `$DSH_HOME/profiles/web/cordis.patch.yml` 加：\n\n```yaml\n   - insert:\n       - id: live-docs\n         name: 'dsh-live-docs'\n   ```\n\n3. 重启 dsh，或让 Loader 重载配置\n\n**B. `dsh plugin add`（需要包已发布到 npm）**\n\n```sh\ndsh plugin --profile web add dsh-live-docs\n```\n\n> ⚠ 用 B 之后，包名会进 `dsh.profile.bundles`，bundles 层会读本包自带的\n> `cordis.patch.yml`；此时**不要**再做 A 的第 2 步 —— 同一个 id 会被插两次，\n> DSH 启动会直接失败。"
+    },
+    {
+      "section": "依赖",
+      "text": "- DSH ≥ 0.2.1-rc.2\n- `@deepseek-ai/schemastery`、`@deepseek-ai/dsh-llm`（harness 自带的私有包，npm 上不存在，运行时由 dsh 的解析器提供）"
+    }
+  ],
+  "skipped": []
+}

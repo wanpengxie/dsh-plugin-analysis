@@ -1,0 +1,197 @@
+{
+  "repo": "fenzirong/dsh-opencode-serve",
+  "commit": "41bd0600dc05d19aad35bc5cd8caf1972607f2e5",
+  "extracted_at": "2026-11-11T20:07:37.894851+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 34933,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 622,
+      "Markdown": 175,
+      "Other": 33,
+      "YAML": 17
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-opencode-serve",
+    "version": "1.2.0",
+    "private": true,
+    "type": "module",
+    "description": "把官方 opencode 客户端进程（opencode-cli serve）注册成 DSH 原生 llm provider，请求由 opencode 运行时发出",
+    "license": "MIT",
+    "engines": {
+      "node": ">=20"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "icon.svg",
+      "locale/*.json"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "opencode",
+      "llm-adapter",
+      "llm-provider",
+      "free-models"
+    ],
+    "meta": {
+      "title": "OpenCode 客户端（后台 serve）",
+      "description": "由本机官方 opencode 客户端的 serve 进程发出模型请求，DSH 侧表现为普通 provider；无需登录，模型无本地工具权限。"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-opencode-serve —— 官方 opencode 客户端进程 → DSH 原生 llm provider\n#\n# 路由名不能和 llm-pi-ai 已声明的路由重名，否则 registerAdapter 会抛\n# DUPLICATE_ADAPTER（见 desktop/cordis.patch.yml 顶部注释）。\n- insert:\n    - id: opencode-serve\n      name: '@local/dsh-opencode-serve'\n      config:\n        providerId: opencode-serve\n        # 留空 = 自动找桌面版自带的 opencode-cli.exe（实测 2.2.0）\n        opencodePath: ''\n        # 留空 = 用 DSH 进程的 cwd 作为 opencode 工作目录\n        workdir: ''\n        # 留空 = ~/.dsh/opencode-serve（隔离的 XDG 根 + 强制禁工具的配置）\n        dataRoot: ''\n        agentId: dsh-chat\n        requestTimeoutMs: 600000\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "APPDATA",
+      "kind": "env",
+      "where": "index.js:87"
+    },
+    {
+      "name": "APPDATA",
+      "kind": "env",
+      "where": "index.js:88"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/inference/v1",
+      "where": "index.js:7"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:PORT",
+      "where": "index.js:15"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/config.json",
+      "where": "index.js:60"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-29T02:19:08Z",
+    "created_at": "2026-10-28T14:39:33Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-opencode-serve",
+      "text": "把**本机官方 opencode 客户端**（`opencode-cli serve`）注册成 DeepSeek Harness（DSH）的原生 LLM provider。\n模型请求由 opencode 自己的进程发出，因此在 DSH 里可以直接选用 OpenCode 的免费模型。\n\n---"
+    },
+    {
+      "section": "为什么需要这个插件",
+      "text": "DSH 直连 `https://opencode.ai/inference/v1` 时，即使把请求伪装成官方客户端也会被拒。\n\n2026-10-28 实测（同一 IP、同一分钟、同一模型 `deepseek-v4.1-flash-free`）：\n\n| 伪装身份 | 结果 |\n| --- | --- |\n| `opencode/1.18.31` + `x-opencode-client: cli` | `429 FreeUsageLimitError` |\n| `opencode/1.19.4` + `cli` | `429`，`retry-after` 与上面同值 |\n| `opencode/2.2.0` + `cli` | `429` |\n| `opencode/2.2.0` + `x-opencode-client: desktop` | `429` |\n| 裸 `node-fetch`，无 UA | `429` |\n\n而用官方 **2.2.0 CLI 本体**（完全未登录、`XDG_DATA_HOME` 指向空目录）调用同一模型，**同一分钟连续两次成功**。"
+    },
+    {
+      "section": "为什么需要这个插件",
+      "text": "结论：上游识别的不是 User-Agent，而是**运行时连接指纹**（opencode 是 Bun 编译的，TLS/HTTP2 特征与 Node/undici 不同）。\n因此唯一可靠的接入方式是：**让请求从 opencode 自己的进程里发出去**，DSH 只做协议翻译。"
+    },
+    {
+      "section": "工作原理",
+      "text": "```\nDSH 会话\n  │  llm adapter（本插件）\n  ▼\n私有 opencode serve 进程（本插件 spawn，隔离 XDG 根）\n\n事件到 DSH 块的映射：\n\n| opencode 事件 | DSH 块 |\n| --- | --- |\n| `session.text.started` | `block-start` (`blockType: \"text\"`) |\n| `session.text.delta` `{delta}` | `text-delta` |\n| `session.text.ended` `{text}` | `block-end` |\n| `session.step.ended` `{finish, tokens}` | 累加用量 / 决定 `finish` 原因 |\n| `session.execution.succeeded` \\| `.failed` | 结束本轮 / 错误收尾 |\n| `POST /api/session/{id}/interrupt` | 响应 DSH 的中断信号 |"
+    },
+    {
+      "section": "上下文如何保留（换模型 / 重启都不丢）",
+      "text": "同一 DSH 会话始终复用同一个 opencode `ses_`，因此多轮对话由 opencode 会话自身维护，不需要每轮重放历史。\n映射关系落盘在 `<dataRoot>/sessions.json`：\n\n```json\n{ \"switch-1\": { \"sid\": \"ses_e7a8d146affe…\", \"model\": \"glm-5.3-flash-free\", \"updatedAt\": 1793240263576 } }\n```\n\n保活与兜底策略："
+    },
+    {
+      "section": "上下文如何保留（换模型 / 重启都不丢）",
+      "text": "| 情况 | 行为 |\n| --- | --- |\n| 同会话、同模型，进程未重启 | 直接复用 `ses_`，只发送本轮消息（最省 token） |\n| **中途换了模型** | 旧会话绑定旧模型，必须新建 `ses_`；此时把 DSH 侧历史压成前导文本（`[系统指令]` + `[此前对话]` + `[当前消息]`）随首轮一起发送，**换模型不丢上下文** |\n| 进程重启（映射从 `sessions.json` 复原） | 复用原 `ses_`，只发送本轮消息；上下文继续 |\n| opencode 侧会话被清理（`GET /api/session/{id}` 返回 404） | 丢弃映射、新建会话，并同样用历史前导兜底 |\n| 映射文件缺失/损坏（首次安装） | 新建会话；若 DSH 已带历史，则同样补发前导 |\n\n前导只保留最近 40 条消息、单条截断 2000 字符（系统提示 8000），避免把上下文窗口一次塞满。\n\n实测（T1→T4）："
+    },
+    {
+      "section": "上下文如何保留（换模型 / 重启都不丢）",
+      "text": "```\nT1 首轮       deepseek-v4.1-flash-free → \"记住了\"      （暗号：蓝鲸42）\nT2 换模型     glm-5.3-flash-free       → \"蓝鲸42\"      ← 历史前导生效\nT3 同模型续聊  glm-5.3-flash-free       → \"蓝鲸42\"\nT4 新进程续聊  glm-5.3-flash-free       → \"蓝鲸42\"      ← 仅靠 sessions.json + opencode 会话记忆"
+    },
+    {
+      "section": "安全模型",
+      "text": "- serve 进程跑在**隔离的 XDG 根**：`~/.dsh/opencode-serve/{data,config}`，不读写你桌面客户端的会话库。\n- 插件在启动时写入一份强制配置，**禁止一切本地工具**：\n\n```jsonc\n  {\n    \"permissions\": [{ \"action\": \"tool.use\", \"resource\": \"*\", \"effect\": \"deny\" }],\n    \"agents\": { \"dsh-chat\": { \"mode\": \"primary\", \"system\": \"…Never call tools…\" } }\n  }\n\n模型只能产出文本，没有 shell / 文件 / 网络工具。需要动文件时仍由 DSH 自己的工具完成。\n- 本地 server 使用随机端口 + 每次启动生成的随机口令（`Authorization: Basic base64(\"opencode:<password>\")`），只监听 `127.0.0.1`。\n- 不需要登录，也不读取任何账号凭据；不会把凭据写进日志。"
+    },
+    {
+      "section": "方式一：从本地目录挂载（开发用）",
+      "text": "```sh\ndsh plugin --profile desktop add D:/AI/deepseek/dsh-opencode-serve\n```\n\n或在 profile 的 `package.json` 里加：\n\n```json\n{\n  \"dependencies\": { \"@local/dsh-opencode-serve\": \"link:D:/AI/deepseek/dsh-opencode-serve\" },\n  \"dsh\": { \"profile\": { \"bundles\": [\"@local/dsh-opencode-serve\"] } }\n}\n\n然后建 junction（Windows）：`node_modules/@local/dsh-opencode-serve` → 插件目录。"
+    },
+    {
+      "section": "方式二：从打包文件安装",
+      "text": "```sh\npnpm pack                                   # 产出 dsh-opencode-serve-<version>.tgz\ndsh plugin --profile desktop add ./dsh-opencode-serve-1.0.0.tgz\n```\n\n安装后**重启 DSH**，模型选择器里会出现「OpenCode 客户端（后台 serve）」分组。"
+    },
+    {
+      "section": "前置条件",
+      "text": "- 本机装有 opencode 客户端。优先使用桌面版自带的 CLI：\n  `%APPDATA%\\ai.opencode.desktop\\cli\\<版本>-<arch>\\opencode-cli.exe`\n  找不到时回退到 PATH 上的 `opencode`。\n- 出站 HTTPS 可达 `opencode.ai`。"
+    },
+    {
+      "section": "配置",
+      "text": "`cordis.patch.yml` 里可覆盖（全部有默认值）：\n\n| 键 | 默认 | 说明 |\n| --- | --- | --- |\n| `providerId` | `opencode-serve` | DSH 中的 provider 路由名，不能与现有路由重名 |\n| `opencodePath` | `''` | 显式指定 opencode 可执行文件；留空自动发现（取 `cli/` 下版本号最大的目录） |\n| `workdir` | `''` | opencode 工作目录；留空用 DSH 进程 cwd |\n| `dataRoot` | `''` | serve 的隔离 XDG 根；留空 = `~/.dsh/opencode-serve` |\n| `agentId` | `dsh-chat` | 会话使用的 agent（插件自动写进隔离配置） |\n| `requestTimeoutMs` | `600000` | 单轮等待上限，超时会中断会话并按 `TIMEOUT` 失败 |\n| `models` | `[]` | 覆盖模型清单；留空用内置免费模型表 |"
+    },
+    {
+      "section": "配置",
+      "text": "内置模型：`deepseek-v4.1-flash-free`、`glm-5.3-flash-free`、`mimo-v2.6-flash-free`、\n`nemotron-3.5-lightning-free`、`nemotron-3.5-super-vl-free`、`flint-40b-free`、`big-pickle`、`beam-free`。\n\n> 上游会变动模型清单与地区策略：`beam-free` 对中国大陆出口返回 `403 RegionError`，属预期行为，不要试图绕过。"
+    },
+    {
+      "section": "排错",
+      "text": "| 现象 | 原因与处理 |\n| --- | --- |\n| 模型选择器里没有该分组 | 插件未装进 profile 的 `bundles`，或 DSH 未重启 |\n| 报 `SERVER_UNAVAILABLE` | `opencode-cli` 找不到/起不来；设 `opencodePath` 指向真实 exe |\n| 报 `SESSION_FAILED 400` | 模型 id 不在上游清单里；换内置清单内的模型 |\n| 首轮很慢（6–8s） | 冷启动：spawn serve + 建会话；同进程后续轮次为毫秒级 |\n| 报 `TIMEOUT` | 单轮超 10 分钟；调大 `requestTimeoutMs` |\n| 报 `DUPLICATE_ADAPTER` | `providerId` 与 `llm-pi-ai` 已声明路由重名 |\n\n排查子进程：`Get-CimInstance Win32_Process -Filter \"Name='opencode-cli.exe'\"`；\nserve 自身日志在 `<dataRoot>\\data\\log`（隔离根内）。"
+    },
+    {
+      "section": "回滚",
+      "text": "1. 从 profile 的 `dependencies` 与 `dsh.profile.bundles` 移除 `@local/dsh-opencode-serve`；\n2. 删除 `node_modules/@local/dsh-opencode-serve` 链接；\n3. 可选：删除 `~/.dsh/opencode-serve` 与打包目录。"
+    },
+    {
+      "section": "兼容性",
+      "text": "- Windows（主力验证平台）。Linux/macOS 理论上可用：把 `opencodePath` 指向 `opencode` 即可，`cli/` 自动发现逻辑仅针对桌面版的 Windows 布局。\n- opencode CLI ≥ 2.x 提供 `/api/*` 服务端接口；更老版本（1.x）的接口路径不同，不保证兼容。"
+    }
+  ],
+  "skipped": []
+}

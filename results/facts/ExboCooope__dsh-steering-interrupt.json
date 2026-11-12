@@ -1,0 +1,143 @@
+{
+  "repo": "ExboCooope/dsh-steering-interrupt",
+  "commit": "f88cf93a667485854fb77ad65c54f3b102107899",
+  "extracted_at": "2026-11-11T09:57:04.801222+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 43600,
+    "lines_by_language": {
+      "JSON": 35,
+      "JavaScript": 499,
+      "Markdown": 459,
+      "Other": 32,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "SUBMISSION.en.md",
+      "SUBMISSION.zh.md",
+      "cordis.patch.yml",
+      "index.js",
+      "install.mjs",
+      "package.json",
+      "test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@ExboCooope/dsh-steering-interrupt",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "Let a mid-turn steering message interrupt in-flight tool waits in DeepSeek Harness.",
+    "author": "DeepSeek-V4.1-Flash 1017 (AI agent)",
+    "contributors": [
+      {
+        "name": "ExboCooope",
+        "url": "https://github.com/ExboCooope"
+      }
+    ],
+    "license": "MIT",
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "cordis",
+      "steering",
+      "agent"
+    ],
+    "exports": {
+      ".": "./index.js"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: steering-interrupt\n      name: '@ExboCooope/dsh-steering-interrupt'\n      config:\n        minElapsedMs: 250\n        sourceKinds:\n          - user\n          - subagent-settled\n          - agent-message\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/ExboCooope",
+      "where": "package.json:10"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-18T08:06:23Z",
+    "created_at": "2026-10-18T07:59:18Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "@ExboCooope/dsh-steering-interrupt",
+      "text": "让插言（steering，运行中追加的消息）**打断正在等待的工具调用**。"
+    },
+    {
+      "section": "它解决什么问题",
+      "text": "DSH 的 agent loop 只在**步骤边界**领取 `next-step` 收件箱里的消息：\n\n```\n步骤 N: [模型请求] -> [工具调用……等待 40 秒……] -> 步骤 N+1 才领取插言\n```\n\n所以你在工具还在等待时插一句「123」，这句消息并不会让那次等待提前结束 ——\n它要等到工具自己返回，下一个步骤才被读到。这个插件补上这段空隙。"
+    },
+    {
+      "section": "它怎么工作",
+      "text": "1. 挂 `tools/execute` 包装层，把每次派发的 `exec.signal` 换成一个融合信号\n   （`AbortSignal.any([上游, 本插件的控制器])`），并在 `finally` 里还原。\n2. 监听 `session/event` 里的 `agent/inbox/spliced`；当 `target === 'next-step'`\n   且插入消息的来源属于插言类型时，中止该会话中**已在途超过 `minElapsedMs`**\n   的调用的控制器。\n3. 工具收到取消后提前返回（随包的 `jobs.wait` 就吃这个信号），步骤随即结束，\n   loop 在下一个边界领取插言 —— 模型马上读到你的话。\n4. 被中止且以错误收尾的调用，其结果被替换成一条明确的\n   `TOOL_INTERRUPTED_BY_STEERING` 错误，告诉模型「这次调用没跑完、结果未知」。"
+    },
+    {
+      "section": "它怎么工作",
+      "text": "取消是**协作式**的：插件只通过 `exec.signal` 通知，从不 race、也不丢弃工具\npromise。忽略该信号的工具仍会让调用方继续等 —— 这一点和\n`dsh-tool-call-timeout-policy` 完全一致。"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml\n- id: steering-interrupt\n  name: '@ExboCooope/dsh-steering-interrupt'\n  config:\n    minElapsedMs: 250      # 太年轻的调用（比如刚起的 write）不动它\n\n`sourceKinds` 的取值来自 DSH 的 `MessageSource.kind`。`followup`（排队到下一轮）\n落在 `next-turn`，**不**会触发打断 —— 那是用户明确选择的「本轮结束后再处理」。\n\n想让长命令也能被打断，把 `exclude` 留空即可（默认就是空）；\n若不想让构建/写入类命令被插言打断，把它们加进 `exclude`，例如\n`['pwsh', 'bash', 'terminal', 'write', 'edit']`。"
+    },
+    {
+      "section": "安装",
+      "text": "从本地检出安装（推荐，可指向 clones 目录）：\n\n```powershell\nnode install.mjs desktop        # 写入 ~/.dsh/profiles/desktop\nnode install.mjs desktop --remove\n```\n\n也可以手动把本包作为 `link:` 依赖加进 profile 的 `package.json`，并列进\n`dsh.profile.bundles`：\n\n```json\n{\n  \"dependencies\": {\n    \"@ExboCooope/dsh-steering-interrupt\": \"link:path/to/dsh-steering-interrupt\"\n  },"
+    },
+    {
+      "section": "安装",
+      "text": "> 包名、`cordis.patch.yml` 的条目 `name`、profile 里的依赖名与目录链接必须\n> 三处一致，否则 loader 解析不到。`install.mjs` 会自动读取 `package.json` 的\n> `name`，并清理同一插件旧名字留下的条目（从 `@local/...` 迁过来时无需手工收拾）。\n\n脚本做两件事：在 profile 的 `node_modules/@ExboCooope` 建到本目录的 junction，并把本包\n加进 `dsh.profile.bundles`。profile 的 manifest 与 patch 变化由 `dsh-hmr` 监听，\n**无需重启**即可生效（插件源码本身也在 `link:` 目标监听范围内）。"
+    },
+    {
+      "section": "验证",
+      "text": "`node test.mjs` 用假宿主跑 16 项断言：打断生效、非插言来源不触发、`next-turn`\n不触发、忽略信号的工具不被 race、上游 signal 被还原、宽限期行为、跨会话隔离。\n\n实测（本机 desktop profile，插件已在线）：\n\n```\nt=0.0s  启动 120 秒后台任务\nt=0.0s  启动 5 秒子代理\nt=0.2s  调用 job_output(wait, timeout 60s)\nt=5.2s  子代理发回消息 -> 等待被打断，返回 TOOL_INTERRUPTED_BY_STEERING\n\n没有插件时同一调用会等满 60 秒。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **协作式，不是硬终止**：只通知 `exec.signal`；忽略信号的工具照旧等完。\n- **只作用于工具调用**：模型请求（LLM 流式响应）本身不会被插言打断，\n  那属于轮次级取消，需要 `agent.cancel()`。\n- **`next-turn` 不打断**：排队消息按设计等本轮结束。\n- 一次插言会打断该会话中所有在途且超过 `minElapsedMs` 的调用，不只是最长的那个。"
+    },
+    {
+      "section": "署名",
+      "text": "- **实现**：DeepSeek-V4.1-Flash 1017（AI agent）\n- **需求、验证与发布**：ExboCooope\n- 2026 年 10 月\n\n这个插件来自一次真实的对话。用户在当时测试「插言」这一交互，发现插言在工具调用阻塞期间\n根本不会生效——消息被接受、界面也显示出来了，可 agent 要等工具自己返回才会读到。于是有了\n那句需求：「让插言能够打断子代理等待，因为你每次都等不准。」\n\n设计、实现、单元测试与端到端验证由 agent 完成；用户负责提出需求，并在真实会话里确认手感。"
+    }
+  ],
+  "skipped": []
+}

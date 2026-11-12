@@ -1,0 +1,150 @@
+{
+  "repo": "ZyxQl-Ala/dsh-rollover",
+  "commit": "91f268ecd108053818291cecc5ece70689077751",
+  "extracted_at": "2026-11-11T16:53:10.842691+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 33965,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 716,
+      "Markdown": 78,
+      "Other": 23,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/page.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-rollover",
+    "version": "0.2.0",
+    "description": "Context rollover for DeepSeek Harness: watch context pressure, auto-save a '接续前情' handoff before the window fills, and re-inject it once in the next session segment. Ships with a settings panel inside DSH Settings.",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "context",
+      "rollover",
+      "compaction",
+      "settings"
+    ],
+    "license": "MIT",
+    "engines": {
+      "dsh": ">=0.2.1-rc.1 <0.3.0-0",
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: rollover\n      name: 'dsh-rollover'\n      config: {}\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:57"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-10-28T15:34:08Z",
+    "created_at": "2026-10-28T15:29:21Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/page.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-rollover",
+      "text": "**上下文滚段** —— 在上下文窗口快满之前，把「上一段发生了什么」保存下来，换到新的一段时再交给自己。\n\nContext rollover for DeepSeek Harness: watch context pressure, save a *接续前情* handoff before the window fills, and re-inject it once in the next session segment."
+    },
+    {
+      "section": "它解决什么",
+      "text": "DSH 会话满的时候有两种糟糕结局：\n\n- 压缩：旧细节被摘要抹平，人一下「变陌生」；\n- 换新会话：新的自己完全不记得刚才聊到哪。\n\n这个插件把两者之间补上一段：\n\n1. **盯占用**：读本地会话投影缓存里的 `contextPressure`，超过 `warnAt`（默认 45%）就在系统提示词里提醒「顺手写进记忆」；超过 `threshold`（默认 60%）提醒「该滚段了」；\n2. **存接续前情**：`rollover_handoff` 把最近 `keepTurns` 轮对话提炼成《接续前情》，存成\n   `<state>/rollover/handoffs/<sessionId>.md`；\n3. **接住自己**：如果装了 `dsh-decay-memory`，同时写一条 📌 永久记忆（换段后每轮都能看到）；\n4. **自动注入**：检测到活跃会话换成了另一个 session，就把上一段的《接续前情》**注入一次**（只注入一次，不刷屏）。"
+    },
+    {
+      "section": "工具",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `rollover_status` | 当前会话占用比例、是否该滚段（fine / getting-full / should-roll） |\n| `rollover_handoff` | 生成并保存《接续前情》（可附一句留给下一段的话） |"
+    },
+    {
+      "section": "配置",
+      "text": "```jsonc\n{\n  \"warnAt\": 0.45,        // 开始提醒\n  \"threshold\": 0.6,      // 建议滚段\n  \"keepTurns\": 12,       // 接续前情取最近几轮"
+    },
+    {
+      "section": "数据",
+      "text": "```\n$DSH_HOME/rollover/handoffs/<sessionId>.md   接续前情正文\n$DSH_HOME/rollover/state.json                已注入记录\n$DSH_HOME/decay-memory/memory.json           可选：📌 记忆\n```\n\n纯本地、无网络、无遥测。会话识别用的是 DSH 自己的投影缓存（`storages/session_projcache/sessions`），不需要任何额外权限。"
+    },
+    {
+      "section": "和 dsh-decay-memory 的关系",
+      "text": "- 单独用：能提醒、能生成接续前情文件（新会话注入靠插件自己的 prompt section）；\n- 一起用：接续前情同时变成 📌 永久记忆，换段后和别的记忆一起被注入，最稳。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    },
+    {
+      "section": "设置页（0.2.0 起自带）",
+      "text": "- **DSH 设置面板**：左侧设置里新增「上下文滚段」一节（client 半用 iframe 嵌 host 页面）\n- **独立网页**：`<你的 DSH 地址>/rollover`\n\n页面可以：看当前会话占用进度、看《接续前情》存档（自动/手动、已注入/待注入）、改阈值与冷却、点「立即生成接续前情」。"
+    },
+    {
+      "section": "自动存档（0.2.0）",
+      "text": "默认开启：占用 >= autoAt（默认 60%）时插件**自己**生成《接续前情》——不依赖模型调用，写 `$DSH_HOME/rollover/handoffs/<sessionId>.md`，并写进 `dsh-decay-memory` 的 📌 记忆；同一会话 10 分钟冷却（autoCooldownMs）。\n\n数据接口（同源、需要 DSH 登录态）：\n\n```\nGET  /rollover/api/state\nPOST /rollover/api/config   { warnAt, threshold, autoAt, autoCooldownMs, keepTurns, maxChars, autoHandoff, injectIntoMemory }\nPOST /rollover/api/action   { op: \"handoff\" | \"reset-injected\" | \"delete-handoff\", ... }\n```"
+    }
+  ],
+  "skipped": []
+}

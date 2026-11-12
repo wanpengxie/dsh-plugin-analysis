@@ -1,0 +1,148 @@
+{
+  "repo": "Kayungko/dsh-plugin-mcp-panel",
+  "commit": "5e36d50ad4c93c656891167500b2af506dda7c8e",
+  "extracted_at": "2026-11-11T11:36:28.097863+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 27416,
+    "lines_by_language": {
+      "JSON": 47,
+      "JavaScript": 537,
+      "Markdown": 52,
+      "Other": 27,
+      "YAML": 15
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "client.js",
+      "commands.mjs",
+      "config.mjs",
+      "cordis.patch.yml",
+      "deploy.mjs",
+      "index.mjs",
+      "list.mjs",
+      "package.json",
+      "test/list.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-mcp-panel",
+    "version": "0.1.0",
+    "description": "Read-only MCP visibility panel for DeepSeek Harness: surfaces which MCP servers are mounted (server name, tool count, active status) through a first-level settings section and a /mcp slash command. Pure observability — no config editing, no credential handling.",
+    "type": "module",
+    "main": "index.mjs",
+    "exports": {
+      ".": "./index.mjs",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.mjs",
+      "config.mjs",
+      "list.mjs",
+      "commands.mjs",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "scripts": {
+      "check": "node --check index.mjs && node --check config.mjs && node --check list.mjs && node --check commands.mjs && node --check client.js",
+      "test": "node --test test/*.test.mjs"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": ">=3.18.0 <4"
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "mcp",
+      "observability",
+      "panel"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# MCP visibility panel: read-only observability of mounted MCP servers.\n# Mounted as an isolated plugin group so a fault cannot take down the host.\n# The plugin enumerates `mcp__<server>__<tool>` tool names from the shared\n# @deepseek-ai/dsh-tools registry (dsh-mcp-client publishes its tools there;\n# it has no introspection API of its own) and exposes the result via a\n# /mcp slash command (live) and a read-only settings section (mount snapshot).\n- insert:\n    - id: mcp-panel\n      name: '@deepseek-ai/cordis-plugin-group'\n      group: true\n      isolate:\n        mcpPanel: true\n      config:\n        - id: mcp-panel-runtime\n          name: 'dsh-plugin-mcp-panel'\n"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-09-15T06:05:17Z",
+    "created_at": "2026-09-15T05:40:56Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "commands.mjs",
+    "config.mjs",
+    "cordis.patch.yml",
+    "index.mjs",
+    "list.mjs",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-mcp-panel",
+      "text": "DSH 的 MCP 可见性面板（只读）。解决一个具体痛点：DSH 通过 Cordis 插件编程式挂载 MCP server（如 OpenViking 记忆服务），但**没有任何 UI 能看出当前挂了哪些 MCP**。本插件把它变成一眼可查的清单。"
+    },
+    {
+      "section": "能做什么",
+      "text": "- **`/mcp` slash 命令**：实时读取 `@deepseek-ai/dsh-tools` 注册表，列出当前挂载的 MCP server + 各 server 工具数。每次调用实时、权威、零 token（不经过模型）。\n- **设置页「MCP 连接」一级 section**：渲染挂载时快照（server 名 + 工具数 + 活跃状态）。"
+    },
+    {
+      "section": "明确不做什么",
+      "text": "- 不增删/开关 MCP（dsh-mcp-client 无自省/卸载 API，且那是挂载方插件的职责）。\n- 不写 Codex `~/.codex/config.toml`、不镜像 Codex 侧 MCP。\n- 不展示、不缓存、不落盘任何启动命令/env/凭据。"
+    },
+    {
+      "section": "原理与局限（务必了解）",
+      "text": "dsh-mcp-client 是\"挂载即忘\"的桥，**没有枚举/自省 API**。本插件从共享的工具注册表反推：每个 MCP 工具以 `mcp__<server>__<tool>` 命名发布，过滤前缀即得 server 清单 + 工具数。\n\n由此产生的两条边界：\n\n1. **只见\"注册了 ≥1 工具\"的活跃 server**。启动失败被 contain（0 工具）的 server 不可见——`active` 字段因此对注册表枚举恒为 true（保留该字段仅为向前兼容）。\n2. **设置页是挂载时快照**，不是实时。MCP server 在宿主启动时挂载，故快照通常等于实况；要实时请用 `/mcp`（宿主侧实时读）。"
+    },
+    {
+      "section": "安装",
+      "text": "1. 将本目录部署到 DSH 桌面 profile 的插件目录（同 `dsh-plugin-task-coordinator` 的安装位）。\n2. 重启 DSH，或让宿主重新加载插件组。\n3. 验证：聊天框输入 `/mcp` 应返回清单；设置页左侧出现「MCP 连接」。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\nindex.mjs      入口：注入 tools/commands/settings，挂 /mcp + 只读 settings section\nlist.mjs       纯枚举逻辑（mcp__<server>__<tool> → 清单），单测覆盖\ncommands.mjs   /mcp 命令注册与渲染\nconfig.mjs     resolveConfig（enabled 开关）"
+    },
+    {
+      "section": "验证",
+      "text": "```bash\nnpm run check   # node --check 全部源码\nnpm test        # 枚举逻辑单测\n```"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,195 @@
+{
+  "repo": "k-ying/manualcompact-billion",
+  "commit": "01b3cf4a90f50041f864b26e24467155672f6e0d",
+  "extracted_at": "2026-11-11T22:34:39.139232+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 22810,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 438,
+      "Markdown": 147,
+      "Other": 24,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/transform.js",
+      "package.json",
+      "test/hook.test.mjs",
+      "test/transform.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "manualcompact-billion",
+    "version": "0.1.0",
+    "description": "Keep DSH's native /compact (manual compaction) while billion-context keeps automatic compression; the compaction backend stays mounted but pinned to auto: false.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./transform": "./lib/transform.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "scripts": {
+      "test": "node --test test/*.test.mjs"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "compaction",
+      "billion-context"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.0"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch for manualcompact-billion.\n#\n# Listing this package in a profile's `dsh.profile.bundles` applies this patch,\n# which inserts the plugin itself. Nothing else is touched: billion-context and\n# its compaction gate keep running exactly as before.\n\n- insert:\n    - id: manualcompact-billion\n      name: manualcompact-billion\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "lib/transform.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "MANUALCOMPACT_OFF",
+      "kind": "env",
+      "where": "test/hook.test.mjs:109"
+    },
+    {
+      "name": "MANUALCOMPACT_OFF",
+      "kind": "env",
+      "where": "test/hook.test.mjs:110"
+    },
+    {
+      "name": "MANUALCOMPACT_OFF",
+      "kind": "env",
+      "where": "test/hook.test.mjs:116"
+    },
+    {
+      "name": "MANUALCOMPACT_OFF",
+      "kind": "env",
+      "where": "test/hook.test.mjs:117"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-30T09:29:28Z",
+    "created_at": "2026-10-30T09:29:12Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/transform.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "manualcompact-billion",
+      "text": "让 dsh 的原生手动压缩 `/compact` 回来，同时**不动** billion-context 的自动压缩。"
+    },
+    {
+      "section": "它解决什么",
+      "text": "装了 `billion-context` 之后，dsh 里的 `/compact` 会消失。原因不是 bug：billion 带了一个 `bili-compaction-gate` 插件，它在配置解析阶段把两个包改成 `disabled: true`：\n\n- `@deepseek-ai/dsh-compaction-basic`（压缩后端）\n- `@deepseek-ai/dsh-command-compact`（`/compact` 命令）\n\n于是 dsh 既没有自动压缩，也没有手动压缩——而 billion 自己的压缩方案在部分场景（非标准线路、拦截没生效）下并不工作，你就落到「两边都没有」的境地。\n\n这个插件把这两条重新打开，并且把后端钉成 `auto: false`：**只手动，不自动**。billion 继续管它的自动压缩，两边互不抢。"
+    },
+    {
+      "section": "原理",
+      "text": "dsh 的配置解析是一条 waterfall（洋葱模型）：每个监听者调用 `next()` 拿到下游结果，还能再改。billion 的 gate 挂在链上做禁用。\n\n本插件用 `{ global: true, prepend: true }` 注册在**最外层**：\n\n```\n我们的钩子（最外层）\n  └─ billion 的 gate（禁用两个包）\n       └─ 基础配置（两个包原本是启用的）\n  ← gate 返回「已禁用」\n\n因为最外层的返回值才是最终结果，所以我们的修改生效，而 gate 自己完全不知道。\n\n它只改三种值：两个 `disabled: true → false`，一个 `config.auto = false`。不碰 billion 的包、代理、gate，也不注册任何服务。"
+    },
+    {
+      "section": "一个刻意的限制：只在被禁用时才动手",
+      "text": "如果配置里**没有**任何被 gate 禁用的行（比如你哪天卸了 billion），插件直接原样返回，连 `auto` 都不碰。这样它不会在你卸掉 billion 之后，悄悄把你的自动压缩关掉。"
+    },
+    {
+      "section": "方式一：从 GitHub 一键安装（推荐）",
+      "text": "```bash\ndsh plugin --profile web add github:k-ying/manualcompact-billion\n```\n\n`web` 是 dsh 的**默认 profile**，绝大多数人用的就是它。dsh 会把 `github:owner/repo` 转成真实 Git 地址拉取安装，`cordis.patch.yml` 随包自动挂载，不用手改配置。"
+    },
+    {
+      "section": "先确认你该装到哪个 profile",
+      "text": "dsh 的插件按 profile 隔离，装错 profile 等于没装。三个办法确认：\n\n```bash"
+    },
+    {
+      "section": "1) 看这台机器上有哪些 profile",
+      "text": "ls ~/.dsh/profiles"
+    },
+    {
+      "section": "2) 看某个 profile 里已经装了什么",
+      "text": "dsh plugin --profile web list"
+    },
+    {
+      "section": "3) 看这个 profile 的插件配置文件在哪（装完就写在这里）",
+      "text": "ls ~/.dsh/profiles/web/cordis.patch.yml\n```\n\n对照着选：\n\n| 你的情况 | profile 名 | 配置文件 |bash\ndsh plugin --profile tauri add github:k-ying/manualcompact-billion\n```\n\n想锁定版本可以带 tag：\n\n```bash\ndsh plugin --profile web add github:k-ying/manualcompact-billion#v0.1.0\n```"
+    },
+    {
+      "section": "方式二：本地目录安装",
+      "text": "```bash\ndsh plugin --profile web add ~/Documents/AI/manualcompact-billion\n```\n\n（把 `web` 换成你自己的 profile 名即可。）"
+    },
+    {
+      "section": "方式三：手写 patch 条目",
+      "text": "不想走插件管理器，也可以在 profile 的 `cordis.patch.yml` 里手写一条：\n\n```yaml\n- id: manualcompact-billion\n  name: 'file:///path/to/manualcompact-billion/index.js'\n```"
+    },
+    {
+      "section": "装完都要做的一步",
+      "text": "**完全退出** dsh 再打开（不是关窗口）。配置是启动时算出来的，热改不会重新走一遍 waterfall。"
+    },
+    {
+      "section": "验证",
+      "text": "重启后，随便开一个会话：\n\n- 敲 `/compact`，应该能压（或回「没有可压缩的历史」——那也说明命令活着）。\n- 失败的样子：命令面板里没有 `/compact`，或报「没有压缩后端」。\n\n日志里搜 `manualcompact-billion:` 会看到一行自检：\n\n```\nmanualcompact-billion: native compaction restored (command×1, basic×1, groups×2, auto=off)\n```\n\n没这行，说明插件没加载，或者配置里根本没有被禁用的行。"
+    },
+    {
+      "section": "开关",
+      "text": "| 环境变量 | 作用 |\n|---|---|\n| `MANUALCOMPACT_OFF=1` | 插件完全让位，什么都不改 |\n| `MANUALCOMPACT_ALLOW_AUTO=1` | 不钉 `auto: false`，保留你原来的自动压缩设置（**会**和 billion 抢历史，不建议） |"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\ndsh plugin --profile tauri remove manualcompact-billion\n```\n\n重启即可。没有任何持久副作用：配置是每次启动时算出来的，插件不在就恢复原样。"
+    },
+    {
+      "section": "风险与限制",
+      "text": "- **它逆着上游的假设走。** billion 的设计是「我接管了就不许宿主压」，没有「接管失败时放行」这一档。本插件补的正是这个缺口，但上游不保证兼容。\n- **billion 真有压缩动作时**，你手动 `/compact` 会让会话历史变化，billion 下一次请求发现增量对不上，会触发一次全量 resync：多一个冷请求、缓存命中掉一格。是费用和速度的损失，不是数据损坏。\n- **它不解决**「billion 能不能压某个供应商」的问题。Command Code 那类非标准线路该不压还是不压。\n- **上游改包名或事件名**时插件会静默失效（`/compact` 又消失），但不会弄坏 dsh。失效时把 `BASIC_PACKAGE` / `COMMAND_PACKAGE` 改一下即可。"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\nnpm test\n```\n\n14 条用例，覆盖：配置转换、嵌套 group、幂等、不改原对象、以及用假 ctx 模拟 waterfall 验证「prepend 确实压在 gate 外层」。"
+    }
+  ],
+  "skipped": []
+}

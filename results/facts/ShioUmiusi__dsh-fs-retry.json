@@ -1,0 +1,157 @@
+{
+  "repo": "ShioUmiusi/dsh-fs-retry",
+  "commit": "1721772e0de70cd54505a6f74b380e52df69bbbb",
+  "extracted_at": "2026-11-11T14:41:19.494768+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 8291,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 100,
+      "Markdown": 81,
+      "Other": 24,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "selftest.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-fs-retry",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": {
+        "default": "./index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "description": "Retry ctx.fs.writeText on Windows ReplaceFileW failures (Win32 1175)",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "windows",
+      "replacefilew",
+      "1175",
+      "retry"
+    ],
+    "license": "MIT",
+    "author": "塩漬けウミウシ",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/minamion/dsh-fs-retry.git"
+    },
+    "homepage": "https://github.com/minamion/dsh-fs-retry#readme",
+    "engines": {
+      "node": ">=22"
+    },
+    "files": [
+      "index.js",
+      "README.md",
+      "LICENSE",
+      "cordis.patch.yml"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-fs-retry bundle patch: mount the plugin row in the host plane.\n# Installed as a local package; lives outside app.asar so app updates don't wipe it.\n- insert:\n    - id: dsh-fs-retry\n      name: dsh-fs-retry\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/minamion/dsh-fs-retry.git",
+      "where": "package.json:30"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/minamion/dsh-fs-retry#readme",
+      "where": "package.json:32"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-23T21:00:10Z",
+    "created_at": "2026-10-23T21:00:03Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-fs-retry",
+      "text": "Retry `ctx.fs.writeText` on Windows `ReplaceFileW` failures (Win32 **1175**)."
+    },
+    {
+      "section": "Why",
+      "text": "On Windows, `dsh-fs-local` publishes file writes with `ReplaceFileW`. When the target\nis briefly held (indexer, AV, cloud-sync filter), it fails with `Win32 1175` and the\nwhole tool call dies — even though a retry succeeds.\n\nMeasured on one machine (`D:` volume, 8k random chars, 50 rounds per directory):"
+    },
+    {
+      "section": "Why",
+      "text": "| operation | failures |\n|---|---|\n| `ReplaceFileW` on `C:` (3 dirs) | 0 / 40, 0 / 40, 0 / 40 |\n| `ReplaceFileW` on `D:` (3 dirs) | 18 / 40, 9 / 40, 20 / 40 |\n| `MoveFileEx(MOVEFILE_REPLACE_EXISTING)` on `D:` | 0 / 40 |\n| `ReplaceFileW` + up to 5 backoff retries on `D:` | 0 / 50 |"
+    },
+    {
+      "section": "Why",
+      "text": "`chkdsk /scan` clean; suspending every user-mode candidate (AV GUI, indexer, backup\nagent) did not change the rate. The volume carries `wcifs` and `FileCrypt` filter\ninstances that the working volume does not — that is the working theory, not a\nproven cause.\n\nUpstream fix belongs in `dsh-fs-local`: fall back to `rename` on any Windows replace\nfailure, not only on `ENOENT`. Until that lands, this plugin retries at the service\nboundary."
+    },
+    {
+      "section": "Install",
+      "text": "Lives in a DSH profile, not in `app.asar` — app updates do not overwrite it.\n\n```bash"
+    },
+    {
+      "section": "add a junction (Windows) or symlink so the profile can resolve it",
+      "text": "mklink /J \"%USERPROFILE%\\.dsh\\profiles\\desktop\\node_modules\\dsh-fs-retry\" \"D:\\tools\\dsh-fs-retry\""
+    },
+    {
+      "section": "3. restart DSH",
+      "text": "```"
+    },
+    {
+      "section": "Verify",
+      "text": "Startup log should show:\n\n```\n[fs-retry] 已装载（原型 ok / 实例 ok，重试 8 次）\n```\n\nThen write repeatedly to the affected volume and confirm no `Win32 1175` reaches the\ntool call. Each retry logs `第 N 次遇到 1175，退避后重试`.\n\nRun the offline self-test:\n\n```bash\nnode selftest.mjs\n```\n\nThree cases: retries then succeeds · non-1175 is not retried · gives up after 8\nattempts (~340 ms of backoff)."
+    },
+    {
+      "section": "Rollback",
+      "text": "Remove the row from `cordis.patch.yml` and delete the junction. Nothing else is touched."
+    },
+    {
+      "section": "Behaviour",
+      "text": "- Only `writeText` is wrapped; `read`/`edit`/`diff` are untouched.\n- Only errors whose message matches `Win32 1175` or `ReplaceFileW` are retried.\n- 8 attempts, delay `12 ms × attempt`. Worst case ≈ 340 ms before the original error\n  surfaces unchanged.\n- Arguments and return value pass through untouched; the error type on final failure\n  is the original one."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,303 @@
+{
+  "repo": "sujingkpo/dsh-auto-pass",
+  "commit": "0573925ecbb5caa58a141ccecece25dca83c29df",
+  "extracted_at": "2026-11-12T05:21:05.059871+00:00",
+  "tree": {
+    "files": 38,
+    "bytes": 1157721,
+    "lines_by_language": {
+      "JSON": 65,
+      "JavaScript": 15557,
+      "Markdown": 675,
+      "Other": 198,
+      "YAML": 54
+    },
+    "outline": [
+      ".codebuddy/memory/2026-09-18.md",
+      ".codebuddy/memory/MEMORY.md",
+      ".gitattributes",
+      ".gitignore",
+      ".idea/.gitignore",
+      ".idea/dsh-auto.iml",
+      ".idea/modules.xml",
+      ".idea/vcs.xml",
+      ".probe-raw.mjs",
+      ".probe-sessions.js",
+      ".probe-sessions.mjs",
+      ".probe-title-events.mjs",
+      ".probe-titles.mjs",
+      "AGENTS.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "docs/images/auto-approve-permission.zh.png",
+      "docs/images/auto-approve-policy.zh.png",
+      "docs/images/auto-approve-timeline.zh.png",
+      "package.json",
+      "prompts/review.md",
+      "prompts/rule.md",
+      "screenshots.json",
+      "src/client.js",
+      "src/index.js",
+      "src/policy.js",
+      "src/records.js",
+      "tests/auto-approve.spec.js",
+      "tests/client.spec.js",
+      "tests/package.spec.js",
+      "tests/policy-gate.spec.js",
+      "tests/policy.spec.js",
+      "tests/records.spec.js",
+      "tests/settings.spec.js",
+      "tests/setup-env.js",
+      "vitest.config.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-auto-pass",
+    "version": "0.3.4",
+    "description": "Model-reviewed Auto Approve permission preset: only review-passed actions are auto-approved, everything else is handed back to the user, with an approval-log panel",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./client": "./src/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src/index.js",
+      "src/client.js",
+      "src/records.js",
+      "prompts/*.md",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "vitest run"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin",
+      "approval",
+      "webui"
+    ],
+    "license": "MIT",
+    "packageManager": "pnpm@11.7.0",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-api-remotes",
+          "@deepseek-ai/dsh-client-ui-conversation",
+          "@deepseek-ai/dsh-client-ui-sidebar-right"
+        ]
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/schemastery": {
+        "optional": true
+      }
+    },
+    "devDependencies": {
+      "vitest": "^4.1.8"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 此 bundle 必须安装在 dsh-web-app 之后。它覆盖权限预设表，并在 Web\n# 人工审批应答器之前插入模型审查器：审查通过（allow）的动作由插件自动放行，\n# 其余结果（模型拒绝、宿主安全降级、审查失败）一律交回 Web 人工审批。\n\n- id: permission\n  config:\n    presets:\n      read-only:\n        sandbox: read-only\n        approval: ask\n      workspace-write:\n        sandbox: workspace-write\n        approval: ask\n      # 预设 id 固定为 auto-approve（插件用它当闸门），显示名保持纯中文\n      auto-approve:\n        sandbox: workspace-write\n        approval: ask\n        name: 自动审批\n        description: 在工作区写入沙箱内自动放行审查通过的操作，其余一律转交人工审批。\n      danger-full-access:\n        sandbox: danger-full-access\n        approval: never\n\n- insert:\n    - id: dsh-auto-pass\n      name: dsh-auto-pass\n      config:\n        # auto（按用户直接消息里的汉字判断）/ zh / en；非法值回退 auto\n        language: auto\n        # 审查模型路由：两者必须同时设置；都省略则用父会话当前的 provider/model\n        reviewerProvider: deepseek-official\n        reviewerModel: deepseek-v4-flash\n        reviewerReasoningEffort: high\n        # 单轮审查（一次 llm.stream，不起子代理）的边界\n        timeoutMs: 90000\n        # 0 = 证据不截断：用户最后一条直接消息与最近一次人工回答原样进提示词；正数才按该字数裁剪\n        maxEvidenceChars: 0\n        maxActionChars: 16000\n        maxOutputTokens: 2048\n        # 审批记录：按工作区分文件落盘；显式给 logFile 退回单文件模式（所有工作区同一个文件）\n        logFile: ''\n        maxRecords: 1000\n        # 连续放行 / 连续被拒的缺省阈值（面板里改过的值存在策略文件里，优先于这里）\n        autoApproveAfter: 3\n        autoDenyAfter: 3\n        # 全局策略文件路径；留空 = $DSH_HOME/dsh-auto-pass/policy.json\n        policyFile: ''\n        # auto|tab|sidebar|all：all（默认）两处都注册；auto 优先右侧栏、没座位时退回对话区\n        placement: all\n        # 界面/行为开关，都能在设置页卡片或「审批设置」面板里改，设置里的值优先\n        notice: true\n        denyDirect: false\n        autoOpenTimeline: true\n        askRejectReason: true\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "src/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": ".probe-raw.mjs:3"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": ".probe-sessions.js:4"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": ".probe-sessions.mjs:3"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": ".probe-title-events.mjs:4"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": ".probe-titles.mjs:4"
+    },
+    {
+      "name": "DSH_AUTO_PASS_SCHEMASTERY",
+      "kind": "env",
+      "where": "src/index.js:208"
+    },
+    {
+      "name": "DSH_GLOBAL_PREFIX",
+      "kind": "env",
+      "where": "src/index.js:226"
+    },
+    {
+      "name": "ProgramFiles",
+      "kind": "env",
+      "where": "tests/settings.spec.js:77"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "tests/settings.spec.js:78"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tests/setup-env.js:12"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "src/client.js:591"
+    },
+    {
+      "host": "dsh.local",
+      "url": "http://dsh.local",
+      "where": "src/index.js:515"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "vitest": "^4.1.8"
+    }
+  },
+  "quality_raw": {
+    "test_files": 8,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 77,
+    "pushed_at": "2026-10-09T10:26:13Z",
+    "created_at": "2026-09-15T02:31:20Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/client.js",
+    "src/index.js",
+    "src/policy.js",
+    "src/records.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-auto-pass",
+      "text": "English | [中文](README.zh.md)\n\n> **This project only auto-approves the requests that pass review — it does not solve unattended operation.**\n>\n> This project is forked from / based on [simon300000/dsh-auto](https://github.com/simon300000/dsh-auto/)."
+    },
+    {
+      "section": "dsh-auto-pass",
+      "text": "`dsh-auto-pass` adds a `自动审批` (Auto Approve) permission preset to the DeepSeek Harness Web UI. Every action that needs approval goes through a **single-shot model review** — one plain model call, no child Agent, no tools and no transcript, fed only the normalized action plus your last direct message — and the plugin auto-approves only the requests that pass that review. A model denial, a host safety downgrade, and a failed review are all handed back to DSH's normal approval chain, so the user decides. The one exception is the **\"Reject on denylist\"** switch (off by default): once you turn it on, a denylist hit fails the tool call outright instead of opening an approval card."
+    },
+    {
+      "section": "dsh-auto-pass",
+      "text": "On top of that sit two layers of *permission memory*: an **allowlist** (allowed directly from then on, with no model call) and a **denylist** (handed to you directly, with no model call), both at **project** and **global** scope. A rule comes from one of three places: your own promote/demote action in the timeline, the suggested rule the Reviewer returned with its review, or **the rule a threshold writes by itself** — after the same permission in the same project has been approved (default 3 times; auto-approvals and your own approvals both count) or denied (default 3 times; your own rejections count, and so does a model denial nobody overrode) in a row: the **approval** side writes the allowlist rule **automatically** (project scope when the session has a working directory, otherwise global) with no question card, while the **denial** side still asks you (this project / global / do not add). Either side uses the match condition the review already returned — or the action's **permission fingerprint** (the normalized signature, see below) when the review returned none. Answering \"do not add\" on the denylist stops the plugin from asking about that action again."
+    },
+    {
+      "section": "Screenshots",
+      "text": "Select the `自动审批` permission preset (DSH 0.1.5-rc.1):\n\nThe \"Approval policy\" panel — both thresholds plus the **global** and **project** allow/deny lists (conversation tab):\n\nThe \"Approval timeline\" panel — one row per decision, filterable by All / Allowlist / Denylist / Auto / Human (right sidebar):"
+    },
+    {
+      "section": "How it works",
+      "text": "```mermaid\nflowchart TD\n    action[\"Action\"] --> sandbox{\"Allowed by<br/>workspace-write?\"}\n    sandbox -- Yes --> execute[\"Execute directly\"]\n    sandbox -- \"No: request escalation\" --> review[\"🧐 Auto Approve\"]"
+    },
+    {
+      "section": "How it works",
+      "text": "With `自动审批` selected, ordinary actions permitted by `workspace-write` run without any approval call. The diagram shows the sandbox-escalation path; other tool approval rules can also trigger Auto Approve. An approval request only exists when a tool actually asks for escalation (`sandbox_permissions` plus `justification`), so a call that never escalates never reaches the plugin."
+    },
+    {
+      "section": "How it works",
+      "text": "- The plugin handles `approval/request` only when the session's current permission preset is `自动审批`; other presets continue through DSH's existing approval chain. The plugin registers its handler with `prepend`, so it answers before the Web UI's human-approval forwarder; that part does not depend on bundle order (the permission-preset override above still requires the bundle to be installed after `dsh-web-app`).\n- Each review is **one plain model call**, and `timeoutMs` (90 s by default) covers that whole call including streaming. The Reviewer gets no child Agent, no tools, no file access and no session history, so it cannot investigate — it decides from what it is handed.\n- The prompt is two JSON sections: the normalized action (tool name, command/paths, cwd, whether an escalation was requested) and minimal evidence (your last direct user message plus the most recent `ask_user_question` answer, **passed in full by default** — `maxEvidenceChars` 0 means no truncation, a positive value clips each to that many characters). Only those two can establish authorization; nothing else is in the prompt at all.\n- The review's stance is \"**a harmless action does not need to interrupt you**\": "
+    },
+    {
+      "section": "How it works",
+      "text": "The parent session records the approval events and a compact plugin notice (switchable off in the settings, on by default). The notice is injected **after** the approval settles, so it carries both the review verdict and the **final outcome**, for example `[auto] Auto Approve allowed bash · Matched: allowlist · low/medium · 0 steps · final result：approved · Rationale: ...` — a hand-off therefore shows whether you eventually approved or rejected it. The line is capped at 240 characters, and the review prompt, its suggested rules and the matched rule text never enter the context. If you explained a rejection, that reason arrives as a **second** one-line notice (`[human] rejection reason from the user：...`). Host logs record the route, risk, authorization, token usage and outcome of each review, but not full prompts or file contents; the token usage of each review is also stored on the record and shown in the timeline."
+    },
+    {
+      "section": "Panels: approval policy and approval timeline",
+      "text": "Every decision is recorded. The two panels are deliberately kept apart so the conversation area does not fill up with approval noise: **the conversation tab holds \"Approval policy\", the right sidebar holds the \"Approval timeline\"**. The panel data comes from the plugin's own localhost routes (`/api/dsh-auto-pass/log`, `/config`, `/models` (the review-model candidate directory), `/policy`, `/rule`, `/rule/draft`, `/rule/revert`)."
+    },
+    {
+      "section": "Panels: approval policy and approval timeline",
+      "text": "\"Approval policy\" contains the consecutive-approval and consecutive-denial thresholds (applied as soon as you save them, stored in the global section of the policy file) and the allow/deny lists at **global** and **project** scope (each rule shows its label, its source — manual/model/memory — and its match condition, and can be **edited** (change its label or match condition; the rule is updated in place, id kept) or deleted individually; the same rule never shows up twice: adding a rule with the same tool + match condition **updates** the existing one, a rule that an existing broader rule already covers **is not written again**, and a broader rule **merges away** the narrower rules it covers — the panel tells you which of the three happened). The settings card under Settings → Plugins (the same card also sits at the bottom of the \"Approval policy\" panel) holds the panel placement plus **four switches**: **inject approval results into the context** (off means the result line is no longer written into the model conversation; the timeline is unaffected), **reject on denylist**, **open the approval timeline automatically** (two paths: ① a **just-happened** approval — within a minute —"
+    },
+    {
+      "section": "Panels: approval policy and approval timeline",
+      "text": "The \"Approval timeline\" has **quick filters** at the top — five chips (`All` / `Allowlist` / `Denylist` / `Auto` / `Human`), each carrying the number of records in this session (the panel only looks at the current session; the this-session/all-sessions switch was removed in 2026-09-18, while the records keep their session fields); allowlist and denylist look at whether the approval matched a list rule, auto at what the plugin approved by itself, and human at what you decided — the latter two exclude list hits, so **the four never overlap and their counts add up to the total**; the four **stack** (with several lit, a record matching any of them is shown), while `All` clears the selection. The list is **grouped by day** (today / yesterday / MM-DD) and every record sits on a timeline rail — a vertical line plus a dot tinted by the outcome (green = approved automatically, amber = waiting for you or rejected outright, gray = you already decided). A collapsed row head is **two lines**: the first is `hh:mm:ss · tool · source chip · auto-add badge · verdict badge`, the second the review opinion, so you can tell why a request was allowed or handed to you without expanding it; expanding one "
+    },
+    {
+      "section": "Panels: approval policy and approval timeline",
+      "text": "- Placement follows [`dsh-context`](https://github.com/bowenliang123/dsh-context)'s model: a tab beside Chat/Trajectory in the conversation view (`conversation.view`) holds the policy panel and a right-sidebar tab (`sidebarRightTabs`) holds the timeline, or both. `placement: all` (default) registers both, so the conversation tab is visible at once; `auto` prefers the right sidebar and falls back to the conversation tab when the sidebar seat is unavailable — so the panels also work without any third-party sidebar plugin. Use `tab` or `sidebar` to keep just one.\n- A settings card (`settings.plugin.item`, under Settings → Plugins) switches the placement at runtime; the choice is written to this plugin row's config (the profile patch row `- id: dsh-auto-pass`, via the host settings service) and survives restarts. The host half exports the config schema for that row (settings forms only accept entries a plugin exposes, with `.volatile()` fields), so the card and the panel both read and write the same values.\n- A collapsed row shows the time (clock only; the day comes from the group header), tool name, the source chip (matched list + decided-by; hover for the matched rule name), the verd"
+    },
+    {
+      "section": "Install",
+      "text": "The package name is `dsh-auto-pass`, and the bundle must be installed after `dsh-web-app`. Install it from GitHub:\n\n```sh\ndsh plugin --profile web add github:sujingkpo/dsh-auto-pass\n```\n\nor from a local checkout:\n\n```sh\ndsh plugin --profile web add link:/path/to/dsh-auto-pass\n```"
+    },
+    {
+      "section": "Install",
+      "text": "Restart the Web UI, then pick `自动审批` in the session Permissions selector or as the default permission preset in General Settings. The preset runs in the `workspace-write` sandbox and keeps `approval: ask`: the plugin answers inside DSH's approval waterfall rather than replacing it."
+    },
+    {
+      "section": "Configuration",
+      "text": "Below are the keys from the bundled `cordis.patch.yml` that belong in a config file; every key except the reviewer pair is optional, and the values shown are the plugin's defaults. The remaining preferences are changed in the UI (see the end of this section).\n\n```yaml\n- id: dsh-auto-pass\n  name: dsh-auto-pass\n  config:\n    language: auto"
+    },
+    {
+      "section": "Key reference",
+      "text": "- `language` — the language of the review: `auto` (default) counts Han characters in the messages **you** send (four or more selects Chinese, otherwise English; agent instructions, assistant messages and tool results do not count), or pin it with `zh` / `en`. An invalid value only warns and falls back to `auto`. The security policy text is one Chinese prompt in both modes, so translation never changes review semantics.\n- `reviewerProvider` / `reviewerModel` — which provider and model run the review; they **must be set together** (one filled and the other empty is refused; leaving both empty follows the current session, exactly like omitting them). With both omitted the Reviewer uses the parent session's current provider and model, and a review with no route at all is handed to the user.\n- `reviewerReasoningEffort` — the reasoning effort handed to the review model (for example `high`); it must be a string, and **an empty string or an omission both mean the model's own default** (that is what \"Clear\" in the panel writes).\n- `timeoutMs` — the deadline for one review in milliseconds (90000 by default), covering that single model call including streaming; a timeout hands the request to "
+    },
+    {
+      "section": "Key reference",
+      "text": "Numeric keys must be **positive integers** and `logFile` / `policyFile` must be strings — a wrong type fails plugin load outright, and setting only one of `reviewerProvider` / `reviewerModel` does too."
+    },
+    {
+      "section": "Key reference",
+      "text": "A few more keys **belong in the UI**: `placement`, `notice`, `denyDirect`, `autoOpenTimeline`, `askRejectReason` (the four behaviour switches), the review-model keys `reviewerProvider` / `reviewerModel` / `reviewerReasoningEffort` / `timeoutMs` / `maxOutputTokens` (the **Review model** section of the Approval policy panel) and `autoApproveAfter` / `autoDenyAfter` (the default consecutive-approval / consecutive-denial thresholds). They do not have to be written into a config file; when they are, **the settings value still wins**, and a threshold changed in the panel is stored in the policy file."
+    },
+    {
+      "section": "Key reference",
+      "text": "`notice` (default `true`) controls whether the approval result line is injected into the model context; `denyDirect` (default `false`) controls whether a denylist hit rejects the call outright; `autoOpenTimeline` (default `true`) controls whether a **just-happened** approval (within a minute) expands the timeline automatically — that happens while the right sidebar is collapsed and also when you have closed the timeline tab yourself, and switching into a session that piled up unread records (away for over a minute, or more than 5 unread) expands it once (records already on disk never pop it, and it stays put when the timeline is already on screen or the sidebar is showing another tool with our tab still open — those cases show as the unread badge on the right-sidebar tab, which is **per session**, cleared by opening the timeline or by any interaction); it is a **global switch** (2026-10-09, on request: it used to be stored per session / per workspace in the project policy file's `prefs`, and that path is gone) — turning it off once stops the auto-open in every session, including new ones, and the \"Approval policy\" panel and the settings card write the very same value; `askRejectRea"
+    },
+    {
+      "section": "Key reference",
+      "text": "A profile override replaces the complete matching bundle-row `config`, so repeat every value that should remain configured.\n\nThe Reviewer's system prompt is `prompts/review.md` and the match-condition prompt used for rule suggestions is `prompts/rule.md`; both are plain Markdown, read when the plugin loads. Restart DSH after changing the configuration, policy, or plugin code."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

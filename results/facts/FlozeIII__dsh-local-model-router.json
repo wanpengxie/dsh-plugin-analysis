@@ -1,0 +1,186 @@
+{
+  "repo": "FlozeIII/dsh-local-model-router",
+  "commit": "497ff497aa357ce8a86ede45699d44533d8e7eab",
+  "extracted_at": "2026-11-11T10:06:55.575631+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 48865,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 1010,
+      "Markdown": 139,
+      "Other": 50,
+      "YAML": 15
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/smoke.mjs",
+      "tools/asar-grep.mjs",
+      "tools/asar-peek.mjs",
+      "tools/asar-slice.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-local-model-router",
+    "version": "0.2.1",
+    "private": true,
+    "type": "module",
+    "description": "Decide when DSH uses the locally configured model instead of the cloud model.",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/en.json",
+      "locale/zh.json",
+      "icon.svg",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: local-model-router\n      name: dsh-local-model-router\n      config:\n        enabled: true\n        provider: ollama\n        model: qwen3\n        purposes:\n          - compaction\n          - session-title\n        mainTurn: false\n        fallbackOnError: true\n        disableThinking: true\n        probeUrl: http://127.0.0.1:11434/api/tags\n        verbose: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:11434/api/tags",
+      "where": "cordis.patch.yml:14"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:11434/api/tags",
+      "where": "index.js:31"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1/api/tags",
+      "where": "test/smoke.mjs:200"
+    }
+  ],
+  "declared": [
+    {
+      "kind": "command",
+      "name": "local",
+      "where": "test/smoke.mjs:147"
+    },
+    {
+      "kind": "command",
+      "name": "local",
+      "where": "test/smoke.mjs:159"
+    },
+    {
+      "kind": "command",
+      "name": "auto",
+      "where": "test/smoke.mjs:164"
+    },
+    {
+      "kind": "command",
+      "name": "local",
+      "where": "test/smoke.mjs:181"
+    },
+    {
+      "kind": "command",
+      "name": "local",
+      "where": "test/smoke.mjs:201"
+    }
+  ],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-22T07:31:42Z",
+    "created_at": "2026-10-22T07:31:35Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "本地模型路由器（dsh-local-model-router）",
+      "text": "决定 DSH **什么时候**把请求交给本地配置的模型，并且真的把它切过去。\n\n不是\"再写一个适配器\"，而是一个路由插件：它挂在两处官方扩展点上，按策略改写这次调用的目标模型。\n\n| 请求类型 | 识别方式 | 默认行为 |\n| --- | --- | --- |\n| 后台杂活（上下文压缩、会话标题、其它带 `purpose` 的调用） | `llm/stream` 洪水式事件上的 `options.purpose` | **走本地模型** |\n| 主对话每一轮 | `agent/request` 事件 | 走云端模型，除非 `/local main` |"
+    },
+    {
+      "section": "本地模型路由器（dsh-local-model-router）",
+      "text": "> **English**: a DSH (DeepSeek Harness) plugin that decides *when* an LLM call is\n> served by your locally configured model — session titles and other background\n> calls on local by default, the main conversation only via `/local main`.\n> The rest of this document is written in Chinese."
+    },
+    {
+      "section": "安装",
+      "text": "本插件是 **Host-only bundle**（零依赖、无需构建）。把它装进当前 DSH profile：\n\n```text\nplugin_manager(action=\"install_bundle\", target=\"<本目录的绝对路径>\")\n```\n\n装完后插件行出现在 `cordis.patch.yml` 里（`include:local-model-router`），\n`list_plugins` 能看到 `fiberPhase: \"active\"`。升级同一个包需要先\n`remove_bundle` 再 `install_bundle`，且新的 JS 世代要重启应用才载入。"
+    },
+    {
+      "section": "前置条件",
+      "text": "1. **本地 runtime 里要有模型**。默认目标是 Ollama 的 `qwen3`：\n   ```bash\n   ollama pull qwen3\n   curl http://127.0.0.1:11434/api/tags   # 确认能看到 qwen3\n   ```\n2. **它必须是 DSH 已注册的 provider route**。插件不改写 provider 目录，只在\n   `listProviders()` 里已经存在 `provider` 时才路由。在「设置 → 模型/供应商」里加一条\n   OpenAI 兼容渠道即可：\n\n| 字段 | 值 |\n   | --- | --- |\n   | route id | `ollama` |\n   | baseURL | `http://127.0.0.1:11434/v1` |\n   | api | `openai-completions` |\n   | model id | `qwen3` |\n   | apiKey | 随便填（Ollama 不校验） |"
+    },
+    {
+      "section": "前置条件",
+      "text": "路由名必须和插件配置里的 `provider` 一致；万一你起成 `ollama-local` 之类，插件会在\n   `listProviders()` 里找不到 `ollama` 时自动挑一个名字像 Ollama/LM Studio 的 route 顶上。\n   装好后运行 `/local status`，它会直接告诉你 `ollama` 是否已注册、端点是否可达、`qwen3`\n   是否已 pull、以及思考档位是否关掉了。"
+    },
+    {
+      "section": "命令",
+      "text": "| 命令 | 作用 |\n| --- | --- |\n| `/local` 或 `/local on` | 本会话背景任务 → 本地模型 |\n| `/local off` | 本会话背景任务 → 调用方原本的模型 |\n| `/local main` | 切换本会话**主对话**是否走本地模型（再次输入即关闭） |\n| `/local status` | 诊断：目标模型、provider 目录、本会话覆盖、探活、路由/回退统计 |\n| `/local reset` | 清掉本会话覆盖 |\n| `/local ollama/qwen3` | 本次运行临时换目标（不落盘） |\n| `/auto` | 清掉本会话覆盖，回到默认策略 |"
+    },
+    {
+      "section": "在当前的 desktop profile 里实际会发生什么",
+      "text": "- **会话标题会被路由**。`@deepseek-ai/dsh-session-title-llm` 实际构造的是\n  `deepFreeze({ ...call.config, messages, system, sessionId, purpose: \"session-title\", signal })`，\n  带 `purpose` 也带 `sessionId` —— 所以本插件读得到、且会话级 `/local` 覆盖对标题也生效。\n- **上下文压缩不会被路由**，因为这个 profile 里它根本不发生第二次 LLM 调用：\n  `billion-context` 的 `bili-compaction-gate` 会把官方 `@deepseek-ai/dsh-compaction-basic` 和\n  `@deepseek-ai/dsh-command-compact` 两行直接改成 `disabled: true`（`list_plugins` 里确实都是\n  `enabled: false`），压缩改由 Agent 自己调 `compress` 工具写摘要 —— 那是主对话的一部分。\n  哪天你把机制换回官方自动压缩，`purpose: \"compaction\"` 就会自动进入路由范围。\n- 所以默认配置的实际收益 = **标题走本地**；想要\"整段对话走本地\"，用 `/local main`。"
+    },
+    {
+      "section": "行为细节",
+      "text": "- **失败回退**：适配器错误不会抛异常，而是以 `finish` + `reason.kind === 'error'` 结束流。\n  插件在\"一个内容块都没吐\"的情况下捕获它，改用调用方原本的模型重放这次请求；已经吐了内容\n  就直接透传，不重放。\n- **熔断**：连续 2 次本地失败后，后台路由冷却 60 秒，期间不打扰本地端点。\n- **思考模型要关思考**（`disableThinking: true`，默认开）。`qwen3` 这类模型先吐 reasoning\n  再吐正文；会话标题的输出预算很小，思考会把预算吃光，`finish_reason` 变成 `length`、\n  正文为空 —— 标题就白跑一趟。Ollama 的 OpenAI 兼容端点里 `\"reasoning_effort\": \"none\"`\n  可以关掉思考（实测 0.40.6 生效），所以插件会先问一下目标模型的档位表\n  （`ctx.llm.resolveModelInfo`），若有 `none`/`off`/`disabled` 档就带上它；没有就退回\n  \"不传档位\"，此时标题若因推理占满预算而失败，照常有失败回退兜底（走云端）。\n- **不改冻结请求**：agent-loop 构造的请求是 deep-frozen 的，插件只读不写；改写永远是派生新\n  对象（并去掉调用方的 `reasoningEffort`，因为本地模型通常不声明这套档位，显式档位会在 I/O\n  前被拒）。\n- **重入守卫**：插件自己发起的重入用 `AsyncLocalStorage` 标记，不会二次路由；重入调用放在\n  generator 首次 pull 时才创建，因此落在外层包装（如 dsh-cost-meter）的异步上下文里，不会被\n  重复计费。\n- **会话隔离**：`/local` 只影响当前会话；子代理有自己的 agent id，不继承。\n- **计费口径**：路由后的调用在成本面板里仍按调用方声明的模型记账（外层包装先于本插件注册），\n  后台杂活的量很小，一般可忽略。"
+    },
+    {
+      "section": "配置项",
+      "text": "安装后行配置在插件行里可改（`cordis.patch.yml` 的 `config`）：\n\n```yaml\nenabled: true                 # 总开关\nprovider: ollama              # 本地 provider route\nmodel: qwen3\npurposes: [compaction, session-title]   # 默认接管的 purpose"
+    },
+    {
+      "section": "关于主对话",
+      "text": "`mainTurn` / `/local main` 是**显式实验开关**。DSH 的工具调用协议对模型有要求，本地小模型\n的工具调用可靠性差异很大；主对话切过去后请自己观察，出问题就 `/local main` 关掉或 `/auto`。"
+    },
+    {
+      "section": "自测",
+      "text": "```bash\ncd dsh-local-router\nnode test/smoke.mjs   # 12 项：路由、回退、会话隔离、命令、冻结对象不变、思考档位、route 自动识别、模型名归一\n```\n\n测试只用一个最小的 fake host（自己拼的 `ctx.llm` / `ctx.commands` / `ctx.on`），\n不需要跑 DSH 本体，也不联网。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。"
+    },
+    {
+      "section": "免责",
+      "text": "这是个改路由的插件：它会真的把你的请求发给本地端点。主对话开关（`mainTurn` /\n`/local main`）属于实验性质，本地小模型的工具调用可靠性差异很大，请自行观察效果。"
+    }
+  ],
+  "skipped": []
+}

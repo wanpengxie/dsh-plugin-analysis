@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Persistent single-source-of-truth scheduler for DSH repository analysis."""
 from __future__ import annotations
-import argparse, csv, datetime as dt, json, os, pathlib, sqlite3, subprocess, sys
+import argparse, concurrent.futures, csv, datetime as dt, json, os, pathlib, sqlite3, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DB = ROOT / "work" / "supervisor.sqlite3"
@@ -186,15 +186,23 @@ def audit():
         ).stdout.splitlines() if len(line) >= 4
     }
     done = db.execute("SELECT repo FROM tasks WHERE state='done'").fetchall()
+    validate_repos = []
     for x in done:
         repo = x["repo"]
         source = ROOT / "work" / repo.replace("/", "__")
         required = required_result_paths(repo)
         if source.is_dir():
-            if not valid(repo):
-                errors.append(f"done task fails validation: {repo}")
+            validate_repos.append(repo)
         elif not required.issubset(tracked) or required.intersection(dirty):
             errors.append(f"done task source cleaned before validated checkpoint: {repo}")
+    # Validation is repository-local and subprocess-isolated. Keep concurrency
+    # bounded so a full A+B+C audit remains practical without changing any
+    # acceptance rule or competing heavily with analysis workers.
+    audit_workers = max(1, min(8, os.cpu_count() or 1))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=audit_workers) as pool:
+        for repo, ok in zip(validate_repos, pool.map(valid, validate_repos)):
+            if not ok:
+                errors.append(f"done task fails validation: {repo}")
     known = {x["repo"] for x in db.execute("SELECT repo FROM tasks")}
     loaded_tiers = {x["tier"] for x in db.execute("SELECT DISTINCT tier FROM tasks")}
     expected = set()

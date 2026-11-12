@@ -1,0 +1,158 @@
+{
+  "repo": "jingfushen/dsh-codex-agy-plugin",
+  "commit": "98b9b3aa3d2b4753124ae70ecce2cf56f2c4a866",
+  "extracted_at": "2026-11-11T22:15:50.421444+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 57662,
+    "lines_by_language": {
+      "JSON": 21,
+      "JavaScript": 1090,
+      "Markdown": 156,
+      "Other": 17,
+      "YAML": 78
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "agy.mjs",
+      "codex.mjs",
+      "cordis.patch.yml",
+      "imagegen.mjs",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-codex-agy-plugin",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "DeepSeek Harness plugin: Codex and AGY subagent backends plus a codex_imagegen tool, mounted as global tools for every agent preset.",
+    "exports": {
+      "./codex": "./codex.mjs",
+      "./agy": "./agy.mjs",
+      "./imagegen": "./imagegen.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "meta": {
+      "title": "Codex + AGY Tools",
+      "description": "Adds global subagent_codex, subagent_agy and codex_imagegen tools to every agent preset."
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-codex-agy-plugin — bundle patch (PLUGIN, not a preset)\n#\n# This layer inserts Host-plane rows only. It registers two out-of-process\n# subagent providers and mounts three model-facing tools in the **global tool\n# layer**, so every agent preset (mode) sees them on its next request — no new\n# preset is declared and no preset is edited.\n#\n# Shape follows the shipped @deepseek-ai/dsh-experimental-ralph-bundle: a\n# top-level host group whose tool rows land in the global tool layer\n# (@deepseek-ai/dsh-tools: \"注册一个工具就足以让它可见\").\n#\n# Provider names are unique per process. Never register `codex` / `agy` again\n# from another bundle or from the profile patch: the second registration fails\n# and takes the mount down. Also avoid enabling a preset that mounts the same\n# `toolName` (`subagent_codex` / `subagent_agy` / `codex_imagegen`) while this\n# plugin is on — the model-facing names would be duplicated.\n\n- insert:\n    # ── Host plane: out-of-process subagent backends ────────────────────────\n    #\n    # `model` + `reasoningEffort` are per-child settings: model goes out as the\n    # thread/start model, reasoningEffort is this plugin's local shim (the\n    # backend package has no such field) and becomes\n    # `-c model_reasoning_effort=\"<value>\"` on the child argv. Both are scoped\n    # to the child process; ~/.codex/config.toml is untouched.\n    - id: subagent-codex-backend\n      name: 'dsh-codex-agy-plugin/codex'\n      config:\n        model: gpt-5.6-sol\n        reasoningEffort: max\n        env: {}\n        disposeGraceMs: 3000\n\n    # agy is driven through the Antigravity CLI's print mode. Every child is\n    # forced through this machine's system proxy (127.0.0.1:12450) for its\n    # whole run, because the subprocess seam starts children from a scrubbed\n    # environment; NO_PROXY is emptied so nothing bypasses it. `verifyProxy`\n    # probes the port before spawning, because agy reports an unreachable\n    # proxy as its generic \"Eligibility check failed\".\n    - id: subagent-agy-backend\n      name: 'dsh-codex-agy-plugin/agy'\n      config:\n        env:\n          HTTP_PROXY: http://127.0.0.1:12450\n          HTTPS_PROXY: http://127.0.0.1:12450\n          ALL_PROXY: http://127.0.0.1:12450\n          NO_PROXY: ''\n\n    # ── Global tool layer: visible to every agent preset ────────────────────\n    - id: codex-agy-tools\n      name: cordis:group\n      group: true\n      config:\n        # One-shot delegation to the Codex CLI. External backends execute once\n        # and report back through a completion notice; `maxDepth:\n        # provider-managed` leaves the recursion budget to the provider.\n        - id: codex-agy-tool-subagent-codex\n          name: '@deepseek-ai/dsh-tool-subagent'\n          config:\n            provider: codex\n            toolName: subagent_codex\n            maxDepth: provider-managed\n\n        # One-shot delegation to the Antigravity CLI (print mode).\n        - id: codex-agy-tool-subagent-agy\n          name: '@deepseek-ai/dsh-tool-subagent'\n          config:\n            provider: agy\n            toolName: subagent_agy\n            maxDepth: provider-managed\n\n        # GPT Image through Codex's own imagegen skill. Set `model` /\n        # `reasoningEffort` to null to fall back to the Codex CLI defaults.\n        - id: codex-agy-tool-codex-imagegen\n          name: 'dsh-codex-agy-plugin/imagegen'\n          config:\n            model: gpt-6-astra\n            reasoningEffort: xhigh\n"
+    }
+  ],
+  "entries": [
+    "codex.mjs",
+    "agy.mjs",
+    "imagegen.mjs",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "CODEX_HOME",
+      "kind": "env",
+      "where": "imagegen.mjs:380"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:12450",
+      "where": "agy.mjs:49"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:12450",
+      "where": "cordis.patch.yml:44"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:12450",
+      "where": "cordis.patch.yml:45"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:12450",
+      "where": "cordis.patch.yml:46"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-19T17:41:47Z",
+    "created_at": "2026-10-19T17:07:00Z"
+  },
+  "runtime_files": [
+    "agy.mjs",
+    "codex.mjs",
+    "cordis.patch.yml",
+    "imagegen.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-codex-agy-plugin",
+      "text": "DeepSeek Harness（DSH）的**插件**：装一次，就给你的**所有 Agent 模式**加上三个工具——\n不需要新建「模式」，也不需要改任何预设。\n\n| 工具 | 作用 |\n| --- | --- |\n| `subagent_codex` | 把一段自包含任务交给 Codex CLI（`codex app-server --stdio`），一次性执行，子进程可在会话工作目录里自己读写文件 |\n| `subagent_agy` | 把任务交给 Antigravity CLI（`agy --print` 非交互模式），强制走本机代理 |\n| `codex_imagegen` | 包装 Codex 自带的 imagegen 技能，用 GPT Image 生成/编辑位图；支持参考图、指定输出路径、一次生成网格母图并自动裁块 |\n\n> 非官方项目：与 DeepSeek、OpenAI、Google 均无隶属关系，只是作者在自己的\n> DSH Desktop 环境里验证可用的一套插件。"
+    },
+    {
+      "section": "「插件」和「模式」的区别",
+      "text": "DSH 里这是两种东西：\n\n- **插件（组合包 bundle）**：装进 profile，可随手在侧栏「插件」页启停。它往 **Host 层**加行：\n  注册服务、注册**全局工具**。全局工具对所有模式生效——官方 `Ralph 循环` 插件就是这么做的。\n- **模式（Agent 预设 preset）**：新建会话时在模式选择器里选的那张卡片（标准 / 创造 / PTC /\n  极简 / 自定义）。它是「一组插件的组合」。\n\n本仓库是前者：`cordis.patch.yml` 只 `insert` Host 层行——两个子代理后端 + 一个全局工具组，\n**不声明 preset**。启用后所有模式（包括极简）都能用这三个工具。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```text\n.\n├── package.json        # 插件清单：exports + dsh.bundle.patch\n├── cordis.patch.yml    # 插件层：Host 后端行 + 全局工具组\n├── codex.mjs           # subagent_codex 后端（re-export 官方包 + 本地 reasoning effort 垫片）\n\n三个 `.mjs` 都是自包含的 ESM 插件（只用相对导入和 `node:` 内置模块），不引入裸包依赖。"
+    },
+    {
+      "section": "方式一：插件页（推荐）",
+      "text": "DSH 侧栏 → **插件** → **添加插件** → **安装第三方插件**，在输入框里填本仓库地址：\n\n```text\nhttps://github.com/jingfushen/dsh-codex-agy-plugin\n```\n\n或者填本地目录的绝对路径。安装完成点**立即启用**，插件页会出现 **Codex + AGY Tools**。\n之后新会话直接可用；正在进行的会话在下一次请求时看到工具列表变化（切换插件会让该会话的\n请求前缀缓存失效一次）。"
+    },
+    {
+      "section": "方式二：手工接入 profile",
+      "text": "编辑 `~/.dsh/profiles/<你的 profile>/package.json`：\n\n```json\n{\n  \"dependencies\": {\n    \"dsh-codex-agy-plugin\": \"link:/absolute/path/to/this/repo\"\n  },\n\n然后在该 profile 目录 `pnpm install`，重启 DSH。"
+    },
+    {
+      "section": "依赖：Codex 后端包",
+      "text": "`subagent_codex` 依赖 `@deepseek-ai/dsh-subagent-codex`（它不随发行版分发，且版本要与 DSH\n运行时对齐）。装到 DSH 配置目录下：\n\n```bash\ncd ~/.dsh/subagent-backends\nnpm install --omit=dev --ignore-scripts @deepseek-ai/dsh-subagent-codex@<与运行时同版本>\n```\n\n然后确认 `codex.mjs` 第 56 行的绝对路径指向它（见下面「换机器要改」第 1 条）。"
+    },
+    {
+      "section": "前置条件",
+      "text": "- **DeepSeek Harness Desktop 0.2.1-rc.2**（本插件只在这个运行时线验证过）\n- **Codex CLI** 已安装并登录（ChatGPT 账号）；`codex_imagegen` 走 PATH 上的 `codex`\n- **Antigravity CLI**：`agy` 在 PATH 上；`subagent_agy` 默认强制走 `http://127.0.0.1:12450` 代理\n- **python3 + Pillow**：只有使用 `codex_imagegen` 的 `grid` 批量裁块时才需要\n- Node.js 18+（插件本身不装依赖，由 DSH 运行时加载）"
+    },
+    {
+      "section": "配置",
+      "text": "- `subagent-codex-backend`\n  - `model`：传给 Codex 每个 thread 的模型（默认 `gpt-5.6-sol`）\n  - `reasoningEffort`：本地垫片，注入为 `-c model_reasoning_effort=\"<value>\"`，只作用于子进程，\n    不改 `~/.codex/config.toml`（默认 `max`）\n  - `env`、`disposeGraceMs`\n- `subagent-agy-backend`\n  - `env`：默认把 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 指到 `http://127.0.0.1:12450`，\n    `NO_PROXY` 清空；子进程环境是净化的，所以必须在这里显式给\n  - `verifyProxy`：spawn 前先探测代理端口；确认代理常开可设 `false`\n  - `command`、`outputArgs`、`disposeGraceMs`\n- `codex-agy-tool-codex-imagegen`\n  - `model`（默认 `gpt-6-astra`）、`reasoningEffort`（默认 `xhigh`）；设为 `null` 退回 Codex CLI 默认值\n  - 另有 `command`、`codexHome`、`env`、`timeoutMs`（默认 15 分钟）、`pythonCommand`"
+    },
+    {
+      "section": "换机器要改的地方",
+      "text": "这是作者本机验证过的工作副本，**有几处机器相关配置**，复用到别的机器前请检查：\n\n1. `codex.mjs` 第 56 行：用绝对路径 re-export 已安装的 codex 后端包\n   （`~/.dsh/subagent-backends/node_modules/@deepseek-ai/dsh-subagent-codex/lib/index.js`），\n   改成你的路径。\n2. `agy.mjs` 的 `PROXY_URL` 常量与 patch 里的 `env`：默认 `127.0.0.1:12450`，\n   改成你可用的代理地址；没有代理就把 `env` 留空并关掉 `verifyProxy`。\n3. patch 里的模型 slug（`gpt-5.6-sol`、`gpt-6-astra`）：换成你账号实际可用的模型。\n4. `~/.dsh/subagent-backends` 里的后端包版本要与 DSH 运行时同步。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **provider 名全局唯一**：`codex` / `agy` 已在 Host 层注册。不要在别的 bundle 或 profile\n  补丁里重复注册同名 provider，否则第二次注册会抛错并导致整个挂载失败。\n- **工具名不要重复**：如果某个模式（预设）也挂了 `subagent_codex` / `subagent_agy` /\n  `codex_imagegen` 同名工具行，启用本插件后请把预设里那几行去掉。\n- **改完插件代码要重新加载模块**：插件以软链形式安装时文件改动立刻落盘，但已加载的 ESM\n  模块在进程内有缓存。用插件页关→开一次，或直接重启 DSH。\n- `codex_imagegen` 认的是 PATH 上的 `codex`（登录 ChatGPT 的那个），`subagent_codex`\n  用的是后端包自带的 `@openai/codex`，两者不是同一个二进制；升级时注意区分。\n- `subagent_agy` 走 argv 传 prompt，超大任务（>256 KB）会被提前拒绝并给出明确报错。\n- AGY 能否使用取决于账号/地区资格——适配器接线正确不代表服务端放行。"
+    },
+    {
+      "section": "验证记录",
+      "text": "工具级实测（2026-10-10/11，DSH Desktop 0.2.0-rc.2）：\n\n- `node --check` 三个 `.mjs` 全部通过；工具注册形状用假 ctx 验证（`codex_imagegen`，\n  `timeoutMs=900000`，schema 合法）\n- `codex_imagegen` 真跑出图两次：默认模型 78s / `gpt-6-astra` + `xhigh` 44s，均肉眼确认\n- `grid: {rows:2, cols:3}` 真跑：一张母图裁出 6 块（各 512×512），逐像素校验覆盖正确\n- Codex 后端 app-server 握手 + `initialize` + `thread/start` 成功\n- AGY 链路：代理端口可达，但服务端返回账号地区资格拒绝（账号侧问题，非适配器问题）\n\n本仓库的插件层（Host 行 + 全局工具组）按官方 Ralph 插件的同款结构编写；加载组合可通过\n`dsh --profile <name> --dump-config` 检查。"
+    },
+    {
+      "section": "许可",
+      "text": "本仓库暂未附开源许可证。如需复用、转载或商用，请先联系仓库作者。"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,157 @@
+{
+  "repo": "leetom314/dsh-risk-gate",
+  "commit": "c8e4866cd50406982fe6580812d5cbf9be2a277c",
+  "extracted_at": "2026-11-11T23:15:03.741471+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 64151,
+    "lines_by_language": {
+      "JSON": 26,
+      "JavaScript": 1193,
+      "Markdown": 82,
+      "Other": 25,
+      "Shell": 54,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/classifier.js",
+      "package.json",
+      "setup.sh",
+      "tests/adversarial.test.js",
+      "tests/boundary.test.js",
+      "tests/classifier.test.js",
+      "tests/host.test.js",
+      "verify.sh"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-risk-gate",
+    "version": "0.1.0",
+    "type": "module",
+    "license": "MIT",
+    "author": "leetom314",
+    "main": "index.js",
+    "files": [
+      "index.js",
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --test tests/"
+    },
+    "dependencies": {
+      "@deepseek-ai/dsh-tools": "*"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-risk-gate bundle patch\n- insert:\n    - id: dsh-risk-gate\n      name: dsh-risk-gate\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "tests/adversarial.test.js:60"
+    },
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "tests/boundary.test.js:73"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-tools": "*"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-09-08T14:59:41Z",
+    "created_at": "2026-09-08T14:59:36Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/classifier.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-risk-gate",
+      "text": "Semantic risk grading + progressive authorization for DeepSeek Harness.\n按操作**语义**自动分级,不要求用户写规则——把 Hermes Agent 的可逆性决策链移植成 dsh 插件。"
+    },
+    {
+      "section": "What it does",
+      "text": "Hooks `tools/pre-execute` and classifies every tool call by **operation semantics**:\n\n| Level | Meaning | Action |\n|---|---|---|\n| `safe` | reversible / read-only (read, search, web, benign bash) | pass through (`next()`) |\n| `risky` | irreversible but low-risk (write, edit, install, git commit) | `ask` via approval seam |\n| `redline` | one of four red lines: remote-state change / outbound message / delete / paid quota | `ask` with explicit redline type; fail-closed `deny` when no answerer |"
+    },
+    {
+      "section": "What it does",
+      "text": "Classification is **local and deterministic** — no network, no LLM call. Unknown tools default to `risky` (fail-closed)."
+    },
+    {
+      "section": "Progressive authorization (渐进授权)",
+      "text": "Same operation signature approved-and-succeeded N times → auto-allowed afterward; a single failure/rejection zeroes the signature back to `ask`.\n\n- Signature = tool name + normalized arguments (large text payloads truncated)\n- Redline ops never auto-allow by default (`alwaysAskRedline: true`)\n- State is per-process (in-memory); HMR dispose clears it"
+    },
+    {
+      "section": "Install",
+      "text": "```bash"
+    },
+    {
+      "section": "from GitHub (requires dsh CLI; git-based install)",
+      "text": "dsh plugin --profile web add \"github:leetom314/dsh-risk-gate#main\""
+    },
+    {
+      "section": "or clone and verify locally first",
+      "text": "git clone https://github.com/leetom314/dsh-risk-gate.git\ncd dsh-risk-gate && ./setup.sh && npm test && ./verify.sh\n```"
+    },
+    {
+      "section": "Config",
+      "text": "```yaml\n- id: dsh-risk-gate\n  name: dsh-risk-gate\n  config:\n    autoAllowThreshold: 3      # 0 = disable progressive auth, always ask"
+    },
+    {
+      "section": "Test",
+      "text": "```bash\nnpm test        # node --test (classifier + host-level progressive auth)\n```\n\nE2E (real model + headless profile, isolated DSH_HOME):\n\n```bash\n./setup.sh\nDEEPSEEK_API_KEY=... ./verify.sh"
+    },
+    {
+      "section": "quoted echo string not blocked / git push + scp + ssh remote blocked",
+      "text": "```\n\n`verify.sh` 动态生成临时 overlay(`$HERE/index.js` 路径),不需要仓库内 overlay 文件——`overlay*.yml` 已 gitignore(含本机绝对路径,不随版本库分发)。"
+    },
+    {
+      "section": "How the semantics map (red lines)",
+      "text": "Shell-command inspection (bash/pwsh only, conservative regex):\n\n- **DELETE** — `rm -rf`, `shred`, `mkfs`, `dd ... of=/dev/...`\n- **REMOTE** — `git push` (incl. `git -C dir push` variants), `git reset --hard`, `rsync user@host:`, `ssh user@host`, `curl/wget -X POST/PUT/DELETE`, data uploads\n- **PAY** — cloud provisioning (`aws ec2 run-instances`, `gcloud compute`, ...)\n- **MESSAGE** — outbound message tools (`send_message`, `im_send`, ...)"
+    },
+    {
+      "section": "How the semantics map (red lines)",
+      "text": "Tool-name mapping: `read/glob/grep/web_*/skill/job_*` safe · `write/edit/str_replace_editor/todo_write/create_goal` risky."
+    },
+    {
+      "section": "Limitations",
+      "text": "- Shell inspection is regex-based (no full shell parsing): designed to be conservative (false positives over misses), but a determined prompt can still smuggle commands through obfuscation. It is a **safety gate, not a sandbox** — pair with `dsh-permission-rules` / sandbox executors for defense in depth.\n- Learning state is in-memory only (no persistence across restarts yet).\n- Approval UI is channel-provided; headless with no answerer fails closed (deny)."
+    }
+  ],
+  "skipped": []
+}

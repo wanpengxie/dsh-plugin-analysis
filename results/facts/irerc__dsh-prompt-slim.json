@@ -1,0 +1,127 @@
+{
+  "repo": "irerc/dsh-prompt-slim",
+  "commit": "a687885f18682d87663c659e50d79bba8241ffb9",
+  "extracted_at": "2026-11-11T21:49:35.731871+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 102055,
+    "lines_by_language": {
+      "JSON": 45,
+      "JavaScript": 650,
+      "Markdown": 77,
+      "Other": 2,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/compress.js",
+      "lib/index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/measure.mjs",
+      "test/plugin.test.mjs",
+      "test/tools-captured.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-prompt-slim",
+    "version": "0.1.0",
+    "description": "Compress the assembled tool-definition block that is re-sent with every model request",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml"
+    },
+    "files": [
+      "lib/index.js",
+      "lib/compress.js",
+      "cordis.patch.yml",
+      "package.json"
+    ],
+    "scripts": {
+      "test": "node test/measure.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "4.0.5",
+      "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.1",
+      "@deepseek-ai/dsh-tools": "0.2.1-rc.1",
+      "@deepseek-ai/schemastery": "3.18.5"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: prompt-slim\n      name: dsh-prompt-slim\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-10-24T23:56:35Z",
+    "created_at": "2026-10-24T23:54:47Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/compress.js",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "prompt-slim",
+      "text": "压缩「每一步都重发给模型的工具定义」——不改工具行为，只砍说明文字。\n\nDSH 在每次请求前把当前可见的 80+ 个工具（名称、描述、完整 JSON Schema）整体发给模型，实测约 65 KB。其中大部分是散文式描述，参数结构只占小头。prompt-slim 在 `system-prompt/assemble` 阶段重写这份工具块：\n\n- **保留**：工具名、参数名、`type` / `enum` / `const` / `required` / `items` / `oneOf` 等一切会改变模型填参行为的字段，顺序不变。\n- **裁剪**：每个描述只留开头的完整句子（在句号、分号处断开），参数描述各自限量；多余空白压成单空格。\n- **可逆**：原始描述始终在注册表里，`prompt_slim_help` 可按名字随时取回完整定义。"
+    },
+    {
+      "section": "效果（本机 81 个生效工具实测）",
+      "text": "| 配置 | 工具块 | 节省 |\n| --- | --- | --- |\n| 原始 | 65492 B（≈18.2k tokens） | — |\n| 保守档 `200 / 60` | 43651 B（≈12.1k tokens） | 33.3% |\n| **默认档 `160 / 40`** + `workflow: 1200` | 39812 B（≈11.1k tokens） | **39.2%** |\n| `120 / 30` | 37072 B（≈10.3k tokens） | 43.4% |\n| `100 / 20` | 34752 B（≈9.7k tokens） | 46.9% |\n| `60 / 0`（丢弃参数描述） | 30000 B | 54.2% |\n| `0 / 0`（只留名字和结构） | 26130 B | 60.1% |"
+    },
+    {
+      "section": "效果（本机 81 个生效工具实测）",
+      "text": "默认档砍掉的几乎都是示例、重复叮嘱和长尾细节：工具的第一句（它做什么、关键约束）和参数的短说明都还在，所以模型仍然知道每个工具干什么、必填什么。`160 / 40` 之后每往下一档，省下的 token 边际收益变小、误用风险变大；再狠就用 `100 / 20`，并且配合 `prompt_slim_help` 让模型按需查全文。"
+    },
+    {
+      "section": "配置",
+      "text": "写在 profile 的 `cordis.patch.yml`：\n\n```yaml\n- insert:\n    - id: prompt-slim\n      name: dsh-prompt-slim\n      config:\n\n`workflow` 单独放宽，是因为它的描述本身就是脚本 API 文档（`agent()` / `pipeline()` / `parallel()` / `phase()`），压到 160 字符会丢掉用法。"
+    },
+    {
+      "section": "安装",
+      "text": "1. 取到本目录，链进 profile：\n\n```sh\n   git clone https://github.com/wsxuyue/dsh-prompt-slim ~/dsh-prompt-slim\n   ln -s ~/dsh-prompt-slim ~/.dsh/profiles/web/node_modules/dsh-prompt-slim\n   ```\n\n2. 在 `~/.dsh/profiles/web/cordis.patch.yml` 末尾加上面那段 `insert`。\n\n3. 依赖解析：本目录 `node_modules/@deepseek-ai/*` 是指向 DSH 安装目录 `.pnpm` 的符号链接（和 `dsh-mobile-shizuku` 的做法一致），换机器时重新指向即可。\n\n改动 `cordis.patch.yml` 会被 loader 热加载，不需要重启 `dsh web`。"
+    },
+    {
+      "section": "卸载",
+      "text": "删掉 `cordis.patch.yml` 里的 `prompt-slim` 段即可；工具定义立刻恢复全量，无需重启。"
+    },
+    {
+      "section": "设计取舍",
+      "text": "- **不做「延迟加载」网关**：`deferLoading` 只对 Anthropic 有效，openai-compatible 适配器不看这个字段；用 `tool_call` 代理转发又会把工具调用渲染成嵌套 JSON、丢掉参数校验。压缩文本则是跨 provider 都成立的省法。\n- **固定点**：压缩对自身输出幂等（已验证），同一份工具集每次产出完全相同的字节，不会因为描述抖动而破坏上游 prompt cache。\n- **失败即放行**：重写包在 `try/catch` 里，插件自身出错时原样返回组装结果，绝不让一个提示词优化拖垮一次对话。"
+    },
+    {
+      "section": "自测",
+      "text": "```sh\nnode test/measure.mjs test/tools-captured.json   # 结构保真 + 节省比例\nnode test/plugin.test.mjs                        # 注册、重写、幂等、取回原文\n```"
+    }
+  ],
+  "skipped": []
+}

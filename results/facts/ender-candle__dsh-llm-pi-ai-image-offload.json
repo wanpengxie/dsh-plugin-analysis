@@ -1,0 +1,231 @@
+{
+  "repo": "ender-candle/dsh-llm-pi-ai-image-offload",
+  "commit": "f5e152629aa86ba61835bb48c716489c16a3f6c8",
+  "extracted_at": "2026-11-11T19:39:19.831118+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 39390,
+    "lines_by_language": {
+      "JSON": 40,
+      "JavaScript": 621,
+      "Markdown": 350,
+      "Other": 47,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "test/offload.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-llm-pi-ai-image-offload",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "Restores request-image token pricing for pi-ai routes so dsh-spill-policy can offload oversized base64 images instead of overflowing the context window.",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "pi-ai",
+      "image-offload",
+      "context-window",
+      "spill-policy"
+    ],
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh-CN.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "scripts": {
+      "test": "node test/offload.test.mjs"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-llm-pi-ai-image-offload bundle patch: one host row.\n# The row name resolves from the profile's own node_modules, so this package\n# must be installed there (`dsh plugin --profile desktop add <path>` or a\n# `file:` dependency plus install).\n- insert:\n    - id: llm-pi-ai-image-offload\n      name: dsh-llm-pi-ai-image-offload\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-11-01T11:04:06Z",
+    "created_at": "2026-11-01T10:49:24Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json",
+    "test/offload.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-llm-pi-ai-image-offload",
+      "text": "**中文文档：[README.zh-CN.md](./README.zh-CN.md)**\n\nRestores **request-image token pricing** for adapter routes that declare none\n— in practice every route served by `@deepseek-ai/dsh-llm-pi-ai`."
+    },
+    {
+      "section": "dsh-llm-pi-ai-image-offload",
+      "text": "Naming: the package is called `image-offload` after the capability it restores,\nnot after the method it patches. The patched method is `imageRequestPricing`,\nwhose job is to price an image in **tokens** so the budget checks can compare it\nagainst `maxInlineTokens` and offload what does not fit. \"Pricing\" here is token\naccounting, not billing."
+    },
+    {
+      "section": "The bug this fixes",
+      "text": "`LlmAdapter.imageRequestPricing()` returns `undefined` by default, meaning \"this\nroute declares no image pricing\". Only `dsh-llm-deepseek` overrides it. pi-ai\ndoes not.\n\n`@deepseek-ai/dsh-spill-policy` asks for that calculator whenever a tool result\ncarries images:\n\n```js\nconst calculator = ctx.get(\"llm\")?.imageRequestPricing(provider, model);\nif (calculator === undefined) throw new Error(\"the current model has no image token calculator\");\n```"
+    },
+    {
+      "section": "The bug this fixes",
+      "text": "That throw is caught by the plugin's own outer `try`, which logs\n`spill-policy: ...; keeping the inline content` and **returns nothing**. The tool\nresult therefore stays completely inline: a multi-megabyte base64 image goes to\nthe provider verbatim and consumes the context window.\n\n`@deepseek-ai/dsh-token-meter` degrades the same way, falling back to a fixed\nstructural heuristic instead of pricing the bytes actually sent."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "It installs `imageRequestPricing` on adapter **instances** that return no\npricing, and re-applies on every `llm/adapters-updated` event.\n- An adapter that answers real pricing keeps it (an upstream fix retires this\n  patch automatically).\n- An adapter whose implementation *throws* is never replaced.\n- Zero runtime dependencies, so it cannot fail to resolve host packages at load\n  time. The descriptor helpers are reproduced byte-for-byte from the shipped\n  implementation, and the integration test asserts that equality against the\n  real `@deepseek-ai/dsh-llm`."
+    },
+    {
+      "section": "Pricing model",
+      "text": "These routes publish no vision-token accounting, so each occurrence is priced by\nthe bytes actually transmitted for it:\n\n```\ntransmitted = min(attachment.bytes, imageRequestTarget(...).maxBytes)\nvisualTokens = ceil(base64Length(transmitted) / charsPerToken)\n```\n\n`base64Length(b) = ceil(b / 3) * 4`, matching the harness's own byte accounting.\nThis is the same unit `spill-policy` compares against `maxInlineTokens`, which is\nwhat lets it shed an oversized image instead of keeping it inline."
+    },
+    {
+      "section": "Pricing model",
+      "text": "For the reported failure case — a 2048×2048 JPEG at 1,266,320 bytes on a route\nwith a 1 MiB request budget — that is `base64(1048576) / 4 = 349,526` tokens,\ncomfortably above the default `maxInlineTokens: 12500`."
+    },
+    {
+      "section": "Config",
+      "text": "All fields optional.\n\n| field | default | meaning |\n| --- | --- | --- |\n| `enabled` | `true` | turn the patch off entirely |\n| `charsPerToken` | `4` | base64 character density per token |\n| `maxVisualTokens` | `400000` | per-occurrence ceiling |\n| `providers` | *(all)* | allowlist of provider route ids |\n| `debug` | `false` | log each patched route to the harness logger |\n\nExample profile patch:\n\n```yaml\n- id: llm-pi-ai-image-offload\n  name: dsh-llm-pi-ai-image-offload\n  config:\n    debug: true"
+    },
+    {
+      "section": "What the model sees",
+      "text": "Shedding does not delete the image from the session, and does not touch the\nworkspace file. The model receives `spill-policy`'s notice plus a path it can\nre-read with `read_image`, so the image is recoverable rather than lost."
+    },
+    {
+      "section": "Verifying it is active",
+      "text": "The harness logger writes to an in-memory ring buffer that has no file sink, so a\nwarn is not observable after the fact. Use `debug: true` plus a large generated\nimage, and check the session log for `image/offload` events — before this patch\nthat signal never appears."
+    },
+    {
+      "section": "From GitHub (recommended)",
+      "text": "```\ndsh plugin --profile <profile> add github:ender-candle/dsh-llm-pi-ai-image-offload\n```\n\nPin a commit for a reproducible install:\n\n```\ndsh plugin --profile <profile> add github:ender-candle/dsh-llm-pi-ai-image-offload#<sha>\n```"
+    },
+    {
+      "section": "From a local checkout",
+      "text": "```\ndsh plugin --profile <profile> add /absolute/path/to/dsh-llm-pi-ai-image-offload\n```"
+    },
+    {
+      "section": "Then activate the bundle",
+      "text": "Either install path puts the package in the profile's `node_modules`. Add the\nname to `dsh.profile.bundles` in the profile `package.json`:\n\n```json\n{\n  \"dsh\": {\n    \"profile\": {\n      \"bundles\": [\"...\", \"dsh-llm-pi-ai-image-offload\"]\n\nThe bundle's own `cordis.patch.yml` inserts the host row, so no manual patch\nediting is needed. Restart the harness afterwards — bundles load at startup."
+    },
+    {
+      "section": "Then activate the bundle",
+      "text": "> `dsh plugin add` writes both `package.json` and `pnpm-lock.yaml`, so the\n> install stays consistent with the profile's package manager state."
+    },
+    {
+      "section": "Tests",
+      "text": "```\nnode test/offload.test.mjs      # 18 unit checks, no dependencies\n```\n\nThe plugin has zero runtime dependencies, so the unit test runs anywhere. A\nseparate integration check (not shipped) runs against host modules extracted\nfrom `app.asar` and asserts the descriptor text is byte-identical to the\nshipped `requestImageHandleText` / `offloadedImageText` serializers."
+    },
+    {
+      "section": "Risks",
+      "text": "- `LlmAdapter` instance fields are not a documented extension point. If the\n  registry shape changes, the patch silently does nothing — by design, since a\n  missing patch restores exactly the pre-existing behaviour.\n- The estimate over-counts routes whose upstream tokenizes as vision. That is\n  conservative on purpose: it triggers shedding earlier, never later. Provider\n  `usage` remains the authoritative accounting anchor."
+    },
+    {
+      "section": "dsh-llm-pi-ai-image-offload",
+      "text": "给「不声明图片计价的适配器路由」补上 **request-image token 计量**。实践中，\n就是所有由 `@deepseek-ai/dsh-llm-pi-ai` 服务的路由。"
+    },
+    {
+      "section": "为什么叫 image-offload 而不是 pricing",
+      "text": "这个包按它**恢复的能力**命名，而不是按它**补的方法**命名。\n\n被补的方法是 `imageRequestPricing`，它的职责是把一张图折算成 **token 数**，\n好让预算检查能拿它跟 `maxInlineTokens` 比，把放不下的内容挪出请求。\n这里的 \"pricing\" 指 **token 计量，不是计费**。\n\n> 补上 `imageRequestPricing` → 图片有了 token 价 → `spill-policy` 才能判断\n> 「这张图太大放不下」→ 触发 image offload。名字取的是终点，不是起点。"
+    },
+    {
+      "section": "它修的是什么问题",
+      "text": "`LlmAdapter.imageRequestPricing()` 基类默认返回 `undefined`，含义是「本路由不声明\n图片计价」。整包里只有 `dsh-llm-deepseek` 覆盖了它，**`dsh-llm-pi-ai` 没有**。\n\n`@deepseek-ai/dsh-spill-policy` 只要遇到带图的工具结果，就会去要这个计算器：\n\n```js\nconst calculator = ctx.get(\"llm\")?.imageRequestPricing(provider, model);\nif (calculator === undefined) throw new Error(\"the current model has no image token calculator\");\n```\n\n这个 `throw` 被 `spill-policy` 自己的外层 `try` 捕获，记一条\n`spill-policy: ...; keeping the inline content` 的 warn，然后 **直接 return**，\n什么也不改。"
+    },
+    {
+      "section": "它修的是什么问题",
+      "text": "结果就是：**整个工具结果原样内联**。几 MB 的 base64 图片一字不差地发给\nprovider，把上下文窗口吃掉。\n\n`@deepseek-ai/dsh-token-meter` 受同样影响，退化成固定结构估算，而不是按实际\n发送的字节计价。"
+    },
+    {
+      "section": "实测症状",
+      "text": "一张 2048×2048、1,266,320 字节的 JPEG，base64 后约 169 万字符，约 **42 万 token**。\n如果上下文窗口是 262,144，单个工具结果就能直接打爆——表现为\n`CONTEXT_WINDOW_EXCEEDED`。"
+    },
+    {
+      "section": "这个插件做了什么",
+      "text": "它给**实例**上补 `imageRequestPricing`，只补那些不返回计价的实例，并在每次\n`llm/adapters-updated` 事件时重新应用。\n\n三条自我约束：\n\n- **已有真实实现的不碰**。上游一旦自己实现，这个补丁自动退场。\n- **实现会抛异常的不替换**。抛异常说明有真实现，不能覆盖。\n- **零运行时依赖**。因此不存在加载期解析不到宿主包的风险。描述文本用到的两个\n  helper 是照官方实现逐字节复刻的，集成测试会对着真实的 `@deepseek-ai/dsh-llm`\n  断言两者完全相等。"
+    },
+    {
+      "section": "计价模型",
+      "text": "这些路由不公布 vision token 的账法，所以按**实际传输的字节**计价：\n\n```\ntransmitted  = min(attachment.bytes, imageRequestTarget(...).maxBytes)\nvisualTokens = ceil(base64Length(transmitted) / charsPerToken)\n```\n\n其中 `base64Length(b) = ceil(b / 3) * 4`，与平台自己的字节账法一致。\n\n**关键点**：这跟 `spill-policy` 拿来比 `maxInlineTokens` 的是**同一个单位**，\n所以才能真的触发「把过大的图挪出去」。\n\n前述那台机器上的案例：2048×2048 / 1,266,320 字节、路由请求预算 1 MiB，算下来是\n`base64(1048576) / 4 = 349,526` token，远高于默认的 `maxInlineTokens: 12500`。"
+    },
+    {
+      "section": "配置",
+      "text": "全部可选。\n\n| 字段 | 默认值 | 含义 |\n| --- | --- | --- |\n| `enabled` | `true` | 完全关闭此补丁 |\n| `charsPerToken` | `4` | 每个 token 对应多少 base64 字符 |\n| `maxVisualTokens` | `400000` | 单次出现（occurrence）的上限 |\n| `providers` | *(全部)* | provider 路由 id 白名单 |\n| `debug` | `false` | 把每条被打补丁的路由写进 logger |\n\n配置示例（写进 profile 的 patch）：\n\n```yaml\n- id: llm-pi-ai-image-offload\n  name: dsh-llm-pi-ai-image-offload\n  config:\n    debug: true"
+    },
+    {
+      "section": "移出请求之后，模型还能看到图吗",
+      "text": "能。**offload 不等于删除**：\n\n- 不会从会话里删掉图片块\n- 不会动工作区里的原图文件\n- 模型收到的是 `spill-policy` 的通知，外加一个可以再用 `read_image` 读回来的路径\n\n所以图是可恢复的，不是丢失的。"
+    },
+    {
+      "section": "如何确认它生效了",
+      "text": "**别去看日志。** 平台 logger 只有内存环形缓冲（1000 条），没有文件 sink，重启即丢，\n事后翻不到那条 warn。\n\n可行的验证方式：\n\n1. 配置里开 `debug: true`\n2. 生成一张大图\n3. 查会话日志（`session.v4.jsonl.zstd`）里有没有 **`image/offload`** 事件\n\n改动之前，这个信号**从没出现过**（本机 40 个会话里 0 次），比看 warn 可靠。"
+    },
+    {
+      "section": "从 GitHub 安装（推荐）",
+      "text": "```\ndsh plugin --profile <profile> add github:ender-candle/dsh-llm-pi-ai-image-offload\n```\n\n固定到某个 commit 更稳（可复现）：\n\n```\ndsh plugin --profile <profile> add github:ender-candle/dsh-llm-pi-ai-image-offload#<sha>\n```"
+    },
+    {
+      "section": "从本地目录安装",
+      "text": "```\ndsh plugin --profile <profile> add /插件目录的绝对路径/dsh-llm-pi-ai-image-offload\n```"
+    },
+    {
+      "section": "然后激活 bundle",
+      "text": "以上两种方式都会把包装进 profile 的 `node_modules`。接着把包名加进 profile\n`package.json` 的 `dsh.profile.bundles`：\n\n```json\n{\n  \"dsh\": {\n    \"profile\": {\n      \"bundles\": [\"...\", \"dsh-llm-pi-ai-image-offload\"]\n\nbundle 自带的 `cordis.patch.yml` 会插入 host 行，**不需要手改 patch**。\n之后**重启** harness——bundle 只在启动时加载。\n\n> `dsh plugin add` 会同时写 `package.json` 和 `pnpm-lock.yaml`，\n> 所以安装状态与 profile 的包管理器一致，不会出现 lockfile 与清单不匹配的问题。"
+    },
+    {
+      "section": "测试",
+      "text": "```\nnode test/offload.test.mjs      # 18 项单测，无需安装任何依赖\n```\n\n插件零运行时依赖，所以单测在任何机器上都能直接跑。\n\n另有一份**不随包发布**的集成测试：它从 `app.asar` 里提取真实的宿主模块，\n断言本插件产出的描述文本与官方 `requestImageHandleText` / `offloadedImageText`\n**逐字节相同**。"
+    },
+    {
+      "section": "风险",
+      "text": "- **`LlmAdapter` 的实例字段不是官方扩展点。** 如果日后 registry 结构变了，\n  这个补丁会**静默失效**——这是刻意设计：不生效就等于回到打补丁前的行为，\n  不会变得更糟。\n- **估算偏保守。** 对上游按 vision token 计价的路由会高估。这是有意的：\n  只会更早触发移出请求，不会更晚。provider 返回的 `usage` 仍然是权威账本。\n- **这不是根治。** 真正的修法是让 pi-ai 自己实现 `imageRequestPricing`。\n  那一天到来时，本插件会自动退场。"
+    },
+    {
+      "section": "兼容性",
+      "text": "- 三种 wire 协议已实测表现一致：`openai-completions`、`openai-responses`、\n  `anthropic-messages`。换 `api:` 不需要重打补丁——三个协议共用同一个\n  `PiAiAdapter` 实例，且图片预算（`requestImagePixelBudget` /\n  `requestImageMaxBytes`）是 **provider 级**字段，与协议无关。\n- 前提是模型声明了 `input: [text, image]`。否则图片在更早阶段就被换成文字占位，\n  `spill-policy` 根本不会看到它。\n- 插件只保证**本地不把超大 base64 塞进上下文**，不会让不支持视觉的上游网关\n  突然支持图片。上游能否收图是另一回事。"
+    }
+  ],
+  "skipped": []
+}

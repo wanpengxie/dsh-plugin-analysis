@@ -1,0 +1,318 @@
+{
+  "repo": "kkomia/dsh-code-team",
+  "commit": "576530e4f7d3bcbf25b89dc93796e7166643ae9a",
+  "extracted_at": "2026-11-11T22:55:43.591383+00:00",
+  "tree": {
+    "files": 30,
+    "bytes": 2248470,
+    "lines_by_language": {
+      "JSON": 82,
+      "JavaScript": 6441,
+      "Markdown": 941,
+      "Other": 51,
+      "YAML": 188
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "board-tools.js",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/DESIGN.md",
+      "docs/MODE-TEXT.md",
+      "docs/PROTOCOL.md",
+      "docs/VERIFICATION.md",
+      "docs/shots/01-mode-session.png",
+      "docs/shots/02-board-card.png",
+      "docs/shots/04b-board-item-fixed-zoom.png",
+      "docs/shots/05b-board-default-left-zoom.png",
+      "docs/shots/06-guard-after-restart.png",
+      "guard.js",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "mode-guard.js",
+      "package.json",
+      "screenshots.json",
+      "store.js",
+      "test/guard.test.mjs",
+      "test/index.js",
+      "test/store.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-project-dev",
+    "version": "0.1.4",
+    "description": "「项目开发模式」+ 开发进度看板：预设 persona/团队职责/看板守则，7 个 project_board_* 工具（含 prune 批量清理），只读快照路由与聊天内悬浮看板。",
+    "license": "MIT",
+    "type": "module",
+    "main": "index.js",
+    "icon": "icon.svg",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./board-tools": "./board-tools.js",
+      "./mode-guard": "./mode-guard.js",
+      "./guard": "./guard.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "store.js",
+      "board-tools.js",
+      "mode-guard.js",
+      "guard.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/kkomia/dsh-code-team.git"
+    },
+    "homepage": "https://github.com/kkomia/dsh-code-team#readme",
+    "bugs": {
+      "url": "https://github.com/kkomia/dsh-code-team/issues"
+    },
+    "engines": {
+      "node": ">=22"
+    },
+    "scripts": {
+      "test": "node --test test/"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "agent-preset",
+      "project-board",
+      "task-board",
+      "agent-team"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-project-dev — profile patch layer\n# ============================================================================\n# 一个 bundle 携带三样东西：\n#   1) project-board：Host 半端（dev-board service + 只读快照路由 + 看板存储）。\n#   2) preset-project-dev：新的 Agent 模式「项目开发模式」（id: project-dev）。\n#   3) preset 内的两个子插件：board-tools（7 个看板工具）、mode-guard（模式守则 +\n#      子智能体工具拦截 + Lead「禁止动手」遮蔽工具）。\n#\n# ⚠️ 故意不覆盖 `agent-team` 行：沿用 profile 默认的 8 席上限；成员闲置时用\n#    `redefine` 改职复用，而不是扩编/增员（见 DESIGN §2.2-11 与 PROTOCOL §2.2）。\n# ============================================================================\n\n- insert:\n    - id: project-board\n      name: dsh-project-dev\n\n    # Lead「完全不动手」的硬拦截（profile 级 Host 插件）。\n    # 不在 preset 里：preset 子插件的 agent 作用域影子工具实测遮不住 preset 层工作类工具；\n    # agent.ctx.tools.guard 是有文档保证的 per-Agent 拒绝点（见 guard.js 头注释）。\n    - id: project-dev-guard\n      name: dsh-project-dev/guard\n\n    - id: preset-project-dev\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: project-dev\n        name: 项目开发模式\n        description: 项目开发总指挥模式：主对话只理解用户意图、维护修改点台账并派活；常设调研/规划/设计/工程进度对照/测试/验收六席，按需增设前后端等工种；所有实现交给 agent-team，只用 agent-team，不混用子智能体；持续对标一份参考实现。\n        order: 5\n        plugins:\n          # ── 身份与提示词 ──────────────────────────────────────────────\n          # persona.prefix 逐字取自 work/MODE-TEXT.md 的 PERSONA_PREFIX（双角色分流版：\n          # teammate 会继承 Lead 的 preset，所以 persona 必须同时写 Lead 与 teammate 规则）。\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |\n                你是「项目开发模式」中的 Agent。运行时上下文会告诉你角色：`You are the Team Lead named \"lead\"` 或 `You are teammate \"<name>\"`。按下面的规则执行你的角色，不要越界。\n\n                ### A. 总指挥（Team Lead）规则\n\n                你是项目总指挥，不是工程师。你对用户负责的只有四件事：**理解对、记录全、派发准、验收可信**。\n\n                1. **完全不动手**：你不读代码、不跑命令、不查网页、不调 MCP、不写文件、不做设计。你的读类与执行类工具已被系统拦截，调用会被拒绝——这不是故障，是纪律。一切实施动作必须派给同事。你的合法工具只有：agent-team 九件套（spawn_teammate/send_message/list_agents/wait_agent/interrupt_agent/team_task_*）、看板工具（project_board_*）、ask_user_question、todo_write、goal 管理、plan 模式、present（只用来把同事做好的文件交付给用户）。\n                2. **先听懂再动**：每收到新需求，先用 1-2 句话复述你的理解，再判断歧义。凡涉及「目标、范围、验收标准、优先级、与既有修改点/参考方案的关系」中任一项不明确，就用 `ask_user_question` 提问（一次 1-4 个，给默认选项）。用户明确允许频繁确认：宁问勿猜，问问题不丢人，猜错才丢人。\n                3. **台账纪律（不可跳过）**：用户提出的每一个修改点——包括补充、纠错、返工、口头禅式的「还有这个」——必须在**当轮**写入开发看板：先 `project_board_open` 建档，再 `project_board_add` 逐条记录，`userQuote` 必须逐字保留用户原话，`detail` 写你的理解与验收标准，拿不准的标注「待确认」。**禁止先干活后补记录，禁止合并两条不同的问题。**\n                4. **派活纪律**：按**工种**派活，不按碎片任务派活。每个修改点入板后，用 `send_message` 发给对应成员，消息必须带：看板编号（如 PB-007）、用户原话引用、期望结果、验收标准、可改范围、参考实现。**`send_message` 的 `target` 必须用成员的英文 name/target**（`list_agents` 返回值），成员 name 采用**「英文职位-英文昵称」**（如 `frontend-cyrus`、`researcher-ada`、`tester-dora`），**不要**用「中文职位 · 昵称」这种显示名当 target（会报 active teammate not found）；中文显示名只用于给用户汇报和看板 `dispatch.member`。派完立刻用 `project_board_update` 的 `dispatch` 记录派给了谁、负责哪个环节（research/design/frontend/backend/test/acceptance）。\n                5. **只准用 agent-team**：只通过 agent-team 九件套协作。**禁止** subagent、subagent_fork、subagent_codex、workflow、ralph 等子智能体/工作流工具（本模式已被系统拦截）。不要与子智能体交叉使用。\n                6. **调研与对标**：项目开始时与用户确认一份「参考方案」（本地插件源码 / 开源仓库 / 截图 / 竞品），用 `project_board_reference` 固定名称、来源、版本（commit 或版本号）。每次大改动前先派调研员读参考实现源码或设计文档，产出对标差距表；差距表写回看板 reference。只允许「照抄源码/照抄设计」，不允许凭印象发明。\n                7. **验收纪律**：只采信证据。测试员给出测试结果与证据（命令输出/截图/复现步骤），验收员逐条对照用户原话给出通过或拒绝；你看板上的 `test`/`acceptance` 字段推进状态。没有证据的「已完成」一律打回。\n                8. **返工归并**：同一问题反复修不好时，不新开条目；用 `project_board_add({ mergeInto })` 或在原条目上 `project_board_update` 的 `fail`/`attempt` 记录第 N 次返工、根因与证据。看板上一个条目就是一个问题。\n                9. **团队编制**：上限 8 人，一人最多身兼两职。常设六席：调研员、规划员、设计师、工程进度对照员、测试员、验收员；按需增设前端/后端/探索/审核。**长期闲置或任务结束的成员，立即修改其定义**（用 `send_message` 通知新职位、用 `project_board_update` 的 `redefine` 更新看板 team），改职复用，不辞退、不扩编。**成员命名强制为「英文职位-英文昵称」**（小写 kebab，见「团队职责」的命名规则；如 `researcher-ada`、`frontend-cyrus`），这样团队面板里一眼能看出工种；`description` 首段写「中文职位 · 英文昵称」+ 中文职责，对用户与看板用「当前职位 · 昵称」称呼（如「调研员 · Ada」），当前职位以看板 `team[]`/description 为权威。\n                10. **汇报纪律**：向用户汇报只讲四件事：本轮完成/推进了哪些编号、哪些待确认、哪些卡住、下一步派给谁。不复述实现细节，不贴大段代码。\n                11. **每轮固定动作**：① 复述理解并提问 → ② 当轮入板 → ③ 派活并登板 dispatch → ④ 等待/推进同事（wait_agent + 看板）→ ⑤ 验收证据 → ⑥ 按编号向用户汇报。\n\n                ### B. 团队成员（teammate）规则\n\n                你是项目团队中的工种成员，只对自己的工种负责，不替总指挥做决策，也不替其他工种干活。\n\n                1. 收到 Lead 的派活消息后，先确认三件事：看板编号、验收标准、可改范围；有疑问用 send_message 向 Lead 问清再动手。\n                2. 你的工种职责见下面「团队职责」一节。只做本职；跨工种工作交回 Lead 分派。\n                3. **不用子智能体**：本模式禁止 subagent/workflow/ralph；需要人手就请 Lead 加派。\n                4. **先方案后实施**：设计/前端/后端接到需求，先给 1-2 个方案与取舍（大改动必须等 Lead/用户确认），再落代码。参考实现优先：能找到参考源码就照抄它的结构与数值，不凭印象发明。\n                5. **证据纪律**：完成工作后必须给出可核查的证据：命令输出/测试结果/截图/复现步骤/文件路径。没有证据不叫完成。\n                6. **看板只读为主**：只有 Lead 与工程进度对照员写看板；其他成员用 `project_board_list` 只读了解全局，用 `project_board_audit` 自查遗漏。汇报用 send_message 发给 Lead，格式：编号 + 状态 + 证据 + 风险。\n                7. **进度对照员专项**：见「团队职责」中的专项说明。\n                8. 不做方案外的「顺手优化」；发现新问题先报告给 Lead，由 Lead 决定是否入板。\n\n          # ── 上下文与指令文件 ──────────────────────────────────────────\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n\n          # ── shell（按平台二选一）──────────────────────────────────────\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n\n          # ── 文件、搜索、后台任务 ──────────────────────────────────────\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n\n          # ── skills ───────────────────────────────────────────────────\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n\n          # ── goal ─────────────────────────────────────────────────────\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n\n          # ── plan mode 组（照 standard preset 写法）────────────────────\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n\n          # ── compaction 组（照 standard preset 写法）──────────────────\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n          # ── 交互与研究工具 ───────────────────────────────────────────\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n\n          # ── 本 bundle 子插件 ─────────────────────────────────────────\n          # 7 个 project_board_* 看板工具（仅本项目开发模式可见）。\n          - id: board-tools\n            name: dsh-project-dev/board-tools\n          # 模式守则 prompt sections + 子智能体工具拦截 + Lead 禁止动手遮蔽工具。\n          - id: mode-guard\n            name: dsh-project-dev/mode-guard\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "board-tools.js",
+    "mode-guard.js",
+    "guard.js",
+    "icon.svg",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:78"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "index.js:142"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kkomia/dsh-code-team.git",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kkomia/dsh-code-team#readme",
+      "where": "package.json:34"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kkomia/dsh-code-team/issues",
+      "where": "package.json:36"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-10-19T08:12:01Z",
+    "created_at": "2026-10-18T09:37:38Z"
+  },
+  "runtime_files": [
+    "board-tools.js",
+    "client.js",
+    "cordis.patch.yml",
+    "guard.js",
+    "icon.svg",
+    "index.js",
+    "mode-guard.js",
+    "package.json",
+    "store.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-code-team",
+      "text": "> DeepSeek Harness 的「**项目开发模式**」+「**开发进度看板**」插件。\n>\n> 模式：主对话（Lead）只做 *理解需求 → 记录修改点 → 按工种派活 → 验收汇报*，完全不动手；具体工作全部交给 agent-team。\n> 插件：聊天内一张**悬浮开发看板**，把用户提出的每个修改点按「派单（含各环节成员）→ 执行 → 测试 → 验收」追踪；同一问题多次返工归并进同一条目；并持续维护对参考方案的对标。\n\n- 插件包名：`dsh-project-dev`（同一个 bundle 同时携带 preset、Host 服务/路由、7 个看板工具、Lead 硬拦截与 Client 悬浮卡）\n- 运行要求：DeepSeek Harness `>= 0.2.1-rc.2`（实验版 Agent Teams）、Node `>= 22`\n- 许可：MIT\n\n---"
+    },
+    {
+      "section": "它解决什么问题",
+      "text": "长时间的项目开发里，主对话容易犯四类错：**自己动手干活**、**漏掉用户后来提的修改点**、**同一问题反复返工却没有归并记录**、**没有持续对标的参考实现**。这个项目把它们变成机制："
+    },
+    {
+      "section": "它解决什么问题",
+      "text": "1. **Lead 完全不动手**：`guard.js` 在 profile 级按 `SessionHeader.agentPreset` 识别项目开发模式 Lead，用 `agent.ctx.tools.guard()` 拒绝一切不在允许清单内的工具调用（读文件、跑命令、查网页、写文件全部拦截）；Lead 自己只用 agent-team + 看板 + ask/todo/goal/plan/present。\n2. **修改点台账**：用户每个修改点在当轮写入看板（逐字保留 `userQuote`），状态机 `pending → dispatched → running → testing → tested → accepting → accepted`，失败回退并记录 attempts。\n3. **按工种派活**：团队常设调研/规划/设计/工程进度对照/测试/验收六席，按需增设前端/后端/探索/审核；一人最多两职；**成员 name 用「英文职位-英文昵称」**（如 `researcher-ada`、`frontend-cyrus`，团队面板直接可辨工种），显示「中文职位 · 昵称」；闲置成员即时**改定义（redefine）**复用，不扩编不辞退。\n4. **持续对标**：固定一份参考方案（本地源码/仓库/截图/竞品），每次大改前调研员读参考实现产出「对标差距表」，写回看板 `reference`，14 天未对标会在审计里提醒。\n5. **只用 agent-team**：项目开发模式成员看不到 subagent / subagent_fork / subagent_codex / workflow / ralph。"
+    },
+    {
+      "section": "方式 A：用 Agent / 插件管理工具（推荐）",
+      "text": "把本仓库克隆到本地任意目录，然后在 DSH 里让 Agent 执行：\n\n```\nplugin_manager install_bundle  target = <本仓库绝对路径>\n```\n\n或直接调用 `plugin_manager` 的工具动作（Web 端 Plugins 页的安装能力同源）。"
+    },
+    {
+      "section": "方式 B：命令行",
+      "text": "```bash"
+    },
+    {
+      "section": "直接用 GitHub 仓库安装（推荐）",
+      "text": "dsh plugin --profile desktop add github:kkomia/dsh-code-team"
+    },
+    {
+      "section": "或先 clone 再装本地目录",
+      "text": "git clone https://github.com/kkomia/dsh-code-team.git\ndsh plugin --profile desktop add link:<本仓库绝对路径>"
+    },
+    {
+      "section": "然后重启一次 DeepSeek Harness（Host 插件改动需要重启生效）",
+      "text": "```\n\n> `--profile desktop` 换成你实际使用的 Web profile 名称即可。若本包发布到 npm，也可以 `dsh plugin --profile desktop add dsh-project-dev`。\n\n安装完成后：\n\n1. **重启 DSH 一次**（Host 插件与 preset 声明需要重新加载）。\n2. 打开 **设置（Ctrl+,）→ Agent 预设 → 自定义 → 项目开发模式**，点卡片「设为新任务默认」；或在新建会话页底部模式 chip 里选择「项目开发模式」。\n\n> 之后如果只改 `client.js`：刷新页面即可；改 Host 文件（index/store/board-tools/mode-guard/guard/patch）需要重新安装并重启。"
+    },
+    {
+      "section": "使用",
+      "text": "1. 在「项目开发模式」会话里直接提需求/修改点。Lead 会先复述理解，有歧义用 `ask_user_question` 追问。\n2. Lead 把每个修改点写进看板，然后按工种 `send_message` 派活并登记 `dispatch`（记录环节 + 成员）。\n3. 项目开发模式会话里，**对话区左上角（「智能体团队」条下方）**出现收起态胶囊「开发看板 · 共 N 项 · 进行中 x · 待验收 y」；胶囊**可拖动**、位置记忆，点一下展开成悬浮卡（展开后也可拖标题栏、Esc 收起）：\n   - 参考方案条（名称 + 固定版本 + 对标时间 / 差距数）\n   - 统计与验收进度、7 个筛选\n   - 条目列表与详情（用户原话、理解与验收标准、分派环节、执行、测试证据、验收证据、attempts 返工时间线、合并来源、审计摘要）\n   - 看板尚未建立/加载中时，同一位置显示「开发看板 · 等待 Lead 入板」胶囊，同样可拖动；其他模式会话不占空间\n4. 进度对照员定期用 `project_board_audit` 抓「未派单 / 未测试 / 未验收 / 返工≥2 / 待确认 / 对标过期」，Lead 汇报前也会看审计。"
+    },
+    {
+      "section": "看板数据与工具",
+      "text": "数据按**工作区路径**持久化：`$DSH_HOME/project-dev/boards/<boardId>.json`（`boardId = pb- + sha1(工作区路径)[:8]`；原子写 + 进程内串行队列）。UI 只读，写入只经 agent 工具。"
+    },
+    {
+      "section": "看板数据与工具",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `project_board_open` | 打开/创建当前工作区看板，自动同步团队名册（`team[]`） |\n| `project_board_add` | 新增一个用户修改点；带 `mergeInto` 时作为该条目的新一轮返工记录 |\n| `project_board_update` | 推进状态：`dispatch / start / test / accept / reject / fail / attempt / block / obsolete / reopen / redefine / unmerge`；另含 `prune` 批量清理（按 `ids` / `statuses` / `categories`，或 `scope:\"all\"` 清空整板；`dryRun` 预览、`confirm` 保护） |\n| `project_board_merge` | 把重复/关联条目并入目标条目（保留来源 id 于 `mergedFrom`，禁链式合并） |\n| `project_board_reference` | 设置/更新参考方案与对标差距表 |\n| `project_board_list` | 精简查询（状态/类别/关键词） |\n| `project_board_audit` | 完整性审计（未派单/未测试/未验收/返工≥2/待确认/对标过期/stale running） |"
+    },
+    {
+      "section": "看板数据与工具",
+      "text": "**写权限**：Lead 与「工程进度对照员」负责写看板；其他成员用 list/audit 只读自查。"
+    },
+    {
+      "section": "条目（item）字段",
+      "text": "`id, number, title, userQuote, detail, category, priority, status, dispatch{stages[]}, execution, test{status,member,evidence}, acceptance{status,member,evidence}, attempts[], mergedFrom[], mergedInto, tags, note, createdAt, updatedAt`\n\n同一问题多次未修复：用 `fail` / `attempt` / `mergeInto` 记进同一 `attempts[]`，禁止新开条目掩盖。"
+    },
+    {
+      "section": "团队分工",
+      "text": "| 职位 | 必要性 | 职责 |\n|---|---|---|\n| 调研员 | 常设 | 读参考实现源码/文档/截图，出对标差距表；可行性调研 |\n| 规划员 | 常设 | 把修改点拆成工作流与依赖，排批次与里程碑 |\n| 设计师 | 常设 | UI/UX/动效/文案方案，先方案后实施 |\n| 工程进度对照员 | 常设 | 看板第二写手：核对用户消息与看板、抓遗漏、推进状态、出审计报告 |\n| 测试员 | 常设 | 写/跑测试，给命令输出/截图/复现步骤等证据 |\n| 验收员 | 常设 | 逐条对照用户原话验收，拒绝无证据的「已完成」；兼审核 |\n| 前端 / 后端 / 探索 / 审核 | 机动 | 按需增设；一人最多两职 |"
+    },
+    {
+      "section": "团队分工",
+      "text": "成员 name 受 `spawn_teammate` 限制只能是小写英文 kebab，因此**强制采用「英文职位-英文昵称」**（如 `researcher-ada`、`frontend-cyrus`、`tester-dora`；固定前缀：researcher/planner/designer/progress/tester/acceptance/frontend/backend/explorer/reviewer），这样团队面板（只显示 name）一眼能看出工种；中文职位写在 `description` 首段、看板 `team[]` 与成员 chip 中。`send_message` 的 `target` 必须用英文 name/target（`list_agents` 返回值），显示名只用于汇报。改职（redefine）不改 name，当前职位以 description/看板为准。"
+    },
+    {
+      "section": "开发与测试",
+      "text": "```bash"
+    },
+    {
+      "section": "33 条单元测试（store 状态机/返工归并/持久化 + guard 硬拦截），只依赖 Node 内置模块",
+      "text": "node --test test/"
+    },
+    {
+      "section": "或",
+      "text": "node --test test/store.test.mjs\nnode --test test/guard.test.mjs\n```\n\n本机验证用 `node >= 22.19`（`node --test test/` 走 `test/index.js` 聚合入口）。"
+    },
+    {
+      "section": "已完成的真实验证",
+      "text": "- **33 条单测全绿**：本机与 GitHub Actions CI 均通过。\n- **真实 GUI**：项目开发模式会话可正常创建（SessionHeader `agentPreset=project-dev`）；7 个 `project_board_*` 工具全链路实测（open → add → dispatch → start → test/audit）；悬浮卡在真实会话中渲染、展开、条目详情与审计均正常。\n- **Lead 硬拦截（重启后复测）**：新 project-dev 会话里 `read/write` 的工具定义被替换为「⛔ 本模式禁用」占位描述，Lead 即使用户明确要求\"允许违反一次\"也拒绝调用；`ralph/subagent_codex` 完全不可见。详见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。\n\n目录："
+    },
+    {
+      "section": "已完成的真实验证",
+      "text": "```\nindex.js          Host 入口：projectBoard 服务 + 只读快照路由 /api/project-board/snapshot\nguard.js          profile 级 Lead 硬拦截（agent.ctx.tools.guard）\nstore.js          纯函数看板存储/状态机/审计（可直接 node --test）\nboard-tools.js    preset 内 7 个 project_board_* 工具"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 运行时没有「删除 agent-team 成员」的 API：成员 name/名额记录永久保留，所以采用**即时修改成员定义（redefine 改职复用）**，不扩编、不辞退。\n- `spawn_teammate` 的 name 只接受小写英文 kebab-case，因此强制用「英文职位-英文昵称」（如 `researcher-ada`）让团队面板可辨工种；中文职位放在 description 首段/看板中显示。改职（redefine）不改 name，当前职位以 description/看板为准。\n- teammate 会继承 Lead 的 preset，因此工作类工具保留在 preset 里给同事用；Lead 的限制由 profile 级 `guard.js` 的 per-Agent guard 实现。\n- 看板工具只挂在项目开发模式；其他模式看不到工具，但已存在看板的会话仍会显示悬浮卡（只读）。\n- Client UI 只读；看板写入只经 agent 工具。\n- Host 插件改动需要重启 DSH 一次；Client 改动刷新页面即可。\n- 看板按「工作区路径」归并：同一目录视为同一项目（多项目请分目录）。\n- 本模式使用默认 native 工具呈现；若改成 PTC 呈现，所有工具调用会走 `run_code` 并被 Lead 守护拒绝（设计上不兼容 PTC）。\n- 部分环境的宿主 pointer 事件可能影响卡片拖动；默认位置已固定在对话区左上角，不需要拖动。"
+    },
+    {
+      "section": "致谢",
+      "text": "- 美术与交互参考：[dsh-claude-style](https://github.com/kkomia)（字体、主题色、动效节奏按本插件主题 token 适配）。\n- 运行底座：DeepSeek Harness 的 Agent Teams（`@deepseek-ai/dsh-experimental-agent-team` 等）。"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE) © 2026 kkomia"
+    },
+    {
+      "section": "dsh-code-team (English)",
+      "text": "> A **Project Development Mode** agent preset plus an in-chat **development progress board** plugin for DeepSeek Harness."
+    },
+    {
+      "section": "dsh-code-team (English)",
+      "text": "The main conversation (Lead) only understands requirements, records every user modification point, delegates by role to an agent team, and verifies evidence — it never touches code or files itself. A floating board in the chat tracks each modification point through dispatch (with per-stage members), execution, testing and acceptance; repeated failed fixes are merged into the same item, and a pinned reference implementation is continuously benchmarked."
+    },
+    {
+      "section": "dsh-code-team (English)",
+      "text": "- Bundle/package: `dsh-project-dev`\n- Requires: DeepSeek Harness `>= 0.2.1-rc.2` (experimental Agent Teams), Node `>= 22`\n- License: MIT"
+    },
+    {
+      "section": "Install",
+      "text": "```bash"
+    },
+    {
+      "section": "install straight from the GitHub repo (recommended)",
+      "text": "dsh plugin --profile desktop add github:kkomia/dsh-code-team"
+    },
+    {
+      "section": "or clone and link a local directory",
+      "text": "git clone https://github.com/kkomia/dsh-code-team.git\ndsh plugin --profile desktop add link:<repo abs path>\n```\n\nRestart DeepSeek Harness once (host plugins/preset declarations reload on restart). Then open **Settings → Agent presets → Custom → 项目开发模式 (Project Development Mode)** and set it as the default, or pick it from the mode chip on a new session."
+    },
+    {
+      "section": "What you get",
+      "text": "- **Project Development Mode** (`preset-project-dev`, id `project-dev`): lead-only orchestration, role-based agent team (research, planning, design, progress tracking, testing, acceptance + optional frontend/backend/exploration/review), research & continuous benchmarking against one pinned reference, strict \"use agent-team only\" (no subagents/workflow/ralph).\n- **Role-prefixed teammate names**: member names are `role-nickname` kebab-case (e.g. `researcher-ada`, `frontend-cyrus`) so the team panel shows each member's role at a glance; the Chinese role text stays in the description and board roster.\n- **Development progress board**: floating card in chat (docked top-left below the team bar), pill summary, filters, item details with quotes/dispatch/execution/test/acceptance/attempts/audit.\n- **7 board tools** `project_board_open/add/update/merge/reference/list/audit`, persisted per workspace under `$DSH_HOME/project-dev/boards/`.\n- **Lead hard guard** (`guard.js`): a profile-level per-agent `tools.guard()` denies every non-allowlisted tool call for the mode's Lead."
+    },
+    {
+      "section": "Docs",
+      "text": "- [Design spec](docs/DESIGN.md)\n- [Field contract](docs/PROTOCOL.md)\n- [Prompt text](docs/MODE-TEXT.md)"
+    },
+    {
+      "section": "Test",
+      "text": "```bash\nnode --test test/\n```"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE) © 2026 kkomia"
+    }
+  ],
+  "skipped": []
+}

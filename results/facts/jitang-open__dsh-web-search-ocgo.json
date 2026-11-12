@@ -1,0 +1,4255 @@
+{
+  "repo": "jitang-open/dsh-web-search-ocgo",
+  "commit": "d4d62feee9d8466662fb9283d74c8132697f7a7e",
+  "extracted_at": "2026-11-11T22:18:16.136593+00:00",
+  "tree": {
+    "files": 34,
+    "bytes": 327876,
+    "lines_by_language": {
+      "JSON": 3195,
+      "JavaScript": 4764,
+      "Markdown": 493,
+      "Other": 78,
+      "YAML": 35
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "NOTICE",
+      "README.md",
+      "bench/ab-analyze.mjs",
+      "bench/ab-official-vs-ocgo.mjs",
+      "bench/ab-raw.json",
+      "bench/ab-report.md",
+      "bench/dump-response.mjs",
+      "bench/maxuses-bench.mjs",
+      "bench/maxuses-raw.json",
+      "bench/maxuses-report.md",
+      "bin/doctor.mjs",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/cache.js",
+      "lib/constants.js",
+      "lib/errors.js",
+      "lib/provider.js",
+      "lib/tui-settings.js",
+      "package.json",
+      "probe/cordis.patch.yml",
+      "probe/index.js",
+      "probe/package.json",
+      "probe/smoke.js",
+      "probe/static.js",
+      "scripts/check.mjs",
+      "test/cache.test.js",
+      "test/client.test.js",
+      "test/index.test.js",
+      "test/map-response.test.js",
+      "test/provider.test.js",
+      "test/tui-settings.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-web-search-ocgo",
+    "version": "0.2.0",
+    "private": true,
+    "description": "自研 DSH 网页搜索 provider：走 OpenCode Go（自动注入 x-opencode-session），带官方端点失败回退、查询缓存、result.content 总结与日期规范化；Web 与 TUI 两套设置页。",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "web-search",
+      "opencode-go",
+      "opencode-zen",
+      "x-opencode-session"
+    ],
+    "type": "module",
+    "license": "MIT",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "NOTICE",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-client-ui-plugin-manager"
+        ]
+      }
+    },
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "scripts": {
+      "check": "node scripts/check.mjs",
+      "test": "node --test test/*.test.js"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-web-search-ocgo 的 bundle 补丁层。\n#\n# 做两件事：\n#\n# 1. 把 `web` seam 的 searchProvider 从官方 `deepseek-official` 改钉到本插件的\n#    `opencode-go`。两个字段都写全：`searchProvider` 是本次改动，\n#    `fetchProvider` 是重述 base bundle 里的既有值 —— 这样即使补丁层是整体替换\n#    而不是深度合并，也不会把 fetch provider 弄丢。\n#\n# 2. 插入本插件的 loader entry。\n#\n# 刻意**不禁用**官方 `web-search-deepseek` entry：\n#   - 官方 provider 继续留在注册表里，但不被选中（searchProvider 已钉死）；\n#   - 它是一条逃生舱：搜索出问题时，在「设置 → 插件」里把 `web` 的\n#     searchProvider 改回 `deepseek-official` 即可立刻回到官方链路，\n#     不需要卸载本插件。\n#\n# 注意：`config` 段留空是有意的 —— 所有默认值都由 index.js 的 Config schema 提供\n# （OPENCODE_API_KEY / Go 端点 / deepseek-v4.1-flash），这样用户在设置页改的字段\n# 会直接落到 profile 的 cordis.patch.yml，不会和这里的硬编码打架。\n- id: web\n  config:\n    searchProvider: opencode-go\n    fetchProvider: http\n\n- insert:\n    - id: web-search-ocgo\n      name: dsh-web-search-ocgo\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "NODE_OPTIONS",
+      "kind": "env",
+      "where": "probe/index.js:25"
+    },
+    {
+      "name": "NODE_PATH",
+      "kind": "env",
+      "where": "probe/index.js:26"
+    },
+    {
+      "name": "OPENCODE_API_KEY",
+      "kind": "env",
+      "where": "index.js:58-60"
+    },
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "index.js:87-92"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1/messages",
+      "where": "bench/ab-official-vs-ocgo.mjs:55"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "bench/ab-official-vs-ocgo.mjs:63"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/ab-raw.json:17"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/ab-raw.json:18"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/ab-raw.json:19"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/ab-raw.json:20"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/ab-raw.json:21"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/ab-raw.json:22"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/ab-raw.json:23"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/ab-raw.json:24"
+    },
+    {
+      "host": "www.toutiao.com",
+      "url": "https://www.toutiao.com/article/7688480728983568911/?wid=1790298893248",
+      "where": "bench/ab-raw.json:25"
+    },
+    {
+      "host": "weibo.com",
+      "url": "https://weibo.com/2/detail/5347716751951745?utm_source=auto",
+      "where": "bench/ab-raw.json:26"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/ab-raw.json:40"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/ab-raw.json:41"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/ab-raw.json:42"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/ab-raw.json:43"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/ab-raw.json:44"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/ab-raw.json:45"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/ab-raw.json:46"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/ab-raw.json:47"
+    },
+    {
+      "host": "www.toutiao.com",
+      "url": "https://www.toutiao.com/article/7688480728983568911/?wid=1790298893248",
+      "where": "bench/ab-raw.json:48"
+    },
+    {
+      "host": "weibo.com",
+      "url": "https://weibo.com/2/detail/5347716751951745?utm_source=auto",
+      "where": "bench/ab-raw.json:49"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/ab-raw.json:68"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/ab-raw.json:69"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/ab-raw.json:70"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/ab-raw.json:71"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/ab-raw.json:72"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/ab-raw.json:73"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/ab-raw.json:74"
+    },
+    {
+      "host": "www.toutiao.com",
+      "url": "https://www.toutiao.com/article/7688480728983568911/?wid=1790298893248",
+      "where": "bench/ab-raw.json:75"
+    },
+    {
+      "host": "weibo.com",
+      "url": "https://weibo.com/2/detail/5347716751951745?utm_source=auto",
+      "where": "bench/ab-raw.json:76"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104482984757571586",
+      "where": "bench/ab-raw.json:77"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/ab-raw.json:91"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/ab-raw.json:92"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/ab-raw.json:93"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/ab-raw.json:94"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/ab-raw.json:95"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/ab-raw.json:96"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/ab-raw.json:97"
+    },
+    {
+      "host": "www.toutiao.com",
+      "url": "https://www.toutiao.com/article/7688480728983568911/?wid=1790298893248",
+      "where": "bench/ab-raw.json:98"
+    },
+    {
+      "host": "weibo.com",
+      "url": "https://weibo.com/2/detail/5347716751951745?utm_source=auto",
+      "where": "bench/ab-raw.json:99"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104482984757571586",
+      "where": "bench/ab-raw.json:100"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/ab-raw.json:119"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/ab-raw.json:120"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/ab-raw.json:121"
+    },
+    {
+      "host": "baijiahao.baidu.com",
+      "url": "https://baijiahao.baidu.com/s?id=1877270502349563141",
+      "where": "bench/ab-raw.json:122"
+    },
+    {
+      "host": "www.36kr.com",
+      "url": "https://www.36kr.com/p/4005374745563268",
+      "where": "bench/ab-raw.json:123"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/ab-raw.json:124"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/ab-raw.json:125"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/ab-raw.json:126"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/ab-raw.json:127"
+    },
+    {
+      "host": "www.toutiao.com",
+      "url": "https://www.toutiao.com/article/7688480728983568911/?wid=1790298893248",
+      "where": "bench/ab-raw.json:128"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/ab-raw.json:142"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/ab-raw.json:143"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/ab-raw.json:144"
+    },
+    {
+      "host": "baijiahao.baidu.com",
+      "url": "https://baijiahao.baidu.com/s?id=1877270502349563141",
+      "where": "bench/ab-raw.json:145"
+    },
+    {
+      "host": "www.36kr.com",
+      "url": "https://www.36kr.com/p/4005374745563268",
+      "where": "bench/ab-raw.json:146"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/ab-raw.json:147"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/ab-raw.json:148"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/ab-raw.json:149"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/ab-raw.json:150"
+    },
+    {
+      "host": "www.toutiao.com",
+      "url": "https://www.toutiao.com/article/7688480728983568911/?wid=1790298893248",
+      "where": "bench/ab-raw.json:151"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/ab-raw.json:170"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/ab-raw.json:171"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/ab-raw.json:172"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/ab-raw.json:173"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/ab-raw.json:174"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/ab-raw.json:175"
+    },
+    {
+      "host": "blog.csdn.net",
+      "url": "https://blog.csdn.net/qq_36894974/article/details/166789901",
+      "where": "bench/ab-raw.json:176"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/ab-raw.json:177"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/ab-raw.json:178"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/ab-raw.json:179"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/ab-raw.json:193"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/ab-raw.json:194"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/ab-raw.json:195"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/ab-raw.json:196"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/ab-raw.json:197"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/ab-raw.json:198"
+    },
+    {
+      "host": "blog.csdn.net",
+      "url": "https://blog.csdn.net/qq_36894974/article/details/166789901",
+      "where": "bench/ab-raw.json:199"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/ab-raw.json:200"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/ab-raw.json:201"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/ab-raw.json:202"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/ab-raw.json:221"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:222"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:223"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/ab-raw.json:224"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/ab-raw.json:225"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/ab-raw.json:226"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2756616/5",
+      "where": "bench/ab-raw.json:227"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/ab-raw.json:241"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:242"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:243"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/ab-raw.json:244"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/ab-raw.json:245"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/ab-raw.json:246"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2756616/5",
+      "where": "bench/ab-raw.json:247"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/ab-raw.json:266"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:267"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:268"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/ab-raw.json:269"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/ab-raw.json:270"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/ab-raw.json:271"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2756616/5",
+      "where": "bench/ab-raw.json:272"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/ab-raw.json:286"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:287"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:288"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/ab-raw.json:289"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/ab-raw.json:290"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/ab-raw.json:291"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2756616/5",
+      "where": "bench/ab-raw.json:292"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/ab-raw.json:311"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:312"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:313"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/ab-raw.json:314"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/ab-raw.json:315"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/ab-raw.json:316"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/ab-raw.json:317"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/ab-raw.json:331"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:332"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:333"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/ab-raw.json:334"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/ab-raw.json:335"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/ab-raw.json:336"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/ab-raw.json:337"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/ab-raw.json:356"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:357"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:358"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/ab-raw.json:359"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/ab-raw.json:360"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/ab-raw.json:361"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/ab-raw.json:362"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/ab-raw.json:376"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:377"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/ab-raw.json:378"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/ab-raw.json:379"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/ab-raw.json:380"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/ab-raw.json:381"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/ab-raw.json:382"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SZMY-haruhi/dsh-tavily#1",
+      "where": "bench/ab-raw.json:401"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/discussions/779?sort=new#1",
+      "where": "bench/ab-raw.json:402"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/ab-raw.json:403"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/ab-raw.json:404"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/ab-raw.json:405"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/ab-raw.json:406"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/ab-raw.json:407"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/ab-raw.json:408"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/ab-raw.json:409"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/ab-raw.json:410"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SZMY-haruhi/dsh-tavily#1",
+      "where": "bench/ab-raw.json:424"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/discussions/779?sort=new#1",
+      "where": "bench/ab-raw.json:425"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/ab-raw.json:426"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/ab-raw.json:427"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/ab-raw.json:428"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/ab-raw.json:429"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/ab-raw.json:430"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/ab-raw.json:431"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/ab-raw.json:432"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/ab-raw.json:433"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SZMY-haruhi/dsh-tavily#1",
+      "where": "bench/ab-raw.json:452"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/discussions/779?sort=new#1",
+      "where": "bench/ab-raw.json:453"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/ab-raw.json:454"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/ab-raw.json:455"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/ab-raw.json:456"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/ab-raw.json:457"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/ab-raw.json:458"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/ab-raw.json:459"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/ab-raw.json:460"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/ab-raw.json:461"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SZMY-haruhi/dsh-tavily#1",
+      "where": "bench/ab-raw.json:475"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/discussions/779?sort=new#1",
+      "where": "bench/ab-raw.json:476"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/ab-raw.json:477"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/ab-raw.json:478"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/ab-raw.json:479"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/ab-raw.json:480"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/ab-raw.json:481"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/ab-raw.json:482"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/ab-raw.json:483"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/ab-raw.json:484"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/ab-raw.json:503"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/ab-raw.json:504"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/ab-raw.json:505"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/ab-raw.json:506"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/ab-raw.json:507"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/devbits-web-search",
+      "where": "bench/ab-raw.json:508"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/ab-raw.json:509"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/ab-raw.json:510"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/ab-raw.json:511"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/ab-raw.json:512"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/ab-raw.json:526"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/ab-raw.json:527"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/ab-raw.json:528"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/ab-raw.json:529"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/ab-raw.json:530"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/devbits-web-search",
+      "where": "bench/ab-raw.json:531"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/ab-raw.json:532"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/ab-raw.json:533"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/ab-raw.json:534"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/ab-raw.json:535"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/ab-raw.json:554"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/ab-raw.json:555"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/ab-raw.json:556"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/ab-raw.json:557"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/ab-raw.json:558"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/devbits-web-search",
+      "where": "bench/ab-raw.json:559"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/ab-raw.json:560"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/ab-raw.json:561"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/ab-raw.json:562"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/ab-raw.json:563"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/ab-raw.json:577"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/ab-raw.json:578"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/ab-raw.json:579"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/ab-raw.json:580"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/ab-raw.json:581"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/devbits-web-search",
+      "where": "bench/ab-raw.json:582"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/ab-raw.json:583"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/ab-raw.json:584"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/ab-raw.json:585"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/ab-raw.json:586"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/ab-raw.json:605"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/ab-raw.json:606"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/ab-raw.json:607"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/ab-raw.json:608"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/anomalyco/opencode/issues/15949",
+      "where": "bench/ab-raw.json:609"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/anomalyco/opencode/issues/42528",
+      "where": "bench/ab-raw.json:610"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/diegosouzapw/OmniRoute/main/open-sse/services/opencodeQuotaFetcher.ts#1",
+      "where": "bench/ab-raw.json:611"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zed-industries/zed/pull/53651#1",
+      "where": "bench/ab-raw.json:612"
+    },
+    {
+      "host": "pi.dev",
+      "url": "https://pi.dev/packages/pi-ocgo-usage?sort=recent&page=81",
+      "where": "bench/ab-raw.json:613"
+    },
+    {
+      "host": "global.v2ex.co",
+      "url": "https://global.v2ex.co/t/1232641#reply0#1#1#1",
+      "where": "bench/ab-raw.json:614"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/ab-raw.json:628"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/ab-raw.json:629"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/ab-raw.json:630"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/ab-raw.json:631"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/anomalyco/opencode/issues/15949",
+      "where": "bench/ab-raw.json:632"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/anomalyco/opencode/issues/42528",
+      "where": "bench/ab-raw.json:633"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/diegosouzapw/OmniRoute/main/open-sse/services/opencodeQuotaFetcher.ts#1",
+      "where": "bench/ab-raw.json:634"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zed-industries/zed/pull/53651#1",
+      "where": "bench/ab-raw.json:635"
+    },
+    {
+      "host": "pi.dev",
+      "url": "https://pi.dev/packages/pi-ocgo-usage?sort=recent&page=81",
+      "where": "bench/ab-raw.json:636"
+    },
+    {
+      "host": "global.v2ex.co",
+      "url": "https://global.v2ex.co/t/1232641#reply0#1#1#1",
+      "where": "bench/ab-raw.json:637"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/ab-raw.json:656"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/ab-raw.json:657"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/ab-raw.json:658"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/ab-raw.json:659"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/anomalyco/opencode/issues/42528",
+      "where": "bench/ab-raw.json:660"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xiaoqi20/dsh-opencode-go-usage#1",
+      "where": "bench/ab-raw.json:661"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/anomalyco/opencode/issues/15949",
+      "where": "bench/ab-raw.json:662"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/diegosouzapw/OmniRoute/main/open-sse/services/opencodeQuotaFetcher.ts#1",
+      "where": "bench/ab-raw.json:663"
+    },
+    {
+      "host": "www.cocoloop.cn",
+      "url": "https://www.cocoloop.cn/t/topic/11876/18",
+      "where": "bench/ab-raw.json:664"
+    },
+    {
+      "host": "meta.appinn.net",
+      "url": "https://meta.appinn.net/t/topic/92564",
+      "where": "bench/ab-raw.json:665"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/ab-raw.json:679"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/ab-raw.json:680"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/ab-raw.json:681"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/ab-raw.json:682"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/anomalyco/opencode/issues/42528",
+      "where": "bench/ab-raw.json:683"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/xiaoqi20/dsh-opencode-go-usage#1",
+      "where": "bench/ab-raw.json:684"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/anomalyco/opencode/issues/15949",
+      "where": "bench/ab-raw.json:685"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/diegosouzapw/OmniRoute/main/open-sse/services/opencodeQuotaFetcher.ts#1",
+      "where": "bench/ab-raw.json:686"
+    },
+    {
+      "host": "www.cocoloop.cn",
+      "url": "https://www.cocoloop.cn/t/topic/11876/18",
+      "where": "bench/ab-raw.json:687"
+    },
+    {
+      "host": "meta.appinn.net",
+      "url": "https://meta.appinn.net/t/topic/92564",
+      "where": "bench/ab-raw.json:688"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/ab-raw.json:707"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/ab-raw.json:708"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/ab-raw.json:709"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/ab-raw.json:710"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/ab-raw.json:711"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/ab-raw.json:712"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/ab-raw.json:713"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/ab-raw.json:714"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/ab-raw.json:715"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/ab-raw.json:716"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/ab-raw.json:730"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/ab-raw.json:731"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/ab-raw.json:732"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/ab-raw.json:733"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/ab-raw.json:734"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/ab-raw.json:735"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/ab-raw.json:736"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/ab-raw.json:737"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/ab-raw.json:738"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/ab-raw.json:739"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/ab-raw.json:758"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/ab-raw.json:759"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/ab-raw.json:760"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/ab-raw.json:761"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/ab-raw.json:762"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/ab-raw.json:763"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/ab-raw.json:764"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/ab-raw.json:765"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/ab-raw.json:766"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/ab-raw.json:767"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/ab-raw.json:781"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/ab-raw.json:782"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/ab-raw.json:783"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/ab-raw.json:784"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/ab-raw.json:785"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/ab-raw.json:786"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/ab-raw.json:787"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/ab-raw.json:788"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/ab-raw.json:789"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/ab-raw.json:790"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/ja/3.16/whatsnew/3.14.html#dis",
+      "where": "bench/ab-raw.json:809"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/release/python-3148/",
+      "where": "bench/ab-raw.json:810"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/3.14/library/asyncio-threading.html",
+      "where": "bench/ab-raw.json:811"
+    },
+    {
+      "host": "m.ithome.com",
+      "url": "https://m.ithome.com/html/887921.htm",
+      "where": "bench/ab-raw.json:812"
+    },
+    {
+      "host": "www.infoq.cn",
+      "url": "https://www.infoq.cn/article/efxy5ldeyr8drjjagllg#1",
+      "where": "bench/ab-raw.json:813"
+    },
+    {
+      "host": "developer.aliyun.com",
+      "url": "https://developer.aliyun.com/article/1685147#1",
+      "where": "bench/ab-raw.json:814"
+    },
+    {
+      "host": "bbs.huaweicloud.com",
+      "url": "https://bbs.huaweicloud.com/blogs/465289#1",
+      "where": "bench/ab-raw.json:815"
+    },
+    {
+      "host": "m.163.com",
+      "url": "https://m.163.com/dy/article/KBHBIM070511FQO9.html?spss=adap_pc#1",
+      "where": "bench/ab-raw.json:816"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/#1",
+      "where": "bench/ab-raw.json:817"
+    },
+    {
+      "host": "realpython.com",
+      "url": "https://realpython.com/python314-new-features/?utm_source=realpython&utm_medium=rss",
+      "where": "bench/ab-raw.json:818"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/ja/3.16/whatsnew/3.14.html#dis",
+      "where": "bench/ab-raw.json:832"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/release/python-3148/",
+      "where": "bench/ab-raw.json:833"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/3.14/library/asyncio-threading.html",
+      "where": "bench/ab-raw.json:834"
+    },
+    {
+      "host": "m.ithome.com",
+      "url": "https://m.ithome.com/html/887921.htm",
+      "where": "bench/ab-raw.json:835"
+    },
+    {
+      "host": "www.infoq.cn",
+      "url": "https://www.infoq.cn/article/efxy5ldeyr8drjjagllg#1",
+      "where": "bench/ab-raw.json:836"
+    },
+    {
+      "host": "developer.aliyun.com",
+      "url": "https://developer.aliyun.com/article/1685147#1",
+      "where": "bench/ab-raw.json:837"
+    },
+    {
+      "host": "bbs.huaweicloud.com",
+      "url": "https://bbs.huaweicloud.com/blogs/465289#1",
+      "where": "bench/ab-raw.json:838"
+    },
+    {
+      "host": "m.163.com",
+      "url": "https://m.163.com/dy/article/KBHBIM070511FQO9.html?spss=adap_pc#1",
+      "where": "bench/ab-raw.json:839"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/#1",
+      "where": "bench/ab-raw.json:840"
+    },
+    {
+      "host": "realpython.com",
+      "url": "https://realpython.com/python314-new-features/?utm_source=realpython&utm_medium=rss",
+      "where": "bench/ab-raw.json:841"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/ja/3.16/whatsnew/3.14.html#dis",
+      "where": "bench/ab-raw.json:860"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/release/python-3148/",
+      "where": "bench/ab-raw.json:861"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/3.14/library/asyncio-threading.html",
+      "where": "bench/ab-raw.json:862"
+    },
+    {
+      "host": "m.ithome.com",
+      "url": "https://m.ithome.com/html/887921.htm",
+      "where": "bench/ab-raw.json:863"
+    },
+    {
+      "host": "www.infoq.cn",
+      "url": "https://www.infoq.cn/article/efxy5ldeyr8drjjagllg#1",
+      "where": "bench/ab-raw.json:864"
+    },
+    {
+      "host": "developer.aliyun.com",
+      "url": "https://developer.aliyun.com/article/1685147#1",
+      "where": "bench/ab-raw.json:865"
+    },
+    {
+      "host": "bbs.huaweicloud.com",
+      "url": "https://bbs.huaweicloud.com/blogs/465289#1",
+      "where": "bench/ab-raw.json:866"
+    },
+    {
+      "host": "m.163.com",
+      "url": "https://m.163.com/dy/article/KBHBIM070511FQO9.html?spss=adap_pc#1",
+      "where": "bench/ab-raw.json:867"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/#1",
+      "where": "bench/ab-raw.json:868"
+    },
+    {
+      "host": "realpython.com",
+      "url": "https://realpython.com/python314-new-features/?utm_source=realpython&utm_medium=rss",
+      "where": "bench/ab-raw.json:869"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/ja/3.16/whatsnew/3.14.html#dis",
+      "where": "bench/ab-raw.json:883"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/release/python-3148/",
+      "where": "bench/ab-raw.json:884"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/3.14/library/asyncio-threading.html",
+      "where": "bench/ab-raw.json:885"
+    },
+    {
+      "host": "m.ithome.com",
+      "url": "https://m.ithome.com/html/887921.htm",
+      "where": "bench/ab-raw.json:886"
+    },
+    {
+      "host": "www.infoq.cn",
+      "url": "https://www.infoq.cn/article/efxy5ldeyr8drjjagllg#1",
+      "where": "bench/ab-raw.json:887"
+    },
+    {
+      "host": "developer.aliyun.com",
+      "url": "https://developer.aliyun.com/article/1685147#1",
+      "where": "bench/ab-raw.json:888"
+    },
+    {
+      "host": "bbs.huaweicloud.com",
+      "url": "https://bbs.huaweicloud.com/blogs/465289#1",
+      "where": "bench/ab-raw.json:889"
+    },
+    {
+      "host": "m.163.com",
+      "url": "https://m.163.com/dy/article/KBHBIM070511FQO9.html?spss=adap_pc#1",
+      "where": "bench/ab-raw.json:890"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/#1",
+      "where": "bench/ab-raw.json:891"
+    },
+    {
+      "host": "realpython.com",
+      "url": "https://realpython.com/python314-new-features/?utm_source=realpython&utm_medium=rss",
+      "where": "bench/ab-raw.json:892"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/ja/3.16/whatsnew/3.14.html#dis",
+      "where": "bench/ab-raw.json:911"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/release/python-3148/",
+      "where": "bench/ab-raw.json:912"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/3.14/library/asyncio-threading.html",
+      "where": "bench/ab-raw.json:913"
+    },
+    {
+      "host": "m.ithome.com",
+      "url": "https://m.ithome.com/html/887921.htm",
+      "where": "bench/ab-raw.json:914"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/#1",
+      "where": "bench/ab-raw.json:915"
+    },
+    {
+      "host": "www.infoq.cn",
+      "url": "https://www.infoq.cn/article/efxy5ldeyr8drjjagllg#1",
+      "where": "bench/ab-raw.json:916"
+    },
+    {
+      "host": "realpython.com",
+      "url": "https://realpython.com/python314-new-features/?utm_source=realpython&utm_medium=rss",
+      "where": "bench/ab-raw.json:917"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/python-314/#atom-everything#1",
+      "where": "bench/ab-raw.json:918"
+    },
+    {
+      "host": "developer.aliyun.com",
+      "url": "https://developer.aliyun.com/article/1685147#1",
+      "where": "bench/ab-raw.json:919"
+    },
+    {
+      "host": "pycoders.com",
+      "url": "https://pycoders.com/issues/704",
+      "where": "bench/ab-raw.json:920"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/ja/3.16/whatsnew/3.14.html#dis",
+      "where": "bench/ab-raw.json:934"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/release/python-3148/",
+      "where": "bench/ab-raw.json:935"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/3.14/library/asyncio-threading.html",
+      "where": "bench/ab-raw.json:936"
+    },
+    {
+      "host": "m.ithome.com",
+      "url": "https://m.ithome.com/html/887921.htm",
+      "where": "bench/ab-raw.json:937"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/#1",
+      "where": "bench/ab-raw.json:938"
+    },
+    {
+      "host": "www.infoq.cn",
+      "url": "https://www.infoq.cn/article/efxy5ldeyr8drjjagllg#1",
+      "where": "bench/ab-raw.json:939"
+    },
+    {
+      "host": "realpython.com",
+      "url": "https://realpython.com/python314-new-features/?utm_source=realpython&utm_medium=rss",
+      "where": "bench/ab-raw.json:940"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/python-314/#atom-everything#1",
+      "where": "bench/ab-raw.json:941"
+    },
+    {
+      "host": "developer.aliyun.com",
+      "url": "https://developer.aliyun.com/article/1685147#1",
+      "where": "bench/ab-raw.json:942"
+    },
+    {
+      "host": "pycoders.com",
+      "url": "https://pycoders.com/issues/704",
+      "where": "bench/ab-raw.json:943"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/ja/3.16/whatsnew/3.14.html#dis",
+      "where": "bench/ab-raw.json:962"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/release/python-3148/",
+      "where": "bench/ab-raw.json:963"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/3.14/library/asyncio-threading.html",
+      "where": "bench/ab-raw.json:964"
+    },
+    {
+      "host": "m.ithome.com",
+      "url": "https://m.ithome.com/html/887921.htm",
+      "where": "bench/ab-raw.json:965"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/#1",
+      "where": "bench/ab-raw.json:966"
+    },
+    {
+      "host": "www.infoq.cn",
+      "url": "https://www.infoq.cn/article/efxy5ldeyr8drjjagllg#1",
+      "where": "bench/ab-raw.json:967"
+    },
+    {
+      "host": "realpython.com",
+      "url": "https://realpython.com/python314-new-features/?utm_source=realpython&utm_medium=rss",
+      "where": "bench/ab-raw.json:968"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/python-314/#atom-everything#1",
+      "where": "bench/ab-raw.json:969"
+    },
+    {
+      "host": "developer.aliyun.com",
+      "url": "https://developer.aliyun.com/article/1685147#1",
+      "where": "bench/ab-raw.json:970"
+    },
+    {
+      "host": "pycoders.com",
+      "url": "https://pycoders.com/issues/704",
+      "where": "bench/ab-raw.json:971"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/ja/3.16/whatsnew/3.14.html#dis",
+      "where": "bench/ab-raw.json:985"
+    },
+    {
+      "host": "www.python.org",
+      "url": "https://www.python.org/downloads/release/python-3148/",
+      "where": "bench/ab-raw.json:986"
+    },
+    {
+      "host": "docs.python.org",
+      "url": "https://docs.python.org/3.14/library/asyncio-threading.html",
+      "where": "bench/ab-raw.json:987"
+    },
+    {
+      "host": "m.ithome.com",
+      "url": "https://m.ithome.com/html/887921.htm",
+      "where": "bench/ab-raw.json:988"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/#1",
+      "where": "bench/ab-raw.json:989"
+    },
+    {
+      "host": "www.infoq.cn",
+      "url": "https://www.infoq.cn/article/efxy5ldeyr8drjjagllg#1",
+      "where": "bench/ab-raw.json:990"
+    },
+    {
+      "host": "realpython.com",
+      "url": "https://realpython.com/python314-new-features/?utm_source=realpython&utm_medium=rss",
+      "where": "bench/ab-raw.json:991"
+    },
+    {
+      "host": "simonwillison.net",
+      "url": "https://simonwillison.net/2025/Oct/8/python-314/#atom-everything#1",
+      "where": "bench/ab-raw.json:992"
+    },
+    {
+      "host": "developer.aliyun.com",
+      "url": "https://developer.aliyun.com/article/1685147#1",
+      "where": "bench/ab-raw.json:993"
+    },
+    {
+      "host": "pycoders.com",
+      "url": "https://pycoders.com/issues/704",
+      "where": "bench/ab-raw.json:994"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning",
+      "where": "bench/ab-raw.json:1013"
+    },
+    {
+      "host": "claude.com",
+      "url": "https://claude.com/blog/bringing-mcp-2026-07-28-to-claude?AdId=main-programme-video&CampaignId=cdt-newvideos&SiteId=linkedin&trk=public_post-text&utm_campaign=cdt-newvideos#1",
+      "where": "bench/ab-raw.json:1014"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1015"
+    },
+    {
+      "host": "ts.sdk.modelcontextprotocol.io",
+      "url": "https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md",
+      "where": "bench/ab-raw.json:1016"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8v9j7keD4Xf?ch=ttsearch",
+      "where": "bench/ab-raw.json:1017"
+    },
+    {
+      "host": "modelcontextprotocol.com.cn",
+      "url": "https://modelcontextprotocol.com.cn/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1018"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/go-sdk/release/v1.7.0#1",
+      "where": "bench/ab-raw.json:1019"
+    },
+    {
+      "host": "aaif.io",
+      "url": "https://aaif.io/blog/mcp-2026-changes-the-rules",
+      "where": "bench/ab-raw.json:1020"
+    },
+    {
+      "host": "gigazine.net",
+      "url": "https://gigazine.net/gsc_news/en/20260729-model-context-protocol-2026-07-28#gsc.tab=0#1",
+      "where": "bench/ab-raw.json:1021"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/python-sdk/release/v2.0.0rc1#1",
+      "where": "bench/ab-raw.json:1022"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning",
+      "where": "bench/ab-raw.json:1036"
+    },
+    {
+      "host": "claude.com",
+      "url": "https://claude.com/blog/bringing-mcp-2026-07-28-to-claude?AdId=main-programme-video&CampaignId=cdt-newvideos&SiteId=linkedin&trk=public_post-text&utm_campaign=cdt-newvideos#1",
+      "where": "bench/ab-raw.json:1037"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1038"
+    },
+    {
+      "host": "ts.sdk.modelcontextprotocol.io",
+      "url": "https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md",
+      "where": "bench/ab-raw.json:1039"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8v9j7keD4Xf?ch=ttsearch",
+      "where": "bench/ab-raw.json:1040"
+    },
+    {
+      "host": "modelcontextprotocol.com.cn",
+      "url": "https://modelcontextprotocol.com.cn/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1041"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/go-sdk/release/v1.7.0#1",
+      "where": "bench/ab-raw.json:1042"
+    },
+    {
+      "host": "aaif.io",
+      "url": "https://aaif.io/blog/mcp-2026-changes-the-rules",
+      "where": "bench/ab-raw.json:1043"
+    },
+    {
+      "host": "gigazine.net",
+      "url": "https://gigazine.net/gsc_news/en/20260729-model-context-protocol-2026-07-28#gsc.tab=0#1",
+      "where": "bench/ab-raw.json:1044"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/python-sdk/release/v2.0.0rc1#1",
+      "where": "bench/ab-raw.json:1045"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning",
+      "where": "bench/ab-raw.json:1064"
+    },
+    {
+      "host": "claude.com",
+      "url": "https://claude.com/blog/bringing-mcp-2026-07-28-to-claude?AdId=main-programme-video&CampaignId=cdt-newvideos&SiteId=linkedin&trk=public_post-text&utm_campaign=cdt-newvideos#1",
+      "where": "bench/ab-raw.json:1065"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1066"
+    },
+    {
+      "host": "ts.sdk.modelcontextprotocol.io",
+      "url": "https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md",
+      "where": "bench/ab-raw.json:1067"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8v9j7keD4Xf?ch=ttsearch",
+      "where": "bench/ab-raw.json:1068"
+    },
+    {
+      "host": "modelcontextprotocol.com.cn",
+      "url": "https://modelcontextprotocol.com.cn/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1069"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/go-sdk/release/v1.7.0#1",
+      "where": "bench/ab-raw.json:1070"
+    },
+    {
+      "host": "aaif.io",
+      "url": "https://aaif.io/blog/mcp-2026-changes-the-rules",
+      "where": "bench/ab-raw.json:1071"
+    },
+    {
+      "host": "gigazine.net",
+      "url": "https://gigazine.net/gsc_news/en/20260729-model-context-protocol-2026-07-28#gsc.tab=0#1",
+      "where": "bench/ab-raw.json:1072"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/python-sdk/release/v2.0.0rc1#1",
+      "where": "bench/ab-raw.json:1073"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning",
+      "where": "bench/ab-raw.json:1087"
+    },
+    {
+      "host": "claude.com",
+      "url": "https://claude.com/blog/bringing-mcp-2026-07-28-to-claude?AdId=main-programme-video&CampaignId=cdt-newvideos&SiteId=linkedin&trk=public_post-text&utm_campaign=cdt-newvideos#1",
+      "where": "bench/ab-raw.json:1088"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1089"
+    },
+    {
+      "host": "ts.sdk.modelcontextprotocol.io",
+      "url": "https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md",
+      "where": "bench/ab-raw.json:1090"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8v9j7keD4Xf?ch=ttsearch",
+      "where": "bench/ab-raw.json:1091"
+    },
+    {
+      "host": "modelcontextprotocol.com.cn",
+      "url": "https://modelcontextprotocol.com.cn/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1092"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/go-sdk/release/v1.7.0#1",
+      "where": "bench/ab-raw.json:1093"
+    },
+    {
+      "host": "aaif.io",
+      "url": "https://aaif.io/blog/mcp-2026-changes-the-rules",
+      "where": "bench/ab-raw.json:1094"
+    },
+    {
+      "host": "gigazine.net",
+      "url": "https://gigazine.net/gsc_news/en/20260729-model-context-protocol-2026-07-28#gsc.tab=0#1",
+      "where": "bench/ab-raw.json:1095"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/python-sdk/release/v2.0.0rc1#1",
+      "where": "bench/ab-raw.json:1096"
+    },
+    {
+      "host": "claude.com",
+      "url": "https://claude.com/blog/bringing-mcp-2026-07-28-to-claude?AdId=main-programme-video&CampaignId=cdt-newvideos&SiteId=linkedin&trk=public_post-text&utm_campaign=cdt-newvideos#1",
+      "where": "bench/ab-raw.json:1115"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1116"
+    },
+    {
+      "host": "ts.sdk.modelcontextprotocol.io",
+      "url": "https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md",
+      "where": "bench/ab-raw.json:1117"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8v9j7keD4Xf?ch=ttsearch",
+      "where": "bench/ab-raw.json:1118"
+    },
+    {
+      "host": "modelcontextprotocol.com.cn",
+      "url": "https://modelcontextprotocol.com.cn/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1119"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/go-sdk/release/v1.7.0#1",
+      "where": "bench/ab-raw.json:1120"
+    },
+    {
+      "host": "aaif.io",
+      "url": "https://aaif.io/blog/mcp-2026-changes-the-rules",
+      "where": "bench/ab-raw.json:1121"
+    },
+    {
+      "host": "gigazine.net",
+      "url": "https://gigazine.net/gsc_news/en/20260729-model-context-protocol-2026-07-28#gsc.tab=0#1",
+      "where": "bench/ab-raw.json:1122"
+    },
+    {
+      "host": "blog.modelcontextprotocol.io",
+      "url": "https://blog.modelcontextprotocol.io/posts/2026-07-28/",
+      "where": "bench/ab-raw.json:1123"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/docs/draft/learn/versioning.md",
+      "where": "bench/ab-raw.json:1124"
+    },
+    {
+      "host": "claude.com",
+      "url": "https://claude.com/blog/bringing-mcp-2026-07-28-to-claude?AdId=main-programme-video&CampaignId=cdt-newvideos&SiteId=linkedin&trk=public_post-text&utm_campaign=cdt-newvideos#1",
+      "where": "bench/ab-raw.json:1138"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1139"
+    },
+    {
+      "host": "ts.sdk.modelcontextprotocol.io",
+      "url": "https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md",
+      "where": "bench/ab-raw.json:1140"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8v9j7keD4Xf?ch=ttsearch",
+      "where": "bench/ab-raw.json:1141"
+    },
+    {
+      "host": "modelcontextprotocol.com.cn",
+      "url": "https://modelcontextprotocol.com.cn/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1142"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/go-sdk/release/v1.7.0#1",
+      "where": "bench/ab-raw.json:1143"
+    },
+    {
+      "host": "aaif.io",
+      "url": "https://aaif.io/blog/mcp-2026-changes-the-rules",
+      "where": "bench/ab-raw.json:1144"
+    },
+    {
+      "host": "gigazine.net",
+      "url": "https://gigazine.net/gsc_news/en/20260729-model-context-protocol-2026-07-28#gsc.tab=0#1",
+      "where": "bench/ab-raw.json:1145"
+    },
+    {
+      "host": "blog.modelcontextprotocol.io",
+      "url": "https://blog.modelcontextprotocol.io/posts/2026-07-28/",
+      "where": "bench/ab-raw.json:1146"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/docs/draft/learn/versioning.md",
+      "where": "bench/ab-raw.json:1147"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning",
+      "where": "bench/ab-raw.json:1166"
+    },
+    {
+      "host": "claude.com",
+      "url": "https://claude.com/blog/bringing-mcp-2026-07-28-to-claude?AdId=main-programme-video&CampaignId=cdt-newvideos&SiteId=linkedin&trk=public_post-text&utm_campaign=cdt-newvideos#1",
+      "where": "bench/ab-raw.json:1167"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1168"
+    },
+    {
+      "host": "ts.sdk.modelcontextprotocol.io",
+      "url": "https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md",
+      "where": "bench/ab-raw.json:1169"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8v9j7keD4Xf?ch=ttsearch",
+      "where": "bench/ab-raw.json:1170"
+    },
+    {
+      "host": "modelcontextprotocol.com.cn",
+      "url": "https://modelcontextprotocol.com.cn/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1171"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/go-sdk/release/v1.7.0#1",
+      "where": "bench/ab-raw.json:1172"
+    },
+    {
+      "host": "aaif.io",
+      "url": "https://aaif.io/blog/mcp-2026-changes-the-rules",
+      "where": "bench/ab-raw.json:1173"
+    },
+    {
+      "host": "gigazine.net",
+      "url": "https://gigazine.net/gsc_news/en/20260729-model-context-protocol-2026-07-28#gsc.tab=0#1",
+      "where": "bench/ab-raw.json:1174"
+    },
+    {
+      "host": "blog.modelcontextprotocol.io",
+      "url": "https://blog.modelcontextprotocol.io/posts/2026-07-28/",
+      "where": "bench/ab-raw.json:1175"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning",
+      "where": "bench/ab-raw.json:1189"
+    },
+    {
+      "host": "claude.com",
+      "url": "https://claude.com/blog/bringing-mcp-2026-07-28-to-claude?AdId=main-programme-video&CampaignId=cdt-newvideos&SiteId=linkedin&trk=public_post-text&utm_campaign=cdt-newvideos#1",
+      "where": "bench/ab-raw.json:1190"
+    },
+    {
+      "host": "modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1191"
+    },
+    {
+      "host": "ts.sdk.modelcontextprotocol.io",
+      "url": "https://ts.sdk.modelcontextprotocol.io/v2/migration/support-2026-07-28.md",
+      "where": "bench/ab-raw.json:1192"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8v9j7keD4Xf?ch=ttsearch",
+      "where": "bench/ab-raw.json:1193"
+    },
+    {
+      "host": "modelcontextprotocol.com.cn",
+      "url": "https://modelcontextprotocol.com.cn/specification/2026-07-28/changelog",
+      "where": "bench/ab-raw.json:1194"
+    },
+    {
+      "host": "newreleases.io",
+      "url": "https://newreleases.io/project/github/modelcontextprotocol/go-sdk/release/v1.7.0#1",
+      "where": "bench/ab-raw.json:1195"
+    },
+    {
+      "host": "aaif.io",
+      "url": "https://aaif.io/blog/mcp-2026-changes-the-rules",
+      "where": "bench/ab-raw.json:1196"
+    },
+    {
+      "host": "gigazine.net",
+      "url": "https://gigazine.net/gsc_news/en/20260729-model-context-protocol-2026-07-28#gsc.tab=0#1",
+      "where": "bench/ab-raw.json:1197"
+    },
+    {
+      "host": "blog.modelcontextprotocol.io",
+      "url": "https://blog.modelcontextprotocol.io/posts/2026-07-28/",
+      "where": "bench/ab-raw.json:1198"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "bench/dump-response.mjs:15"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "bench/maxuses-bench.mjs:5"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "bench/maxuses-bench.mjs:16"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "bench/maxuses-raw.json:4"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/maxuses-raw.json:65"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/maxuses-raw.json:66"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Links2008/DeepSeek-Harness-Desktop/releases/tag/v4.4",
+      "where": "bench/maxuses-raw.json:67"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/maxuses-raw.json:68"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/maxuses-raw.json:69"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/maxuses-raw.json:70"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/maxuses-raw.json:71"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/maxuses-raw.json:72"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/maxuses-raw.json:73"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/maxuses-raw.json:74"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/maxuses-raw.json:125"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/maxuses-raw.json:126"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Links2008/DeepSeek-Harness-Desktop/releases/tag/v4.4",
+      "where": "bench/maxuses-raw.json:127"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/maxuses-raw.json:128"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/maxuses-raw.json:129"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/maxuses-raw.json:130"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/maxuses-raw.json:131"
+    },
+    {
+      "host": "blog.csdn.net",
+      "url": "https://blog.csdn.net/qq_36894974/article/details/166789901",
+      "where": "bench/maxuses-raw.json:132"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/maxuses-raw.json:133"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/maxuses-raw.json:134"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/maxuses-raw.json:185"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/maxuses-raw.json:186"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Links2008/DeepSeek-Harness-Desktop/releases/tag/v4.4",
+      "where": "bench/maxuses-raw.json:187"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/maxuses-raw.json:188"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/maxuses-raw.json:189"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/maxuses-raw.json:190"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/maxuses-raw.json:191"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/maxuses-raw.json:192"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/maxuses-raw.json:193"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/maxuses-raw.json:194"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/maxuses-raw.json:245"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/maxuses-raw.json:246"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Links2008/DeepSeek-Harness-Desktop/releases/tag/v4.4",
+      "where": "bench/maxuses-raw.json:247"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/maxuses-raw.json:248"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/maxuses-raw.json:249"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/maxuses-raw.json:250"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/maxuses-raw.json:251"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/maxuses-raw.json:252"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/maxuses-raw.json:253"
+    },
+    {
+      "host": "hub-assets-cache.baai.ac.cn",
+      "url": "https://hub-assets-cache.baai.ac.cn/view/58382",
+      "where": "bench/maxuses-raw.json:254"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/maxuses-raw.json:305"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Links2008/DeepSeek-Harness-Desktop/releases/tag/v4.4",
+      "where": "bench/maxuses-raw.json:306"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/maxuses-raw.json:307"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/maxuses-raw.json:308"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C1WT00?scene=wap&no-redirect=1",
+      "where": "bench/maxuses-raw.json:309"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/maxuses-raw.json:310"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/maxuses-raw.json:311"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/maxuses-raw.json:312"
+    },
+    {
+      "host": "www.sohu.com",
+      "url": "https://www.sohu.com/a/1080819993_122980439?scm=10008.1479_13-1479_13-68_68.4935001-5096002-0.0-1-0-0-0.0&spm=smpc.content-abroad.fd-d.67.1790318859536ZNeSZ2a",
+      "where": "bench/maxuses-raw.json:313"
+    },
+    {
+      "host": "www.toutiao.com",
+      "url": "https://www.toutiao.com/article/7688480728983568911/?wid=1790298893248",
+      "where": "bench/maxuses-raw.json:314"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/maxuses-raw.json:365"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Links2008/DeepSeek-Harness-Desktop/releases/tag/v4.4",
+      "where": "bench/maxuses-raw.json:366"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/maxuses-raw.json:367"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/maxuses-raw.json:368"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C1WT00?scene=wap&no-redirect=1",
+      "where": "bench/maxuses-raw.json:369"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/maxuses-raw.json:370"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/maxuses-raw.json:371"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/maxuses-raw.json:372"
+    },
+    {
+      "host": "www.sohu.com",
+      "url": "https://www.sohu.com/a/1080819993_122980439?scm=10008.1479_13-1479_13-68_68.4935001-5096002-0.0-1-0-0-0.0&spm=smpc.content-abroad.fd-d.67.1790318859536ZNeSZ2a",
+      "where": "bench/maxuses-raw.json:373"
+    },
+    {
+      "host": "www.toutiao.com",
+      "url": "https://www.toutiao.com/article/7688480728983568911/?wid=1790298893248",
+      "where": "bench/maxuses-raw.json:374"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/maxuses-raw.json:425"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/maxuses-raw.json:426"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Links2008/DeepSeek-Harness-Desktop/releases/tag/v4.4",
+      "where": "bench/maxuses-raw.json:427"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/maxuses-raw.json:428"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/maxuses-raw.json:429"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/maxuses-raw.json:430"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/maxuses-raw.json:431"
+    },
+    {
+      "host": "blog.csdn.net",
+      "url": "https://blog.csdn.net/qq_36894974/article/details/166789901",
+      "where": "bench/maxuses-raw.json:432"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/maxuses-raw.json:433"
+    },
+    {
+      "host": "www.ai345.info",
+      "url": "https://www.ai345.info/ai-guide/deepseek-harness-v020",
+      "where": "bench/maxuses-raw.json:434"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.7-rc.1",
+      "where": "bench/maxuses-raw.json:485"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/cc1252/deepseek-harness-desktop/releases",
+      "where": "bench/maxuses-raw.json:486"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Links2008/DeepSeek-Harness-Desktop/releases/tag/v4.4",
+      "where": "bench/maxuses-raw.json:487"
+    },
+    {
+      "host": "news.qq.com",
+      "url": "https://news.qq.com/rain/a/20260924A0C1WT00",
+      "where": "bench/maxuses-raw.json:488"
+    },
+    {
+      "host": "jishuzhan.net",
+      "url": "https://jishuzhan.net/article/2104488910889693185",
+      "where": "bench/maxuses-raw.json:489"
+    },
+    {
+      "host": "baijiahao.baidu.com",
+      "url": "https://baijiahao.baidu.com/s?id=1877270502349563141",
+      "where": "bench/maxuses-raw.json:490"
+    },
+    {
+      "host": "view.inews.qq.com",
+      "url": "https://view.inews.qq.com/k/20260924A0C0EX00?scene=wap&no-redirect=1#1",
+      "where": "bench/maxuses-raw.json:491"
+    },
+    {
+      "host": "m.toutiao.com",
+      "url": "https://m.toutiao.com/article/7688749343013077567/?wid=1790222972597&upstream_biz=toutiao_pc#1",
+      "where": "bench/maxuses-raw.json:492"
+    },
+    {
+      "host": "blog.csdn.net",
+      "url": "https://blog.csdn.net/qq_36894974/article/details/166789901",
+      "where": "bench/maxuses-raw.json:493"
+    },
+    {
+      "host": "www.xianshe.com",
+      "url": "https://www.xianshe.com/article-189-1.html",
+      "where": "bench/maxuses-raw.json:494"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/maxuses-raw.json:545"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:546"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:547"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/maxuses-raw.json:548"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/maxuses-raw.json:549"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/maxuses-raw.json:550"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/maxuses-raw.json:551"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/maxuses-raw.json:602"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:603"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:604"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/maxuses-raw.json:605"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/maxuses-raw.json:606"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/maxuses-raw.json:607"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/maxuses-raw.json:608"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/maxuses-raw.json:659"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:660"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:661"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/maxuses-raw.json:662"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/maxuses-raw.json:663"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/maxuses-raw.json:664"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/maxuses-raw.json:665"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/maxuses-raw.json:716"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:717"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:718"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/maxuses-raw.json:719"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/maxuses-raw.json:720"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/maxuses-raw.json:721"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/maxuses-raw.json:722"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/maxuses-raw.json:773"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:774"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:775"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/maxuses-raw.json:776"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/maxuses-raw.json:777"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/maxuses-raw.json:778"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/maxuses-raw.json:779"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/maxuses-raw.json:830"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:831"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:832"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/maxuses-raw.json:833"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/maxuses-raw.json:834"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/maxuses-raw.json:835"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/maxuses-raw.json:836"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/maxuses-raw.json:887"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:888"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:889"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/maxuses-raw.json:890"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/maxuses-raw.json:891"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/maxuses-raw.json:892"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/maxuses-raw.json:893"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/leeyoung1/dsh-web-search-opencode-go#1",
+      "where": "bench/maxuses-raw.json:944"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:945"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-web-search-opencode/",
+      "where": "bench/maxuses-raw.json:946"
+    },
+    {
+      "host": "deepseekplugin.org",
+      "url": "https://deepseekplugin.org/plugins/fanxing-0710-dsh-web-search-opencode",
+      "where": "bench/maxuses-raw.json:947"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2752166/12",
+      "where": "bench/maxuses-raw.json:948"
+    },
+    {
+      "host": "linux.do",
+      "url": "https://linux.do/t/topic/2755287/10",
+      "where": "bench/maxuses-raw.json:949"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/DDDMUC/dsh-free-search#1#2",
+      "where": "bench/maxuses-raw.json:950"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/maxuses-raw.json:1001"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/maxuses-raw.json:1002"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/maxuses-raw.json:1003"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/maxuses-raw.json:1004"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/maxuses-raw.json:1005"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/maxuses-raw.json:1006"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/maxuses-raw.json:1007"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/maxuses-raw.json:1008"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/maxuses-raw.json:1009"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/maxuses-raw.json:1010"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/maxuses-raw.json:1061"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/maxuses-raw.json:1062"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/maxuses-raw.json:1063"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/maxuses-raw.json:1064"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/maxuses-raw.json:1065"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/maxuses-raw.json:1066"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/maxuses-raw.json:1067"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/maxuses-raw.json:1068"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/maxuses-raw.json:1069"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/maxuses-raw.json:1070"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/maxuses-raw.json:1121"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/maxuses-raw.json:1122"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/maxuses-raw.json:1123"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/maxuses-raw.json:1124"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/maxuses-raw.json:1125"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/maxuses-raw.json:1126"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/maxuses-raw.json:1127"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/maxuses-raw.json:1128"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/maxuses-raw.json:1129"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/maxuses-raw.json:1130"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/maxuses-raw.json:1181"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/maxuses-raw.json:1182"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/maxuses-raw.json:1183"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/maxuses-raw.json:1184"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/maxuses-raw.json:1185"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/maxuses-raw.json:1186"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/maxuses-raw.json:1187"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/maxuses-raw.json:1188"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/maxuses-raw.json:1189"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/maxuses-raw.json:1190"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/maxuses-raw.json:1241"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/maxuses-raw.json:1242"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/maxuses-raw.json:1243"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/maxuses-raw.json:1244"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/maxuses-raw.json:1245"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/maxuses-raw.json:1246"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/maxuses-raw.json:1247"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/maxuses-raw.json:1248"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/maxuses-raw.json:1249"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/maxuses-raw.json:1250"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/maxuses-raw.json:1301"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/maxuses-raw.json:1302"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/maxuses-raw.json:1303"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/maxuses-raw.json:1304"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/maxuses-raw.json:1305"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/maxuses-raw.json:1306"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/maxuses-raw.json:1307"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/maxuses-raw.json:1308"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/maxuses-raw.json:1309"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/maxuses-raw.json:1310"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/maxuses-raw.json:1361"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/maxuses-raw.json:1362"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/maxuses-raw.json:1363"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/maxuses-raw.json:1364"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/maxuses-raw.json:1365"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/maxuses-raw.json:1366"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/maxuses-raw.json:1367"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/maxuses-raw.json:1368"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/maxuses-raw.json:1369"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/maxuses-raw.json:1370"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/wakeup595626-cmyk/dsh-plugin-websearch-tavily",
+      "where": "bench/maxuses-raw.json:1421"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Soulize/dsh-free-search",
+      "where": "bench/maxuses-raw.json:1422"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-tavily#1",
+      "where": "bench/maxuses-raw.json:1423"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/dsh-web-search-thirdparty#1",
+      "where": "bench/maxuses-raw.json:1424"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search/",
+      "where": "bench/maxuses-raw.json:1425"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@yugasun/dsh-web-search#1",
+      "where": "bench/maxuses-raw.json:1426"
+    },
+    {
+      "host": "socket.dev",
+      "url": "https://socket.dev/npm/package/dsh-search-router#1",
+      "where": "bench/maxuses-raw.json:1427"
+    },
+    {
+      "host": "www.dshplugin.store",
+      "url": "https://www.dshplugin.store/plugin/zmh2000829/dsh-web-search-multi",
+      "where": "bench/maxuses-raw.json:1428"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/plugins/dsh-search-mcp/",
+      "where": "bench/maxuses-raw.json:1429"
+    },
+    {
+      "host": "dshbase.com",
+      "url": "https://dshbase.com/zh/plugins/dsh-tavily-search-provider/",
+      "where": "bench/maxuses-raw.json:1430"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/maxuses-raw.json:1481"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/maxuses-raw.json:1482"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/maxuses-raw.json:1483"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/maxuses-raw.json:1484"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/maxuses-raw.json:1485"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/maxuses-raw.json:1486"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/maxuses-raw.json:1487"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/maxuses-raw.json:1488"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/maxuses-raw.json:1489"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/maxuses-raw.json:1490"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/maxuses-raw.json:1541"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/maxuses-raw.json:1542"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/maxuses-raw.json:1543"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/maxuses-raw.json:1544"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8wAEKapnS7x",
+      "where": "bench/maxuses-raw.json:1545"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/maxuses-raw.json:1546"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/maxuses-raw.json:1547"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/maxuses-raw.json:1548"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/maxuses-raw.json:1549"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/maxuses-raw.json:1550"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/maxuses-raw.json:1601"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/maxuses-raw.json:1602"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/maxuses-raw.json:1603"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/maxuses-raw.json:1604"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/maxuses-raw.json:1605"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/maxuses-raw.json:1606"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/maxuses-raw.json:1607"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/maxuses-raw.json:1608"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/maxuses-raw.json:1609"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/maxuses-raw.json:1610"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/maxuses-raw.json:1661"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/maxuses-raw.json:1662"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/maxuses-raw.json:1663"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/maxuses-raw.json:1664"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/maxuses-raw.json:1665"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/maxuses-raw.json:1666"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/maxuses-raw.json:1667"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/maxuses-raw.json:1668"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/maxuses-raw.json:1669"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/maxuses-raw.json:1670"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/maxuses-raw.json:1721"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/maxuses-raw.json:1722"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/maxuses-raw.json:1723"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/maxuses-raw.json:1724"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8wAEKapnS7x",
+      "where": "bench/maxuses-raw.json:1725"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/maxuses-raw.json:1726"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/maxuses-raw.json:1727"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/maxuses-raw.json:1728"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/maxuses-raw.json:1729"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/maxuses-raw.json:1730"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/maxuses-raw.json:1781"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/maxuses-raw.json:1782"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/maxuses-raw.json:1783"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/maxuses-raw.json:1784"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/maxuses-raw.json:1785"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/maxuses-raw.json:1786"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/maxuses-raw.json:1787"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/maxuses-raw.json:1788"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/maxuses-raw.json:1789"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/maxuses-raw.json:1790"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/maxuses-raw.json:1841"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/maxuses-raw.json:1842"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/maxuses-raw.json:1843"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/maxuses-raw.json:1844"
+    },
+    {
+      "host": "tech.ifeng.com",
+      "url": "https://tech.ifeng.com/c/8wAEKapnS7x",
+      "where": "bench/maxuses-raw.json:1845"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/maxuses-raw.json:1846"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/maxuses-raw.json:1847"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/maxuses-raw.json:1848"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/maxuses-raw.json:1849"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/maxuses-raw.json:1850"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/zh-cn/go/",
+      "where": "bench/maxuses-raw.json:1901"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/docs/pt-br/go/#1",
+      "where": "bench/maxuses-raw.json:1902"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/go?ref=5N6DR0ENGW",
+      "where": "bench/maxuses-raw.json:1903"
+    },
+    {
+      "host": "www.opencode.asia",
+      "url": "https://www.opencode.asia/ko/go/#%ec%82%ac%ec%9a%a9-%ec%a0%9c%ed%95%9c",
+      "where": "bench/maxuses-raw.json:1904"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/th/go",
+      "where": "bench/maxuses-raw.json:1905"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/br/go",
+      "where": "bench/maxuses-raw.json:1906"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zht/go",
+      "where": "bench/maxuses-raw.json:1907"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/fr/go",
+      "where": "bench/maxuses-raw.json:1908"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/ko/go",
+      "where": "bench/maxuses-raw.json:1909"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/pl/go",
+      "where": "bench/maxuses-raw.json:1910"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "bin/doctor.mjs:322"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages`），自动注入",
+      "where": "index.js:4"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "lib/constants.js:26"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1",
+      "where": "lib/constants.js:47"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "lib/tui-settings.js:68"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1",
+      "where": "lib/tui-settings.js:159"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "test/cache.test.js:11"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/cache.test.js:36"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1",
+      "where": "test/cache.test.js:63"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "test/client.test.js:99"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/v1",
+      "where": "test/client.test.js:260"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/v1",
+      "where": "test/client.test.js:266"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "test/index.test.js:26"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1",
+      "where": "test/index.test.js:34"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/index.test.js:58"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:36"
+    },
+    {
+      "host": "b.test",
+      "url": "https://b.test/2",
+      "where": "test/map-response.test.js:37"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:38"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:48"
+    },
+    {
+      "host": "b.test",
+      "url": "https://b.test/2",
+      "where": "test/map-response.test.js:48"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:72"
+    },
+    {
+      "host": "b.test",
+      "url": "https://b.test/2",
+      "where": "test/map-response.test.js:73"
+    },
+    {
+      "host": "b.test",
+      "url": "https://b.test/2",
+      "where": "test/map-response.test.js:79"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:93"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:106"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:120"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:135"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:149"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/map-response.test.js:179"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1",
+      "where": "test/provider.test.js:18"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1",
+      "where": "test/provider.test.js:26"
+    },
+    {
+      "host": "a.test",
+      "url": "https://a.test/1",
+      "where": "test/provider.test.js:52"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "test/provider.test.js:124"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "test/provider.test.js:146"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1/messages",
+      "where": "test/provider.test.js:193"
+    },
+    {
+      "host": "opencode.ai",
+      "url": "https://opencode.ai/zen/go/v1/messages",
+      "where": "test/provider.test.js:206"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com/anthropic/v1/messages",
+      "where": "test/provider.test.js:207"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-10-13T15:34:42Z",
+    "created_at": "2026-10-01T13:09:54Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "lib/cache.js",
+    "lib/constants.js",
+    "lib/errors.js",
+    "lib/provider.js",
+    "lib/tui-settings.js",
+    "package.json",
+    "scripts/check.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-web-search-ocgo",
+      "text": "自研的 DeepSeek Harness 网页搜索 provider：**走 OpenCode Go**（自动注入\n`x-opencode-session`），并补上官方 provider 没有的失败回退、查询缓存、\n结果总结与设置页。\n\n- **provider id**：`opencode-go`\n- **loader entry id**：`web-search-ocgo`\n- **包名**：`dsh-web-search-ocgo`\n- **依赖面**：只 import `@deepseek-ai/schemastery` 一个外部包\n\n---"
+    },
+    {
+      "section": "为什么自研",
+      "text": "原先用的第三方 fork `dsh-web-search-opencode-go` 有四个硬伤：\n\n1. **加载即崩** —— 它静态 import 了 `installSettingsSection`，而 DSH `0.1.7-rc.2`\n   的 `@deepseek-ai/dsh-settings` 没有这个导出，整个 provider 无法加载。\n2. **靠旧版本残留侥幸解析** —— 它 import 的 `@deepseek-ai/dsh-*` 从它自己的目录\n   根本解析不到，是靠 `~/.dsh/profiles/node_modules/@deepseek-ai/` 里指向\n   **dsh 0.1.5-rc.3** 的旧 symlink 才加载起来的（详见「为什么不 import dsh 包」）。\n3. **代码是官方 provider 的 drop-in fork**，官方升级拿不到好处。\n4. **本地补丁不持久**，任何 `pnpm install` 都会覆盖。\n\n本插件从零重写，并保持对外行为兼容。\n\n---"
+    },
+    {
+      "section": "与官方 provider 的差异",
+      "text": "| 能力 | 官方 `dsh-web-search-deepseek` | 本插件 |\n|---|---|---|\n| 端点 | `api.deepseek.com/anthropic/v1` | **OpenCode Go** `opencode.ai/zen/go/v1` |\n| 可用模型 | 只认 `deepseek-flash` / `deepseek-v4-pro` | 只认 `deepseek-v4-flash` / `deepseek-v4.1-flash` |\n| 会话头 | — | 自动注入 `x-opencode-session` + `x-opencode-client` |\n| **`result.content`** | **完全不填**（实测摘要覆盖率 0%） | 取响应 `text` 块（模型总结），默认截断 2000 字符 |\n| 查询缓存 | 无 | TTL 默认 5 分钟 / LRU 50，命中即 0 token |\n| 失败回退 | 无 | Go 端点重试耗尽后改打官方端点（默认开） |\n| 重试 | 无 | 429 / 5xx / 网络错误退避重试（默认 1 次） |\n| 日期规范化 | 原样透传 `page_age` | 规范成 ISO-8601；解析不出来就丢弃而不是塞假日期 |\n| 设置页 | 官方定制卡片（绑定 `web-search-deepseek`） | 自带（注册 `plugins.bundle.config`） |\n| 会话事件 | 只有请求事件 | **也只有请求事件**（响应统计走 logger，见下） |\n| 外部依赖 | 多个 `@deepseek-ai/dsh-*` | **只有 `@deepseek-ai/schemastery`** |"
+    },
+    {
+      "section": "为什么不写响应事件（一个会让整份日志打不开的坑）",
+      "text": "早期版本额外写了一个自定义事件 `web/ocgo-search-response`（延迟 / token /\n结果数 / 缓存命中 / 是否回退）。结果**一条记录就足以让整份会话日志拒绝加载**：\n\n```\n历史加载失败：session \"...\" contains event type \"web/ocgo-search-response\" (seq 969)\nunknown to this harness and not marked ignorable; refusing to interpret the log\n```\n\n根因有两层："
+    },
+    {
+      "section": "为什么不写响应事件（一个会让整份日志打不开的坑）",
+      "text": "1. harness 的读路径（`dsh-session-persistence` 的 `validateStoredEvents`）会拒绝任何\n   不在 `KNOWN_SESSION_EVENT_TYPES` 里、又没标 `ignorable: true` 的事件类型 ——\n   这是**故意**的保守设计：无法判断\"省略该事件是否安全\"时，宁可整体拒绝，\n   也不要静默重建一个被掏空的会话。\n2. 但写侧 `Session.append(type, data, ...opts)` **只接受 `surfaceOp` /\n   `sourceEventSeqs`，没有 `ignorable` 的入口** —— 仓库外插件其实没有正规途径\n   写\"可忽略事件\"。官方 provider 同样只写请求事件，不写响应事件。\n\n所以本插件的响应统计改走 `logger.info`（没有 logger 服务时退化为 `console.log`），\n**不再进会话日志**。`bin/doctor.mjs` 会主动扫描历史日志，把旧版留下的未标记事件\n扫出来并给出修法。"
+    },
+    {
+      "section": "为什么不写响应事件（一个会让整份日志打不开的坑）",
+      "text": "如果你确实需要把响应统计写进会话日志，唯一安全的做法是给 `Session.append`\n补上 `ignorable` 支持（改全局 `@deepseek-ai/dsh-session`，pnpm 重装或升级会覆盖），\n并让插件传 `{ ignorable: true }`。本插件不采用：补丁维护成本高于这点诊断数据的收益。"
+    },
+    {
+      "section": "一个反直觉的实测结论：`max_uses` 不影响成本",
+      "text": "32 次请求实测（见 `bench/maxuses-report.md`）：`max_uses` 从 5 降到 2，\n**总 prompt 恒定在 ~8.1k**，结果条数也不变。根因是每次请求实际只发起\n**1 次** `web_search`（`usage.server_tool_use.web_search_requests` 恒为 1），\n`max_uses` 是上限而非目标值，从未被触及。\n\n所以默认值保持 **5**；省额度靠**查询缓存**，不是下调 `max_uses`。\n\n---"
+    },
+    {
+      "section": "1. 准备依赖链接",
+      "text": "本插件只依赖 `@deepseek-ai/schemastery`，需要让它能被解析：\n\n```bash\nln -sfn ~/.dsh/profiles/web/node_modules/@deepseek-ai/schemastery \\\n        node_modules/@deepseek-ai/schemastery\n```"
+    },
+    {
+      "section": "2. 挂进 profile",
+      "text": "```bash\nln -sfn \"$PWD\" ~/.dsh/profiles/web/node_modules/dsh-web-search-ocgo\n```"
+    },
+    {
+      "section": "3. 登记 bundle",
+      "text": "在 `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里加上\n`dsh-web-search-ocgo`，并在 `dependencies` 里加：\n\n```json\n\"dsh-web-search-ocgo\": \"link:/Users/mac/Documents/workspace/创造模式/dsh-web-search-ocgo\"\n```"
+    },
+    {
+      "section": "4. 清理旧链路",
+      "text": "从 `~/.dsh/profiles/web/cordis.patch.yml` 删掉旧的 `web-search-opencode-go` 段，\n并从 `dsh.profile.bundles` 移除 `dsh-web-search-opencode-go`。"
+    },
+    {
+      "section": "5. 重启",
+      "text": "```bash\ndsh web\n```\n\n重启后日志里应出现：\n\n```\n[web-search-ocgo] 已装载 provider id=opencode-go endpoint=https://opencode.ai/zen/go/v1 model=deepseek-v4.1-flash fallback=deepseek-flash\n```"
+    },
+    {
+      "section": "验证",
+      "text": "```bash\ndsh --profile web --dump-config | grep -A5 \"id: web$\"      # searchProvider 应为 opencode-go\nnode scripts/check.mjs                                     # 清单自检\nnode --test test/*.test.js                                 # 单元测试\nnode bin/doctor.mjs                                        # 一键诊断\n\n---"
+    },
+    {
+      "section": "图形界面（Web profile）",
+      "text": "「设置 → 插件」→ 打开 `dsh-web-search-ocgo` → 配置页。\n改动在**失焦或回车**时立即保存，写入 profile 的 `cordis.patch.yml`。"
+    },
+    {
+      "section": "终端界面（dsh-tui profile）",
+      "text": "在 `dsh-tui` 里跑时，插件会额外注册一个 TUI 设置区块，出现在 `/settings` 里：\n\n```\n[web-search-ocgo] TUI 设置页已注册：ns=web-search-ocgo · 19 个字段 · 7 个分组\n```\n\n分组：端点与模型 / 凭据 / OpenCode Go 会话头 / 失败回退官方端点 / 查询缓存 / 结果质量 / 可靠性。\n\n**契约差异（重要）**：Web 半自己画 UI（注册 `plugins.bundle.config`，用 `ctx.configForms` 读写）；\nTUI 半**只声明「什么可编辑」** —— 渲染、暂存编辑与带 revision 栅栏的写入都由 TUI 自己做，\n存储与校验仍归 dsh 的 settings 服务。见 `lib/tui-settings.js`。\n\n**两个容易踩的点**（都实测过）："
+    },
+    {
+      "section": "终端界面（dsh-tui profile）",
+      "text": "1. **`tuiSettingsSections` 服务晚于插件 `apply` 才挂载**。实测 `apply` 时\n   `ctx.get('tuiSettingsSections')` 是 `undefined`，约 1 秒后才出现 ——\n   同 profile 里的 `dsh-ssh-manager` 恰好赶上（它用 `tuiPanels`，时机更早），\n   而我们会错过。修法：先试一次，拿不到就 `ctx.inject(['tuiSettingsSections'], cb)` 等它出现。\n   （dsh-tui 源码里还提到某些组合会 dispose 掉这个服务行，见其 issue #183。）\n2. **不能直接读 `ctx.tuiSettingsSections` 属性**，会抛\n   `cannot get property \"tuiSettingsSections\" without inject` ——\n   本插件的静态 `inject` 只有 `'web'`，不能声明 TUI 专属服务。只能用 `ctx.get()`。"
+    },
+    {
+      "section": "YAML",
+      "text": "也可以在 `~/.dsh/profiles/web/cordis.patch.yml` 里写：\n\n```yaml\n- id: web-search-ocgo\n  name: dsh-web-search-ocgo\n  config:\n    apiKeyEnv: OPENCODE_API_KEY\n\n所有字段都有 schema 默认值，写多少覆盖多少。"
+    },
+    {
+      "section": "主要配置项",
+      "text": "| 字段 | 默认值 | 说明 |\n|---|---|---|\n| `apiKeyEnv` | `OPENCODE_API_KEY` | 凭据中心里的密钥名 |\n| `baseURL` | `https://opencode.ai/zen/go/v1` | Go 端点（不含 `/messages`） |\n| `model` | `deepseek-v4.1-flash` | Go 端点只认 `deepseek-v4-flash` / `deepseek-v4.1-flash` |\n| `maxUses` | `5` | **实测对成本无影响**，不建议下调 |\n| `sessionId` | 空（每次启动随机） | 固定会话 id；实测缓存命中不依赖它 |\n| `fallbackEnabled` | `true` | Go 失败后回退官方端点（消耗 DeepSeek 余额） |\n| `fallbackModel` | `deepseek-flash` | 官方端点只认 `deepseek-flash` / `deepseek-v4-pro` |\n| `cacheEnabled` / `cacheTtlMs` / `cacheMaxEntries` | `true` / `300000` / `50` | 查询缓存 |\n| `answerMaxChars` | `2000` | `result.content` 截断；**0 = 不返回** |\n| `snippetMaxChars` | `300` | 单条摘要截断 |\n| `retryCount` | `1` | 429 / 5xx / 网络错误的重试次数 |"
+    },
+    {
+      "section": "主要配置项",
+      "text": "---"
+    },
+    {
+      "section": "为什么不 import dsh 包",
+      "text": "实测：从插件自己的目录，`@deepseek-ai/dsh-*` **一个都解析不到**\n（8 个里只有 `schemastery` 能解析）：\n\n```\nimport FAIL @deepseek-ai/dsh-web              ERR_MODULE_NOT_FOUND\nimport FAIL @deepseek-ai/dsh-credentials      ERR_MODULE_NOT_FOUND\nimport FAIL @deepseek-ai/dsh-session          ERR_MODULE_NOT_FOUND\nimport OK   @deepseek-ai/schemastery\n\n把同样的静态 import 写进一个 entry，dsh 日志会出现\n`failed to import` / `1 entry did not activate`。"
+    },
+    {
+      "section": "为什么不 import dsh 包",
+      "text": "那上游 fork 为什么能加载？因为 Node 从\n`~/.dsh/profiles/web/node_modules/dsh-web-search-opencode-go/` 向上查找时会命中\n**`~/.dsh/profiles/node_modules/@deepseek-ai/`** —— 那里有 242 个 symlink，\n全部指向 **dsh `0.1.5-rc.3`** 的旧安装，而不是当前运行的 `0.1.7-rc.2`。\n它一直在用旧版本的 `WebError` / `credentialRef` 跑，是一次随时会坏的版本错配。"
+    },
+    {
+      "section": "为什么不 import dsh 包",
+      "text": "**本插件的对策**：依赖面压到最小，只 import `schemastery`。其余契约全部经 `ctx` 取\n（`ctx.get('credentials')`、`ctx.get('agents')`），错误对象按 `HarnessError` 的\n形状手工构造（`class extends Error { readonly code }`，见 `lib/errors.js`），\n`process.env` 兜底 launch environment。\n\n好处：插件可以放在任意目录，也不受 dsh 升级的版本错配影响。\n\n---"
+    },
+    {
+      "section": "临时回滚到官方链路（不卸载）",
+      "text": "在「设置 → 插件」里把 `web` 这一行的 `searchProvider` 改回 `deepseek-official`，\n重启即可。官方 provider 一直留在注册表里，就是为这个逃生舱准备的。"
+    },
+    {
+      "section": "完全卸载",
+      "text": "1. 从 `~/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 移除 `dsh-web-search-ocgo`\n2. 删除 `cordis.patch.yml` 里 `web-search-ocgo` 段，并把 `web` 的 `searchProvider`\n   改回 `deepseek-official`\n3. 删除 `~/.dsh/profiles/web/node_modules/dsh-web-search-ocgo` 这个链接\n4. 重启 `dsh web`\n\n---"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\nnode scripts/check.mjs            # 清单自检（字段、exports、语法、依赖面）\nnode --test test/*.test.js        # 单元测试（40 项）\nnode bin/doctor.mjs               # 诊断：凭据 / 配置 / 依赖 / 语法 / 会话日志遗留污染\nnode bin/doctor.mjs --probe       # 额外真发一次搜索（会花钱）"
+    },
+    {
+      "section": "目录",
+      "text": "| 路径 | 说明 |\n|---|---|\n| `index.js` | host 半：Config schema + 装载自检 + 注册 provider + 挂 TUI 设置区块 |\n| `client.js` | 浏览器半：Web 设置页（手写 `__ModuleLoader__` bundle，无构建步骤） |\n| `lib/tui-settings.js` | TUI 设置区块描述（纯数据：19 字段 / 7 分组） |\n| `lib/provider.js` | provider 本体：请求、重试、回退、结果映射 |\n| `lib/cache.js` | 查询缓存（TTL + LRU） |\n| `lib/errors.js` | 与 `HarnessError` 同形状的错误 |\n| `lib/constants.js` | 协议常量与默认值 |\n| `cordis.patch.yml` | bundle 补丁层：改钉 `web.searchProvider`、插入本 entry |\n| `bin/doctor.mjs` | 一键诊断（含会话日志污染扫描） |\n| `bench/` | A/B 对比、`max_uses` 曲线、原始响应 dump |\n| `probe/` | 阶段 0 的一次性探针（可删） |"
+    },
+    {
+      "section": "目录",
+      "text": "---"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。衍生关系与上游声明见 [NOTICE](./NOTICE)。"
+    }
+  ],
+  "skipped": []
+}

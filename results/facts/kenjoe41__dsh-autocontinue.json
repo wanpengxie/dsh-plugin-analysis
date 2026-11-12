@@ -1,0 +1,271 @@
+{
+  "repo": "kenjoe41/dsh-autocontinue",
+  "commit": "ee4bd2f0b1014c2cafd80370625e3289e399c8bd",
+  "extracted_at": "2026-11-11T22:40:24.288646+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 71601,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 1189,
+      "Markdown": 366,
+      "Other": 27,
+      "YAML": 24
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/resume-scan.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-autocontinue",
+    "version": "0.1.13",
+    "description": "Automatic same-session continuation for dsh: keep an idle agent working, and retry failed turns with backoff.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "~4.0.4",
+      "@deepseek-ai/dsh-agent": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-llm": "^0.2.0-rc.2",
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "autocontinue",
+      "continuation",
+      "goal",
+      "agent"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/kenjoe41/dsh-autocontinue.git"
+    },
+    "homepage": "https://github.com/kenjoe41/dsh-autocontinue#readme",
+    "bugs": {
+      "url": "https://github.com/kenjoe41/dsh-autocontinue/issues"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The dsh-autocontinue bundle patch: one row, inserted after the base and mode\n# layers. Override this row by id from a profile's own cordis.patch.yml (a patch\n# replaces the whole `config`, so restate every key you keep).\n#\n# Row defaults are deliberately conservative: nothing runs until a session is\n# armed. `enabled: true` arms every session in the profile (use it for headless,\n# cron, and other \"called in\" launchers); `goalSessions: true` arms sessions that\n# already carry an active goal.\n\n- insert:\n    - id: autocontinue\n      name: dsh-autocontinue\n      config:\n        enabled: false\n        goalSessions: true\n        reviveGoals: true\n        maxGoalRevives: 5\n        maxRounds: 0\n        maxRetries: 0\n        idleDelayMs: 0\n        retryBaseDelayMs: 15000\n        retryMaxDelayMs: 300000\n        doneMarker: 'AUTOCONTINUE: DONE'\n        notices: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/kenjoe41/dsh-autocontinue.git",
+      "where": "package.json:40"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kenjoe41/dsh-autocontinue#readme",
+      "where": "package.json:42"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/kenjoe41/dsh-autocontinue/issues",
+      "where": "package.json:44"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-17T13:04:34Z",
+    "created_at": "2026-10-17T13:04:01Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/resume-scan.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-autocontinue",
+      "text": "A dsh plugin that keeps a session working when nobody is watching: it continues\nthe conversation on its own, retries through provider and network failures with\nbackoff, and refuses to let a goal session stall.\n\n**Version 0.1.13** · verified on `dsh 0.2.1-rc.2`."
+    },
+    {
+      "section": "dsh-autocontinue",
+      "text": "- [Why](#why)\n- [What it does](#what-it-does)\n- [Quick start](#quick-start)\n- [Behaviour](#behaviour)\n  - [1. Continuation](#1-continuation)\n  - [2. Retry through outages](#2-retry-through-outages)\n  - [3. Goal revival](#3-goal-revival)\n- [Working with the goal round driver](#working-with-the-goal-round-driver)\n- [Visibility](#visibility)\n- [Commands](#commands)\n- [Configuration](#configuration)\n- [Install and update](#install-and-update)\n- [Hard-won notes](#hard-won-notes)"
+    },
+    {
+      "section": "Why",
+      "text": "A long unattended run dies in three boring ways: the model stops after one turn\nand waits for a human; the uplink drops and the turn ends in `TRANSPORT`; or a\ngoal quietly loses its activation edge — the round driver disarms a goal on\nerror, and a session resume or fork deliberately leaves it disarmed. The work is\nstill perfectly resumable in all three cases. This plugin resumes it."
+    },
+    {
+      "section": "What it does",
+      "text": "| | Behaviour |\n| --- | --- |\n| **Continues** | An armed session's idle agent gets the next round queued for it, instead of waiting for a human to type \"continue\". |\n| **Retries** | A turn that failed on the provider or network is retried forever by default, with exponential backoff that plateaus at a constant 5-minute interval. |\n| **Revives** | A goal that stopped being driven — disarmed after a failure, left disarmed by a resume/fork, or paused — is re-armed so the objective keeps moving. |"
+    },
+    {
+      "section": "What it does",
+      "text": "Nothing runs until a session is **armed** (see [Quick start](#quick-start))."
+    },
+    {
+      "section": "Quick start",
+      "text": "```sh"
+    },
+    {
+      "section": "1. install into a profile (see Install and update for the why-tarball)",
+      "text": "dsh plugin --profile web add /path/to/dsh-autocontinue-0.1.4.tgz"
+    },
+    {
+      "section": "2. arm the current session, from the session itself",
+      "text": "/autocontinue on\n```\n\nGoal sessions arm themselves (`goalSessions: true`). Profiles that launch\nsessions rather than a human — cron, headless, \"called in\" — set\n`enabled: true` and get it for every session in that profile."
+    },
+    {
+      "section": "1. Continuation",
+      "text": "When an armed session's agent goes idle, the plugin queues a round: a normal user\nmessage headed `<autocontinue> Round n/…` that tells the model to keep going, to\ntreat the workspace and tool results as authoritative, and to end its reply with\nthe done marker when the assignment is genuinely finished. The transcript reads\nas an ordinary conversation."
+    },
+    {
+      "section": "1. Continuation",
+      "text": "The loop stops when any of these is true: the model ends a reply with the done\nmarker (`AUTOCONTINUE: DONE`), a turn is aborted (you hit stop — a human\ninterrupt is respected), `maxRounds` is reached, or you run `/autocontinue off`."
+    },
+    {
+      "section": "2. Retry through outages",
+      "text": "Defaults are tuned for an unreliable uplink — retry **forever**, backing off to a\nconstant 5-minute interval:\n\n| Consecutive failure | Wait before the retry |\n| --- | --- |\n| 1 | 15 s |\n| 2 | 30 s |\n| 3 | 60 s |\n| 4 | 2 min |\n| 5 | 4 min |\n| 6+ | **5 min, forever** (unless `maxRetries` is set) |"
+    },
+    {
+      "section": "2. Retry through outages",
+      "text": "Each retry round names the exact failure and instructs the model to retry the\naction that failed rather than restart completed work. Set `maxRetries` to give\nup after N, or leave it at `0` to ride out an outage of any length.\n\nTwo implementation facts that matter if you touch this code:"
+    },
+    {
+      "section": "2. Retry through outages",
+      "text": "- The retry is driven by `turn/end` with `reason.kind === 'error'` — the turn\n  boundary that owns a failed request, carrying the harness's structured\n  `LlmFailure` (`TRANSPORT`, `AUTH`, …).\n- `agent/error` is deliberately **not** counted. A failed turn emits\n  `agent/error` first and then `turn/end` with the same failure; counting both\n  burned two retry credits per outage, so `maxRetries: 2` gave up after a single\n  real retry. `turn/end` is the only counter."
+    },
+    {
+      "section": "3. Goal revival",
+      "text": "A goal stops being driven for reasons unrelated to the objective, and a stalled\ngoal is worse than a failed turn because nothing retries it:\n\n- the round driver **disarms** a goal on `agent/error`, so one network blip ends\n  the goal's own continuation;\n- a session **resume or fork** leaves an active goal disarmed by design (the\n  driver never revives work on its own);\n- the goal can be **paused**."
+    },
+    {
+      "section": "3. Goal revival",
+      "text": "With `reviveGoals: true` (default), the plugin calls the sanctioned\n`ctx.goals.resume(agent, ref)` — which carries no caller-authority gate — and the\ngoal round driver immediately takes the rounds back, keeping the goal's own\nround accounting authoritative.\n\nDeliberately **not** revived:"
+    },
+    {
+      "section": "3. Goal revival",
+      "text": "- **`blocked`** — that is the model, or the goal-tool policy, stating the work\n  cannot proceed. Overriding it would fight the harness's own repeated-blocking\n  policy.\n- A goal whose **round budget is spent** — `resume` would throw; `maxGoalRounds`\n  is the goal's decision to make, not this plugin's."
+    },
+    {
+      "section": "3. Goal revival",
+      "text": "Revivals are capped by `maxGoalRevives` (default 5) so something that keeps\npausing a goal cannot ping-pong with it forever; the counter resets as soon as\nthe goal actually starts a round. Every revival is announced in the chat."
+    },
+    {
+      "section": "4. Restart recovery",
+      "text": "A server swap (the `dsh-update` staged install + reload) or a crash stops the\nprocess while a turn is still open: the persisted log ends inside `turn/start`\nwith no `turn/end`, and no live agent is left to continue it. On startup this\nplugin scans the session corpus, and for every recently-written log that still\nends inside a turn it reopens the session through the same path the Web GUI uses\n(`resolveAgent`) and queues a resume round.\n\nThat does three things the browser cannot be relied on for:"
+    },
+    {
+      "section": "4. Restart recovery",
+      "text": "- the harness appends its synthetic `interrupted` closers, so the old turn is\n  balanced instead of looking like a permanently running one;\n- the session's agent preset and model selection are recomposed, and the goal\n  round driver picks the work back up for a goal session;\n- sessions with no browser tab still continue, which is what keeps a switch from\n  orphaning work in another workspace."
+    },
+    {
+      "section": "4. Restart recovery",
+      "text": "The resumed session is told exactly what happened so it does not spend a round\nworking it out: the notice and the resume round name the durable cut\n(`turn N, step M`), say the interruption was infrastructure — an update or a\ncrash — rather than a verdict on the plan, and tell the model not to investigate\nit or re-plan from scratch. A goal session gets the same explanation as an\nautocontinue notice riding the goal round."
+    },
+    {
+      "section": "4. Restart recovery",
+      "text": "The scan also reconstructs what the dead process owned, because a resumed model\ncannot know it from the transcript alone:"
+    },
+    {
+      "section": "4. Restart recovery",
+      "text": "- **Pending input.** The harness durably cancels queued inbox messages when the\n  process disposes, so a message typed during a turn disappears on restart. The\n  scan replays the raw `agent/inbox/spliced` history and re-queues messages\n  canceled at that shutdown, deduped against input that is still pending or was\n  already admitted (a steer move appears as a cancel plus a re-insert). The\n  last handled cancellation seq is persisted per session, so a tab that\n  reattaches and appends a fresh `session/end-seed` before the scan cannot hide\n  the shutdown cancel behind a new resume marker.\n- **Background jobs.** `job/registered` minus `job/settled` from the same\n  generation is listed in the resume round. The processes are gone; naming them\n  is what lets the model decide what to re-launch.\n- **Subagent sessions.** Direct children of the resumed session created in the\n  same generation are listed, so their work is not silently orphaned.\n- **Active goals.** A session whose latest `goal/change` is `phase: active` with\n  rounds left is reopened even when its last turn completed, so the goal round\n  driver keeps the objective moving instead of leaving it parked until someone\n  opens the w"
+    },
+    {
+      "section": "4. Restart recovery",
+      "text": "Only logs modified within `resumeWindowMs` are considered, at most `resumeMax`\nsessions are resumed per startup, and each session's failure is contained and\nlogged.\n\nA resume notice looks like:\n\n```\n[autocontinue] dsh server restarted mid-run (turn 3, step 12); background jobs\nfrom the old process are gone — continuing from there\n```"
+    },
+    {
+      "section": "Working with the goal round driver",
+      "text": "`dsh-base` always mounts `dsh-goal-round-driver`, which continues a session only\nwhile a goal is active **and** armed. Autocontinue defers in exactly that state\n(`queue skipped: an armed goal round driver owns the rounds`) so a goal session\nnever gets double rounds, and takes over when the driver stands down. The two are\ncomplementary: the driver owns *progress*, this plugin owns *persistence*."
+    },
+    {
+      "section": "In the chat",
+      "text": "Notice rows appear in the transcript, in the same shape the harness uses for its\nmodel-switch banner:\n\n```\n[autocontinue] armed (profile default) — this session keeps taking rounds\nuntil the model reports completion or /autocontinue off\n```\n\n```\n[autocontinue] previous turn failed (TRANSPORT: DeepSeek Messages transport\nfailed) — retry 2 queued, next backoff up to 300s\n```\n\n```\n[autocontinue] goal was active/disarmed — re-armed it (revive 1), so the\nobjective keeps moving\n```"
+    },
+    {
+      "section": "In the chat",
+      "text": "A notice is never queued as a turn: it is appended to the step's own message list\nby the plugin's `agent/pre-step` hook, so it rides the round that follows and\ncannot start a turn of its own. Silence them with `notices: false`."
+    },
+    {
+      "section": "On demand",
+      "text": "```\n/autocontinue status\n```\n\nreports armed state, rounds, consecutive failures, the pending wait, the last\nfailure, the goal's phase/activation, who owns the rounds, and the revival count."
+    },
+    {
+      "section": "Debug trace",
+      "text": "`debug: true` appends every lifecycle decision — arming, scheduling, each skip\nreason, retry accounting, revival attempts — to `debugFile` (default\n`/tmp/dsh-autocontinue.log`). This is the tool that found both bugs described in\n[Hard-won notes](#hard-won-notes)."
+    },
+    {
+      "section": "Commands",
+      "text": "```\n/autocontinue            # status for this session\n/autocontinue on|off     # arm / disarm this session\n/autocontinue reset      # zero the round, failure and revival counters\n```"
+    },
+    {
+      "section": "Configuration",
+      "text": "Every key, with its default. A profile patch **replaces** the whole `config`, so\nrestate every key you want to keep."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n| --- | --- | --- |\n| `enabled` | `false` | Arm every session in this profile. Turn on for launcher/cron/headless profiles. |\n| `goalSessions` | `true` | Arm sessions that have a goal. |\n| `reviveGoals` | `true` | Re-arm a goal that stopped being driven, or was paused. `blocked` is never overridden. |\n| `maxGoalRevives` | `5` | Consecutive revivals before giving up and reporting; resets when the goal starts a round. `0` = unlimited. |\n| `maxRounds` | `0` | Continuation rounds per session. `0` = unlimited. |\n| `maxRetries` | `0` | Consecutive failure retries. `0` = retry forever. |\n| `idleDelayMs` | `0` | Grace period after idle before the next round. Keep `0` for one-shot launchers (see below). |\n| `retryBaseDelayMs` | `15000` | First backoff; doubles per consecutive failure. |\n| `retryMaxDelayMs` | `300000` | Backoff ceiling (5 min). |\n| `doneMarker` | `AUTOCONTINUE: DONE` | Exact last line that stops the loop. |\n| `notices` | `true` | Post chat notice rows on arm / retry / revive. |\n| `debug` | `false` | Append the decision trace to `debugFile`. |\n| `debugFile` | `/tmp/dsh-autocontinue.log` | Where the trace goes. |\n| `resumeUnfinished` | `true` | On s"
+    },
+    {
+      "section": "Configuration",
+      "text": "A cron or headless profile usually wants:\n\n```yaml"
+    },
+    {
+      "section": "<profile>/cordis.patch.yml",
+      "text": "- id: autocontinue\n  config:\n    enabled: true\n    goalSessions: true\n    reviveGoals: true\n    maxGoalRevives: 5\n    maxRounds: 0\n    maxRetries: 0\n    idleDelayMs: 0\n    retryBaseDelayMs: 15000\n    retryMaxDelayMs: 300000\n    doneMarker: 'AUTOCONTINUE: DONE'\n    notices: true\n```"
+    },
+    {
+      "section": "Install and update",
+      "text": "**Every change bumps `version` in `package.json`.** This package is installed\nfrom GitHub, a packed tarball, or a linked checkout; a version bump is what\nmakes \"which build is actually running?\" answerable, and it keeps the plugin\nmanager's bookkeeping honest.\n\nFrom GitHub:\n\n```sh\ndsh plugin --profile <profile> add github:kenjoe41/dsh-autocontinue"
+    },
+    {
+      "section": "or pin a release",
+      "text": "dsh plugin --profile <profile> add github:kenjoe41/dsh-autocontinue#v0.1.13\n```\n\nFrom a local checkout (maintainers):\n\n```sh"
+    },
+    {
+      "section": "from this directory",
+      "text": "pnpm pack --pack-destination /tmp\ndsh plugin --profile <profile> add /tmp/dsh-autocontinue-<version>.tgz\n```\n\nKeep the `peerDependencies` in step with the runtime (`dsh -V`): the plugin\nmanager refuses an install whose peers do not match and rolls the profile back.\nsh\ndsh plugin --profile <profile> add /path/to/dsh-autocontinue\n```"
+    },
+    {
+      "section": "Hard-won notes",
+      "text": "- **`sessionQuery.observeSession` cannot tell you a session was interrupted.**\n  The query read balances an open tail in memory (synthetic `turn/end`\n  closers), so a scan over its events sees a clean log and resumes nothing —\n  the first restart-recovery build found 0 of 2 interrupted sessions this way.\n  Read the raw log through `ctx.sessionPersistence.open(id, 'read')`; that is\n  the same read the harness's own resume path runs `interruptedTurnClosers` on.\n- **A reattaching tab resumes the session before a 5 s scan runs.** The tab's\n  attach appends the harness's synthetic `turn/end` with\n  `reason.kind === 'interrupted'`, so checking only for an open `turn/start`\n  misses exactly the sessions a browser already half-resumed. Treat a log whose\n  last turn ended `interrupted` (with no later `turn/start`) as still needing a\n  resume round, and do not skip a session just because an agent is already live.\n- **The shutdown cancels pending inbox input, durably.** `agent/inbox/spliced`\n  entries with `outcome: 'canceled'` are how a queued message is lost; a steer\n  move produces the same shape (`canceled` next-turn removal, then a next-step\n  insert with the same message id), so a cance"
+    }
+  ],
+  "skipped": []
+}

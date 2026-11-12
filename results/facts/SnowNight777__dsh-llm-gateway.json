@@ -1,0 +1,172 @@
+{
+  "repo": "SnowNight777/dsh-llm-gateway",
+  "commit": "f17afd1cf93753ecb19f6603bd629aaec6c94ecf",
+  "extracted_at": "2026-11-11T14:49:25.764273+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 73634,
+    "lines_by_language": {
+      "JSON": 35,
+      "JavaScript": 1434,
+      "Markdown": 183,
+      "Other": 51,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "build-and-pack.ps1",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-llm-gateway",
+    "version": "0.1.1",
+    "private": true,
+    "type": "module",
+    "main": "./lib/index.js",
+    "description": "把 DSH 已配置的模型共享给本机程序——无需重复配置，用 OpenAI 兼容接口直接调用",
+    "license": "MIT",
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-plugin-manager",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-llm-gateway bundle layer: 插入本机 OpenAI 兼容网关。\n- insert:\n    - id: llm-gateway\n      name: 'dsh-llm-gateway'\n      config:\n        host: 127.0.0.1\n        port: 8790\n        apiKeys: []\n        requestLog: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "%s",
+      "url": "http://%s:%d/v1",
+      "where": "lib/index.js:1037"
+    },
+    {
+      "host": "%s",
+      "url": "http://%s:%d/v1",
+      "where": "lib/index.js:1065"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-10-04T14:47:23Z",
+    "created_at": "2026-09-30T08:38:33Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-llm-gateway",
+      "text": "把 DSH 已配置的模型共享给本机程序——无需重复配置，用 **OpenAI 兼容接口**直接调用。\n\nPython、Node、curl、Notebook 都能直接用，不需要额外的 SDK 适配层；模型目录从你的 DSH 配置里自动发现。"
+    },
+    {
+      "section": "特性",
+      "text": "- **OpenAI 兼容**：`/v1/models`、`/v1/chat/completions`（流式与非流式）、`/healthz`\n- **真实路由**：模型目录从 DSH 的 `llm` 服务自动发现；请求里的 `model` 决定实际调哪个 provider，不是被忽略后照常回答\n- **工具调用**：`tools` 完整转发，`tool_calls` 按 OpenAI 约定分片返回；`role:'tool'` 回执与 `assistant.tool_calls` 历史都能正确落回 DSH 的消息形状\n- **图片输入**：`image_url` 支持 data URL 与 http(s) 链接，图片经 DSH 的 attachments 服务落盘后交给模型；`/v1/models` 里 `input_modalities` 含 `image` 的模型可直接用\n- **thinking 双向**：非流式响应带 `reasoning_content`，请求也可回传它——DeepSeek 系 thinking 模型的多轮工具对话靠这个才续得上\n- **usage 带明细**：除三个基本数字外，还给出 `prompt_tokens_details.cached_tokens` 与 `completion_tokens_details.reasoning_tokens`\n- **没有去路的参数会报错**：DSH 的调用配置只承载 `temperature` / `max_tokens` / `reasoning_effort`，其余（`top_p`、`seed`、`response_format` 等）一律 `400` 说清，不静默忽略；`stop` 会被透传，但**当前 DSH 的适配器不吃它**（见「已知边界」）\n- **未知模型会报错**：打错一个字母得到的是 `404 model_not_found`，不会静默换成另一个模型的答案\n- **歧义会报错**：某个裸 model id 同时属于多个 provider 时返回 `400 ambiguous_model`，提示改用 `provider/model`\n- **错误码有据可依**：按 DSH 的稳定 code 映射状态（401 / 429 / 400 / 404），`Retry-After` 一并透传\n- **可选鉴权**：配置 `apiKeys` 后校验 `Authorization: Bearer` 或 `x-api-key`（sha256 + 定长比较）\n- **可在界面配置**：宿主侧声明了 Config schema（**每个字段都必须带 `.volatile()`** —— `dsh-settings` 的 `volatileForm()` 会把「一个 volatile 字段都没"
+    },
+    {
+      "section": "安装",
+      "text": "**本插件必须作为 profile 依赖安装**：`dependencies` 交给 pnpm 解析，`dsh.profile.bundles` 交给 loader 组合，两处都要登记。\n\n只把目录丢进 `<profile>/node_modules/`、不写 `dependencies` 的「游离安装」不受支持，后果是：\n\n- DSH 插件页看不到它 —— 那里的 `installed` 由 profile 的 `dependencies` 决定，启停、版本、卸载都无从操作；\n- 插件页那张包卡片的**详情页**里不会出现「配置」块，端口 / 默认模型这些参数只能改配置文件；\n- `/healthz` 会返回 `installation.declared: false`，宿主日志同时打一条「游离安装」警告。\n\n**建议安装方式：打包安装**（tarball）—— profile 与源码目录解耦，内容被复制进 profile，\nNode 的依赖解析基准留在 profile 的 `node_modules` 内，不依赖符号链接。"
+    },
+    {
+      "section": "安装",
+      "text": "1. bump `package.json` 的 `version`，然后打包并登记：\n\n```powershell\n   powershell -NoProfile -ExecutionPolicy Bypass -File .\\build-and-pack.ps1\n   ```\n\n脚本做三件事：`pnpm pack` 出 `<name>-<version>.tgz`、把它复制进 profile、\n   把 profile 的 `dependencies.dsh-llm-gateway` 改写成 `file:<name>-<version>.tgz`。\n\n2. 在 profile 目录里安装：\n\n```powershell\n   pnpm install\n   ```"
+    },
+    {
+      "section": "安装",
+      "text": "3. **重启 DSH** —— bundle 清单变更必须重启（`patchReload: live` 只管已加载插件的 config）。\n   改动插件代码后同样要重启：重装只换磁盘上的文件，跑着的进程不会把已载入的模块换掉；\n   Windows 上重装前最好先卸载，否则 pnpm 会撞 `EPERM`（旧目录还被进程占着，改不了名）。\n\n> 别在 profile 的 `cordis.patch.yml` 里再写一条 `id: llm-gateway` 的 `insert` —— 会和包内 patch 撞 id。\n> 参数一律在**设置页**改：写在组合层（patch 里的 config override）的值会让设置页里那个字段显示成\n> 「已覆盖」，反而挡住正常改法。"
+    },
+    {
+      "section": "验证",
+      "text": "1. `curl http://127.0.0.1:8790/healthz` 能通就说明起来了（宿主日志落不落盘取决于部署，\n   别把日志当验收依据）：`ok: true`\n2. `curl http://127.0.0.1:8790/healthz` → `catalog.models` 应等于你在 profile 里配的模型总数\n3. 非流式与流式各调一次，`finish_reason` 应是**字符串**\n4. 发一个不存在的 model → 应返回 **404**（不是 200）\n5. 带 `tools` 发一次 → 应返回 `finish_reason: \"tool_calls\"`，且 `message.tool_calls` 非空"
+    },
+    {
+      "section": "调用",
+      "text": "```python\nfrom openai import OpenAI\n\nc = OpenAI(base_url=\"http://127.0.0.1:8790/v1\", api_key=\"any\")  # 未配 apiKeys 时不校验\n\n```bash\ncurl http://127.0.0.1:8790/v1/chat/completions \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"model\":\"provider/model\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}'\n```"
+    },
+    {
+      "section": "接口",
+      "text": "| 方法   | 路径                     | 说明                                                           |\n| ---- | ---------------------- | ------------------------------------------------------------ |\n| GET  | `/v1/models`           | 全部 `provider/model`；某个裸 model id 只属于一个 provider 时，同时以裸 id 列出 |\n| GET  | `/healthz`             | 网关状态 + 目录统计（provider 数 / 模型数 / 别名数 / 目录年龄）+ `installation`（profile 声明的 spec、是否登记在 dependencies 与 `dsh.profile.bundles` 里） |\n| POST | `/v1/chat/completions` | OpenAI 兼容，`stream` 真/假都支持                                    |"
+    },
+    {
+      "section": "接口",
+      "text": "`/models`、`/chat/completions`、`/v1/healthz` 是等价别名。\n\n请求体支持的参数：`model`、`messages`、`stream`、`max_tokens`（或新名 `max_completion_tokens`；\n**超出 200000 会被截断到 200000，不是报错**）、`temperature`、`stop`（最多 4 条，见下面的警告）、\n`tools`、`reasoning_effort`。\n\n> ⚠️ **`stop` 在当前 DSH 上不可用**：网关会把它原样透传，但 DSH 的适配器不支持\n> `GenerateOptions.stop`，带 `stop` 的请求会以 `502 UNSUPPORTED_OPTION` 失败\n> （上游原话：`llm-pi-ai does not support GenerateOptions.stop`；opencode-go 与 niko-api 实测一致，\n> 不带 `stop` 的同请求返回 200）。需要截断请用提示词自行约束。"
+    },
+    {
+      "section": "接口",
+      "text": "**不在这份名单里的一律 `400 unsupported_parameter`。** 例外只有 `n=1`、`stream_options`、`user` 和\n`tool_choice:\"auto\"` —— 这几个等于不表态，却几乎每个 SDK 都会默认带上，拒绝等于自断门路。\n\n`messages[].content` 可以是字符串，也可以是 part 数组："
+    },
+    {
+      "section": "接口",
+      "text": "| part                                  | 说明                                                             |\n| ------------------------------------- | -------------------------------------------------------------- |\n| `{type:'text', text}`                 | 文本                                                             |\n| `{type:'image_url', image_url:{url}}` | 图片；`url` 支持 `data:image/png;base64,…` 与 `http(s)://`（后者由网关代下载） |\n\n消息角色除 `user` / `assistant` / `system` / `developer` 外，还支持工具对话的两个形状："
+    },
+    {
+      "section": "接口",
+      "text": "- `{role:'tool', tool_call_id, content}` —— 工具回执\n- `{role:'assistant', tool_calls:[…], reasoning_content}` —— 带工具调用或思考过程的历史\n\n`system` / `developer` 消息会合并成 DSH 的 `options.system`。\n\n`model` 解析顺序：规范 id `provider/model` → 唯一的裸 model id → 请求缺 `model` 时用 `defaultModel`。"
+    },
+    {
+      "section": "配置",
+      "text": "| 键                    | 默认          | 说明                                                |\n| -------------------- | ----------- | ------------------------------------------------- |\n| `host`               | `127.0.0.1` | **别改成 `0.0.0.0`**，除非同时配 `apiKeys`                 |\n| `port`               | `8790`      | 监听端口；改动会重建 HTTP 服务                                |\n| `defaultModel`       | （空）         | 请求没带 `model` 时使用；留空则强制显式指定                        |\n| `apiKeys`            | `[]`        | 非空则校验 `Authorization: Bearer` 或 `x-api-key`（定长比较） |\n| `excludeProviders`   | `[]`        | 从目录剔除的 provider id                                |\n| `excludeModels`      | `[]`        | 从目录剔除的 model id 或 `provider/model`                |\n| `catalogTtlMs`       | `30000`     | 目录缓存时长；未命中会强制刷新一次                                 |\n| `reasoningAsContent` | `true`      | 上游只出 reasoning 不出 text 时，把 reasoning 兜底当 content  |\n| `requestLog`         | `true`      | 每个请求打一行 `方法 路径 -> 状态 (耗时)`                        |\n| `maxBodyBytes`       | `8388608`   | 请求体上限                                             |"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **默认无鉴权**：只绑回环所以安全；一旦把 `host` 改到局域网或公网，**必须**同时配 `apiKeys`。\n- **图片要靠 attachments 服务**：DSH 没挂载 attachment provider 时返回 `501`。图片的类型、张数、\n  总字节由那个 provider 的策略决定，它拒绝时网关把原话（如 `INVALID_IMAGE`）直接透传，不替它改口。\n- **音频、视频不支持**：`input_audio` 之类的 part 返回 `400 unsupported_content`。\n- **采样参数没有去路**：DSH 的调用配置只有六个字段，`top_p` / `seed` / `response_format` / `logprobs` /\n  penalties 等都返回 `400` —— 宁可报错，也不静默忽略。\n- **`stop` 当前不可用**：它会被原样透传给 DSH，但适配器不支持 `GenerateOptions.stop`，带 `stop` 的请求\n  以 `502 UNSUPPORTED_OPTION` 失败 —— 这一层上游不支持，不是网关的取舍；同请求去掉 `stop` 即 200。\n- **`max_tokens` 是软上限**：超过 200000 不报错，而是被截断到 200000（DSH 的调用配置就收这个数）。\n- **thinking 模型要多传一个字段**：多轮请求必须把上一轮的 `reasoning_content` 带回，否则上游会以 `400`\n  拒绝。这是模型的要求，不是网关的。\n- **`reasoning_tokens` 未必有**：字段实现了，但取不取得到取决于上游是否上报；成文时测到的 provider\n  都没给这个数。\n- **单轮**：每次请求独立调用 `llm.stream`，不维护服务端会话；多轮靠客户端把历史塞回 `messages`。\n- **目录是快照**：`catalogTtlMs` 到期或 id 未命中时重建，新增模型建议重启 DSH。空目录不算有效快照，\n  适配器就绪后会自愈。\n- **中途失败改不回状态码**：SSE 头一旦发出就只能下发错误数据帧（OpenAI 同样做法）；开流前的失败会给\n  真实的错误状态。\n- 插件加载失败不会拖垮 DSH：单个插件异常只影响本插件。"
+    },
+    {
+      "section": "文件清单",
+      "text": "```\ndsh-llm-gateway/\n  package.json         # 包描述，dsh.bundle.patch 与 dsh.client 声明\n  cordis.patch.yml     # bundle 层：插入 llm-gateway 条目\n  build-and-pack.ps1   # 打包安装脚本：pnpm pack → 放进 profile → 改写 dependencies\n\n宿主半侧依赖 `@deepseek-ai/schemastery`（由 DSH 运行时提供）；浏览器半侧通过 DSH 的客户端模块表使用\n`@deepseek-ai/dsh-client-ui-primitives`。除此外没有第三方依赖。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

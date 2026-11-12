@@ -1,0 +1,110 @@
+{
+  "repo": "LiKanGame/dsh-custom-context-injector",
+  "commit": "3fc8a2be5a76cc5d937c1794eff45ae2c97e800c",
+  "extracted_at": "2026-11-11T12:04:18.375750+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 13596,
+    "lines_by_language": {
+      "JSON": 21,
+      "JavaScript": 189,
+      "Markdown": 50,
+      "Other": 28,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "src/client.js",
+      "src/host.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-custom-context-injector",
+    "version": "0.1.0",
+    "private": true,
+    "description": "DeepSeek Harness (Cordis) 插件：提供「自定义上下文」设置页并注入到模型上下文，支持落盘持久化。",
+    "type": "commonjs",
+    "license": "MIT",
+    "files": [
+      "src",
+      "cordis.patch.yml"
+    ],
+    "scripts": {
+      "lint": "echo no lint configured"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "cordis",
+      "deepseek-harness",
+      "plugin",
+      "custom-context"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\r\n    - id: custom-context-plugin\r\n      name: dsh-custom-context-injector"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-09T09:12:04Z",
+    "created_at": "2026-09-09T09:08:18Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "dsh-custom-context-injector",
+      "text": "DeepSeek Harness（Cordis 运行时）插件：让你在设置里维护一段「自定义上下文」，并把它注入到每次模型调用的提示中。"
+    },
+    {
+      "section": "它做什么",
+      "text": "两个能力合在一起：\n\n- **D — 「自定义上下文」设置页**\n  在 GUI 的 设置（齿轮）→ 新增一页「自定义上下文」：一个「启用注入」开关 + 一个多行输入框 + 「保存」按钮。\n\n- **B — 自动注入**\n  启用状态下，保存的这段文字会作为一条 `systemPrompt` section 注入到每次模型装配。实测：开启后，当前会话以及之后通过「新对话」开出的新会话都会携带这段内容。\n\n- **持久化**\n  保存会尝试把内容写入磁盘 JSON，跨重启保留；若磁盘写入不可用则如实降级为“仅内存”并在设置页提示。"
+    },
+    {
+      "section": "结构",
+      "text": "```\nsrc/\n  host.js     Host 半区：fs 持久化、get/set RPC、systemPrompt section 注入\n  client.js   Client 半区：settings.section 插槽里的设置页 UI\npackage.json\n\n两侧通过 **Package-private RPC** 通信：Client 用 `host.call('extra-context/get'|'extra-context/set')`，Host 用 `harness.handle(...)` 应答。Host 的注入读取内存缓存（由启动时的磁盘加载与保存时写入共同维护），因为 `systemPrompt.section` 的 `text` 是同步的。"
+    },
+    {
+      "section": "运行环境依赖（重要）",
+      "text": "本源码是**经过实机验证的动态 Cordis Package** 的可维护镜像。它依赖 DSH 动态运行时注入的全局/服务：\n\n- Host：`harness` 全局、`ctx.get('systemPrompt')`、`ctx.get('fs')`（纯 JS，无 import/require）。\n- Client：`React`（仅 createElement）、`host`、`styles`、`ctx`、插槽 `settings.section`（无 JSX/import）。\n\n因此它**当前不是可独立安装的 npm 包**：客户端部分会依赖 Harness 内部包（`@deepseek-ai/dsh-*`），在那些包可被外部解析之前，无法用 `dsh plugin add` 直接装上。把它跑起来有两条现实途径："
+    },
+    {
+      "section": "运行环境依赖（重要）",
+      "text": "1. **作为动态插件**：把 `host.js`/`client.js` 的插件函数体按 Cordis 动态插件流程 `define` + `run` 到当前运行实例。\n2. **接线成真正的 DSH feature**：待能解析内部依赖后，把它并入某个 composition / feature 目录并加一行加载。"
+    },
+    {
+      "section": "行为与边界（如实说明）",
+      "text": "- **进程内缓存 + 磁盘文件**：内容存一份在内存（供同步注入），保存时落盘。\n- **持久文件实际落点**：在本机实测中，`fs` 服务的默认 base 是 DSH 宿主进程工作目录（如 `E:\\deepseek-harness`），所以文件落在 `E:\\deepseek-harness\\.dsh-custom-context.json`。若要改到别处，需要显式 resolve 一个绝对路径（并确认 `fs` 允许写该位置）。`.dsh-custom-context.json` 已加入本仓 `.gitignore`，不会被提交。\n- **注入作用域**：作用于加载该插件的 realm 的后续提示装配，不等于对全 Harness 的历史会话做持久写入。\n- **动态插件为临时形态**：正式化需迁到持久 settings namespace 或 composition。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

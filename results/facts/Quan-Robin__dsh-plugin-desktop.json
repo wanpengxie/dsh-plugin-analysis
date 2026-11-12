@@ -1,0 +1,169 @@
+{
+  "repo": "Quan-Robin/dsh-plugin-desktop",
+  "commit": "0d14f56622dec537ded354527ae181c1632aa0bb",
+  "extracted_at": "2026-11-11T14:05:20.931818+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 115935,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 2408,
+      "Markdown": 86,
+      "Other": 21,
+      "YAML": 10
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client-menu.js",
+      "lib/compat.js",
+      "lib/files-panel-client.js",
+      "lib/index.js",
+      "lib/upstream-patch.js",
+      "lib/ws-tree.js",
+      "package.json",
+      "test/compat.test.mjs",
+      "test/run.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-desktop",
+    "version": "0.4.4",
+    "description": "Companion plugin for DSH-desktop: current-session / usage / prompt / approval APIs, turn stats (TTFT/speed/cache), error surfacing, in-page context menu + pinned sessions, right-side file panel, and the /api/shell PTY terminal bridge.",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client-menu.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime"
+        ]
+      }
+    },
+    "license": "MIT",
+    "author": "Quan-Robin",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "desktop",
+      "context-menu"
+    ],
+    "dependencies": {
+      "ws": "^8.21.0"
+    },
+    "scripts": {
+      "test": "node test/run.mjs && node test/compat.test.mjs"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-plugin-desktop\n      name: dsh-plugin-desktop\n      inject:\n        - webServer\n        # The terminal bridge spawns a PTY via ctx.subprocess.spawnTerminal.\n        # Without this declaration dsh refuses the access at runtime with\n        # \"cannot get property \"subprocess\" without inject\" and the terminal\n        # never starts (the panel then looks like it \"can't type\").\n        - subprocess\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client-menu.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_GLOBAL_ROOT",
+      "kind": "env",
+      "where": "lib/upstream-patch.js:61"
+    },
+    {
+      "name": "USER",
+      "kind": "env",
+      "where": "lib/upstream-patch.js:62"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "x",
+      "url": "http://x",
+      "where": "lib/index.js:403"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "ws": "^8.21.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-09-13T07:22:26Z",
+    "created_at": "2026-08-17T18:20:13Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client-menu.js",
+    "lib/compat.js",
+    "lib/index.js",
+    "lib/upstream-patch.js",
+    "lib/ws-tree.js",
+    "package.json",
+    "test/compat.test.mjs",
+    "test/run.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-desktop",
+      "text": "DSH-desktop-for-Linux 的**官方伴生插件**（独立发布，`dsh-plugin` 话题）。\n\n**定位：大部分桌面端功能 + 小部分插件功能。** 原版桌面端保持极简；安装此插件才解锁增强功能。运行在 dsh 服务进程内，一方面把桌面端需要的内部状态以稳定 HTTP 端点暴露出来（替代桌面端过去的 hack），另一方面往 Web UI 注入增强的页内右键菜单与「置顶会话」扩展。\n\n| 桌面端旧做法 | 插件做法 |\n|---|---|\n| 嗅探 `webRequest` 的 `/api/session.*` POST body 判断当前会话 | `GET /api/state` 直接给出 |\n| 解压 `~/.dsh/sessions/**/session.jsonl.zstd` 估算用量 | `GET /api/usage` 给出事件流实时聚合 |\n| （无） | 页内完整右键菜单（会话/工作区/正文/链接/输入框）+「置顶会话」扩展（client 注入） |"
+    },
+    {
+      "section": "端点",
+      "text": "- `GET /api/state` → `{ plugin, since, currentSessionId, turn: 'working'|'idle', lastTurnEndSeq, lastSummary }`\n- `GET /api/usage` → `{ plugin, since, complete: false, byModel, sessions: [{ id, byModel, userMsgByModel, lastTurnEndSeq, lastSummary, updatedAt }] }`\n  - `complete: false`：仅覆盖插件加载后的事件（dsh 重启后归零）。桌面端用它做当前会话的实时数据，历史总量仍走本地文件扫描（有 mtime+size 缓存，增量代价很小）。\n- `POST /api/prompt` `{ sessionId?, text }` → 全局快捷输入的发送通道；`sessionId` 缺省用当前会话。\n- `POST /api/set-session` `{ sessionId }` → 桌面壳在用户在 Web UI 中切换会话时调用，让 `/api/state` 的 `currentSessionId` 始终跟随用户实际查看的会话（DS-pet 依赖此接口）。"
+    },
+    {
+      "section": "实机验证（2026-08-17）",
+      "text": "在真实 dsh + 桌面 Electron 环境中验证了 `POST /api/set-session` 的端到端链路：\n\n1. 创建两个会话，`/api/state` 因 `session/created` 事件暂时指向新会话；\n2. 在主页面（webContents 内）发起 `fetch('/api/session.history', { method: 'POST', body: JSON.stringify({ payload: { sessionId } }) })`，模拟用户在 Web UI 中打开某个会话；\n3. 桌面壳的 `webRequest` 嗅探捕获该请求并调用 `POST /api/set-session`；\n4. 随后 `GET /api/state` 的 `currentSessionId` 双向切换正确（`session-f30a986a-…` ↔ `session-611cc60e-…`）。"
+    },
+    {
+      "section": "实机验证（2026-08-17）",
+      "text": "该链路证明：即使插件可用（`pluginAvailable=true`），桌面端也会持续嗅探 `/api/session.*` 并同步 UI 导航导致的当前会话变化，DS-pet 轮询到的 `currentSessionId` 与实际查看的会话一致。\n\n事件语义与桌面端 `src/usage-parse.js` 完全一致（`request/header` 记模型、`user/message` 开新一轮、`turn/end` 收尾、用量只取 `assistant/chunk`），保证两条路径数字一致。"
+    },
+    {
+      "section": "安装",
+      "text": "**方式一（推荐，独立发布）**：\n\n```bash\ndsh plugin add github:Quan-Robin/dsh-plugin-desktop\n```\n\n**方式二（桌面端内置）**：DSH-desktop-for-Linux 托盘/设置页「安装伴生插件」一键安装（从应用内拷贝 + patch 注册）。\n\n手动亦可：把本目录拷贝到 `$DSH_HOME/profiles/web/node_modules/dsh-plugin-desktop/`，并在 `$DSH_HOME/profiles/web/cordis.patch.yml` 追加：\n\n```yaml\n- insert:\n    - id: dsh-plugin-desktop\n      name: dsh-plugin-desktop\n      inject:\n\n然后重启 dsh 服务。手动验证：`curl http://127.0.0.1:3080/api/state`。"
+    },
+    {
+      "section": "页内增强（client 注入，随插件加载）",
+      "text": "安装后 dsh Web UI 自动获得：\n\n- **完整右键菜单**：会话 / 工作区 / 正文编辑 / 链接 / 输入框，各场景对应操作；检测到社区 @baihejiangnan/dsh-session-context-menu 已装时自动让位，仅注册「置顶会话」为其扩展\n- **置顶会话**：会话行右键「置顶会话」→ 侧边栏独立「📌 置顶」分区（状态由桌面端保管）；右键会话菜单显示「置顶/取消置顶」随状态切换"
+    },
+    {
+      "section": "适配真实 dsh（重要）",
+      "text": "dsh 的插件 API 尚未文档化，本插件的宿主交互集中在 `lib/index.js` 的三个\nADAPTER 函数里，全部是\"尝试多种可能形态、逐个降级\"的写法：\n\n1. **`EVENT_BUS_SHAPES`** — 事件挂接：`ctx.on('dsh/event')` / `ctx.on('session/event')` / `ctx.events.on(...)`\n2. **`ROUTER_SHAPES`** — HTTP 注册：`ctx.server.get/post` / `ctx.router.get/post`\n3. **`PROMPT_SHAPES`** — 发消息 RPC：`ctx.server.call('session.prompt')` 等\n\n接真实 dsh 时只需要改这三个列表；聚合逻辑（`Tracker`）不依赖任何宿主 API。\n`GET /api/state` 不暴露适配诊断（保持响应精简），可用插件 apply 返回的\n`report()` 在进程内查询哪个形态挂接成功。"
+    },
+    {
+      "section": "适配真实 dsh（重要）",
+      "text": "零 npm 依赖是有意为之：桌面端直接拷贝目录安装，无需 npm/网络。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnode test/run.mjs\n```\n\n用 mock ctx（假事件总线 + 路由表）验证事件聚合、三个端点的响应与降级行为，\n不依赖真实 dsh。"
+    }
+  ],
+  "skipped": []
+}

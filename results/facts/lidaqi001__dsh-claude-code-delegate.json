@@ -1,0 +1,215 @@
+{
+  "repo": "lidaqi001/dsh-claude-code-delegate",
+  "commit": "e87c638e8eb8b6d0b1b88cbc5968c8606352fa67",
+  "extracted_at": "2026-11-11T23:35:49.099755+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 30595,
+    "lines_by_language": {
+      "JSON": 68,
+      "JavaScript": 86,
+      "Markdown": 132,
+      "Other": 38,
+      "YAML": 124
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "assets/icon-180.png",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "packaging/awesome-entry.yml",
+      "test/patch.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-claude-code-delegate",
+    "version": "1.2.0",
+    "description": "DeepSeek Harness agent preset that delegates every task to a Claude Code subagent and only schedules and reports results.",
+    "type": "module",
+    "license": "MIT",
+    "author": "liqi",
+    "homepage": "https://github.com/lidaqi001/dsh-claude-code-delegate#readme",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/lidaqi001/dsh-claude-code-delegate.git"
+    },
+    "bugs": {
+      "url": "https://github.com/lidaqi001/dsh-claude-code-delegate/issues"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh-bundle",
+      "agent-preset",
+      "claude-code",
+      "claude",
+      "subagent",
+      "delegation"
+    ],
+    "scripts": {
+      "test": "node --test test/*.test.mjs"
+    },
+    "engines": {
+      "dsh": ">=0.2.1 <0.3.0-0"
+    },
+    "dependencies": {
+      "@deepseek-ai/dsh-subagent-claude-code": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.3.0-0"
+    },
+    "exports": {
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "package.json",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "assets/icon-180.png",
+      "README.md",
+      "LICENSE"
+    ],
+    "icon": "./icon.svg",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Claude Code 委托模式\n#\n# 本 bundle 做两件事：\n#\n# 1. 在 Host 层注册一个专用的 Claude Code subagent provider\n#    (`claude-code-delegate`)。它不注册任何全局工具，因此其它会话里由\n#    @deepseek-ai/dsh-subagent-claude-code bundle 提供的全局\n#    `subagent_claude_code` 保持原样，互不影响。\n# 2. 声明一个 Agent preset `claude-code`，名字显示为「Claude Code 委托」：\n#    persona 让主代理只做调度与汇报；preset 内的 `subagent_claude_code`\n#    指向上面的专用 provider（同名工具按 Agent 作用域规则遮蔽全局工具）；\n#    另外保留 ask_user_question 用于澄清，并用 compaction 组压缩长会话。\n#\n# 依赖：`@deepseek-ai/dsh-subagent-claude-code` 已声明为本包依赖，`dsh plugin add`\n# 会一并装好并在 profile 根可解析；本机 Claude Code 需要先完成登录。\n#\n# 用户可以在自己的 profile patch 里按行 id 覆盖本 bundle 的行。注意：\n# `providerName` 与 preset 内 tool 行的 `provider` 必须完全一致，改一处要同步另一处。\n#\n#   - id: subagent-claude-code-delegate\n#     name: '@deepseek-ai/dsh-subagent-claude-code'\n#     config:\n#       providerName: claude-code-delegate        # 改了要同步下面 tool 行的 provider\n#       permissionMode: auto                      # dontAsk | acceptEdits | auto | plan | bypassPermissions\n#       # model: '<claude-model-id>'              # 固定 Claude Code 使用的模型\n#\n# permissionMode 说明：auto 由 Claude Code 原生分类器逐项裁决，**不是沙箱**，\n# 仍可能读写文件、执行命令；bypassPermissions 会跳过所有权限检查，风险最高。\n- insert:\n    # ---- Host 层：专用 provider（名称必须全局唯一）----\n    - id: subagent-claude-code-delegate\n      name: '@deepseek-ai/dsh-subagent-claude-code'\n      config:\n        providerName: claude-code-delegate\n        permissionMode: auto\n\n    # ---- Preset 层：Claude Code 委托模式 ----\n    - id: preset-claude-code\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: claude-code\n        name: Claude Code 委托\n        description: 会话只做调度：每个任务都交给 Claude Code 子代理执行，结果由主代理汇报。\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              # complete: true 让这段文字成为该会话唯一的系统提示词，\n              # 避免其它提示词段落把主代理引向\"自己动手\"。\n              complete: true\n              includeRuntimeContext: false\n              prefix: |-\n                你是「Claude Code 委托」模式的调度器。这个模式不自己动手：所有实际工作都交给 Claude Code 子代理完成，你只负责理解请求、组织任务、转交和汇报。\n\n                工作规则：\n                1. 先判断请求是否属于实际工作——写代码、改文件、运行命令、检索仓库、分析数据、查资料等都属于。只有纯寒暄，或对已有结果的简短追问，才可以直接回答。\n                2. 每一次实际工作都调用 subagent_claude_code，把任务派给 Claude Code 子代理。除了 ask_user_question（以及切换工作目录这类准备动作），不要使用其他工具自己动手，也不要凭猜测回答需要动手核实的问题。\n                3. 任务描述必须自包含。子代理看不到本会话的历史，也不接受追加消息、不支持恢复对话，所以每次都要写清：\n                   - 背景和目标：用户的原始要求，以及为什么要做；\n                   - 范围：要改哪些文件或模块，不要碰哪些；\n                   - 步骤和约束：技术栈、风格、兼容性、必须遵守的约定；\n                   - 验收标准：怎样算完成（测试、构建、行为验证）。\n                   用户已经给出的细节不要省略，也不要擅自改写。子代理默认在会话工作目录运行；需要别的目录时，在任务里写明具体路径。\n                4. 一次调用只派一件事。任务分多个阶段时，先派第一阶段，等完成通知到达后再派下一阶段，并且把下一阶段当成一次全新的委派来写说明。\n                5. 调用会立刻返回子任务 id；真正的结果通过完成通知到达。等待期间不要轮询、不要空转，也不要重复派同一个任务。\n                6. 收到完成通知后简洁汇报：做了什么、结果如何、涉及哪些文件（给相对路径）、还有什么没做完或需要用户决定。不要复述子代理的全部输出，也不要自己再重复执行它做过的事。按验收标准核对子代理的结论，明显不达标就补派一轮修正任务。\n                7. 委派失败时，如实说明失败发生在哪个阶段、可能原因，再判断是否值得用更明确的任务描述重试一次；仍然失败就把诊断信息交给用户。\n                8. 如果子代理返回的是问题、阻塞或\"需要更多信息\"，不要当成完成：先向用户确认，再作为新的自包含任务重新委派。\n                9. 汇报时区分\"子代理报告完成\"和\"已由你验证\"；不要声称自己执行过命令或改过文件。\n                10. 需求存在会改变结果、又无法由子代理自行发现的关键歧义时，先用 ask_user_question 向用户确认，再委派。\n                11. 用用户提问时使用的语言回复，默认中文。\n\n          # 本模式的委派工具：指向专用 provider，并遮蔽全局同名工具。\n          - id: tool-claude-code-delegate\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: claude-code-delegate\n              toolName: subagent_claude_code\n              maxDepth: provider-managed\n\n          # 主代理唯一保留的\"自己\"工具：向用户澄清需求。\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n\n          # 长会话压缩：委派结果会持续累积，避免上下文溢出。\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n"
+    }
+  ],
+  "entries": [
+    "package.json",
+    "cordis.patch.yml",
+    "icon.svg"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-claude-code-delegate#readme",
+      "where": "package.json:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-claude-code-delegate.git",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-claude-code-delegate/issues",
+      "where": "package.json:14"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/awesome-dsh-plugin/awesome-dsh-plugin",
+      "where": "packaging/awesome-entry.yml:1"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-claude-code-delegate",
+      "where": "packaging/awesome-entry.yml:3"
+    },
+    {
+      "host": "raw.githubusercontent.com",
+      "url": "https://raw.githubusercontent.com/lidaqi001/dsh-claude-code-delegate/main/assets/icon-180.png",
+      "where": "packaging/awesome-entry.yml:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-claude-code-delegate.git",
+      "where": "test/patch.test.mjs:20"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-subagent-claude-code": ">=0.2.1-rc.1 <0.2.2-0 || >=0.2.2-rc.1 <0.3.0-0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-11-06T08:12:27Z",
+    "created_at": "2026-11-06T05:46:35Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-claude-code-delegate",
+      "text": "**Claude Code 委托** —— DeepSeek Harness 的 Agent preset 插件：新建会话时选择这个模式，\n会话就只做调度，每个实际任务都通过 `subagent_claude_code` 交给 **Claude Code 子代理**执行，\n主代理负责理解需求、组织任务说明、转交和汇报结果。\n\n```\n你 → 主代理（调度器） → subagent_claude_code → Claude Code（真正干活） → 主代理汇报 → 你\n```"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile <profile> add dsh-claude-code-delegate\n```\n\n或在 Web/Desktop 的 **插件** 页面安装（`plugin_manager` 的 `install_bundle`，target 为\n`dsh-claude-code-delegate`）。安装后新建会话，在模式列表里选择 **Claude Code 委托**。"
+    },
+    {
+      "section": "前置条件",
+      "text": "- 本机 Claude Code 已完成登录。它的原生 `settings.json` / `~/.claude.json` 是认证与\n  其它原生设置的权威来源，本插件不会替你登录或改写这些文件。\n- DSH 版本满足本包的 `engines.dsh`（见 `package.json`）。\n\n`@deepseek-ai/dsh-subagent-claude-code`（Claude Code SDK 载荷与进程外运行能力）已经声明为\n本包的依赖，`dsh plugin add` 会一并装好；本插件的 patch 自己注册专用 provider，所以**不需要**\n额外启用那个 bundle。你若手动启用了它也不冲突：它注册的是全局 `claude-code` provider 与全局\n工具，本插件用的是另一个名字的专用 provider。"
+    },
+    {
+      "section": "这个模式里有什么",
+      "text": "preset 只注册两个工具：\n\n| 工具 | 作用 |\n|---|---|\n| `subagent_claude_code` | 唯一的干活入口，指向本插件注册的专用 provider |\n| `ask_user_question` | 需求有关键歧义时先问用户 |\n\n> **注意**：profile 级的全局工具依然存在（例如 `working_directory`、MCP 工具、插件管理工具），\n> 它们对 preset 里的 Agent 仍然可见。本插件目前**只靠 persona 约束**主代理不去使用它们。\n> 如果你需要硬隔离（把这些全局工具从该 preset 的 Agent 里隐藏），需要额外的 Agent 级\n> `ctx.tools.restrict()` 插件；注意在 preset 作用域调用 `restrict()` 会连同 preset 自己注册的\n> 工具一起藏掉，所以这类 gate 必须按 Agent 作用域实现。"
+    },
+    {
+      "section": "这个模式里有什么",
+      "text": "系统提示词（`complete: true`，只有这一段）把主代理定义成调度器：判断是否实际工作、写\n自包含任务说明、一次只派一件事、等完成通知、汇报结果、区分\"子代理报告完成\"与\"已验证\"、\n失败时给出阶段与原因。纯寒暄或对结果的简短追问可以直接回答，其余一律委派。另外挂了\ncompaction 组，长会话会压缩，不会因为不断累积的子代理结果撑爆上下文。\n\nClaude Code 是**一次性外部子代理**：看不到会话历史、不接受追加消息、结束后不能恢复。\n所以任务说明必须自包含；本插件的 persona 已经要求主代理这样写。"
+    },
+    {
+      "section": "它怎么接进去",
+      "text": "`cordis.patch.yml` 插入两行：\n\n1. **Host 行 `subagent-claude-code-delegate`**：一个专用 Claude Code provider 实例\n   （`providerName: claude-code-delegate`，默认 `permissionMode: auto`）。它**不注册任何全局\n   工具**，所以其它模式里由官方 bundle 提供的全局 `subagent_claude_code` 完全不受影响。\n2. **Preset 行 `preset-claude-code`**：声明 preset `claude-code`。preset 内的\n   `subagent_claude_code` 与全局工具同名，按 Agent 作用域规则遮蔽全局工具，从而落到专用\n   provider 上。"
+    },
+    {
+      "section": "配置",
+      "text": "在本机 profile 的 `cordis.patch.yml` 里按行 id 覆盖即可，不需要改本插件的文件：\n\n```yaml\n- id: subagent-claude-code-delegate\n  name: '@deepseek-ai/dsh-subagent-claude-code'\n  config:\n    providerName: claude-code-delegate   # 改了必须同步下面 preset 里的 provider"
+    },
+    {
+      "section": "配置",
+      "text": "| permissionMode | 行为 |\n|---|---|\n| `dontAsk` | 不弹提示，未在 Claude 设置里预授权的操作直接拒绝（最保守） |\n| `acceptEdits` | 自动接受文件编辑，其余权限请求拒绝（能改文件，基本跑不了命令） |\n| `auto` | 由 Claude Code 原生分类器逐项裁决。**不是沙箱**：仍可能读写文件、执行命令，危险操作是否被拒取决于策略与版本（默认） |\n| `plan` | 原生规划模式：只出计划，不执行 |\n| `bypassPermissions` | 跳过所有权限检查；风险最高，不建议日常使用 |\n\n修改后重新应用配置层（重启应用，或 profile 启用了 HMR 时的热重载）即可；preset 的改动只影响\n之后新建的会话。"
+    },
+    {
+      "section": "装完怎么验证",
+      "text": "按顺序检查三层，任意一层不对就停在那层：\n\n1. **行激活**：`plugin_manager` → `list_plugins`，确认 `subagent-claude-code-delegate` 与\n   `preset-claude-code` 都是 `enabled: true`、`fiberPhase: active`。\n2. **preset 已注册**：`cordis_inspect_query` → `Config.listConfigs`（name 过滤\n   `@deepseek-ai/dsh-agent-preset`），应能看到 `preset-claude-code`。\n3. **真实委派**：新建会话选「Claude Code 委托」，先派一个无害任务（例如在临时文件里写一行再读回来），\n   确认 `subagent_claude_code` 工具存在、子代理返回结果并被汇报。\n\n常见故障："
+    },
+    {
+      "section": "装完怎么验证",
+      "text": "| 现象 | 可能原因 | 处理 |\n|---|---|---|\n| 模式列表里没有「Claude Code 委托」 | 插件未启用 / preset 行挂载失败 | 回到第 1、2 步看诊断 |\n| 有模式，但主代理说没有 `subagent_claude_code` 工具 | provider 包解析不到或 Host 行未激活 | `list_plugins` 看 `subagent-claude-code-delegate` |\n| 委派立刻失败，诊断指向 query-start | Claude Code 未登录 / SDK 载荷缺失 / 平台不支持 | 先在终端跑一次 `claude` 确认可登录 |\n| 子代理能读不能写、跑不了命令 | `permissionMode` 过于保守（`dontAsk` / `acceptEdits`） | 改成 `auto`，或接受其限制 |"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\ndsh plugin --profile <profile> remove dsh-claude-code-delegate\n```\n\n或 `plugin_manager` 的 `remove_bundle`。"
+    },
+    {
+      "section": "兼容性",
+      "text": "`engines.dsh` 见 `package.json`（`>=0.2.1 <0.3.0-0`）。依赖 Harness 的 Agent preset、\n`dsh-tool-subagent` 与 `dsh-subagent-claude-code` 接口；官方包版本变化后建议先派一个无害任务\n验证一次。"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\nnpm test        # 无依赖的静态 smoke test：patch/package/locale/文件清单一致性\nnpm pack --dry-run\n```"
+    },
+    {
+      "section": "许可证",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

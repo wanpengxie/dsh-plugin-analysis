@@ -1,0 +1,381 @@
+{
+  "repo": "MangMax/dsh-acp-agentmode",
+  "commit": "7b25ad03005213b7fb2ce924923dfd29b470a8f3",
+  "extracted_at": "2026-11-11T12:33:02.387780+00:00",
+  "tree": {
+    "files": 47,
+    "bytes": 270977,
+    "lines_by_language": {
+      "JSON": 105,
+      "Markdown": 730,
+      "Other": 38,
+      "TypeScript": 3011,
+      "YAML": 2989
+    },
+    "outline": [
+      ".github/CODEOWNERS",
+      ".github/ISSUE_TEMPLATE/bug_report.md",
+      ".github/ISSUE_TEMPLATE/config.yml",
+      ".github/ISSUE_TEMPLATE/feature_request.md",
+      ".github/dependabot.yml",
+      ".github/pull_request_template.md",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "CODE_OF_CONDUCT.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "README_EN.md",
+      "SECURITY.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "pnpm-lock.yaml",
+      "presets/cordis.patch.yml",
+      "presets/minimal.patch.yml",
+      "presets/ptc.patch.yml",
+      "presets/standard.patch.yml",
+      "scripts/smoke-acp.ts",
+      "scripts/sync-presets.ts",
+      "src/args.ts",
+      "src/compose.ts",
+      "src/constants.ts",
+      "src/errors.ts",
+      "src/index.ts",
+      "src/log.ts",
+      "src/plugin.ts",
+      "src/ports.ts",
+      "src/sanitize.ts",
+      "src/selection.ts",
+      "src/settings.ts",
+      "tests/helpers/fakes.ts",
+      "tests/unit/args.test.ts",
+      "tests/unit/compose.test.ts",
+      "tests/unit/format.test.ts",
+      "tests/unit/plugin.test.ts",
+      "tests/unit/sanitize.test.ts",
+      "tests/unit/selection.test.ts",
+      "tests/unit/settings.test.ts",
+      "tsconfig.json",
+      "vite.config.ts"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-acp-agentmode",
+    "version": "0.3.0",
+    "private": true,
+    "description": "Give `dsh --profile acp` a --agentmode <preset> flag that picks the agent preset every new ACP session runs.",
+    "homepage": "https://github.com/MangMax/dsh-acp-agentmode#readme",
+    "bugs": {
+      "url": "https://github.com/MangMax/dsh-acp-agentmode/issues"
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/MangMax/dsh-acp-agentmode.git"
+    },
+    "files": [
+      "dist",
+      "presets",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "README_EN.md",
+      "LICENSE"
+    ],
+    "type": "module",
+    "types": "./dist/index.d.mts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./package.json": "./package.json"
+    },
+    "scripts": {
+      "build": "vp pack",
+      "check": "vp check",
+      "check:fix": "vp check --fix",
+      "test": "vp test",
+      "test:coverage": "vp test run --coverage",
+      "smoke": "node scripts/smoke-acp.ts",
+      "dev": "vp pack --watch",
+      "sync-presets": "node scripts/sync-presets.ts",
+      "verify": "vp check && vp test run && vp pack",
+      "prepack": "pnpm verify"
+    },
+    "devDependencies": {
+      "@types/node": "^26.6.5",
+      "typescript": "^7.0.2",
+      "vite-plus": "^1.3.0",
+      "vitest": "^5.0.5"
+    },
+    "engines": {
+      "node": ">=22"
+    },
+    "packageManager": "pnpm@12.15.0",
+    "dsh": {
+      "bundle": {
+        "patch": [
+          "./cordis.patch.yml",
+          "./presets/standard.patch.yml",
+          "./presets/ptc.patch.yml",
+          "./presets/minimal.patch.yml",
+          "./presets/cordis.patch.yml"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-acp-agentmode — patch layer for the automation-only ACP profile.\n#\n# Installed into a profile, this bundle turns `dsh --profile acp` from a\n# zero-option, host-plane-composed app into one that selects an agent preset:\n#\n#   dsh --profile acp --agentmode <preset>\n#\n# Three changes, in order: take over the app's command line, move the agent\n# plane behind presets (the same split @deepseek-ai/dsh-web-app applies to the\n# Web surface), and mount the selection registry that the shipped preset\n# declaration files below register into.\n\n# ── 1. The app's command line ──────────────────────────────────────────────\n# The shipped provider owns a zero-option commander program, so any extra flag\n# is rejected before the ACP bridge starts. Disable it and let this bundle's\n# plugin (row `acp-agentmode`, inserted below) own the flag family and publish\n# the same `acpAppStartup` service the `acp` row injects.\n- id: acp-app-startup\n  disabled: true\n\n# ── 2. The agent plane moves behind agent presets ──────────────────────────\n# Every row below composes what ONE agent contributes to the host registries:\n# its tools, its prompt sections, its delegation backends. The base keeps them\n# for single-session surfaces that compose their agent process-wide; an ACP\n# process serves several sessions, so the identical set must move into the\n# preset each session mounts. Disabling rather than deleting is deliberate: the\n# base is shared, and an absent row would silently reappear after a reorder.\n#\n# This list mirrors `@deepseek-ai/dsh-web-app/cordis.patch.yml`\n# (\"the agent plane moves behind agent presets\"). A row renamed upstream makes\n# the corresponding patch a no-op with a loader warning rather than a failure.\n- id: tool-plugin-manager\n  disabled: true\n\n- id: tool-bash\n  disabled: true\n\n- id: tool-pwsh\n  disabled: true\n\n- id: tool-jobs\n  disabled: true\n\n- id: tool-fs\n  disabled: true\n\n- id: tool-fs-search\n  disabled: true\n\n- id: skill-filesystem\n  disabled: true\n\n- id: tool-skill\n  disabled: true\n\n- id: command-goal\n  disabled: true\n\n- id: tool-goal\n  disabled: true\n\n- id: plan-mode\n  disabled: true\n\n- id: compaction-basic\n  disabled: true\n\n- id: command-compact\n  disabled: true\n\n- id: tool-result-pruner\n  disabled: true\n\n- id: tool-subagent-control\n  disabled: true\n\n- id: tool-subagent-list-agents\n  disabled: true\n\n- id: tool-subagent\n  disabled: true\n\n- id: tool-subagent-fork\n  disabled: true\n\n- id: workflow-ptc\n  disabled: true\n\n- id: tool-workflow\n  disabled: true\n\n- id: agent-instructions\n  disabled: true\n\n- id: tool-todo\n  disabled: true\n\n- id: tool-web\n  disabled: true\n\n# ── 2b. Host-plane support rows the preset declarations depend on ──────────\n# Moving the agent plane into presets leaves some *host* services that the\n# preset rows consume: subagent model selection and the plugin inventory. The\n# Web surface inserts the same rows for the same reason. (The schedule service\n# is deliberately absent: @deepseek-ai/dsh-schedule requires the Web-only\n# sessionController, so the preset snapshots disable `tool-schedule` instead.)\n- insert:\n    - id: subagent-model-selection-settings\n      name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'\n\n    - id: plugin-inventory\n      name: '@deepseek-ai/dsh-host-plugin-inventory'\n\n# ── 3. The preset selection registry ───────────────────────────────────────\n# The declarations follow as separate patch files under `presets/`, listed\n# after this file in package.json `dsh.bundle.patch`. `default` is only the\n# fallback when no --agentmode is passed; this bundle never rewrites the\n# user's persisted selection.\n- insert:\n    - id: agent-preset-registry\n      name: '@deepseek-ai/dsh-agent-preset-registry'\n      config:\n        default: standard\n\n# ── 4. The provider that owns --agentmode ──────────────────────────────────\n# Runs in the Host plane: parses the flag, validates it against the registry,\n# publishes `acpAppStartup`, then binds each new Agent to the preset from the\n# serial `agent/created` event (before the session's queued input is released).\n- insert:\n    - id: acp-agentmode\n      name: 'dsh-acp-agentmode'\n"
+    },
+    {
+      "path": "presets/standard.patch.yml",
+      "text": "# Snapshot of @deepseek-ai/dsh-web-app@0.2.1-rc.2 presets/standard.patch.yml\n# Regenerate with `node scripts/sync-presets.mjs` after a harness upgrade;\n# do not hand-edit this file.\n# Agent preset standard: one `@deepseek-ai/dsh-agent-preset` declaration inserted\n# after the web patch. Edits saved from the Web editor override this row's\n# `config.plugins` by id from the profile patch.\n- insert:\n    - id: preset-standard\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: standard\n        order: 1\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            disabled: true\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n          - id: tool-plugin-market\n            name: '@deepseek-ai/dsh-plugin-market/tools'\n            disabled: true\n"
+    },
+    {
+      "path": "presets/ptc.patch.yml",
+      "text": "# Snapshot of @deepseek-ai/dsh-web-app@0.2.1-rc.2 presets/ptc.patch.yml\n# Regenerate with `node scripts/sync-presets.mjs` after a harness upgrade;\n# do not hand-edit this file.\n# Agent preset ptc: one `@deepseek-ai/dsh-agent-preset` declaration inserted\n# after the web patch. Edits saved from the Web editor override this row's\n# `config.plugins` by id from the profile patch.\n- insert:\n    - id: preset-ptc\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: ptc\n        order: 2\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            disabled: true\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                disabled: true\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n                disabled: true\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: tool-presentation\n            name: '@deepseek-ai/dsh-agent-tool-presentation'\n            config:\n              mode: ptc\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n          - id: tool-plugin-market\n            name: '@deepseek-ai/dsh-plugin-market/tools'\n            disabled: true\n"
+    },
+    {
+      "path": "presets/minimal.patch.yml",
+      "text": "# Snapshot of @deepseek-ai/dsh-web-app@0.2.1-rc.2 presets/minimal.patch.yml\n# Regenerate with `node scripts/sync-presets.mjs` after a harness upgrade;\n# do not hand-edit this file.\n# Agent preset minimal: one `@deepseek-ai/dsh-agent-preset` declaration inserted\n# after the web patch. Edits saved from the Web editor override this row's\n# `config.plugins` by id from the profile patch.\n- insert:\n    - id: preset-minimal\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: minimal\n        order: 3\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a helpful software engineer assistant.\n              complete: true\n              includeRuntimeContext: false\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n            config:\n              read: false\n              readImage: true\n              write: false\n              edit: false\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n          - id: persistent-shell\n            name: cordis:group\n            group: true\n            isolate:\n              terminals: true\n            config:\n              - id: pty\n                name: '@deepseek-ai/dsh-terminal'\n              - id: terminal-bash\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform === 'win32'\n                config:\n                  timeoutMs: 300000\n              - id: persistent-bash\n                name: '@deepseek-ai/dsh-tool-bash-persistent'\n                disabled: !!js process.platform === 'win32'\n                config:\n                  timeoutMs: 300000\n                  description: |-\n                    Run commands in a bash shell\n                    * When invoking this tool, the contents of the \"command\" parameter does NOT need to be XML-escaped.\n                    * Network access depends on the task environment. Prefer configured mirrors/proxies when they are available.\n                    * State is persistent across command calls and discussions with the user.\n                    * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.\n                    * Please avoid commands that may produce a very large amount of output.\n                    * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.\n              - id: terminal-pwsh\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  shellDialect: pwsh\n                  timeoutMs: 300000\n              - id: persistent-pwsh\n                name: '@deepseek-ai/dsh-tool-pwsh-persistent'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  timeoutMs: 300000\n                  description: |-\n                    Run commands in a PowerShell shell\n                    * When invoking this tool, the contents of the \"command\" parameter does NOT need to be XML-escaped.\n                    * You don't have access to the internet via this tool.\n                    * State is persistent across command calls and discussions with the user.\n                    * Use native Windows paths (C:\\...) and $env:NAME variables; this is PowerShell, not bash.\n                    * Please avoid commands that may produce a very large amount of output.\n                    * Please run long lived commands in the background, e.g. 'Start-Job' or start a server with Start-Process.\n"
+    },
+    {
+      "path": "presets/cordis.patch.yml",
+      "text": "# Snapshot of @deepseek-ai/dsh-web-app@0.2.1-rc.2 presets/cordis.patch.yml\n# Regenerate with `node scripts/sync-presets.mjs` after a harness upgrade;\n# do not hand-edit this file.\n# Agent preset cordis: one `@deepseek-ai/dsh-agent-preset` declaration inserted\n# after the web patch. Edits saved from the Web editor override this row's\n# `config.plugins` by id from the profile patch.\n- insert:\n    - id: preset-cordis\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: cordis\n        order: 4\n        plugins:\n          # Same persona as `standard`: tool descriptions and the skill catalog carry\n          # the operating detail, and the skills own the preset-authoring rules.\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: >-\n                You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            disabled: true\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: tool-cordis\n            disabled: true\n            name: '@deepseek-ai/dsh-tool-cordis'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n            config:\n              customSkillDirs:\n                - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: !!js \"!ctx.get('profileContext')\"\n          - id: tool-plugin-market\n            name: '@deepseek-ai/dsh-plugin-market/tools'\n            disabled: !!js \"!ctx.get('profileContext')\"\n"
+    }
+  ],
+  "entries": [
+    "icon.svg",
+    "package.json",
+    "cordis.patch.yml",
+    "presets/standard.patch.yml",
+    "presets/ptc.patch.yml",
+    "presets/minimal.patch.yml",
+    "presets/cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PROFILE_UNDER_TEST",
+      "kind": "env",
+      "where": "scripts/smoke-acp.ts:56"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/smoke-acp.ts:59"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/sync-presets.ts:41"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "src/plugin.ts:90"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/plugin.ts:90"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "src/plugin.ts:90"
+    },
+    {
+      "name": "DSH_ACP_AGENTMODE_DEBUG",
+      "kind": "env",
+      "where": "src/plugin.ts:256"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/MangMax/dsh-acp-agentmode/security/advisories/new",
+      "where": ".github/ISSUE_TEMPLATE/config.yml:4"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/MangMax/dsh-acp-agentmode/discussions",
+      "where": ".github/ISSUE_TEMPLATE/config.yml:7"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/MangMax/dsh-acp-agentmode#readme",
+      "where": "package.json:6"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/MangMax/dsh-acp-agentmode/issues",
+      "where": "package.json:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/MangMax/dsh-acp-agentmode.git",
+      "where": "package.json:13"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@types/node": "^26.6.5",
+      "typescript": "^7.0.2",
+      "vite-plus": "^1.3.0",
+      "vitest": "^5.0.5"
+    }
+  },
+  "quality_raw": {
+    "test_files": 8,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 6,
+    "pushed_at": "2026-11-02T19:57:30Z",
+    "created_at": "2026-10-23T02:05:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "package.json",
+    "presets/cordis.patch.yml",
+    "presets/minimal.patch.yml",
+    "presets/ptc.patch.yml",
+    "presets/standard.patch.yml",
+    "scripts/smoke-acp.ts",
+    "scripts/sync-presets.ts",
+    "src/args.ts",
+    "src/compose.ts",
+    "src/constants.ts",
+    "src/errors.ts",
+    "src/index.ts",
+    "src/log.ts",
+    "src/plugin.ts",
+    "src/ports.ts",
+    "src/sanitize.ts",
+    "src/selection.ts",
+    "src/settings.ts"
+  ],
+  "readme": [
+    {
+      "section": "dsh-acp-agentmode",
+      "text": "给 `dsh --profile acp`（Agent Client Protocol 自动化模式）增加一个参数：**启动时直接选定 agent preset**。\n\n```bash\ndsh --profile acp --agentmode cordis     # 本次进程的每个新会话都用 cordis preset\ndsh --profile acp                        # 用 profile 配置的默认 preset（本包默认 standard）\ndsh --profile acp --list-agentmodes      # 列出本 profile 声明的 preset\n```\n\n**默认不持久化**：不带参数时复用**当前 profile** 里用户已设定的 preset（并在日志里标明来源）；`--agentmode` 只覆盖本次启动；只有显式 `--remember` 才会把选择写进当前 profile。"
+    },
+    {
+      "section": "dsh-acp-agentmode",
+      "text": "> ⚠️ **设定按 profile 隔离（harness 设计，不是本插件的取舍）**：Web 界面里的\"默认 preset\"由 settings 服务写入**当前 profile** 的 `cordis.patch.yml`。桌面端 Web 界面 = `desktop` profile，所以在那里设的值**不会**自动带到 `dsh --profile acp`；acp 会退回本 bundle 声明的部署默认 `standard`。要让 ACP 跟随某个默认，用 `--remember` 写入 acp profile（推荐），或把值放进共享 home patch `$DSH_HOME/cordis.patch.yml`（它会压住 Web 表单对该字段的写入）。\n\n工具链：**Vite+ 1.3**（`vp check` / `vp test` / `vp pack`）+ **pnpm** + **TypeScript 7**，零运行时依赖。"
+    },
+    {
+      "section": "安装、构建与卸载",
+      "text": "```bash\npnpm install        # 只装工具链（vite-plus / typescript / vitest / @types/node）\npnpm build          # vp pack → dist/index.mjs + dist/index.d.mts + sourcemap\ngit clone https://github.com/MangMax/dsh-acp-agentmode.git\ndsh plugin --profile acp add ./dsh-acp-agentmode"
+    },
+    {
+      "section": "安装、构建与卸载",
+      "text": "- 也可以直接从 GitHub Releases 下载 tarball：`dsh plugin --profile acp add ./dsh-acp-agentmode-0.3.0.tgz`（未发布到 npm，刻意为之：这个包只在 acp profile 里有意义）。\n- 该 bundle 只属于 **acp profile**。界面里的 `plugin_manager` 只作用于当前 profile（本机是 `desktop`），必须用 `dsh plugin --profile acp …`。\n- 安装会写 profile 的 `dependencies` 并把 `dsh-acp-agentmode` **追加到** `dsh.profile.bundles` 末尾；patch 层按顺序应用，只有排在 `@deepseek-ai/dsh-acp-app` 之后的层才能覆盖它的行。\n- profile 以 symlink 方式引用本目录，因此**改完代码必须 `pnpm build`**（harness 通过 package `exports` 加载 `dist/index.mjs`）。\n- 卸载：`dsh plugin --profile acp remove dsh-acp-agentmode`，profile 回到“零参数 ACP”。"
+    },
+    {
+      "section": "命令",
+      "text": "| 命令                                | 作用                                                                                                            |\n| ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |\n| `pnpm check` / `pnpm check:fix`     | `vp check`：格式化 + oxlint（含类型感知与 tsc 类型检查）                                                        |\n| `pnpm test`                         | `vp test`：69 个单元测试（纯逻辑 + 假端口，无真实 harness）                                                     |\n| `pnpm build`                        | `vp pack`：ESM 库构建（含 `.d.mts` 与 sourcemap）                                                               |\n| `pnpm smoke -- --agentmode minimal` | 真实端到端冒烟：拉起 `dsh --profile acp`，走 `initialize → session/new`，再从**会话日志**断言 preset 真的挂上了 |\n| `pnpm smoke`                        | 同上，但走\"无参数\"路径，验证 profile 设定的复用                                                                 |\n| `pnpm sync-presets`                 | 从已安装的 `@deepseek-ai/dsh-web-app` 重新快照四个官方 preset 声明                                              |\n| `pnpm verify`                       | `check && test && build`，即 `prepa"
+    },
+    {
+      "section": "目录与模块",
+      "text": "```\nsrc/constants.ts   限制、退出码、计时预算、preset id 语法（安全策略集中处）\nsrc/ports.ts       四个协作方的最小结构接口（无 @deepseek-ai/cordis 版本绑定）\nsrc/args.ts        严格参数解析（纯函数）\nsrc/sanitize.ts    诊断文本净化（ANSI/控制字符/换行/路径）\n\n设计要点：`ports.ts` 让插件**不依赖**具体 harness 版本的类型，也让人工假端口可以完整单测；`plugin.ts` 是唯一接触真实 Cordis 上下文的地方。"
+    },
+    {
+      "section": "复用你的设定：读取 / 覆盖 / 持久化",
+      "text": "registry 解析\"新会话用哪个 preset\"的公式是 `selectedDefault ?? default`：\n\n- `default` 是本 bundle 的补丁声明的**部署默认**（`standard`），只是兜底；\n- `selectedDefault` 是 **volatile 用户字段**——Web 设置界面里\"默认 preset\"写的就是它，由 settings 服务持久化到**当前 profile** 的 Cordis 补丁层。\n\n所以插件本来就是\"读用户设定\"的，`--agentmode` 只是**本次覆盖**。三种用法与来源标注："
+    },
+    {
+      "section": "复用你的设定：读取 / 覆盖 / 持久化",
+      "text": "| 用法                                           | 行为                                                                                                             | 启动日志                                                                                     |\n| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |\n| `dsh --profile acp`                            | 读 `selectedDefault ?? default`                                                                                  | `agent preset: ptc (user setting)` / `(home/command-line override)` / `(deployment default)` |\n| `dsh --profile acp --agentmode cordis`         | 仅本次覆盖                                                                                                       | `agent preset: cordis (from --agentmode)`                                                    |\n| `dsh --profile acp --agentmode ptc --remember` | 通过官方 `settings.update('agent-preset-registry', { selectedDefault })` 写入当前 profile 补丁，之后无参数即复用 | `remembered agent prese"
+    },
+    {
+      "section": "复用你的设定：读取 / 覆盖 / 持久化",
+      "text": "`--list-agentmodes` 也会标出 `(default, user setting)` / `(default, override)`。\n\n**为什么 desktop/web 里的选择不会自动带到 ACP**：settings 是**按 profile 持久化**的（写入 `profileContext.patchPath`），而 `dsh --profile acp` 是另一个 profile，有独立的补丁层与存储。想跨 profile 共用一份，两条路：① 在 acp profile 里 `--remember` 一次；② 写共享的 home patch `$DSH_HOME/cordis.patch.yml`（优先级高于 profile 补丁；注意此时 settings 表单写入会被拒绝，见上游 `dsh-settings` README）。插件不会去读别的 profile 的文件——那会破坏 profile 隔离。"
+    },
+    {
+      "section": "它在 profile 里改了什么",
+      "text": "1. **接管命令行**：`disable` 官方 `acp-app-startup` 行（零参数 commander program，任何额外参数都会 `error: unknown option`），插入本包的 `acp-agentmode` 行，由它提供官方 `acp` 行 inject 的 `acpAppStartup` 服务。\n2. **agent 平面搬进 preset**：禁用 base 里 23 条“每 agent 各自贡献”的行（`tool-bash` / `tool-fs` / `tool-skill` / `tool-todo` / `tool-web` / `tool-subagent*` / `compaction-basic` / `agent-instructions` / `skill-filesystem` …），与 `@deepseek-ai/dsh-web-app/cordis.patch.yml` 对 Web 面的拆分同构——ACP 一个进程服务多个会话，而这些 base 行是为“单会话、进程级组合”的表面保留的。\n3. **插入 preset 选择注册表**：`agent-preset-registry`，`default: standard`（仅在没有 `--agentmode` 时兜底）。\n4. **插入 host 支撑行**：`subagent-model-selection-settings`、`plugin-inventory` —— preset 子行要消费、base 不提供的 Host 服务。"
+    },
+    {
+      "section": "工作原理",
+      "text": "**命令行**：`inject: ['cmdlineArgs']` → 严格解析 → `assertAcpProfile()` 守卫 → **同步发布** `acpAppStartup` → 后台解析 preset → 成功后才 arm stdin EOF。\n\n就绪必须同步发布：App 层启动审计会独立结算 Loader 树，若让 readiness 等 registry I/O，慢一点就会被判成“启动失败”。解析失败则打印分类错误并以对应退出码退出。"
+    },
+    {
+      "section": "工作原理",
+      "text": "**会话绑定**：`dsh-acp` 建 agent 时只传 `meta: { cwd }`，从不挂 preset（Web 的 session controller 是在自己的 `setup` 里 `agentPresets.mount`）。所以从外部接上：监听 serial 事件 `agent/created`（agent loop 在释放排队输入**之前** await 它），对空白会话调 `agentPresets.select(agent, id)` —— 这正是 Web UI 给“活着的空白会话”换 preset 用的公开 API，且 `select` 只在 `recompose/mount` 成功后写入 `agent-preset/selected`。`session/resume` 的会话已过首轮（`select` 会以 `agent-preset/locked` 拒绝），因此沿用日志记录的 preset 并用 `agentPresets.mount()` 组合。"
+    },
+    {
+      "section": "工作原理",
+      "text": "**两个启动期竞态**：① 声明是异步注册的 —— 按 Loader 中声明行数等待 roster 到齐（有截止时间）；② profile 的启动 patch 重载会重建 registry 行 —— 只对 `agent-preset/not-found` 做抖动退避重试，`INACTIVE_EFFECT`（实例被替换）交给替换实例。另有一个 watchdog：registry 始终不激活时报 `E_ENVIRONMENT` 并退出，而不是让客户端在“永远不会被组合”的会话上打转。"
+    },
+    {
+      "section": "安全加固",
+      "text": "| 面          | 措施                                                                                                                                                                         |\n| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| 参数面      | 只接受 `--agentmode` / `--agentmode=` / `--list-agentmodes` / `-h`；重复参数直接报错（不做 last-wins）；`--` 之后不允许位置参数；未知选项不静默忽略                          |\n| 输入校验    | preset id 在进入 registry **之前**按 `^[A-Za-z0-9][A-Za-z0-9._-]*$`、长度 ≤ 64 校验：不允许空白、控制字符、前导分隔符（防止被下游当成 flag）                                 |\n| 组合守卫    | 启动时检查组合里确实有 `@deepseek-ai/dsh-acp` 行、且官方零参数启动行已被禁用；否则以 `E_ENVIRONMENT` 退出——误装到别的 profile 会**响亮地失败**而不是劫持它的 stdin/退出语义  |\n| 服务发布    | 只发布一次；若别的 row 已发布 `acpAppStartup`，记警告并让位，不抛错、不崩溃                                                                                                  |\n| 诊断卫生    | 所有 stderr 输出经 `oneLine` + `redactPaths`：剥离 ANSI/OSC 与控制字符（防终端劫持）、压成单行（防日志伪造）、长度截断、把 `$HOME`/`$DSH_HOME`/绝对路径替换为 `~` / `<path>` |\n| 代码面      | 无 `eval`/`Function`/动态 import；不读 stdin（只挂 `end` 监听并在卸载时移除）；不调用 `process."
+    },
+    {
+      "section": "性能",
+      "text": "- **启动零阻塞**：readiness 同步发布；preset 解析在后台，首个 `session/new` 会 await 同一个 promise（只解析一次）。\n- **不做忙等**：等待策略是“先让 Loader 静止（有界 race）→ 再按声明行数等 roster”；退避 20ms 起、160ms 封顶，全部有截止时间；不存在固定轮询热路径。\n- **零热路径开销**：已绑定 preset 的 agent 只做一次 `composedPreset()` 判断即返回；subagent 子代理在自身 setup 里继承父级，直接跳过。\n- **构建产物**：单文件 ESM 31.6 kB（gzip 10.5 kB），无运行时依赖、无 top-level 副作用。\n- **清理**：定时器统一由实例时钟登记，卸载即 `clearTimeout`。"
+    },
+    {
+      "section": "错误模型",
+      "text": "| 错误码              | 含义                                                                              | 退出码 |\n| ------------------- | --------------------------------------------------------------------------------- | ------ |\n| `E_USAGE`           | 调用本身不对（未知选项、缺值、非法 id、重复参数）                                 | 2      |\n| `E_PRESET_UNKNOWN`  | id 不在 roster（消息附可用列表）                                                  | 3      |\n| `E_PRESET_UNUSABLE` | 声明存在但无法激活（消息附 registry 给出的原因，如缺 `cordisInspect`）            | 3      |\n| `E_REGISTRY`        | registry 未在预算内响应                                                           | 3      |\n| `E_ENVIRONMENT`     | 组合不对（不是 ACP app、官方启动行仍激活、注入缺失、registry 从未激活）           | 4      |\n| `E_BIND`            | 单个会话绑定失败——只 `warning`，降级为“无 preset 组合”，绝不让 `session/new` 失败 | —      |"
+    },
+    {
+      "section": "错误模型",
+      "text": "`DSH_ACP_AGENTMODE_DEBUG=1` 会额外输出 cause 链与（净化后的）栈，默认只输出一行分类错误。"
+    },
+    {
+      "section": "已验证",
+      "text": "单测：`vp test` — **7 个文件 / 85 个用例**全绿（参数语法、诊断净化、roster 等待、resolve 分类与重试、空白会话判定、绑定降级、设定来源判定与 `--remember` 写入、`apply()` 的 help/守卫/发布/列表/重复发布等）。\n\n静态门禁：`vp check` — 格式化 + oxlint（类型感知）+ tsc 类型检查，**0 error / 0 warning**。\n\n真实端到端（本机 0.2.1-rc.2，最小 ACP 客户端，不触发模型调用）："
+    },
+    {
+      "section": "已验证",
+      "text": "| 用例                                      | 结果                                                                                               |\n| ----------------------------------------- | -------------------------------------------------------------------------------------------------- |\n| `--agentmode standard/minimal/ptc/cordis` | 会话创建成功；会话日志分别写入 `agent-preset/selected: standard/minimal/ptc/cordis`                |\n| 不带参数                                  | 默认 `standard`                                                                                    |\n| `--agentmode nope`                        | exit 3，`E_PRESET_UNKNOWN: unknown agent preset \"nope\"; available: standard, ptc, minimal, cordis` |\n| `--bogus`                                 | exit 2，`E_USAGE: unknown option \"--bogus\"`                                                        |\n| `--list-agentmodes` / `--help`            | exit 0，输出正确                                                                                   |\n| `session/resume`（空白会话）              | 成功，组合沿用日志记录的 preset                                                                    |\n| `pnpm smoke -- --agentmode minimal`       | 通过（脚本自行读会话日志断言）             "
+    },
+    {
+      "section": "已验证",
+      "text": "未实测：`session/resume` 的**非空白**会话（`mount` 分支）需要先产生一轮真实模型对话。"
+    },
+    {
+      "section": "权限（沙箱 / 审批）",
+      "text": "ACP profile 里权限由 `permission` 行（`@deepseek-ai/dsh-permission-presets`）决定，它把 sandbox 与 approval 绑成一个预设。**acp profile 默认没有 `defaultPreset`**，所以默认值是推断出来的：\n\n| 项                  | 默认值            |\n| ------------------- | ----------------- |\n| `permission/preset` | `workspace-write` |\n| `sandbox/mode`      | `workspace-write` |\n| `approval/policy`   | `ask`             |\n\n要改成**完全访问**，在 `~/.dsh/profiles/acp/cordis.patch.yml` 里补 `defaultPreset`（`config` 是整体替换，整张 `presets` 表必须重述）："
+    },
+    {
+      "section": "权限（沙箱 / 审批）",
+      "text": "```yaml\n- id: permission\n  name: '@deepseek-ai/dsh-permission-presets'\n  config:\n    presets:\n\n只想本次生效就不改 profile，把它存成文件后用 launcher flag 叠加（`--patch` 必须在 app 参数之前）：\n\n```bash\ndsh --profile acp --patch ~/.dsh/full-access.yml\n```\n\n验证方式是读会话日志的前三个事件：\n\n```\npermission/preset : danger-full-access\nsandbox/mode      : danger-full-access\napproval/policy   : never\n```"
+    },
+    {
+      "section": "权限（沙箱 / 审批）",
+      "text": "三个要注意的点：ACP 客户端的 `session/new` 只暴露 `model` 与 `reasoning_effort`，**没有**权限选择面（`/permission` 这类命令 ACP 也不支持），所以权限只能在 profile 默认或 `--patch` 上设；`danger-full-access` 自带 `approval: never`，因此不再产生审批请求；一个 ACP 进程服务多个会话，该默认对全部会话生效。"
+    },
+    {
+      "section": "已知能力边界",
+      "text": "- **设定按 profile 隔离**：`selectedDefault` 只存在于写入它的那个 profile；跨 profile 没有共享存储（同机 desktop/web/acp 各自独立）。要跨 profile 统一，用共享 home patch，代价是 Web 表单此后改不动该字段。\n- **粒度是进程级**：一次 `dsh --profile acp` 一个 preset。要让 ACP 客户端**按会话**指定，必须改 harness 的 `dsh-acp`（`session/new` 的 `_meta` 被 SDK 保留但 bridge 完全忽略），纯插件做不到。\n- **preset 不含模型**：preset 组合工具/提示词段/skills/压缩/委派；模型仍由 `acp` 行与 `agent-default-model` 决定，客户端还能用 `session/set_config_option` 改 `model`/`reasoning_effort`。\n- 两个子行在该表面不可用，已在快照中 `disabled: true` 并保留上游原文：`tool-schedule`（需要 Web 专属 `sessionController` 支撑的 `schedule`）、`tool-cordis`（需要 Web 专属 inspector 的 `cordisInspect`）。因此 `cordis` preset 在 ACP 面上可用但缺少 cordis 运行时查询工具。\n- 禁用清单镜像 Web 面的 23 行：上游**改名**只会产生 “warn + skip”（不致命）；上游**新增** agent 平面行会留在 host 平面并被 preset 同名行就近遮蔽，但可能带来额外 token 开销——升级后建议对照一次。\n- 桌面界面的 `plugin_manager` 看不到它（不同 profile）；`locale/`、`icon.svg` 只为清单完整性准备，渲染效果无法在桌面 UI 验证。"
+    },
+    {
+      "section": "升级维护",
+      "text": "```bash\npnpm sync-presets                       # 从当前安装的 harness 重新快照 presets/\npnpm sync-presets /path/to/dsh-web-app  # 或显式指定包目录\n```\n\n脚本会按当前 harness 版本重新生成四个 preset 声明，并自动给“本表面不可用”的子行加 `disabled: true`（清单与原因写在脚本里）。升级 harness 后建议再跑一次 `pnpm verify && pnpm smoke`。"
+    },
+    {
+      "section": "依赖的公开 API",
+      "text": "`ctx.cmdlineArgs` / `ctx.appExit` / `ctx.appReady`（启动器值），`ctx.agentPresets.{list,resolve,select,mount,composedPreset,defaultId}`，`ctx.sessionProjections.stateOf(session, 'agentPreset' | 'turnBoundary')`，serial 事件 `agent/created`，Loader 的 `entries()` / `await()`。全部为公开契约，未触碰内部实现。"
+    },
+    {
+      "section": "贡献与安全",
+      "text": "- 参与开发：见 [CONTRIBUTING.md](CONTRIBUTING.md)（本地门禁是 `pnpm verify`；`dist/` 不入库，Release 构建产出）。\n- 报告漏洞：请走 [SECURITY.md](SECURITY.md) 的私密渠道，不要开公开 issue。\n- 行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。\n\n`main` 受保护：所有改动经 PR + CI 全绿 + 维护者审核后合并。\n\nMIT License."
+    }
+  ],
+  "skipped": []
+}

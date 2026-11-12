@@ -1,0 +1,452 @@
+{
+  "repo": "bigbigtooth/DSH-Maestro5",
+  "commit": "171434036a3c37d2b1bbc39f257bc38e476f45e7",
+  "extracted_at": "2026-11-11T17:52:27.534454+00:00",
+  "tree": {
+    "files": 23,
+    "bytes": 613886,
+    "lines_by_language": {
+      "JSON": 76,
+      "JavaScript": 613,
+      "Markdown": 714,
+      "Other": 191,
+      "YAML": 675
+    },
+    "outline": [
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/ISSUE_TEMPLATE/feature_request.yml",
+      ".github/PULL_REQUEST_TEMPLATE.md",
+      ".github/workflows/validate.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/screenshots/chat-delegation.png",
+      "docs/screenshots/mode-picker.png",
+      "docs/screenshots/plugins-installed.png",
+      "docs/screenshots/settings-team-mode.png",
+      "docs/social-preview.png",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "scripts/validate.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-maestro5",
+    "version": "0.1.0",
+    "description": "DSH Maestro5：主控 + L1–L5 五档难度子智能体的团队模式，安装即得配置界面",
+    "type": "module",
+    "license": "MIT",
+    "author": "bigbigtooth",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "agent-preset",
+      "subagent",
+      "multi-agent",
+      "team",
+      "maestro"
+    ],
+    "homepage": "https://github.com/bigbigtooth/DSH-Maestro5",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/bigbigtooth/DSH-Maestro5.git"
+    },
+    "bugs": {
+      "url": "https://github.com/bigbigtooth/DSH-Maestro5/issues"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "README.en.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "dsh": ">=0.2.1-rc.2 <0.3.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": "3.18.5"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true
+      }
+    },
+    "scripts": {
+      "validate": "node scripts/validate.mjs"
+    },
+    "devDependencies": {
+      "js-yaml": "^4.1.0"
+    },
+    "private": true
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# =============================================================================\n# DSH Maestro5 — 主控 + L1–L5 五档难度子智能体\n# -----------------------------------------------------------------------------\n# 安装本插件即自动获得：\n#   1) 一个新的会话模式「团队主控」（preset id: team）\n#   2) L1–L5 五档难度子智能体（preset id: team-l1 … team-l5）\n#   3) 一个可在「设置 → 团队模式」里配置每档模型的设置页\n#\n# 结构：\n#   maestro-levels  根层设置行（Host 插件 dsh-maestro5）：\n#                   L1–L5 每档的 provider / model / 思考强度（volatile，设置页可改）\n#   team            主控 Lead preset：拆解任务 → 选档分派 → 汇总复核 → 交付\n#   team-l1 … l5    五个档位 preset（人设 + 全套执行工具；模型来自 maestro-levels）\n# =============================================================================\n\n# =============================================================================\n# 0. 设置行：L1–L5 档位的模型路由（volatile 配置）\n#    Web: 设置 → 团队模式；或 插件 → DSH Maestro5 → 行 maestro-levels → Configure\n#    保存写入 profile cordis.patch.yml；preset 启动时读取，因此保存后需重启 DSH。\n# =============================================================================\n- insert:\n    - id: maestro-levels\n      name: 'dsh-maestro5'\n      config:\n        levels:\n          - { level: l1, label: 团队·L1 极简执行, provider: deepseek-official, model: deepseek-flash, reasoningEffort: off }\n          - { level: l2, label: 团队·L2 常规执行, provider: deepseek-official, model: deepseek-flash, reasoningEffort: low }\n          - { level: l3, label: 团队·L3 复杂执行, provider: deepseek-official, model: deepseek-flash, reasoningEffort: max }\n          - { level: l4, label: 团队·L4 难题解决, provider: deepseek-official, model: deepseek-v4-pro, reasoningEffort: high }\n          - { level: l5, label: 团队·L5 关键任务, provider: deepseek-official, model: deepseek-v4-pro, reasoningEffort: max }\n\n- insert:\n    # =========================================================================\n    # 1. 主控 Lead（会话模式「团队主控」）\n    # =========================================================================\n    - id: preset-team\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: team\n        name: 团队主控\n        description: >-\n          DSH Maestro5 · 主控 + L1–L5 五档难度子智能体协作模式：自动拆解任务、\n          按难度与成本选档分派、汇总复核后交付；每档模型可在设置页调整。\n        order: 5\n        plugins:\n          # ---------------------------------------------------------------\n          # 人设：主控的职责、难度档位、选档与分派规则、汇报要求\n          # ---------------------------------------------------------------\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                你是「团队主控」（Lead），一个由多个子智能体组成的 AI 团队的负责人（DSH Maestro5）。你的默认工作方式是：先理解并拆解用户任务，把独立、边界清晰的工作分派给最胜任且成本合适的子智能体，最后汇总、复核并交付结果。规划、判断、整合和最终质量把关由你亲自负责；简单问答或单步操作可以直接自己做。\n\n                【子智能体按难度分档（越往上模型越强、越慢、越贵，所有档位都有完整的执行工具：文件、bash、联网、Office 技能）】\n                - delegate_l1 —— L1 极简执行（最便宜最快）：格式转换、字段提取、简单改写、按明确指令的单步操作。\n                - delegate_l2 —— L2 常规执行：资料整理、摘要、日常写作、按模板产出、简单数据核对。\n                - delegate_l3 —— L3 复杂执行：长文写作、多步脚本、表格分析、多来源整理、需要先规划再执行的任务。\n                - delegate_l4 —— L4 难题解决（较贵）：严谨分析、代码实现与调试、关键结论、方案设计。\n                - delegate_l5 —— L5 关键任务（最贵最慢）：疑难推理、终审与关键复核、关键决策支持、最高质量交付。\n                各档位具体使用的模型由用户在「设置 → 团队模式」（或插件页的 maestro-levels 配置）中配置，当前生效值以配置页为准。\n\n                【选档规则（难度 + 成本）】\n                1. 默认从最低可行档开始：能用 L1/L2 解决的，不要用 L4/L5；结果不达标再升一档重派，并在汇报里说明升级原因。\n                2. 机械、规则明确、结果容易人工复核的任务 → L1/L2；推理链长、需要多步规划、错误代价高的任务 → L4/L5。\n                3. 大批量同类任务用低档并行；少量关键任务用高档精做。\n                4. 需要高可靠性的最终交付：高档子智能体完成后，再派一个 L4/L5 做独立复核（或你亲自复核）。\n                5. 每次委派都是一条独立分支：子智能体看不到本对话，prompt 必须自包含（背景与目标、输入文件绝对路径 / 数据 / 链接、方法与步骤要求、输出格式、落盘路径、约束与验收标准）。拿不准就先问用户或自己补齐。\n                6. 独立子任务并行：在同一条回复里同时发起多个委派，不要串行等待；一个子智能体只做一件事，范围大就拆。\n                7. 写文件分工明确：不同子智能体不要同时写同一批文件；只读任务交给低档即可。\n                8. 不要轮询等待：delegate_* 子智能体完成时会以通知形式自动送达结果。不要用 wait_agent / list_agents / sleep 去等它们——它们不是 Team 成员；没有其他工作可做时直接结束本轮，完成通知会自动唤醒你。\n                9. 本环境另有 Team 协作工具（spawn_teammate、team_task_* 等共享任务板，成员会出现在 list_agents 里）。需要特定难度 / 模型的工作优先用 delegate_*；delegate_* 子智能体不能用 send_message 追加指令；同一件事不要重复分派。\n                10. 子智能体失败或结果不达标时，降级自己完成，并如实说明。\n\n                【交付与汇报】\n                最终回答用中文，先给结论与可直接使用的交付物，再简述分工（用了哪几档子智能体、各自做了什么、产出在哪个文件）。重要文件用 present 声明；不确定的地方明确标注，不要替用户假设关键事实。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n\n          # ---------------------------------------------------------------\n          # 主控自己的执行工具\n          # ---------------------------------------------------------------\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n\n          # 计划模式（可省略）\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    你正处于计划模式。在用户通过 exit_plan_mode 批准计划或切换模式之前，保持计划模式。用户以祈使语气要求实施，意味着先做计划而不是立刻执行。用户口头同意（包括回答你的提问）不构成批准，把确认的结论并进计划后重新提交。\n                    先探索：用只读的方式读文件、搜索、静态分析与检查，让计划建立在真实仓库之上。不要写入或修改文件、不要改配置、不要运行会重写文件的格式化或代码生成、不要提交，也不要执行计划本身。\n                    计划要决策完备：写清目标与验收标准、按子系统分组的改动、接口 / 数据结构 / 数据流变化、边界情况与失败模式、测试与验收方式、明确的假设。简洁但足以让另一位工程师照做而无需再做设计决策。\n                    准备好后调用 exit_plan_mode，传入以 # 标题开头的完整计划 markdown，并且让 exit_plan_mode 成为该回复里唯一的、最后的工具调用。若审核被拒，吸收反馈后重新提交。审核通道不可用时留在计划模式并请用户手动切换，不要直接实施。\n\n          # ---------------------------------------------------------------\n          # 上下文压缩（长任务必备）\n          # ---------------------------------------------------------------\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n          # ---------------------------------------------------------------\n          # 核心：L1–L5 五个难度档位委派工具\n          #   toolName     = 主控看到的工具名（delegate_l1 … delegate_l5）\n          #   agentPreset  = 子智能体档位 preset（人设 + 工具集）\n          #   agentOptions = !!js 读取 maestroLevels 服务 → 用户在设置页配置的模型\n          # ---------------------------------------------------------------\n\n          - id: delegate-l1\n            name: '@deepseek-ai/dsh-tool-subagent'\n            inject: [maestroLevels]\n            config:\n              provider: spawn\n              toolName: delegate_l1\n              agentPreset: team-l1\n              agentOptions: !!js ctx.get('maestroLevels').agentOptionsFor('l1')\n              maxDepth: 1\n\n          - id: delegate-l2\n            name: '@deepseek-ai/dsh-tool-subagent'\n            inject: [maestroLevels]\n            config:\n              provider: spawn\n              toolName: delegate_l2\n              agentPreset: team-l2\n              agentOptions: !!js ctx.get('maestroLevels').agentOptionsFor('l2')\n              maxDepth: 1\n\n          - id: delegate-l3\n            name: '@deepseek-ai/dsh-tool-subagent'\n            inject: [maestroLevels]\n            config:\n              provider: spawn\n              toolName: delegate_l3\n              agentPreset: team-l3\n              agentOptions: !!js ctx.get('maestroLevels').agentOptionsFor('l3')\n              maxDepth: 1\n\n          - id: delegate-l4\n            name: '@deepseek-ai/dsh-tool-subagent'\n            inject: [maestroLevels]\n            config:\n              provider: spawn\n              toolName: delegate_l4\n              agentPreset: team-l4\n              agentOptions: !!js ctx.get('maestroLevels').agentOptionsFor('l4')\n              maxDepth: 1\n\n          - id: delegate-l5\n            name: '@deepseek-ai/dsh-tool-subagent'\n            inject: [maestroLevels]\n            config:\n              provider: spawn\n              toolName: delegate_l5\n              agentPreset: team-l5\n              agentOptions: !!js ctx.get('maestroLevels').agentOptionsFor('l5')\n              maxDepth: 1\n\n    - id: preset-team-l1\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: team-l1\n        name: 团队·L1 极简执行\n        description: 子智能体档位（DSH Maestro5 · 供团队主控委派）：机械/单步任务，默认配置关闭思考，最便宜最快。模型可在插件配置页调整。不建议直接选作会话模式。\n        order: 6\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                你是「L1 极简执行」子智能体，向团队主控汇报。你只负责明确、机械、单步的任务：格式转换、字段 / 信息提取、简单改写、按指令做一步操作。\n\n                工作要求：\n                - 严格按主控指令执行，不扩展范围、不做额外分析、不自行发挥；任务有歧义时按最直接的理解执行，并在结果里写明你的假设。\n                - 输出尽量短、可直接使用；不要长篇解释。\n                - 需要写文件时写到主控指定的绝对路径；只改自己负责的文件。\n                - 完成后报告：做了什么、产出文件路径（如有）、任何假设或异常。\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n    - id: preset-team-l2\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: team-l2\n        name: 团队·L2 常规执行\n        description: 子智能体档位（DSH Maestro5 · 供团队主控委派）：常规任务，默认低思考、便宜且快。模型可在插件配置页调整。不建议直接选作会话模式。\n        order: 7\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                你是「L2 常规执行」子智能体，向团队主控汇报。你负责任务边界清晰的常规工作：资料整理、摘要、日常写作、按模板产出、简单数据核对。\n\n                工作要求：\n                - 先核对输入（文件 / 数据 / 链接是否齐全、格式是否可用），再按主控要求执行；输入有缺口时在报告中明确指出，不要编造。\n                - 遵循主控给定的结构、格式、篇幅与落盘路径；需要时使用 office 技能处理 docx / xlsx / pptx。\n                - 只写自己负责的文件，不覆盖他人产出。\n                - 完成后报告：产出文件绝对路径、关键内容要点、仍需确认的事项。\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n    - id: preset-team-l3\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: team-l3\n        name: 团队·L3 复杂执行\n        description: 子智能体档位（DSH Maestro5 · 供团队主控委派）：多步骤复杂执行，默认最高思考、性价比高。模型可在插件配置页调整。不建议直接选作会话模式。\n        order: 8\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                你是「L3 复杂执行」子智能体，向团队主控汇报。你负责需要多步骤完成的任务：较长文档、多步脚本、表格分析、多来源信息整理、需要先规划再执行的工作。\n\n                工作要求：\n                - 先快速拆解任务并列出步骤（必要时用 todo 工具），再逐步执行；步骤之间保持一致，避免返工。\n                - 计算与数据处理用代码完成，保留可复现的脚本 / 命令；引用外部信息时注明来源与日期。\n                - 输出结构：①结论 / 成果 ②过程与依据 ③产出文件路径 ④风险与局限。\n                - 只写自己负责的文件，不覆盖他人产出。\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n    - id: preset-team-l4\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: team-l4\n        name: 团队·L4 难题解决\n        description: 子智能体档位（DSH Maestro5 · 供团队主控委派）：难题解决，默认更强模型 + 高思考，较贵。模型可在插件配置页调整。不建议直接选作会话模式。\n        order: 9\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                你是「L4 难题解决」子智能体，向团队主控汇报。你负责需要严谨推理与较高质量的任务：复杂分析、代码实现与调试、关键结论、方案设计。\n\n                工作要求：\n                - 先明确问题边界与验收标准，列出关键假设；信息不足时自行检索 / 验证补齐。\n                - 推理要显式：给出论证链、证据与反例检查；关键数字用代码复算；关键事实交叉验证并注明来源。\n                - 主动自检：边界条件、失败模式、与需求的覆盖度；不确定处明确标注，不硬下结论。\n                - 输出结构：①结论与建议 ②论证与证据 ③产出文件路径 ④剩余风险与待确认项。\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n    - id: preset-team-l5\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: team-l5\n        name: 团队·L5 关键任务\n        description: 子智能体档位（DSH Maestro5 · 供团队主控委派）：关键任务与终审，默认最强模型 + 最高思考，最贵最慢。模型可在插件配置页调整。不建议直接选作会话模式。\n        order: 10\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                你是「L5 关键任务」子智能体，向团队主控汇报。你负责最高难度、最关键交付的工作：疑难推理、终审与关键复核、关键决策支持、最高质量交付。\n\n                工作要求：\n                - 以“宁慢勿错”为原则：先厘清目标、约束与验收标准，形成检验清单，再逐项完成与核验。\n                - 对关键结论做多角度论证与反例检验；对重要事实至少两个独立来源确认；关键数字必须用代码复算。\n                - 明确区分事实、推断、假设与未知；给出置信度与剩余风险，不做没有依据的承诺。\n                - 输出结构：①最终结论 / 交付物 ②论证与证据链 ③检验清单与结果 ④剩余风险、假设与需要用户决策的点。\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n# =============================================================================\n# 如何自定义（开发/高级用法）\n# -----------------------------------------------------------------------------\n# A. 改每档模型（推荐，普通用户）：设置 → 团队模式 → 选 Provider / 模型 /\n#    思考强度 → 保存 → 重启 DSH Desktop 生效（模型列表来自 DSH 模型目录）。\n#\n# B. 改档位人设 / 工具集：修改对应 preset-team-l1 … preset-team-l5 的 plugins。\n#\n# C. 新增档位（如 L6）：\n#    1) 复制 preset-team-l5 整段并改 id / config.id / name / description / order；\n#    2) 在 team 的 delegation 区复制 delegate-l5，改 id / toolName / agentPreset /\n#       agentOptionsFor('l6')；\n#    3) 在 maestro-levels 的 levels 与 index.js 的 DEFAULT_LEVELS 里各加一行；\n#    4) 重启 DSH Desktop。\n#\n# D. 生效方式：本插件以 link: 方式安装（源目录即安装物），改完文件后重启\n#    DSH Desktop 最稳妥；改设置页里的模型同样重启后对新会话生效。\n# =============================================================================\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/bigbigtooth/DSH-Maestro5",
+      "where": "package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/bigbigtooth/DSH-Maestro5.git",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/bigbigtooth/DSH-Maestro5/issues",
+      "where": "package.json:24"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "js-yaml": "^4.1.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-10-18T17:26:57Z",
+    "created_at": "2026-10-18T10:08:32Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">\n\n<img src=\"https://raw.githubusercontent.com/bigbigtooth/DSH-Maestro5/main/icon.svg\" width=\"96\" alt=\"DSH Maestro5\" />"
+    },
+    {
+      "section": "DSH Maestro5",
+      "text": "**一个主控 + L1–L5 五档难度子智能体，把「团队」变成 DeepSeek Harness 的默认工作方式。**\n\n安装即获得「团队主控」模式与模型配置界面：主控负责拆任务、按难度与成本选档、并行分派、汇总复核；每个档位的模型都可以在设置页里独立配置。\n\n[English](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/README.en.md) · [中文](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/README.md)"
+    },
+    {
+      "section": "DSH Maestro5",
+      "text": "[](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/LICENSE)\n[](https://github.com/deepseek-ai/deepseek-harness)\n[](https://github.com/bigbigtooth/DSH-Maestro5/releases/latest)\n[](https://github.com/bigbigtooth/DSH-Maestro5/actions/workflows/validate.yml)\n[](https://github.com/topics/dsh-plugin)\n[](#兼容性)\n\n> 社区插件，与 DeepSeek AI 无隶属关系，也不是官方项目。\n\n</div>\n\n---"
+    },
+    {
+      "section": "这是什么",
+      "text": "**DSH Maestro5** 是一个 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）Web 插件。装上之后，新任务里会多出一个 **「团队主控」** 模式：\n\n- 你说一句任务，**主控**先拆解，再决定「哪些自己做、哪些交给子智能体、交给哪一档」；\n- 有 **L1–L5 五档难度**子智能体，越往上模型越强、越慢、越贵；\n- 五档的工具集相同（文件、bash、联网、Office 技能），差异在**模型 / 思考强度 / 人设**，所以任何任务都能交给任何档；\n- 每一档用哪个 Provider、哪个模型、什么思考强度，都能在 **设置 → 团队模式** 里单独配置，模型列表直接来自你当前 DSH 的模型目录；\n- 安装插件即自动注册模式、五个档位 preset 和配置页——**不需要手动改任何配置文件**。"
+    },
+    {
+      "section": "为什么值得装",
+      "text": "| 痛点 | Maestro5 的做法 |\n| --- | --- |\n| 一个模型包办所有任务，简单任务浪费贵模型 | 简单任务派 L1/L2（便宜快），关键交付才上 L4/L5（强而贵） |\n| 长任务一个上下文越滚越大，越跑越慢越贵 | 子任务在独立上下文里执行，主控只收结果，上下文更干净 |\n| 多个独立子任务只能串行做 | 主控可以在同一轮并行派出多个子智能体 |\n| 子智能体「用哪个模型」写死在代码里 | 设置页逐档配置，模型目录变化自动跟随 |\n| 高风险交付没人复核 | 主控人设要求关键交付再派 L4/L5 独立复核 |\n\n---"
+    },
+    {
+      "section": "截图",
+      "text": "| 新任务里的「团队主控」模式 | 设置 → 团队模式（逐档配模型） |\n| --- | --- |\n|  |  |\n\n| 安装后出现在插件列表 | 实际分派过程 |\n| --- | --- |\n|  | 见页面顶部大图：主控并行派出 L1 / L2，6 秒汇总交付 |\n\n---"
+    },
+    {
+      "section": "环境要求",
+      "text": "- **DeepSeek Harness `0.2.1-rc.2` 或同系列 `0.2.x`**（插件声明了 `engines.dsh: >=0.2.1-rc.2 <0.3.0`）\n- **Web / Desktop profile**：本插件依赖 agent preset 注册表与 Web 设置界面，因此仅在 `web` / `desktop` profile 生效；headless / TUI profile 不适用\n- 至少配置一个可用的模型 provider（**设置 → 模型**），否则子智能体没有可用的模型路由"
+    },
+    {
+      "section": "安装",
+      "text": "三种方式任选一种，装完都得到同一个 bundle。"
+    },
+    {
+      "section": "方式 A：Web 界面（最直观）",
+      "text": "1. 侧栏 **插件（Plugins）** → 右上角 **添加插件 ▾** → **安装第三方插件**；\n2. 输入本地目录绝对路径，确认安装；\n3. **刷新页面**（`Cmd+R` / `Ctrl+R`）加载浏览器端配置页；\n4. 新建任务，模式选择器里应出现 **「团队主控」**。"
+    },
+    {
+      "section": "方式 B：从 GitHub 安装",
+      "text": "```sh"
+    },
+    {
+      "section": "源码安装（跟随 main 分支）",
+      "text": "dsh plugin --profile desktop add github:bigbigtooth/DSH-Maestro5"
+    },
+    {
+      "section": "或从 Releases 的打包文件安装（固定版本、可离线分发）",
+      "text": "dsh plugin --profile desktop add https://github.com/bigbigtooth/DSH-Maestro5/releases/latest/download/dsh-maestro5-0.1.0.tgz\n```\n\n> 桌面版如果提示找不到 `dsh` 命令，可在菜单栏用 **Manage dsh command** 把它装进 PATH（不同版本入口可能略有差异）。\n> 安装完成后**重启 DSH**（bundle 层在启动时组装）；至少刷新页面以加载客户端半。"
+    },
+    {
+      "section": "方式 C：本地目录（开发态）",
+      "text": "```sh\ndsh plugin --profile desktop add /path/to/DSH-Maestro5\n```\n\n本地目录是 `link:` 安装：源目录就是安装物，**改代码 / 改配置后重启 DSH 即生效，无需重装**。"
+    },
+    {
+      "section": "安装后验证清单",
+      "text": "- [ ] 新任务 → 模式选择器出现 **「团队主控」**（旁边还有 `团队·L1` … `团队·L5` 五个档位卡，它们只供子智能体使用，不建议直接选作会话模式）\n- [ ] **设置 → 团队模式** 能打开，五个档位的 Provider / 模型 / 思考强度都能下拉选择\n- [ ] **插件 → 已安装插件** 里出现 **DSH Maestro5**，点开后能看到 `maestro-levels` 行与 6 个 preset 行\n- [ ] 发一句「用 delegate_l1 计算 1+1」，能看到主控派出子智能体并汇总结果"
+    },
+    {
+      "section": "设为默认模式（推荐）",
+      "text": "**设置 → Agent 预设 → 团队主控 → 设为新任务默认**。\n\n> ⚠️ 不要通过编辑 profile 的 `cordis.patch.yml` 去改 `agent-preset-registry` 的默认值：那会让 preset 注册表重启，运行中的会话会丢失 preset 工具。请只用设置界面。\n\n---"
+    },
+    {
+      "section": "使用",
+      "text": "选中「团队主控」后，直接描述任务即可。主控会自己判断要不要派、派给谁、派几个。也可以直接指定档位：\n\n```text\n用 L1 把这份 CSV 转成 xlsx，保持表头不变。\n\n先让 L2 整理这些素材，再让 L5 写终稿并做一次事实核查。"
+    },
+    {
+      "section": "主控怎么工作",
+      "text": "1. **拆解**：把任务拆成独立、边界清晰的子任务；简单问答 / 单步操作自己做；\n2. **选档**：机械可复核 → L1/L2；推理链长、错误代价高 → L4/L5；默认从最低可行档开始；\n3. **分派**：每个子智能体拿到一份**自包含**的任务说明（背景、输入路径、方法、输出格式、落盘路径、验收标准）——它们看不到你的对话；\n4. **并行**：互相独立的子任务在同一轮同时派出，而不是串行等待；\n5. **复核**：结果回来后对照验收标准检查；关键交付再派 L4/L5 独立复核；\n6. **交付**：汇总成结论 + 可直接使用的产物，并说明用了哪几档、产出在哪个文件。"
+    },
+    {
+      "section": "五档难度",
+      "text": "| 档位 | 定位 | 默认模型 / 思考强度 | 适合任务 |\n| --- | --- | --- | --- |\n| **L1 极简执行** | 最便宜最快 | `deepseek-flash` / off | 格式转换、字段提取、简单改写、单步操作 |\n| **L2 常规执行** | 便宜且快 | `deepseek-flash` / low | 资料整理、摘要、日常写作、模板产出 |\n| **L3 复杂执行** | 性价比高 | `deepseek-flash` / max | 长文写作、多步脚本、表格分析、多来源整理 |\n| **L4 难题解决** | 较贵 | `deepseek-v4-pro` / high | 严谨分析、代码实现与调试、关键结论、方案设计 |\n| **L5 关键任务** | 最贵最慢 | `deepseek-v4-pro` / max | 疑难推理、终审复核、关键决策支持、最高质量交付 |\n\n> 表格是**出厂默认值**。你可以在设置页把任意一档换上你配置的任何 provider / 模型（例如 MiniMax、9router 里的模型）。"
+    },
+    {
+      "section": "成本控制建议",
+      "text": "- 默认让主控「能用 L2 就不上 L4」；\n- 大批量同类任务用 L1/L2 并行，比单个高价模型串行更划算；\n- 只有**错误代价高**的交付才用 L4/L5，并且只让 L5 做终审而不是全程主力。\n\n---"
+    },
+    {
+      "section": "配置每档模型",
+      "text": "**入口：设置（Settings）→ 团队模式**（与插件页 **插件 → DSH Maestro5 → 行 `maestro-levels` → Configure** 是同一份配置）。\n\n每一档一行，三个字段："
+    },
+    {
+      "section": "配置每档模型",
+      "text": "| 字段 | 来源 | 说明 |\n| --- | --- | --- |\n| **Provider** | 当前 DSH 可路由的 provider 列表 | 如 `deepseek-official`、`deepseek-account`、`minimaxcode`、`myrouter` —— 名称取自模型目录，悬停可看路由 id |\n| **模型** | 所选 provider 下实际配置的模型 | 如 `deepseek-flash` / `deepseek-v4-pro` / `MiniMax-M3.1-Flash-Preview` / `TopCoder`…；另有「自定义模型 ID…」兜底 |\n| **思考强度** | **所选模型自带的 efforts** | DeepSeek：默认 / off / low / high / max；MiniMax：默认 / off / low / medium / high；无思考档的模型只有「默认」 |\n\n交互细节："
+    },
+    {
+      "section": "配置每档模型",
+      "text": "- 切换 Provider 会自动选中该 provider 的第一个模型并清空思考强度；\n- 切换模型会重置思考强度（不同模型支持的档位不同）；\n- 「默认」表示不显式指定，由模型自己的默认思考强度决定。"
+    },
+    {
+      "section": "生效方式（重要）",
+      "text": "- 点 **保存** → 配置写入当前 profile 的 `cordis.patch.yml`（`- id: maestro-levels` 的 override），重启后保留；\n- **保存后需要重启 DSH Desktop**，且只对**新建**的会话生效——DSH 的 preset 在会话创建时固定，已运行的会话保持原配置；\n- 想恢复出厂默认：把五档改回上表的值保存 + 重启即可。\n\n---"
+    },
+    {
+      "section": "工作原理",
+      "text": "```\n┌──────────────────────────── dsh-maestro5（bundle） ───────────────────────────┐\n│ cordis.patch.yml                                                             │\n│   ├── 根层设置行 maestro-levels（Config.levels 是 volatile，设置页可写）        │\n│   ├── preset team        主控 Lead（人设 + 全部工具 + 5 个 delegate 工具）      │\n\n关键机制："
+    },
+    {
+      "section": "工作原理",
+      "text": "- **安装即注册**：DSH 安装 bundle 时读取 `dsh.bundle.patch`，把设置行与 6 个 preset 插入 profile 层栈；\n- **配置可持久化**：`maestro-levels` 行的 `levels` 字段标了 `.volatile()`，因此能被设置表单编辑、由 config-editor 写回 profile 的 patch 层；\n- **模型注入 preset**：主控的 5 个 `delegate-*` 委派工具通过 `!!js ctx.get('maestroLevels').agentOptionsFor('l1')` 在挂载时读取当前配置，把模型写进子智能体；\n- **浏览器半手写**：`client.js` 是 `window.__ModuleLoader__` 工厂包，注册到 `settings.section` 与 `plugins.row.config` 两个槽位，**不需要打包器**。\n\n---"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\nDSH-Maestro5/\n├── package.json          # bundle 清单：dsh.bundle.patch + dsh.client（浏览器半）+ engines.dsh\n├── cordis.patch.yml      # 设置行 maestro-levels + 主控 preset + 5 个档位 preset\n├── index.js              # Host 半：maestroLevels 服务"
+    },
+    {
+      "section": "本地开发",
+      "text": "```sh"
+    },
+    {
+      "section": "把本地目录装进 profile（link，改完重启即生效）",
+      "text": "dsh plugin --profile desktop add /path/to/DSH-Maestro5\ndsh --profile desktop --dump-config   # 可选：只看组装结果，不启动服务\n```\n\n- 没有构建步骤：Host/Client 两半都是手写 JS，DSH 直接加载源目录；\n- 改 `index.js` / `client.js` / `cordis.patch.yml` 后**重启 DSH**（Host 半）并刷新页面（Client 半）；\n- 校验：sh\nnode --input-type=module --check < index.js\nnode --check client.js\nnode -e \"require('js-yaml').load(require('fs').readFileSync('cordis.patch.yml','utf8'))\"  # 若本机有 js-yaml\n```"
+    },
+    {
+      "section": "修改说明",
+      "text": "| 想改什么 | 改哪里 | 生效 |\n| --- | --- | --- |\n| 每档模型 | **设置 → 团队模式**（推荐） | 重启后新会话 |\n| 每档人设 / 工具集 | `cordis.patch.yml` → `preset-team-l1 … l5` 的 `plugins` | 重启 |\n| 主控的选档 / 分派策略 | `cordis.patch.yml` → `preset-team` 的 `persona.prefix` | 重启 |\n| 档位名称 / 描述 | `cordis.patch.yml` 对应 preset 的 `name` / `description`，以及 `index.js` 的 `DEFAULT_LEVELS` | 重启 |\n| 新增档位 L6 | 复制 `preset-team-l5` 改 id/name/order；复制 `delegate-l5` 改 `toolName`/`agentPreset`/`agentOptionsFor('l6')`；在 `maestro-levels.levels` 与 `DEFAULT_LEVELS` 各加一行 | 重启 |\n| 插件显示名 / 图标 | `locale/*.json` 的 `meta`、`icon.svg` | 重启 |"
+    },
+    {
+      "section": "修改说明",
+      "text": "---"
+    },
+    {
+      "section": "兼容性",
+      "text": "| 项目 | 说明 |\n| --- | --- |\n| DSH 版本 | `>=0.2.1-rc.2 <0.3.0`（`engines.dsh`）；0.2.1-rc.2 实测通过 |\n| profile | `web` / `desktop`（需要 agent preset 注册表 + Web 设置界面） |\n| 依赖 | `@deepseek-ai/schemastery`（peerDependency，由 DSH 安装解析，无需你安装） |\n| 构建 | 无（纯 JS bundle，安装即用） |\n| 网络与权限 | 插件本身不联网、不监听端口、不写 DSH 以外文件；配置只写当前 profile 的 patch 层 |"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **保存配置后需要重启 DSH**，且只影响之后新建的会话（preset 在会话创建时固定）；\n- 主控自身的模型不固定，跟随会话的模型选择器；\n- 五个档位 preset 也会出现在模式选择器里（DSH 对所有健康 preset 一视同仁，没有隐藏开关），描述里已注明「不建议直接选作会话模式」；\n- `delegate_*` 创建的子智能体**不是 Agent Team 成员**：不会出现在 `list_agents`，也不能用 `send_message` 追加指令，完成后以通知形式回到主控；\n- 子智能体使用哪个模型取决于你的模型目录；本地 provider（如 9router）需要对应服务在运行。"
+    },
+    {
+      "section": "故障排查",
+      "text": "| 现象 | 处理 |\n| --- | --- |\n| 插件页看不到 DSH Maestro5 / 没有 Configure | 刷新页面；仍没有则重启 DSH |\n| 模式选择器里没有「团队主控」 | 确认 profile 的 `dsh.profile.bundles` 含 `dsh-maestro5`；或在插件页把它打开 |\n| 设置页保存后模型没变 | 保存后必须**重启 DSH**；且要**新建会话**（旧会话保持旧配置） |\n| 子智能体报模型不可用 | 设置页把该档改回可用路由；检查「设置 → 模型」中的 provider / API Key；本地网关服务要在线 |\n| 档位用错了模型 | 确认改的是**正在使用的 profile**（桌面版是 `desktop`）并已重启 |\n| 想完全移除 | 见下方卸载；或删除 profile `cordis.patch.yml` 里的 `- id: maestro-levels` override |"
+    },
+    {
+      "section": "卸载",
+      "text": "```sh\ndsh plugin --profile desktop remove dsh-maestro5   # 或 --profile web\n```\n\nWeb 界面：**插件 → DSH Maestro5 → 卸载**。卸载会同时移除它注册的 6 个 preset 与设置行；重启后「团队主控」从模式选择器消失。"
+    },
+    {
+      "section": "发布新版本（维护者）",
+      "text": "本插件**不发布到 npm**，只通过 GitHub Release 分发打包文件：\n\n1. 更新 `README` / `CHANGELOG.md` 与 `package.json` 的 `version`；\n2. 生成 bundle 打包文件（`npm pack` 或 `pnpm pack`），得到 `dsh-maestro5-<version>.tgz`；\n3. 创建 GitHub Release 并上传该文件：\n\n```sh\ngh release create v<version> dsh-maestro5-<version>.tgz \\\n  --title \"DSH Maestro5 v<version>\" --notes-file RELEASE_NOTES.md\n```\n\n发布前检查：`package.json` 的 `files` 已包含 `index.js`、`client.js`、`cordis.patch.yml`、`locale/*.json`、`icon.svg`；`engines.dsh` 与目标 DSH 版本匹配。"
+    },
+    {
+      "section": "发布新版本（维护者）",
+      "text": "> 仓库也欢迎提交到 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 等收录列表。"
+    },
+    {
+      "section": "社区与收录",
+      "text": "- GitHub topic：[`dsh-plugin`](https://github.com/topics/dsh-plugin)（加在仓库 Settings → Topics，便于被发现）\n- 欢迎提交到 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 与各类 DSH 插件市场\n- 问题与建议：请开 [GitHub Issue](https://github.com/bigbigtooth/DSH-Maestro5/issues)\n- 贡献指南：[CONTRIBUTING.md](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/CONTRIBUTING.md) · 变更记录：[CHANGELOG.md](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/CHANGELOG.md)"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/LICENSE)"
+    },
+    {
+      "section": "Introduction",
+      "text": "<div align=\"center\">\n\n<img src=\"https://raw.githubusercontent.com/bigbigtooth/DSH-Maestro5/main/icon.svg\" width=\"96\" alt=\"DSH Maestro5\" />"
+    },
+    {
+      "section": "DSH Maestro5",
+      "text": "**One Lead + five difficulty tiers of subagents. Turn \"a team\" into the default way DeepSeek Harness works.**\n\nInstall it and you get a **Team Lead** session mode plus a settings page: the Lead decomposes work, picks the right difficulty tier by cost/capability, delegates in parallel, then reviews and delivers. Each tier's model is configurable independently."
+    },
+    {
+      "section": "DSH Maestro5",
+      "text": "[English](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/README.en.md) · [中文](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/README.md)\n\n[](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/LICENSE)\n[](https://github.com/deepseek-ai/deepseek-harness)\n[](https://github.com/bigbigtooth/DSH-Maestro5/releases/latest)\n[](https://github.com/bigbigtooth/DSH-Maestro5/actions/workflows/validate.yml)\n[](https://github.com/topics/dsh-plugin)\n[](#compatibility)"
+    },
+    {
+      "section": "DSH Maestro5",
+      "text": "> A community plugin. Not affiliated with or endorsed by DeepSeek AI.\n\n</div>\n\n---"
+    },
+    {
+      "section": "What it is",
+      "text": "**DSH Maestro5** is a [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) Web plugin. After install, a new **\"Team Lead\"** session mode appears:"
+    },
+    {
+      "section": "What it is",
+      "text": "- You describe a task; the **Lead** decomposes it, decides what to do itself, what to delegate, and to which tier;\n- Five difficulty tiers **L1–L5** — higher tiers use stronger (slower, pricier) models;\n- All tiers share the same worker toolbox (files, bash, web, Office skills); they differ in **model / reasoning effort / persona**, so any task can go to any tier;\n- The provider, model and reasoning effort of **each tier** are configurable in **Settings → Team Mode**, populated from your live DSH model catalog;\n- Installing the plugin registers the mode, the five tier presets and the settings page — **no manual config editing**."
+    },
+    {
+      "section": "Why use it",
+      "text": "| Problem | Maestro5 |\n| --- | --- |\n| One model for everything; cheap tasks burn an expensive model | Delegate routine work to L1/L2, keep L4/L5 for critical delivery |\n| Long tasks accumulate one huge, slow, expensive context | Subtasks run in isolated contexts; the Lead only collects results |\n| Independent subtasks run serially | The Lead dispatches several subagents in parallel in one turn |\n| Subagent models are hard-coded | Configure per tier in settings; follows your model catalog |\n| No independent check on critical output | Lead policy: critical deliverables get an L4/L5 review pass |"
+    },
+    {
+      "section": "Why use it",
+      "text": "---"
+    },
+    {
+      "section": "Screenshots",
+      "text": "| \"Team Lead\" in the new-session picker | Settings → Team Mode (per-tier model) |\n| --- | --- |\n|  |  |\n\n| Listed after install | A real delegation run |\n| --- | --- |\n|  | See the hero image above: two subagents in parallel, delivered in 6s |\n\n---"
+    },
+    {
+      "section": "Requirements",
+      "text": "- **DeepSeek Harness `0.2.1-rc.2` or another `0.2.x`** (declares `engines.dsh: >=0.2.1-rc.2 <0.3.0`)\n- **Web / Desktop profile** — this plugin needs the agent preset registry and the Web settings UI; it does not apply to headless/TUI profiles\n- At least one routable model provider (Settings → Models)"
+    },
+    {
+      "section": "Install",
+      "text": "Pick one. All three install the same bundle.\n\n**A. Web UI:** sidebar **Plugins → Add plugin ▾ → Install a third-party plugin** → enter an absolute local path → install → **reload the page**.\n\n**B. GitHub:**\n\n```sh"
+    },
+    {
+      "section": "from the repository",
+      "text": "dsh plugin --profile desktop add github:bigbigtooth/DSH-Maestro5"
+    },
+    {
+      "section": "or from a release tarball (pinned, works offline)",
+      "text": "dsh plugin --profile desktop add https://github.com/bigbigtooth/DSH-Maestro5/releases/latest/download/dsh-maestro5-0.1.0.tgz\n```\n\n**C. Local checkout (development):**\n\n```sh\ndsh plugin --profile desktop add /path/to/DSH-Maestro5\n```\n\n> Restart DSH after installing (bundle layers compose at boot); reload the page at minimum to load the client half.\n> If the desktop app has no `dsh` command, use **Manage dsh command** in the menu bar to add it to PATH."
+    },
+    {
+      "section": "Verify",
+      "text": "- [ ] New session → mode picker shows **Team Lead** (the `Team·L1…L5` cards are subagent presets; do not select them as session modes)\n- [ ] **Settings → Team Mode** opens with five rows of provider/model/effort dropdowns\n- [ ] **Plugins → Installed plugins** lists **DSH Maestro5** with the `maestro-levels` row and six preset rows\n- [ ] Ask \"use delegate_l1 to compute 1+1\" and watch the Lead delegate and summarize"
+    },
+    {
+      "section": "Make it the default mode",
+      "text": "**Settings → Agent Presets → Team Lead → Set as new task default.**\n\n> ⚠️ Do not edit `agent-preset-registry` in the profile's `cordis.patch.yml` to change the default: that restarts the preset registry and running sessions lose their preset tooling. Use the settings UI.\n\n---"
+    },
+    {
+      "section": "Usage",
+      "text": "Select **Team Lead** and describe the task. The Lead decides whether/how to delegate. You can also name tiers explicitly:\n\n```text\nUse L1 to convert this CSV to xlsx, keep the header row.\n\nHave L2 organize the material first, then L5 writes the final draft and fact-checks it."
+    },
+    {
+      "section": "How the Lead works",
+      "text": "1. **Decompose** — split into independent, well-scoped subtasks; trivial work it does itself;\n2. **Pick a tier** — mechanical/reviewable → L1/L2; long reasoning chains, costly mistakes → L4/L5; start from the cheapest viable tier;\n3. **Delegate** — every subagent gets a *self-contained* brief (goal, input paths, method, output format, output path, acceptance criteria) because it cannot see your conversation;\n4. **Parallelize** — independent subtasks are dispatched in the same turn, not awaited serially;\n5. **Review** — check results against acceptance criteria; critical deliverables get an independent L4/L5 review;\n6. **Deliver** — summary + usable artifacts, stating which tiers were used and where outputs live."
+    },
+    {
+      "section": "The five tiers",
+      "text": "| Tier | Role | Default model / effort | Good for |\n| --- | --- | --- | --- |\n| **L1** | Minimal executor | `deepseek-flash` / off | format conversion, extraction, simple rewrites, one-step ops |\n| **L2** | Routine executor | `deepseek-flash` / low | organization, summaries, everyday writing, templates |\n| **L3** | Complex executor | `deepseek-flash` / max | long docs, multi-step scripts, spreadsheets, multi-source synthesis |\n| **L4** | Hard problem solver | `deepseek-v4-pro` / high | rigorous analysis, coding/debugging, key conclusions, design |\n| **L5** | Mission-critical | `deepseek-v4-pro` / max | difficult reasoning, final review, decision support, top quality |"
+    },
+    {
+      "section": "The five tiers",
+      "text": "> These are factory defaults. Any tier can be pointed at any provider/model you configured (MiniMax, 9router, …).\n\n---"
+    },
+    {
+      "section": "Configure per-tier models",
+      "text": "**Settings → Team Mode** (or **Plugins → DSH Maestro5 → row `maestro-levels` → Configure** — same configuration).\n\nEach tier has three fields:"
+    },
+    {
+      "section": "Configure per-tier models",
+      "text": "| Field | Source | Notes |\n| --- | --- | --- |\n| **Provider** | Currently routable providers | e.g. `deepseek-official`, `deepseek-account`, `minimaxcode`, `myrouter`; hover shows the route id |\n| **Model** | Models configured under that provider | e.g. `deepseek-flash`, `deepseek-v4-pro`, `MiniMax-M3.1-Flash-Preview`, `TopCoder`…; plus a \"custom model id\" fallback |\n| **Reasoning effort** | **Efforts advertised by the selected model** | DeepSeek: default/off/low/high/max; MiniMax: default/off/low/medium/high; models without reasoning only offer \"default\" |"
+    },
+    {
+      "section": "Configure per-tier models",
+      "text": "- Switching provider selects that provider's first model and clears the effort;\n- Switching model resets the effort (models support different levels).\n\n**Save → restart DSH Desktop → new sessions use the new models.** The config is persisted as an override of `- id: maestro-levels` in the profile's `cordis.patch.yml`; running sessions keep their original configuration because DSH pins presets at session creation.\n\n---"
+    },
+    {
+      "section": "How it works",
+      "text": "```\n┌──────────────────────── dsh-maestro5 (bundle) ────────────────────────┐\n│ cordis.patch.yml                                                     │\n│   ├── root row maestro-levels (volatile Config.levels — editable)     │\n│   ├── preset team        Lead (persona + tools + 5 delegate tools)    │"
+    },
+    {
+      "section": "How it works",
+      "text": "- **Install registers everything**: DSH reads `dsh.bundle.patch` on install and inserts the settings row and six presets into the profile layer stack.\n- **Persistent config**: `levels` on the `maestro-levels` row is `.volatile()`, so the settings form can edit it and config-editor writes it back to the profile patch.\n- **Model injection**: each `delegate-*` row reads `ctx.get('maestroLevels').agentOptionsFor('l1')` at mount time via `!!js`.\n- **Hand-written browser half**: `client.js` is a `window.__ModuleLoader__` factory registering into `settings.section` and `plugins.row.config` — no bundler needed."
+    },
+    {
+      "section": "How it works",
+      "text": "---"
+    },
+    {
+      "section": "Development",
+      "text": "```sh\ndsh plugin --profile desktop add /path/to/DSH-Maestro5   # link install\ndsh --profile desktop --dump-config                      # inspect composition without booting\n```\n\nNo build step: both halves are hand-written JS loaded from the source directory. After editing `index.js` / `client.js` / `cordis.patch.yml`, restart DSH (host half) and reload the page (client half).\n\nLayout:"
+    },
+    {
+      "section": "Development",
+      "text": "```\nDSH-Maestro5/\n├── package.json          # bundle manifest: dsh.bundle.patch + dsh.client + engines.dsh\n├── cordis.patch.yml      # settings row + Lead preset + five tier presets\n├── index.js              # Host half: maestroLevels service\n\nSee [中文 README](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/README.md#自定义与开发) for the customization table (change personas, tools, add an L6 tier, add a row, …).\n\n---"
+    },
+    {
+      "section": "Compatibility",
+      "text": "| Item | Notes |\n| --- | --- |\n| DSH version | `>=0.2.1-rc.2 <0.3.0` (`engines.dsh`); verified on 0.2.1-rc.2 |\n| Profile | `web` / `desktop` (needs the agent preset registry and Web settings UI) |\n| Dependencies | `@deepseek-ai/schemastery` (peer, resolved by DSH) |\n| Build | None (plain JS bundle) |\n| Network / permissions | The plugin itself makes no network calls, listens on no port, writes only the profile patch layer |"
+    },
+    {
+      "section": "Known limitations",
+      "text": "- Changing tier models requires a **restart** and **new sessions**;\n- The Lead's own model follows the session model selector;\n- The five tier presets also show up in the session mode picker (DSH has no hidden flag); their descriptions say they are not meant as session modes;\n- Subagents created by `delegate_*` are **not Agent Team members** (no `list_agents`, no `send_message` follow-ups); they report back via completion notices;\n- Tier models depend on your model catalog; local providers (e.g. 9router) need their service running."
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Symptom | Fix |\n| --- | --- |\n| DSH Maestro5 missing in Plugins / no Configure | Reload the page; restart DSH if still missing |\n| No \"Team Lead\" in the mode picker | Ensure `dsh-maestro5` is in the profile's `dsh.profile.bundles`; enable it in Plugins |\n| Models unchanged after saving | Restart DSH and **create a new session** |\n| Subagent reports model unavailable | Pick a routable model for that tier; check Settings → Models / API keys; local gateways must be running |"
+    },
+    {
+      "section": "Uninstall",
+      "text": "```sh\ndsh plugin --profile desktop remove dsh-maestro5\n```\n\nOr **Plugins → DSH Maestro5 → Uninstall**. The six presets and the settings row are removed; restart and the mode disappears."
+    },
+    {
+      "section": "Publishing a release (maintainers)",
+      "text": "This plugin is **not published to npm**; it ships as a GitHub Release bundle:\n\n1. Update the READMEs / `CHANGELOG.md` and the `version` in `package.json`;\n2. Build the bundle tarball (`npm pack` or `pnpm pack`) to get `dsh-maestro5-<version>.tgz`;\n3. Create the GitHub Release and upload the tarball:\n\n```sh\ngh release create v<version> dsh-maestro5-<version>.tgz \\\n  --title \"DSH Maestro5 v<version>\" --notes-file RELEASE_NOTES.md\n```"
+    },
+    {
+      "section": "Publishing a release (maintainers)",
+      "text": "Before releasing: confirm `files` includes `index.js`, `client.js`, `cordis.patch.yml`, `locale/*.json` and `icon.svg`, and that `engines.dsh` matches the target DSH."
+    },
+    {
+      "section": "Community",
+      "text": "- Topic: [`dsh-plugin`](https://github.com/topics/dsh-plugin)\n- Suggestions and PRs: [issues](https://github.com/bigbigtooth/DSH-Maestro5/issues)\n- Contributing: [CONTRIBUTING.md](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/CONTRIBUTING.md) · Changelog: [CHANGELOG.md](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/CHANGELOG.md)\n- Consider listing it in [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](https://github.com/bigbigtooth/DSH-Maestro5/blob/main/LICENSE)"
+    }
+  ],
+  "skipped": []
+}

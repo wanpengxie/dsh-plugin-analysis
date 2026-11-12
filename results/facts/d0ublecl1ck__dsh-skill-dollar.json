@@ -1,0 +1,209 @@
+{
+  "repo": "d0ublecl1ck/dsh-skill-dollar",
+  "commit": "1ce24a648a293599def2896539c7b04e208c03d3",
+  "extracted_at": "2026-11-11T18:50:12.038431+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 86217,
+    "lines_by_language": {
+      "JSON": 43,
+      "JavaScript": 1577,
+      "Markdown": 251,
+      "Other": 30,
+      "YAML": 5
+    },
+    "outline": [
+      ".freak",
+      "AGENTS.md",
+      "LICENSE",
+      "README.md",
+      "bundle-patch.mjs",
+      "check-core-surface.mjs",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "patch-core.mjs",
+      "test-bundle-patch.mjs",
+      "test-core-surface.mjs",
+      "test-skill-rank.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-skill-dollar",
+    "version": "0.2.0",
+    "private": true,
+    "type": "module",
+    "license": "MIT",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "bundle-patch.mjs",
+      "patch-core.mjs",
+      "check-core-surface.mjs",
+      "cordis.patch.yml"
+    ],
+    "scripts": {
+      "test": "node --test",
+      "check:core": "node check-core-surface.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "compatibility": {
+        "dshReleases": {
+          "0.1.5-rc.3": "compatible",
+          "0.1.7-rc.2": "compatible"
+        }
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-input-trigger",
+          "@deepseek-ai/dsh-api-remotes"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# A bundle layer: applied in dsh.profile.bundles order, overridden by id\n# from later bundle layers and from the profile/user patch files.\n- insert:\n    - id: skill-dollar\n      name: \"dsh-skill-dollar\"\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_BIN",
+      "kind": "env",
+      "where": "patch-core.mjs:54"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-09-28T07:54:57Z",
+    "created_at": "2026-09-22T12:34:47Z"
+  },
+  "runtime_files": [
+    "bundle-patch.mjs",
+    "client.js",
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-skill-dollar",
+      "text": "Invoke DeepSeek Harness skills with a `$` gesture instead of `/`.\n\nDSH already uses `/name` for both host commands and user-invocable skills. This\nbundle keeps `/` for commands and adds a parallel `$name` gesture for skills,\nwith the same composer menu, fuzzy ranking, keyboard pick, and deterministic\nhost-side injection that the `/` skill path uses."
+    },
+    {
+      "section": "What it does",
+      "text": "- **Client half (`client.js`)** registers a candidate source under the trigger\n  char `$` over the session skill catalog (`skills/list`). Typing `$` in the\n  composer opens the normal trigger menu (title \"Skills\" / \"技能\"). Candidates\n  are ordered by match quality first — name prefix, name substring, name\n  subsequence, then description-only — and ties prefer the most recently picked\n  skill, then the most frequently picked, then the host's own order. Picking a\n  row inserts the literal text `$skill-name `.\n- **Host half (`index.js`)** listens on `agent/pre-step`, recognises the\n  whitespace-bounded `$name` token in direct user messages, resolves it through\n  the `skills` service, and appends the canonical `<skill_content>` block —\n  byte-identical to what `dsh-tool-skill` does for `/name`."
+    },
+    {
+      "section": "What it does",
+      "text": "Because the bridge is plain draft text, a menu pick and a hand-typed `$name`\nare the same gesture, exactly like the built-in slash pipeline."
+    },
+    {
+      "section": "How the client half plugs into the core",
+      "text": "The input-trigger package hard-codes `'/' | '@'` in its `detectTrigger`, but\nthe rest of the pipeline (source registry, menu reducer, keyboard arbitration,\nspan CAS insertion) is keyed by an opaque trigger string. The client half:"
+    },
+    {
+      "section": "How the client half plugs into the core",
+      "text": "1. declares `@deepseek-ai/dsh-client-ui-input-trigger` in `dsh.client.inject`;\n2. `require`s that module from its factory and patches\n   `InputTriggerController.prototype.track`;\n3. on a live `$query` token, synthesises a hit with `trigger: '$'` and drives\n   the controller's own `reduce`/`fetchCandidates`/`refreshHeaders` against the\n   `'$'` roster, so MenuView rendering and keyboard arbitration are reused\n   without forking the core package."
+    },
+    {
+      "section": "How the client half plugs into the core",
+      "text": "When no `$token` is live the original `track` runs untouched, so `/` and `@`\nbehaviour is unchanged. Both halves depend on literals DSH may reformat, so\nneither fails silently: `check-core-surface.mjs` reports drift with a non-zero\nexit, the client half logs a console error when the controller shape is gone,\nand the host half warns once per served bundle when the reference scan no\nlonger matches. The host half still makes a hand-typed `$name` work."
+    },
+    {
+      "section": "Install into a profile",
+      "text": "The plugin directory is this repository root.\n\n```sh\ndsh plugin --profile web add /absolute/path/to/dsh-skill-dollar\ndsh --profile web --dump-config\n```\n\n`dsh plugin` forwards to pnpm inside the profile and rebuilds\n`dsh.profile.bundles`. Then restart the web app so the new client module joins\nthe boot graph: the host composes the client module manifest at startup, so a\nrunning `dsh web` must be restarted to serve `client.js`."
+    },
+    {
+      "section": "Install into DSH Desktop",
+      "text": "DSH Desktop runs its own harness home — `~/Library/Application Support/dsh-desktop/harness`\non macOS — and snapshots every installed plugin into a content-addressed\n\"generation\" under `profiles/.generations/live/`. Two consequences matter:\n\n- a `link:` install in `~/.dsh/profiles/web` does **not** reach Desktop; and\n- a running Desktop keeps the generation it booted from, so a plugin edit is\n  only picked up after the profile is refreshed and Desktop restarts."
+    },
+    {
+      "section": "Install into DSH Desktop",
+      "text": "After editing this repo, reinstall/update `dsh-skill-dollar` in Desktop's\nprofile (its plugin market or settings surface) so a new generation is built.\nGeneration installs are restart-based: the running harness keeps the code it\nbooted with, so press **Cmd/Ctrl+Shift+R** (\"Restart Harness\") — or quit and\nreopen DSH Desktop — to load the new generation. The version is bumped with\neach behavior change so the update is visible. Nothing else needs a manual\nstep: the decoration is applied at boot by the plugin's host half (see below),\nnever by editing a file inside the app bundle."
+    },
+    {
+      "section": "Verify",
+      "text": "Repo-local, no external tooling:\n\n```sh\nnode --test                  # transform, drift guard, registry hook, ranking\nnode check-core-surface.mjs  # DSH core anchors still hold (non-zero on drift)\n```"
+    },
+    {
+      "section": "Verify",
+      "text": "`node --test` asserts the textual transform, the served-bytes hook, the drift\nwarning, and the pure ranking/usage helpers against fixtures, and it re-runs\nthe transform against every DSH install it can find on this machine. The client\nhalf is browser-side: verify it by opening the web app, typing `$` in the\ncomposer, and confirming the skill menu appears and a pick loads the skill."
+    },
+    {
+      "section": "Blue text-ref decoration (`$` parity with `/`)",
+      "text": "The composer's blue \"this is a reference\" treatment is produced by a plain-text\nscan in `@deepseek-ai/dsh-client-ui-conversation`. Its token regex is\nhard-coded to `/` and `@`, and the trigger set is closed there — the\ninput-trigger lexicon is already keyed by arbitrary trigger strings, and this\nplugin already publishes its skill names under `$`, but the scan never looks\nfor `$`. No plugin API registers another text-ref trigger, so exact parity\nneeds two literal substitutions in that bundle:"
+    },
+    {
+      "section": "Blue text-ref decoration (`$` parity with `/`)",
+      "text": "- `TEXT_REF_RE` becomes `/(^|\\s)([/@$])([\\w-]+)/g`;\n- the `/`-only end-boundary rule (a token must end at whitespace or the draft\n  end) is applied to `$` as well."
+    },
+    {
+      "section": "Served at runtime (works in DSH Desktop)",
+      "text": "Editing the file on disk is not an option inside DSH Desktop: the bundle lives\nin `app.asar`/`app.asar.unpacked`, whose unpacked files carry SHA-256\nintegrity hashes (`ElectronAsarIntegrity` in `Info.plist`), so a modified\nbyte fails Electron's integrity check and invalidates the code signature."
+    },
+    {
+      "section": "Served at runtime (works in DSH Desktop)",
+      "text": "Instead the host half (`index.js`) rewrites the bundle **while it is served**.\n`@deepseek-ai/dsh-client-modules` snapshots every client bundle in memory at\nboot and hands responses back through\n`ClientModuleRegistry.bundleResource`; the plugin wraps that method,\nsubstitutes `$` into the scan, and returns the patched bytes. Degradation\nstays graceful:"
+    },
+    {
+      "section": "Served at runtime (works in DSH Desktop)",
+      "text": "- the wrapper only touches `text/javascript` bodies that contain the shipped\n  scan, so source maps and unrelated bundles pass through untouched;\n- if there is no `clientModules` service (older DSH), the plugin logs a hint\n  and the `$` menu and host injection still work;\n- the substitution is idempotent, so replaying it changes nothing."
+    },
+    {
+      "section": "Served at runtime (works in DSH Desktop)",
+      "text": "Immutable `/plugins` URLs are cached by the browser for a year, so different\nbytes under the same URL would never be fetched. The plugin also salts the\nconversation row's revision (`captureArtifactBaseline`) and calls\n`rebuilt()`, which recomposes the boot graph with a fresh URL and forces the\nfetch. Bump `TEXT_REF_PATCH_VERSION` in `bundle-patch.mjs` when the patched\nbytes change."
+    },
+    {
+      "section": "Served at runtime (works in DSH Desktop)",
+      "text": "A host that derives revisions from bundle *content* instead of file metadata\ndoes not see that salt (DSH 0.1.5 and earlier, including the current\n`npx dsh web`). On such a host the plugin logs a hint and you run the legacy\npatch once; the host's content-derived revision then changes and busts the\ncache by itself."
+    },
+    {
+      "section": "Legacy fallback",
+      "text": "`patch-core.mjs` still applies the same two substitutions to a bundle on disk\nfor hosts whose bundle revisions come from content (DSH 0.1.5 and earlier),\nwhich cannot be cache-busted in memory:\n\n```sh\nnode patch-core.mjs            # resolve the bundle from the dsh install\nnode patch-core.mjs --check    # exit non-zero when the patch is missing\nnode patch-core.mjs --file <client.js>\n```"
+    },
+    {
+      "section": "Legacy fallback",
+      "text": "Re-run it after a DSH upgrade only if you are on such a host; on DSH 0.1.7+ the\nserved-at-runtime patch leaves nothing to re-apply."
+    },
+    {
+      "section": "Self-check",
+      "text": "Everything this plugin adds beyond the official `inputTriggers.registerSource`\npipeline hangs off two literals in DSH core:\n\n- `ui-input-trigger` detects only `/` and `@` (`type TriggerChar = '/' | '@'`),\n  so `client.js` hooks `InputTriggerController.prototype.track`;\n- `ui-conversation`'s plain-text scan is `/(^|\\s)([/@])([\\w-]+)/g`, so the\n  host half rewrites the served bytes.\n\nRun the check after every DSH upgrade and before shipping a change to either\npatch:"
+    },
+    {
+      "section": "Self-check",
+      "text": "```sh\nnode check-core-surface.mjs           # auto-locate installed DSH homes\nnode check-core-surface.mjs --root <node_modules/@deepseek-ai>\nnode check-core-surface.mjs --json\n```\n\nIt prints one line per installed surface, quotes the offending scan when one\nchanged shape, exits `1` on drift, and exits `2` when no installed DSH was\nfound. If upstream ever widens the scan to `$`, it reports\n`decoration-obsolete`: the decoration patch and the `TEXT_REF_PATCH_VERSION`\nsalt can then be deleted."
+    },
+    {
+      "section": "Design notes",
+      "text": "- The trigger char is deliberately fixed at `$`. The host and client halves must\n  agree on it, and a host-only config knob would silently break the picked text,\n  so there is no such knob.\n- The host half adds no bare package imports (only the `node:crypto` builtin\n  and its own relative `./bundle-patch.mjs`) so a `link:`-installed profile can\n  resolve it; the two small framework helpers it needs (`renderSkillContent`,\n  `createUserMessage`) are inlined byte-for-byte from `@deepseek-ai/dsh-skill`\n  and `@deepseek-ai/dsh-llm`.\n- The decoration never writes to the DSH install. Both the served bytes and the\n  salted revision are applied in memory, so DSH Desktop's integrity-sealed\n  `app.asar` and code signature stay valid.\n- `$VARS` and shell-style tokens do not open the menu: a live query must match\n  `^[a-z0-9-]*$`, the skill-name grammar.\n- The ranking usage table lives in `localStorage` under\n  `dsh-skill-dollar/usage`, is capped at 200 skills, and is best-effort: a\n  locked-down profile or a corrupt value degrades to host order instead of\n  throwing. It adds no runtime dependency."
+    }
+  ],
+  "skipped": []
+}

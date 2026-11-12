@@ -1,0 +1,195 @@
+{
+  "repo": "MyRemme/dsh-loop-guard",
+  "commit": "f585ebc53bcfcb9a067994b13c930f0a8fd5ad52",
+  "extracted_at": "2026-11-11T13:04:39.639131+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 120790,
+    "lines_by_language": {
+      "JSON": 56,
+      "JavaScript": 2594,
+      "Markdown": 214,
+      "Other": 8,
+      "YAML": 10
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/layers.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-loop-guard",
+    "version": "0.2.0",
+    "description": "多智能体监工：一个独立模型实时审阅推理文本与工具调用，检测死循环 / 空转 / 偷懒，并按 WARN / BLOCK / STOP 三档落地。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.js",
+      "lib/client.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-primitives",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "cordis",
+      "plugin",
+      "loop-guard",
+      "supervisor",
+      "multi-agent"
+    ],
+    "license": "Apache-2.0",
+    "dependencies": {
+      "@deepseek-ai/schemastery": "~3.18.4"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.0-rc.1 <0.3.0-0 || >=0.3.0-rc.1 <0.4.0-0",
+      "react": "^18.3.1",
+      "react-dom": "^18.3.1"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/dsh-client-ui-primitives": {
+        "optional": true
+      },
+      "react": {
+        "optional": true
+      },
+      "react-dom": {
+        "optional": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch layer: one host row for the loop guard itself.\n#\n# The entry id doubles as the plugin's settings namespace, so the row below can\n# carry the Config through the same convention dsh-context / dsh-computer-use-guard\n# follow. Leave the row body empty to use the plugin defaults; add a `config:`\n# map here (or a `- id: dsh-loop-guard` block in the profile's cordis.patch.yml)\n# to point the supervisor at a different provider/model.\n- insert:\n    - id: dsh-loop-guard\n      name: dsh-loop-guard\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "~3.18.4"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 16,
+    "pushed_at": "2026-10-01T06:23:04Z",
+    "created_at": "2026-10-01T04:25:36Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/layers.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-loop-guard",
+      "text": "多智能体监工。一个独立模型实时审阅另一个正在工作的智能体的推理文本与工具调用，检测死循环、空转与偷懒，并按 **WARN / BLOCK / STOP** 三档落地。\n\n宿主侧是 cordis 插件，浏览器侧是设置页里的一行。单包同时声明 `dsh.bundle` 与 `dsh.client`。\n\n---"
+    },
+    {
+      "section": "四层流水线",
+      "text": "实现在 `lib/layers.js`（可独立单测），hook 接线在 `lib/index.js`。\n\n```\n① 采集 TraceStore    轨迹 / 证据 / 预算\n        │\n② 检测 Detector      可插拔规则注册表\n        │"
+    },
+    {
+      "section": "① 采集",
+      "text": "`TraceStore` 每个会话一份，记录工具轨迹与观测指纹，三张表都带 LRU 封顶。\n\n**观测摘要**是这套东西的地基。只比 `action + input` 的哈希区分不出「有效轮询」和「空转」：同一个命令反复跑，结果在变说明外部状态在推进，结果不变说明卡死了。所以每次工具调用都会算一个结果指纹，并记录它与上一次的关系：\n\n| 判读 | 含义 |\n|---|---|\n| 结果与上次完全相同 | 重复调用且无新信息 → 高度疑似空转 |\n| 结果在 N 种取值间来回振荡 | 看似每次都在变，取值种类却不增长 → 状态未推进 |\n| 结果有变化 | 外部状态在推进 → 合理轮询 |\n| 结果为空 | 没有任何产出 |\n\n指纹前先剥离显式易变量（ISO 时间戳、`HH:MM:SS`、UUID、十六进制、`12ms`/`3s`）。只匹配明确的易变量，**不做模糊归一**——宁可误报「有变化」，也不能把真实变化压成「相同」，后者会制造假阳性阻断。"
+    },
+    {
+      "section": "② 检测",
+      "text": "四条规则，声明式注册，单条抛错不影响其它：\n\n| id | 触发 | 档位 |\n|---|---|---|\n| `stream-loop` | 推理/正文的短语级或字符级周期重复 | STOP |\n| `tool-repeat` | 同一工具同一参数被反复调用 | WARN |\n| `observation-stall` | 结果逐字节相同 / 振荡 / 为空 | WARN~STOP |\n| `step-stall` | 连续多步没有新的可验证结果 | WARN |\n\n字符级周期检测**逐字符比对，不抽样**。抽样步进会跳过模板里唯一变化的那些字符，`第32步…第33步…` 这种正常推理会被判成死循环——这是最贵的一类假阳性。同时强制最少验证 64 个字符，且报告的重复次数是**实际验证跨度内成立的周期数**，不由全文长度推断。"
+    },
+    {
+      "section": "③ 仲裁",
+      "text": "规则只负责「发现可疑」，不决定惩罚强度。两条原则：\n\n- **结果逐字节相同是确定性证据**，不依赖模型也能定罪，直接 BLOCK；一路到 `toolBlockAt` 还没换路则升 STOP。\n- **仅调用次数多但结果一直在变**，只 WARN，并把判决权交给模型。假阻断会毁掉真实工作，漏判只多花 token——默认向漏判倾斜。\n\n模型的角色是**撤回者而不是加重者**：它能否掉规则对合理轮询的误判，但不能凭想象把规则没发现的东西升到 STOP。\n\n屡犯升级：第 2 次至少 BLOCK，第 3 次 STOP。"
+    },
+    {
+      "section": "④ 干预",
+      "text": "| 档位 | 落地方式 |\n|---|---|\n| WARN | `additionalContexts` 软提示，不打断 |\n| BLOCK | `PostToolDecision.block`，本次工具调用判失败 |\n| STOP | 截断输出流 + `agent.steer` 把工人抽回来 |\n\n干预带**回合归属**。监工最长要 `timeoutMs`（默认 60s）才返回，而收工点最多等 `stopWaitMs`（默认 8s），判决晚归是常态；没有回合归属，上一个回合的诊断就会被注入到下一个回合。\n\n到 `maxStrikes` 后插件**放手**，让回合自然收尾，不再强制续跑。\n\n---"
+    },
+    {
+      "section": "配置",
+      "text": "`cordis.patch.yml`：\n\n```yaml\n- id: dsh-loop-guard\n  name: dsh-loop-guard\n  config:\n    enabled: true"
+    },
+    {
+      "section": "顶层扁平别名",
+      "text": "以下几个旋钮同时提供**顶层**写法：\n\n```yaml\n    toolRepeatThreshold: 3\n    toolBlockAt: 5\n    stepStallThreshold: 30\n    hardAfterHits: 2\n\n顶层优先于嵌套值。这不是冗余：浏览器的设置表单（`dsh-client-ui-primitives` 的 `SettingsFormModel`）写操作是 `{op:\"set\", path:[field]}`——**单段路径**，读也是平面取值，嵌套的 `detect.*` / `punish.*` 它既读不出也写不进。UI 改的就是这一层，手改 `cordis.patch.yml` 两种写法都生效。\n\n监工必须走**另一条路由**：换了工人的模型，`supervisor.provider` / `supervisor.model` 也要跟着换。两个模型相同会让监工调用自己触发自己。\n\n---"
+    },
+    {
+      "section": "设置界面",
+      "text": "设置 → 通用 → 空转监工。可改上面那六个顶层字段，改动即时写回宿主配置。\n\n实现见 `lib/client.js`：\n\n- 入口是 `window.__ModuleLoader__.load({id, factory})`\n- 注册进 `settings.general.item` 槽位\n- 配置经 `ctx.get(\"configForms\").get(\"dsh-loop-guard\")` 拿到\n- **无条件注册**，不用 `whileServed` 门控：非 loopback 页面下设置文档是进程内的，`describe` 镜像永远不加载，门控会让这一行根本不存在——看起来像被删了而不是被禁用"
+    },
+    {
+      "section": "两个必须同时满足的条件",
+      "text": "**一、字段要标 `.volatile()`。** 只有 volatile 字段才会被 harness 生成可编辑的设置表单，`dsh-settings` 的 `hasConfigEntry` 也就认不到这个命名空间，浏览器侧只会拿到 `status: \"unavailable\"`。schemastery 的校验器还要求 volatile 字段有固定对象路径、且**不被外层 volatile 包住**——所以标在叶子上，不要标在 `supervisor` / `detect` / `punish` 这些对象上。\n\n**二、宿主侧必须拆包。** 标了 `.volatile()` 的字段，cordis 交给插件的是**带 `.get()` 的包装值**，而手写在 `cordis.patch.yml` 补丁行里的则是普通 JSON。`normalizeConfig` 里走 `unwrap()` 同时接受两种："
+    },
+    {
+      "section": "两个必须同时满足的条件",
+      "text": "```js\nSchema.resolve({ toolRepeatThreshold: 7 }, Config)[0].toolRepeatThreshold\n// → { get: [Function], [Symbol(cosmokit.volatile.write)]: [Function] }\n```\n\n不拆包的后果是静默的：`typeof wrapper === \"object\"`，所有类型判定落空，配置一声不响地退回默认值。"
+    },
+    {
+      "section": "改完立即生效，不用重启",
+      "text": "`normalizeConfig` 里对这几个 volatile 旋钮**不取快照，挂的是取值器**。\n\ncordis 处理设置写入时，只在 volatile 路径上跑 `_commitVolatile()`，对包装对象做 `target[Symbol.for(\"cosmokit.volatile.write\")](nextValue)`——原地改写，**并且不会重新执行 `apply`**（`dsh-util-values` 的 `updateVolatile` 就是这个实现）。所以插件必须持有包装对象、在用的时候调 `.get()`。\n\n早先这里把值拷进普通快照对象，UI 改完写进了包装对象而插件再也不看它——于是每调一次参数都要重启。现在改成取值器后，设置界面里的改动**立即生效**。\n\n需要重启的只剩**代码变更**（`lib/*.js` 的逻辑），因为那要求 cordis 重新 import 模块，这一点无法绕过。"
+    },
+    {
+      "section": "读生效值",
+      "text": "宿主侧顶层优先于嵌套，但用户的 `cordis.patch.yml` 里写的是嵌套值、顶层字段压根没被设过。所以这一行读的是**生效值**（顶层 → 嵌套 → 默认），写一律写到顶层。只读顶层会让 UI 显示 schema 默认值，而插件实际用的是嵌套值。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "包自带 `dsh.bundle.patch`，走 bundle 声明挂载。profile 的 `package.json`：\n\n```jsonc\n{\n  \"dependencies\": {\n    \"dsh-loop-guard\": \"file:./node_modules/dsh-loop-guard\"\n  },\n\n`cordis.patch.yml` 里覆盖 config。改完**需要重启 DSH**才会重新装载。\n\n---"
+    },
+    {
+      "section": "测试",
+      "text": "仓库外有一组独立探针（不进包），覆盖观测摘要、四层内核、hook 接线、真实加载、真实会话重放：\n\n| 探针 | 覆盖 |\n|---|---|\n| `lg-obs` | 观测指纹与易变量剥离 |\n| `lg-layers` | 四层内核：采集/检测/仲裁/干预 |\n| `lg-integration` | 驱动 `apply()` 注册的四个 hook，走完整调用链 |\n| `lg-load` | 用真的 schemastery 校验 Config |\n| `lg-ui-config` | 顶层别名优先级与向后兼容 |\n\n---"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **`supervisor` 答非所问与调不通走同一条兜底路径**。模型回散文而非 JSON 时判决无法解析，插件按「监工不可用」处理并沿用兜底判决；按设计兜底会把规则 WARN 升级到 BLOCK。现在这种情形会打一条 warn 日志，不再静默。\n- **规则是哨兵，不是法官**。所有阈值都偏保守，宁可漏判。\n- **流式检测看的是窗口**。`windowChars` 之外的重复不会被发现。\n\n---"
+    },
+    {
+      "section": "License",
+      "text": "Apache-2.0"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,172 @@
+{
+  "repo": "ShiraGawaAnri/dsh-vision-bridge",
+  "commit": "65717f9fa61700300ac24258c6c92c3622de7504",
+  "extracted_at": "2026-11-11T14:41:31.944297+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 56639,
+    "lines_by_language": {
+      "JSON": 62,
+      "JavaScript": 1107,
+      "Markdown": 179,
+      "Other": 21,
+      "YAML": 6
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@dsh-external/dsh-vision-bridge",
+    "version": "1.0.0",
+    "description": "DSH profile bundle: auto-bridge images for text-only models (DeepSeek etc.) — instead of the native \"model does not support images\" rejection, the image is materialized into the workspace and the model is instructed to run the configured vision tool (vision_glance, fuzzy-selectable) and answer from its analysis. Works on WSL/Ubuntu and native Windows; sessions on excluded presets (default minimal) keep the original blocking behavior.",
+    "keywords": [
+      "deepseek",
+      "deepseek-harness",
+      "dsh",
+      "plugin",
+      "vision",
+      "image",
+      "bridge",
+      "vision-glance",
+      "toolkit"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-agent-loop": "^0.0.1",
+      "@deepseek-ai/dsh-agent-presets": "^0.0.1",
+      "@deepseek-ai/dsh-attachment": "^0.0.1",
+      "@deepseek-ai/dsh-llm": "^0.0.1",
+      "@deepseek-ai/dsh-sandbox-policy": "^0.0.1",
+      "@deepseek-ai/dsh-settings": "^0.0.1",
+      "@deepseek-ai/dsh-shell": "^0.0.1",
+      "@deepseek-ai/dsh-system-prompt": "^0.0.1",
+      "@deepseek-ai/dsh-tools": "^0.0.1",
+      "@deepseek-ai/dsh-host-webserver": "^0.0.1",
+      "schemastery": "^3.18.0"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/dsh-host-webserver": {
+        "optional": true
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-vision-bridge bundle patch: mounts the plugin into a profile layer stack.\n# No runtime config is required. Users can override or disable it in their own\n# profile patch layer using the same id.\n- insert:\n    - id: vision-bridge\n      name: '@dsh-external/dsh-vision-bridge'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-08-16T09:58:33Z",
+    "created_at": "2026-08-16T01:57:06Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "[中文](README.zh.md) | [English](README.md)"
+    },
+    {
+      "section": "dsh-vision-bridge",
+      "text": "A DSH profile bundle for sessions running models that cannot accept image\ninput (DeepSeek and similar). Instead of the native \"the current model does\nnot support images\" rejection, the plugin runs the following pipeline:"
+    },
+    {
+      "section": "dsh-vision-bridge",
+      "text": "1. materializes the image into the session workspace (`.dsh-vision-bridge/`);\n2. rewrites the user message (via the sanctioned `agent/pre-step` channel) into\n   a `[图片桥接]` instruction carrying the image paths;\n3. registers a **system-prompt rule** (order 150) requiring the model to call\n   the configured vision tool (default `vision_glance`, fuzzy-selectable such\n   as `glance` / `ground` / `detect`, matched against the agent's actual\n   toolset) and answer from its analysis — the tool-call card and its result\n   appear in the conversation;\n4. patches `llm.streamWithRegistration` — the dispatch funnel behind both\n   `llm.stream` and the agent loop's prepared-call path — to strip image blocks\n   (including images nested inside tool results), replacing them with a\n   placeholder before a text-only adapter serializes the conversation."
+    },
+    {
+      "section": "dsh-vision-bridge",
+      "text": "Sessions whose agent preset matches **excluded presets** (default `minimal`,\nthe two-tool preset) are NOT bridged: their images are replaced with the\noriginal \"model does not support images\" notice text. The preset a session\nruns is resolved the same way DSH itself resolves it: the newest\n`agent-preset/selected` event wins, with the creation-time header as fallback."
+    },
+    {
+      "section": "Why the native rejection happens (DSH itself)",
+      "text": "- `dsh-host-apiproxy`'s `prompt` RPC rejects image messages *before* they enter\n  the session when `llm.resolveModelInfo().inputModalities` lacks `image`\n  (that is the banner shown in the UI).\n- The DeepSeek adapter throws `UNSUPPORTED_CONTENT` on any message containing\n  image blocks at serialization time.\n\nThis plugin intervenes at three layers:"
+    },
+    {
+      "section": "Why the native rejection happens (DSH itself)",
+      "text": "| Layer | Mechanism |\n| --- | --- |\n| Admission | Patches `llm.resolveModelInfo` so bridged models report an `image` input modality |\n| Current message | `agent/pre-step` materializes the image and injects the vision-tool instruction |\n| History | Patches `llm.streamWithRegistration` (the shared dispatch funnel) to strip image blocks before adapter serialization |"
+    },
+    {
+      "section": "Settings (Settings → 视觉桥接)",
+      "text": "| Setting | Default | Meaning |\n| --- | --- | --- |\n| Enable vision bridge | on | Off = restore native DSH blocking entirely |\n| Vision tool (fuzzy input) | `vision_glance` | The tool the model must call; fuzzy-matched against the agent's real toolset |\n| Custom prompt (optional) | empty | Extra instruction passed to the vision tool |\n| Bridge models | `deepseek-official*,deepseek*` | `provider[:model]` patterns, `*` wildcards |\n| Excluded session presets | `minimal` | Multi-select + extra wildcard patterns; matched sessions are NOT bridged (original blocking text) |"
+    },
+    {
+      "section": "Settings (Settings → 视觉桥接)",
+      "text": "Configuration is persisted through the DSH settings service (namespace\n`vision-bridge`); it survives restarts."
+    },
+    {
+      "section": "Platforms: WSL/Ubuntu and Windows",
+      "text": "- Image bytes are written via `ctx.shell` with **base64 on stdin** (no huge\n  command lines): `bash` (`base64 -d`) on Linux/WSL, PowerShell\n  (`[IO.File]::WriteAllBytes`) on native Windows — the shell flavor is\n  auto-detected once (`Write-Output` probe + `resolveExecutable('pwsh')`\n  fallback).\n- Shell commands carry the **session-resolved sandbox policy** (like the bash\n  tool): `danger-full-access` sessions run without a sandbox backend; confined\n  sessions run inside the workspace fence when a backend exists.\n- The vision tools themselves are native DSH tools (vision-tools skill); their\n  runtime already handles cross-platform execution."
+    },
+    {
+      "section": "Requirements",
+      "text": "- The session must have the vision-tools skill loaded (or another vision\n  plugin) so a vision tool exists in the agent's toolset; otherwise the bridge\n  degrades to a self-heal instruction (load the skill first) or a clear notice.\n- Standard/cordis presets have the `skill` tool; the `minimal` preset does not\n  (it is excluded by default)."
+    },
+    {
+      "section": "Installation",
+      "text": "Unzip the bundle, then add it to a profile:\n\n```sh\nunzip dsh-vision-bridge.zip -d dsh-vision-bridge\ndsh plugin --profile web add ./dsh-vision-bridge\n```\n\n(`dsh plugin` forwards to pnpm in the profile directory. Alternatively, copy\nthe extracted folder into the profile's `node_modules/@dsh-external/` and\nreconcile plugins.)"
+    },
+    {
+      "section": "Known limitations",
+      "text": "- The admission patch is process-wide, so excluded sessions cannot get the\n  native error banner — the same reason is rendered as text instead.\n- Multiple sessions share the plugin's global effects (llm patches, pre-step\n  listener, system rule) while the plugin is mounted.\n- Bridged models never receive image blocks (the adapter forbids them); the\n  attachment stays available in the session."
+    }
+  ],
+  "skipped": []
+}

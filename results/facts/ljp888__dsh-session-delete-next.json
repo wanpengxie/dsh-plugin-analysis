@@ -1,0 +1,160 @@
+{
+  "repo": "ljp888/dsh-session-delete-next",
+  "commit": "0b421068881cd59a080a9e5b82dd1d4bdf2e141a",
+  "extracted_at": "2026-11-12T00:05:37.691870+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 34507,
+    "lines_by_language": {
+      "JSON": 38,
+      "JavaScript": 734,
+      "Markdown": 149,
+      "Other": 30,
+      "YAML": 17
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-session-delete-next",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "DSH sidebar session deletion: adds a Delete session action to every session row menu and permanently removes that session's local records.",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "session"
+    ],
+    "license": "MIT",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-workspace"
+        ]
+      }
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-session-delete-next — bundle patch shipped with the package.\n#\n# `dsh.bundle.patch` makes `dsh plugin add` apply this layer automatically.\n# Installing by hand instead (writing the package into the profile's\n# node_modules) needs the same single row appended to the profile's own\n# cordis.patch.yml:\n#\n#   - insert:\n#       - id: dsh-session-delete-next\n#         name: dsh-session-delete-next\n#\n# The row name must equal the package name: the browser half registers itself\n# in the module loader under that same id, and the node half of the client\n# module system serves it because this row mounts the declaring package.\n- insert:\n    - id: dsh-session-delete-next\n      name: dsh-session-delete-next\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-12T12:36:37Z",
+    "created_at": "2026-10-12T12:34:30Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-session-delete-next",
+      "text": "DSH（DeepSeek Harness）侧栏**会话删除**插件 —— 为当前运行时（`0.2.0-rc.2`）重写的版本，\n替代插件市场里因 peer 版本范围（`^0.1.0-rc.5`）不兼容而装不上的 `dsh-session-delete`。\n\n仓库：<https://github.com/ljp888/dsh-session-delete-next>\n\n[English](#english) | 中文\n\n---"
+    },
+    {
+      "section": "功能",
+      "text": "| 入口 | 菜单项 | 行为 |\n|---|---|---|\n| 会话行 `…` 菜单 | **删除会话** | 永久删除该会话的全部本地记录，不可恢复 |\n\n要点：\n\n- 危险操作，红色菜单项 + 独立确认对话框（明示「不可恢复」并显示会话标题）。\n- **运行中的会话一律拒绝删除**（含当前会话）——宿主端返回 `409 live`，对话框给出提示。\n- 删除后立即从侧栏消失，**无需刷新**（复用官方已转发的 `api-session/removed` 事件）。\n- 菜单文案跟随 GUI 语言（中文 / 英文），走官方 locale 服务。"
+    },
+    {
+      "section": "技术实现",
+      "text": "与旧版插件的关键差异：**不再用 DOM 注入**。`0.2.0-rc.2` 已开放官方扩展点，本插件走\n标准 slot 机制，不会随侧栏结构变化而静默失效。\n\n**Host 半**（`index.js`，纯 ESM）"
+    },
+    {
+      "section": "技术实现",
+      "text": "- 只 `inject: ['webServer']`，其余服务（`sessionPersistence` / `workspaceRegistry` /\n  `sessions` / `storageDomain`）按请求用 `ctx.get()` 惰性获取，缺失时降级而不是拒绝加载。\n- 注册同源路由 `POST /dsh-session-delete-next/delete`，请求体 `{ sessionId }`。\n- 删除顺序（**先删文件，后记账**，失败绝不留下「已隐藏但未删除」的半删状态）：\n  1. 拒绝 live / 已创建未落盘的会话；\n  2. `ctx.sessionPersistence.stat(id)` 定位日志，`locate(header).path` 取路径，\n     删除其所在目录（含 `session.lock`）；\n  3. 安全校验：文件名必须匹配后端自己的 `session.v<N>.jsonl[.zst|.zstd|.gz]`，\n     且目录必须位于持久化后端的 `root` 之内，否则拒绝；\n  4. 清理 `session_projcache` 投影缓存；\n  5. 从 workspace 账目 `detachSession`，并清除归档标记；\n  6. `ctx.emit('api-session/removed', id)` 通知浏览器。\n- 同源校验：跨站 `Origin` 直接 `403`。"
+    },
+    {
+      "section": "技术实现",
+      "text": "**Client 半**（`client.js`，手写浏览器 bundle，无需构建）\n\n- `window.__ModuleLoader__.load({ id: '<包名>', factory })` 懒注册。\n- 注册到官方 slot：\n  - `sidebar.workspaces.session.menu.item`（会话 `…` 菜单，`order: 500`，排在\n    pin/rename/fork/archive 之后）；\n  - `shell.overlay`（确认对话框，独立于菜单生命周期）。\n- 复用宿主注入的 `useMenuOpenState()` 关闭菜单；`t()` 来自 `ctx.locale.register`。\n- 若宿主缺少所需 UI primitives，只告警并跳过注册，不会让 slot 渲染崩溃。"
+    },
+    {
+      "section": "安装",
+      "text": "最省事的方式是直接 clone 成 profile 的插件目录（`<profile>` 默认为 `~/.dsh/profiles/desktop`）：\n\n```bash\ngit clone https://github.com/ljp888/dsh-session-delete-next.git \\\n  ~/.dsh/profiles/desktop/node_modules/dsh-session-delete-next\n```\n\nWindows PowerShell 对应写法：\n\n```powershell\ngit clone https://github.com/ljp888/dsh-session-delete-next.git `\n  \"$env:USERPROFILE\\.dsh\\profiles\\desktop\\node_modules\\dsh-session-delete-next\"\n```\n\n然后手动复制文件也可以，步骤："
+    },
+    {
+      "section": "安装",
+      "text": "1. 把整个包目录复制到 `<profile>/node_modules/dsh-session-delete-next/`\n   （`<profile>` 默认为 `~/.dsh/profiles/desktop`）。\n2. 在 `<profile>/cordis.patch.yml` **追加**一行挂载（此文件被 HMR 监听，保存后即热加载）：\n\n```yaml\n   - insert:\n       - id: dsh-session-delete-next\n         name: dsh-session-delete-next\n   ```\n\n3. 浏览器刷新一次即可看到菜单项。\n\n> 不写入 profile 的 `package.json`：本包不在 npm 上，写成 `dependencies` 会让后续\n> `pnpm install` / `dsh plugin` 操作去 registry 拉取而失败。代价是将来在 profile 里跑\n> `pnpm install` 可能把这个目录剪掉，重装即可。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- **不能删除 live 会话。** 官方没有公开的「驱逐运行中会话」API，所以正在运行或已打开的\n  会话会被拒绝。先关掉它（或重启 DSH）再删。\n- **子智能体会话**也可删除；删除后父会话的子智能体目录会少一项，界面会随\n  `api-session/removed` 自行收敛。\n- **附件不删。** `~/.dsh/attachments/**` 是内容寻址、跨会话共享的，删除会话不会动它。\n- Windows 上若另一个进程仍持有 `session.lock`，`rm` 可能报 `EBUSY`；此时对话框会显示\n  原始错误且**磁盘状态不变**，重试即可。\n- 全量删除（按工作区批量）未实现——只做单个会话删除，减少不可验证的失败路径。"
+    },
+    {
+      "section": "实测验证状态（本机）",
+      "text": "| 项目 | 结果 |\n|---|---|\n| 宿主端加载 + 路由注册 | ✅ `~/.dsh/logs/desktop-next.log`：`[dsh-session-delete-next] host ready: POST /dsh-session-delete-next/delete` |\n| profile 热加载（无需重启） | ✅ 追加 patch 行后 Loader 自动刷新，日志即出现上述行 |\n| 侧栏 `…` 菜单出现「删除会话」 | ✅ 红色危险样式 + 分隔线，排在官方「归档会话」之后 |\n| 中文 locale 解析 | ✅ 显示「删除会话」，不是原始 key |\n| 确认对话框 | ✅ 标题、含会话名插值的正文、红色「永久删除」、取消 |\n| 执行真正删除（成功路径） | ⚠️ **未执行** —— 原因见下 |"
+    },
+    {
+      "section": "实测验证状态（本机）",
+      "text": "**为什么没做破坏性实测**：验证时侧栏只有一条会话，正是承载那次对话的活跃会话。\n官方在 `0.2.0-rc.2` 没有公开「驱逐运行中会话」的 API，所以插件会拒绝删除它；\n跑通「删除成功」路径需要一个**非活跃**会话当靶子，我不拿真实对话历史去赌。\n想自行确认：新开一个会话 → 随便发一条消息 → 切回原会话 → 对那个测试会话执行删除。\n删除成功的判据是 `~/.dsh/sessions/<项目目录>/<会话 id>/` 整个目录消失，且侧栏该行立即消失。\n\n> 注：`index.js` 的 fail-closed 安全加固（`sessions` 服务不可用时拒绝删除）不在 HMR\n> 模块监听根内，需**重启 DSH** 才在运行实例中生效；之前的运行实例行为一致。"
+    },
+    {
+      "section": "English",
+      "text": "Adds the missing **Delete session** action to the sidebar session row menu of DSH\n`0.2.0-rc.2`, replacing the marketplace `dsh-session-delete` whose peer range\n(`^0.1.0-rc.5`) no longer resolves."
+    },
+    {
+      "section": "English",
+      "text": "- Permanently removes the session's local records; red danger styling plus a\n  confirmation dialog that states the action is irreversible.\n- Running/open sessions are refused (`409 live`) — they are never deleted.\n- The row disappears immediately, with no refresh, by re-emitting the official\n  `api-session/removed` forwarded event.\n- Localized through the client locale service (zh/en)."
+    },
+    {
+      "section": "English",
+      "text": "Unlike the original plugin this uses the **official slots** rather than DOM\ninjection: `sidebar.workspaces.session.menu.item` for the menu row and\n`shell.overlay` for the dialog. Files are removed before any bookkeeping, so a\nfailure never leaves a session that is hidden but still on disk."
+    },
+    {
+      "section": "English",
+      "text": "Install: clone this repository straight into the profile's plugin directory —\n`git clone https://github.com/ljp888/dsh-session-delete-next.git ~/.dsh/profiles/desktop/node_modules/dsh-session-delete-next`\n— then append the `- insert:` row to `<profile>/cordis.patch.yml` and refresh the\npage. The profile `package.json` is deliberately left untouched because this\npackage is not published to npm."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

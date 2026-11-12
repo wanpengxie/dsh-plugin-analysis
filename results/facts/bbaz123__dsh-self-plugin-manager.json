@@ -1,0 +1,494 @@
+{
+  "repo": "bbaz123/dsh-self-plugin-manager",
+  "commit": "1388528d58fba2e8839960546f345d48649b7d93",
+  "extracted_at": "2026-11-11T17:46:44.791059+00:00",
+  "tree": {
+    "files": 34,
+    "bytes": 257514,
+    "lines_by_language": {
+      "JSON": 76,
+      "JavaScript": 5203,
+      "Markdown": 389,
+      "Other": 214,
+      "YAML": 71
+    },
+    "outline": [
+      ".gitignore",
+      "AGENTS.md",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "lib/gate.js",
+      "lib/health.js",
+      "lib/index.js",
+      "lib/json-safe.js",
+      "lib/registry.js",
+      "lib/runtime.js",
+      "lib/scan.js",
+      "lib/service.js",
+      "lib/update.js",
+      "lib/verify.js",
+      "lib/wire.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/client.test.mjs",
+      "test/gate.test.mjs",
+      "test/health.test.mjs",
+      "test/registry.test.mjs",
+      "test/scan.test.mjs",
+      "test/service.test.mjs",
+      "test/update.test.mjs",
+      "test/verify.test.mjs",
+      "test/wire.test.mjs",
+      "verify/activation.mjs",
+      "verify/dispatch.mjs",
+      "verify/registry.mjs",
+      "verify/wiring.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-self-plugin-manager",
+    "version": "0.1.0",
+    "private": true,
+    "description": "DSH 自安装插件管理器：在 设置 → 插件 中新增「自安装插件」页签，给出本 profile 自行安装插件的权威归属、运行健康与宿主兼容信息，并提供经 DPIP 前置校验的更新与回滚。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./client": {
+        "default": "./client.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "lib/",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "AGENTS.md",
+      "LICENSE"
+    ],
+    "icon": "./icon.svg",
+    "meta": {
+      "title": "自安装插件",
+      "description": "区分本 profile 自行安装的插件与 DSH 自带插件，显示运行健康与兼容信息，并提供经 DPIP 前置校验的更新与回滚。"
+    },
+    "license": "Apache-2.0",
+    "author": "bbaz123",
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "scripts": {
+      "test": "node --test \"test/*.test.mjs\"",
+      "test:offline": "node --test \"test/scan.test.mjs\" \"test/health.test.mjs\" \"test/gate.test.mjs\" \"test/wire.test.mjs\"",
+      "check": "node --check lib/index.js && node --check lib/service.js && node --check lib/registry.js && node --check lib/scan.js && node --check lib/health.js && node --check lib/gate.js && node --check lib/update.js && node --check lib/wire.js && n...",
+      "verify": "node verify/wiring.mjs && node verify/activation.mjs && node verify/dispatch.mjs",
+      "verify:registry": "node verify/registry.mjs"
+    },
+    "dsh": {
+      "manifestVersion": 1,
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-api-remotes",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ]
+      }
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-typert-protocol": "^0.2.0-rc.2",
+      "@deepseek-ai/schemastery": "^3.18.2"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-self-plugin-manager bundle patch.\n#\n# Mounts ONE host-plane row. The row publishes the Cordis service `selfPlugins`\n# and its Gateway namespace of the same name, so the Settings tab (and only it)\n# can read the profile's installed bundles and ask for an update or rollback.\n#\n#   * no `isolate` realm: the service is global, exactly like `pluginManager`\n#     itself, which this row depends on through `export const inject`.\n#   * the module declares its own `inject`, so the row needs none.\n#\n# Install:   plugin_manager install_bundle  (target = this package directory)\n# Uninstall: remove the bundle from the profile. The row, its service and its\n#            Gateway namespace go with it. Its own state file under\n#            `$DSH_HOME/self-plugin-manager/` is the only thing left behind.\n- insert:\n    - id: self-plugin-manager\n      # Node-resolvable package name — must stay in sync with package.json `name`.\n      name: 'dsh-self-plugin-manager'\n      config:\n        # ── write path ──────────────────────────────────────────────────────\n        # WARNING, read before changing: a Gateway call does NOT pass through\n        # the tool pipeline. @deepseek-ai/dsh-operation-security contributes\n        # only `tools/pre-execute` + `ctx.tools.guard`, and its detector has no\n        # rule for `plugin_manager`; the plugin manager's own service has no\n        # security hook either. The shipped Web Plugins page already calls\n        # `remote.pluginManager.*` directly for the same reason.\n        #\n        # So this plugin's update/rollback buttons are an additional write entry\n        # point, and the ONLY thing guarding them is `lib/gate.js`, which\n        # mirrors the security layer's DPIP verdict (BLOCKED / QUARANTINED /\n        # ROLLBACK_REQUIRED refused; an unreadable state document refused\n        # outright; a plugin with no completed DPIP run requires the user's\n        # explicit acknowledgement in the dialog).\n        #\n        # That is a pre-check, NOT an approval: it cannot run the DPIP pipeline\n        # and must never be described as if it had. Set this to false to keep\n        # the whole read-only view and disable both write actions.\n        writesEnabled: true\n\n        # ── local placement ─────────────────────────────────────────────────\n        # '' -> $DSH_HOME/operation-security/plugin-state.json  (the shipped\n        #       security layer's own document; read only, never written here)\n        gateStateDir: ''\n        # '' -> $DSH_HOME/self-plugin-manager/rollback.json     (this plugin's\n        #       own rollback points; the plugin manager keeps no such record)\n        storageDir: ''\n\n        # ── post-change verification session ────────────────────────────────\n        # OFF by default, deliberately: this creates a Session and prompts an\n        # Agent on your behalf, which is an action taken without a click in that\n        # session. Turn it on only if you want an automatic verification run\n        # after every version change that actually took effect.\n        #\n        # A change reporting `restart-required` never triggers it: the new\n        # JavaScript generation is not loaded, so a fresh session would verify\n        # the old code and could report a misleading PASS.\n        autoVerify: false\n\n        # Route for that verification session. BOTH must be set to be used;\n        # otherwise the deployment's default model is used instead.\n        #\n        # There is intentionally no \"cheapest model\" setting. DeepSeek Harness\n        # 0.2.0-rc.2 exposes NO token pricing: ModelCatalogModel carries only\n        # id/name/description/reasoning, and LlmModelInfo / LlmResolvedModelInfo\n        # add only context, output cap, modalities and reasoning. The `llm`\n        # service's only pricing accessor, imageRequestPricing(), prices images.\n        # A cost ranking therefore cannot be computed from the shipped API, and\n        # this plugin does not guess one from model names — name the exact cheap\n        # route here if that is what you want.\n        verifyModelProvider: ''\n        verifyModel: ''\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/service.js:86"
+    },
+    {
+      "name": "DSH_SPM_VERIFY_PACKAGE",
+      "kind": "env",
+      "where": "verify/registry.mjs:45"
+    },
+    {
+      "name": "DSH_SPM_VERIFY_REGISTRY",
+      "kind": "env",
+      "where": "verify/registry.mjs:46"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "lib/registry.js:36"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/registry.test.mjs:30"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/registry.test.mjs:32"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/registry.test.mjs:45"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/registry.test.mjs:46"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/registry.test.mjs:81"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:4873/",
+      "where": "test/registry.test.mjs:81"
+    },
+    {
+      "host": "x",
+      "url": "https://x/",
+      "where": "test/registry.test.mjs:88"
+    },
+    {
+      "host": "x",
+      "url": "https://x/",
+      "where": "test/registry.test.mjs:89"
+    },
+    {
+      "host": "x",
+      "url": "https://x/y%20z",
+      "where": "test/registry.test.mjs:90"
+    },
+    {
+      "host": "x",
+      "url": "https://x/y^z",
+      "where": "test/registry.test.mjs:91"
+    },
+    {
+      "host": "x",
+      "url": "https://x/y&z",
+      "where": "test/registry.test.mjs:92"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://Registry.NPMJS.org",
+      "where": "test/registry.test.mjs:101"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org///",
+      "where": "test/registry.test.mjs:102"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/registry.test.mjs:108"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/registry.test.mjs:109"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com",
+      "where": "test/registry.test.mjs:110"
+    },
+    {
+      "host": "npm.corp.example",
+      "url": "https://npm.corp.example/",
+      "where": "test/registry.test.mjs:111"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/registry.test.mjs:118"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/registry.test.mjs:119"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "test/registry.test.mjs:119"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/registry.test.mjs:122"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/registry.test.mjs:122"
+    },
+    {
+      "host": "npm.corp.example",
+      "url": "https://npm.corp.example/",
+      "where": "test/registry.test.mjs:129"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/registry.test.mjs:130"
+    },
+    {
+      "host": "npm.corp.example",
+      "url": "https://npm.corp.example/",
+      "where": "test/registry.test.mjs:131"
+    },
+    {
+      "host": "npm.corp.example",
+      "url": "https://npm.corp.example/",
+      "where": "test/registry.test.mjs:133"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/registry.test.mjs:141"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/registry.test.mjs:142"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/registry.test.mjs:149"
+    },
+    {
+      "host": "x",
+      "url": "https://x/y",
+      "where": "test/registry.test.mjs:193"
+    },
+    {
+      "host": "registry.test",
+      "url": "https://registry.test/demo-plugin",
+      "where": "test/service.test.mjs:446"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/service.test.mjs:473"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/service.test.mjs:474"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/service.test.mjs:478"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/service.test.mjs:486"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/service.test.mjs:487"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/service.test.mjs:487"
+    },
+    {
+      "host": "npm.corp.example",
+      "url": "https://npm.corp.example/",
+      "where": "test/service.test.mjs:496"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/service.test.mjs:497"
+    },
+    {
+      "host": "npm.corp.example",
+      "url": "https://npm.corp.example/",
+      "where": "test/service.test.mjs:498"
+    },
+    {
+      "host": "npm.corp.example",
+      "url": "https://npm.corp.example/",
+      "where": "test/service.test.mjs:506"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/",
+      "where": "test/service.test.mjs:514"
+    },
+    {
+      "host": "registry.npmmirror.com",
+      "url": "https://registry.npmmirror.com/",
+      "where": "test/service.test.mjs:514"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2"
+    }
+  },
+  "quality_raw": {
+    "test_files": 9,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-22T14:08:24Z",
+    "created_at": "2026-10-22T14:08:13Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "lib/gate.js",
+    "lib/health.js",
+    "lib/index.js",
+    "lib/json-safe.js",
+    "lib/registry.js",
+    "lib/runtime.js",
+    "lib/scan.js",
+    "lib/service.js",
+    "lib/update.js",
+    "lib/verify.js",
+    "lib/wire.js",
+    "package.json",
+    "test/gate.test.mjs",
+    "test/health.test.mjs",
+    "test/scan.test.mjs",
+    "test/wire.test.mjs",
+    "verify/activation.mjs",
+    "verify/dispatch.mjs",
+    "verify/registry.mjs",
+    "verify/wiring.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-self-plugin-manager",
+      "text": "DSH 自安装插件管理器：在 **设置 → 插件** 中新增一个 **「自安装插件」** 页签，\n把「哪些插件是这个 profile 自己装的」「它们现在是否健康」「能不能更新/回滚」三件事\n一次说清，并且**只读数据来自权威记录**而非目录扫描。\n\n目标宿主：**DeepSeek Harness 0.2.0-rc.2**。\n\n---"
+    },
+    {
+      "section": "它做什么",
+      "text": "| 能力 | 数据来源 |\n| --- | --- |\n| **自安装归属**：区分 profile 自装插件与 DSH 自带插件 | `pluginManager.listBundles()` 的 `installed` / `removable` / `optional`，与 profile `package.json` 的依赖表交叉验证 |\n| **运行健康** | Loader 的 `PluginFiberPhase`（`active` / `failed` / `pending` / `loading` / `unloading` / `null`）＋ `BundleInfo.error` |\n| **宿主兼容** | `pluginManager.listVersionExemptions()` 的豁免记录＋当前运行版本（由本机可解析的 `@deepseek-ai/dsh-*` 包版本得出，并回报来源） |\n| **更新** | 本插件按宿主同款方式询问 registry（`pnpm view <name> version --json`，在 profile 目录内），再 `installBundle('<name>@<version>')` |\n| **回滚** | 回到本插件自己记录的「上一次变更前」的精确版本 |\n| **更新后验证会话**（默认关闭） | `sessionController.create → selectModel → rename → prompt` |\n| **DPIP 前置校验** | 读取 `$DSH_HOME/operation-security/plugin-state.json` |"
+    },
+    {
+      "section": "它做什么",
+      "text": "---"
+    },
+    {
+      "section": "安全契约（请先读这一节）",
+      "text": "**写路径不受 DSH 既有审批门禁覆盖。** 实测事实（对本机 0.2.0-rc.2 安装产物核对）：\n\n- `@deepseek-ai/dsh-operation-security` 只挂在**工具管线**上\n  （`ctx.on('tools/pre-execute')` + `ctx.tools.guard()`），因此它看不到任何 Gateway 调用；\n- 它的检测器匹配 `dsh plugin …` shell 命令与动态 Cordis 生命周期工具，\n  **没有** `plugin_manager` 的规则；\n- `@deepseek-ai/dsh-plugin-manager` 服务内部没有安全或审批钩子；\n- DSH 自带的 Web Plugins 页同样是直接调用 `remote.pluginManager.*` 的。\n\n所以本插件的「更新 / 回滚」是一条**额外的写通道**，唯一守着它的是本插件的\n`lib/gate.js`："
+    },
+    {
+      "section": "安全契约（请先读这一节）",
+      "text": "1. `plugin-state.json` **不可读 / 损坏 → 一律拒绝**（fail closed，与安全层\n   `pluginStateUnknown` 的语义一致）；\n2. 状态为 `BLOCKED` / `QUARANTINED` / `ROLLBACK_REQUIRED` → **拒绝**；\n3. 状态为 `ACTIVE` → 放行；\n4. 其余（含「没有任何 DPIP 记录」）→ 需要调用方显式传\n   `acknowledgedUncovered: true`，UI 以此强制一次逐动作的二次确认。\n\n第 4 条**不等于一次 DPIP 审批**：安全层对这种插件返回的是 `ask`，\n而本插件只能把它变成一次用户点击，无法代替 DPIP 的来源核验、制品完整性校验、\n依赖审查与隔离安装。**README、UI 与代码注释都不得把它描述为已受 DPIP 保护。**\n\n另外，安装动作本身**不接受任意 spec**："
+    },
+    {
+      "section": "安全契约（请先读这一节）",
+      "text": "- `update` 只能给**包名**；版本由本插件问 registry 得到（见下），调用方无法指定它；\n- `rollback` 只能回到本插件记录的精确版本；\n- `link:` / `file:` / `workspace:` 本地依赖一律拒绝更新与回滚\n  （否则会把开发者的 checkout 换成 registry 上的另一个包）；\n- 不提供「安装新插件」入口。"
+    },
+    {
+      "section": "「检查更新」为什么自己问 registry（2026-10-15 实测）",
+      "text": "**宿主的 `pluginManager.inspect(spec)` 不能用来查已安装包的版本。** 它在询问\nregistry **之前**就先拒绝：`known` 集合 = profile 的 `bundles` + `dependencies`\n+ 安装锚点的 dependencies，命中即返回 `problem: 'already-installed'`\n（`dsh-plugin-manager/lib/index.js`；`name@latest` 之类的写法也没用，解析后仍取裸包名）。\n本插件能操作的对象按定义都在这个集合里，所以用 `inspect()` 实现「检查更新」必然报\n`inspect-already-installed`——这正是首版上线的缺陷。宿主也没有第二个只读入口：\n它的全部方法只有 `cancelInstall` / `inspect` / `installBundle` / `listBundles` /\n`listPlugins` / `listVersionExemptions` / `registries` / `removeBundle` /\n`setBundleEnabled` / `setPluginEnabled` / `setVersionExemption` / `waitForInstall`，\n且 `BundleInfo` 里没有「最新版本」字段。"
+    },
+    {
+      "section": "「检查更新」为什么自己问 registry（2026-10-15 实测）",
+      "text": "因此版本由 `lib/registry.js` + `service.resolveLatest()` 自己问，方式与宿主自己的\n预检一致：在 **profile 目录内** 运行 `pnpm view <name> version --json`，所以同一份\n`.npmrc`、代理与认证设置生效；registry 顺序来自 `pluginManager.registries()`\n（配置项 → 声明的 fallback）。\n\n三条约束是刻意的："
+    },
+    {
+      "section": "「检查更新」为什么自己问 registry（2026-10-15 实测）",
+      "text": "- **只读**：`pnpm view` 只询问并打印，不安装、不写 profile 文件；这是本插件**唯一**\n  的子进程。\n- **参数不可注入**：包名由 `findSelfBundle()` 限定为已在 profile 清单里的名字，\n  且必须通过 `isSafePackageName()`；registry URL 必须通过 `isSafeRegistryUrl()`。\n  Windows 上命令经 `cmd.exe` 执行（npm 的 pnpm 垫片是 `pnpm.cmd`，Node 不能直接执行），\n  因此这两个校验是命令行的安全边界。\n- **私有源不外泄**：只有首问地址是公共的（npm 官方源，或部署自己声明的 fallback）\n  才允许转问下一个 registry；私有源的包名不会被拿去问公共镜像。\n\n---"
+    },
+    {
+      "section": "更新后的验证会话（`autoVerify`，**默认关闭**）",
+      "text": "打开 `autoVerify` 后，每一次**真正生效**的版本变更（更新或回滚）都会：\n\n1. `sessionController.create({})` 建一个会话；\n2. 选模型（见下）；`selectModel`；\n3. `rename` 为 `插件更新验证：<包名>`；\n4. `prompt` 一条验证任务：**是否加载 / 是否运行 / 是否返回结果**，最后要求一行 `PASS` 或 `FAIL`，\n   并在提示里明确要求：**若 DSH 提示需要重启才能加载新的 JS 世代，不得判 PASS**。\n\n三条边界是刻意的："
+    },
+    {
+      "section": "更新后的验证会话（`autoVerify`，**默认关闭**）",
+      "text": "- **默认关闭。** 建会话并给 Agent 发问是**代你执行**的动作，因此只有你在 `cordis.patch.yml`\n  里显式打开才会发生；配置开关比 UI 开关更难被误触。\n- **`restart-required` 不触发。** 此时新的 JS 世代还没加载，新会话验证的是**旧代码**，\n  有可能报出误导性的 PASS。这类变更只返回 `verification.reason = \"restart-required-first\"`。\n- **不声称\"最低成本\"。** 见下。"
+    },
+    {
+      "section": "为什么没有「自动选最低成本模型」",
+      "text": "| 候选来源 | 实际字段 |\n| --- | --- |\n| `sessionController.modelCatalog()` → `ModelCatalogModel` | `id` / `name` / `description?` / `reasoning?` |\n| `llm.listModels()` → `LlmModelInfo` | `provider` / `id` / `name` / `description?` / `inputModalities?` |\n| `llm.resolveModelInfo()` → `LlmResolvedModelInfo` | 上述 + `context?` / `defaultMaxTokens?` / `reasoning?` / `systemPromptUpdate?` / `toolUpdate?` |\n| `llm.imageRequestPricing()` | 只给**图像** token 计价，与文本单价无关 |"
+    },
+    {
+      "section": "为什么没有「自动选最低成本模型」",
+      "text": "本机唯一的价格表属于第三方插件 `dsh-budget` 自己的配置。因此**成本排序无法从被支持的 API 算出**，\n本插件不用「名字里有 mini/flash 就便宜」这类猜测去冒充它。\n\n实际行为：`verifyModelProvider` + `verifyModel` **两者都设置**时用你指定的路由\n（`modelSource: \"configured\"`），否则用 `modelCatalog()` 的部署默认\n（`\"deployment-default\"`），再否则用第一个可路由模型（`\"first-routable\"`）。\n`modelSource` 会随结果一并返回，四种取值都不含任何成本含义。想固定用某个便宜路由，就在这里指名。\n\n---"
+    },
+    {
+      "section": "结构与两侧",
+      "text": "```\ndsh-self-plugin-manager/\n├── package.json          dsh.bundle.patch + dsh.client + icon + locale 导出\n├── cordis.patch.yml      Host 行（含 writesEnabled 开关与风险说明）\n├── client.js             浏览器半边（经 window.__ModuleLoader__.load 加载）\n\n两侧通过**本插件自己的** Gateway 命名空间 `selfPlugins` 通信，客户端\n**从不**直接调用 `remote.pluginManager` —— 否则 Host 侧的 DPIP 前置校验会被绕过。"
+    },
+    {
+      "section": "两个刻意的工程取舍",
+      "text": "**不用 `@Remote` 装饰器。** 装饰器需要编译/转译；本插件是零构建的纯 ESM。\n`lib/wire.js` 直接写入装饰器会写的那个原型属性\n（`'@deepseek-ai/dsh-typert-protocol/remote-methods'`），`verify/wiring.mjs`\n用真实的 `remoteMethods()` 证明它可被读取。\n\n**不用 zod 构造 codec。** Gateway Client 要求每个参数 codec 有\n`mode: 'strict'`，Typert registry 要求非空 `typeSymbol` 与可调用的 `create`；\n这条路径上**没有任何代码会调用 `create()`**（客户端把值直接放进 `args`，\nHost 侧按 SRC 派生以 `src-json` 解码）。因此 codec 无需 schema 库。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "```text\nplugin_manager install_bundle   target = 本包目录的绝对路径\n```\n\n或 CLI：`dsh plugin --profile web add <本包目录>`。\n\n**本机注意（2026-10-12 实测）**：`dsh-ops@0.2.9` 依赖\n`@dsh-ops/bash-win32-x64@0.2.1`，该版本在 **npmjs 上存在**，\n但配置的 `registry.npmmirror.com` 上只有 `0.0.0-stage`。\n因此任何 `pnpm add` 都会在解析阶段失败（`ERR_PNPM_NO_MATCHING_VERSION`），\n与本插件无关。绕过方式是一次性指定 registry：\n\n```text\nplugin_manager install_bundle  target=<绝对路径>  registry=https://registry.npmjs.org/\n```\n\n该参数只作用于本次操作，不修改 `.npmrc`。"
+    },
+    {
+      "section": "安装",
+      "text": "安装是 `link:` 方式（`dsh-self-plugin-manager link:<本包目录>`），\n**因此本包目录的 `node_modules/@deepseek-ai/*` 是运行时依赖**：\n它指向本机 DSH 安装内的同名包，保证插件与宿主使用同一份 `cordis` /\n`dsh-typert-protocol`，避免版本漂移。该目录被 `.gitignore` 排除，\n新克隆的仓库需先重建（见 `AGENTS.md`）。\n\n---"
+    },
+    {
+      "section": "验证",
+      "text": "```powershell\nnpm test                 # node --test，全部单元与 stub 集成用例\nnpm run check            # 语法检查 + 全部测试\nnpm run verify           # wiring + activation + dispatch 三档真实装配验证\nnpm run verify:registry  # 真实 pnpm + 真实 registry（需要网络与 PATH 上的 pnpm）\n\n`verify/registry.mjs` 是唯一**真的去问 registry** 的一档：它用真实的\n`runPnpmView` 启动真实的 `pnpm`，证明「宿主不能回答的那个问题」这条路真的通\n（默认问 `dsh-ops`，可用 `DSH_SPM_VERIFY_PACKAGE` / `DSH_SPM_VERIFY_REGISTRY` 覆盖）。\n因为它需要网络，所以不在 `npm run verify` 里。"
+    },
+    {
+      "section": "验证",
+      "text": "`verify/dispatch.mjs` 是三档里最有价值的一档：它用**真实的** Host Gateway\n调度器调用本插件的端点，证明「没有生成式 strict 定义时 SRC 派生仍然可用」\n「wire 参数按名送达」「DPIP 门禁在 Host 侧生效且拒绝是正常结果而非传输故障」。\n\n组合层：\n\n```powershell\ndsh --profile web --dump-config   # 退出码 0 且包含 id: self-plugin-manager\n```\n\n---"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **不做**自建下载器、SHA256 自校验、`backup/` 或 `old-version/` 目录：\n  pnpm 与 `pluginManager` 已提供 `package.json` + `pnpm-lock.yaml` 的快照与恢复，\n  重复实现只会制造第二份真相。\n- **不做** API 翻译层（原方案的 `adapter/0.2-to-0.3.ts`）：rc.2 没有这样的机制，\n  兼容性由 `peerDependencies` + `engines.dsh` + 精确版本豁免实现。\n- `restart-required` **不视为已生效**：改动过已安装包的 JS 世代需要重启进程。\n- `autoVerify` 默认关闭；打开后仍不会在 `restart-required` 的变更上建会话。\n- 本插件不提供、也不推断模型成本，因此没有「自动选最低成本模型」这一能力。\n- 健康判据只映射 rc.2 真实存在的信息；`null` 相位被如实报为「无活动实例」，\n  不猜测成失败或成功。\n- **「检查更新」依赖 `pnpm` 在 PATH 上且有网络**：两者缺一时如实返回\n  `pnpm-missing` / `registry-network` 等拒绝码并附上诊断，而不是假装已是最新。\n  版本解析不经过 DPIP 前置校验（它只读、不安装）；写路径仍然经过。\n- 插件清单快照为**点击时读取**，不订阅 Loader 变更。"
+    }
+  ],
+  "skipped": []
+}

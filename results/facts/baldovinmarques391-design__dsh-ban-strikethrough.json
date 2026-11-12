@@ -1,0 +1,156 @@
+{
+  "repo": "baldovinmarques391-design/dsh-ban-strikethrough",
+  "commit": "9d055f1073865eda129d5b7e87a7388100a1b29b",
+  "extracted_at": "2026-11-11T17:41:35.788281+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 17031,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 194,
+      "Markdown": 94,
+      "Other": 12,
+      "YAML": 10
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "bundle-check.mjs",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-ban-strikethrough",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "禁止渲染删除线：GFM 的单波浪号删除线会把 3~5 这样的区间号吞掉并划一横，本插件在 GUI 与会话文档预览里取消删除线并还原 ~ 字符。",
+    "icon": "./icon.svg",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "bundle-check.mjs",
+      "icon.svg",
+      "locale/*.json",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true
+      }
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "markdown",
+      "web-ui"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/baldovinmarques391-design/dsh-ban-strikethrough.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-ban-strikethrough bundle patch: one Host-plane row.\n#\n# The row exists so the profile has a single Loader entry to enable, disable,\n# and inspect. All of the behavior is in the browser half, which the package\n# declares through `dsh.client` in package.json; `dsh-client-modules` composes\n# that declaration into the Web boot graph, so the browser module id equals the\n# package name `dsh-ban-strikethrough` and needs no wiring here.\n- insert:\n    - id: ban-strikethrough\n      name: dsh-ban-strikethrough\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_RUNTIME",
+      "kind": "env",
+      "where": "bundle-check.mjs:25"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/baldovinmarques391-design/dsh-ban-strikethrough.git",
+      "where": "package.json:40"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-17T10:30:43Z",
+    "created_at": "2026-10-17T09:50:02Z"
+  },
+  "runtime_files": [
+    "bundle-check.mjs",
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-ban-strikethrough",
+      "text": "DSH 插件：**禁止删除线渲染**。在 Harness Web GUI 的聊天、思考过程，以及会话文档预览的 Markdown 页里取消删除线，并把被吃掉的 `~` 字符还原回文本。\n\n- 包名：`dsh-ban-strikethrough`\n- Loader 行 id：`ban-strikethrough`\n- 形态：Host 空壳（`index.js`）+ 浏览器半边（`client.js`，通过 `package.json` 的 `dsh.client` 声明）"
+    },
+    {
+      "section": "为什么会有这个插件",
+      "text": "Web 端的 Markdown 渲染器（`@deepseek-ai/dsh-client-ui-primitives` 的直接 mdast→React 渲染）用的 GFM 语法扩展沿用了 micromark 的默认值 `singleTilde: true`，也就是**一个** `~` 就能开一个删除线区间，下一个 `~` 就关掉它。而单个 `~` 在中文技术写作里正是「某某至某某」的区间号，于是一段话里出现两个区间就会互相配对：\n\n```\n要求 200400~稳定只给~113134\n        └──── 中间全部被划掉，两个 ~ 被吃掉 ────┘\n```\n\n模型从来不是要表达「删除」，而渲染结果既难看又丢字符（`3~5` 直接显示成 `35`）。"
+    },
+    {
+      "section": "做了什么",
+      "text": "`client.js` 在插件生命周期内注入一张样式表（`ctx.effect` 注册，卸载/停用即移除）：\n\n```css\ndel,\ns,\nstrike { text-decoration: none; }\n\n- 第一条取消删除线本身。\n- 第二条把被解析器吃掉的区间号还回文本，于是渲染结果和模型写下的原文逐字符一致。\n\n选择 `del` 元素作为唯一选择器，是因为整个 Web 客户端里**只有** Markdown 渲染器会产出 `<del>`（`case \"delete\": jsx(\"del\", …)`），而且宿主样式表没有给这个元素写任何规则，所以普通作者规则就能压过浏览器的 UA `line-through`。"
+    },
+    {
+      "section": "覆盖范围",
+      "text": "| 位置 | 是否覆盖 | 原因 |\n|---|---|---|\n| 聊天消息、思考过程 | ✅ | 走同一个 Markdown 原语 |\n| 会话文档预览的 Markdown 页 | ✅ | `MarkdownBody` 用的就是该原语的 `MarkdownText` |\n| 终端 ANSI 删除线（SGR 9） | ❌ 故意不动 | 那是行内 `text-decoration`，是终端内容的真实属性 |\n| HTML / PDF / Excel 预览 | ❌ | 独立 iframe 文档，内容是文件自己的，不是模型写的 Markdown |\n| 输入框富文本编辑器 | ❌ | 用的是行内 mark，与渲染无关 |"
+    },
+    {
+      "section": "文件",
+      "text": "| 文件 | 作用 |\n|---|---|\n| `package.json` | 包清单：`dsh.bundle.patch` + `dsh.client`（`platform: web`、`immediately: true`）+ 导出与 `files` |\n| `cordis.patch.yml` | 一条 Host 行 `ban-strikethrough`，让插件在插件列表里有独立开关 |\n| `index.js` | Host 半边，空实现（行为全在浏览器半边） |\n| `client.js` | 浏览器半边：注册工厂 + 注入样式表 |\n| `locale/en.json`、`locale/zh.json` | 插件卡片上的标题与说明 |\n| `icon.svg` | 插件图标（禁止删除线） |\n| `bundle-check.mjs` | 安装前离线自检：清单、`./client` 解析、用 Harness 自己的 loader 解析 patch |"
+    },
+    {
+      "section": "安装与开关",
+      "text": "装进一个 profile，两种方式都可以：\n\n```sh\ndsh plugin --profile web add <path-to-this-checkout>\n```\n\n```\nplugin_manager { action: \"install_bundle\", target: \"<path-to-this-checkout>\" }\n```\n\n- 停用/启用：插件列表里找「禁止删除线」，或 `plugin_manager { action: \"set_bundle\", target: \"dsh-ban-strikethrough\", enabled: false }`。\n- 安装会改 profile（`bundles` 列表 + profile 依赖），所以必须用 Plugin Manager，不要手改 profile。\n- 停用后样式表随插件卸载一起移除，不需要重启 Harness；**页面刷新一次**最稳妥。"
+    },
+    {
+      "section": "验证",
+      "text": "已做的（离线/服务端）：\n\n1. `node --check index.js client.js bundle-check.mjs`；\n2. `node bundle-check.mjs` → 15 项全 PASS，包括用 Harness 自己的 loader（`@deepseek-ai/dsh-app-boot` 的 `loadOverlayPatches`）解析 `cordis.patch.yml`；\n3. `cordis_inspect_query`（Host `Config.listConfigs`，name = `dsh-ban-strikethrough`）能看到活着的 Loader 行 `include:ban-strikethrough`。\n\n**没做的：页面里的视觉确认。** 本会话没有浏览器控制，而「样式表是否真的生效」只有那个已打开的页面能证明。请刷新该页面后自测："
+    },
+    {
+      "section": "验证",
+      "text": "- 一段话里放两个区间，例如 `范围 3~5 天，稳定后 10~20 天`：应显示原样的 `~`，没有任何横线；\n- 打开一个含 `~` 区间的 `.md` 文件，在会话文档预览里看同一段：同样无横线；\n- `~~这样的~~` 应显示为 `~这样的~`（不划线，保留一个 `~`）。"
+    },
+    {
+      "section": "已知取舍",
+      "text": "- 还原出来的 `~` 是 CSS 伪元素内容，**选中复制**时是否带上它取决于浏览器；`del` 里的正文本身从来都在。\n- 原文写的是 `~~双波浪号~~` 时只会还原成一个 `~`（CSS 无从得知定界符长度）。考虑到「有意写删除线」的概率约等于零，这个偏差可以接受。\n- 如果哪天也想禁掉终端 ANSI 删除线，在同一个样式表里加一条针对行内 `text-decoration` 的规则即可，但那会牺牲终端输出的保真度，所以默认不做。"
+    }
+  ],
+  "skipped": []
+}

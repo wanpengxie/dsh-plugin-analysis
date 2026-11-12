@@ -1,0 +1,148 @@
+{
+  "repo": "Igumi-BeXst/dsh-auto-mode",
+  "commit": "16a284745adf07898cad0207b5086f12d303a2d1",
+  "extracted_at": "2026-11-11T11:04:09.478152+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 29982,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 379,
+      "Markdown": 189,
+      "Other": 23,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-auto-mode",
+    "version": "0.2.7",
+    "description": "Auto Mode for DeepSeek Harness: auto-accept approval prompts (Claude Code auto-accept equivalent); the composer status chip is both indicator and toggle — no chat messages",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-ui-slots",
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ]
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.0-rc <5",
+      "@deepseek-ai/dsh-settings": ">=0.0.1-rc <2",
+      "@deepseek-ai/schemastery": "^3.18.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-auto-mode bundle patch: mounts the Auto Mode plugin on the host plane.\n# The profile keeps this bundle FIRST in dsh.profile.bundles so this row\n# precedes the web UI answerer and its approval listener claims requests\n# before the browser prompt.\n- insert:\n    - id: auto-mode\n      name: dsh-auto-mode\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 17,
+    "pushed_at": "2026-09-21T11:52:55Z",
+    "created_at": "2026-08-16T17:37:34Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-auto-mode",
+      "text": "**Auto Mode** for DeepSeek Harness: when enabled, every\napproval prompt is auto-accepted — operations that require approval\n(workspace-escape file writes, wider shell commands, sandbox escalations) run\nimmediately without asking you. A persistent status chip above the composer\nshows the current mode and updates live.\n\n[English](README.md) | [中文](README.zh.md)"
+    },
+    {
+      "section": "Installation",
+      "text": "One command (no build step — the plugin ships plain ESM):\n\n```sh\ndsh plugin --profile web add github:Igumi-BeXst/dsh-auto-mode\n```\n\nThen:"
+    },
+    {
+      "section": "Installation",
+      "text": "1. **Move the bundle to the front of the list** — edit\n   `~/.dsh/profiles/web/package.json` and put `\"dsh-auto-mode\"` first in\n   `dsh.profile.bundles` (the `add` command appends it last). This ordering\n   is what makes the approval listener register before the web UI answerer;\n   without it, auto-grant does not work.\n2. Restart `dsh web` and hard-refresh the page (Ctrl+Shift+R). The chip\n   appears above the composer, aligned with the input card.\n3. **Click the chip** to toggle. The switch is durable and survives restarts,\n   and no chat message is produced."
+    },
+    {
+      "section": "Installation",
+      "text": "Manual/local install: clone the repo, then\n`dsh plugin --profile web add <path-to-clone>` — same two follow-up steps.\n\nRequirements: a `web` profile with the standard bundles (`@deepseek-ai/dsh-base`,\n`@deepseek-ai/dsh-web-app`), which provide the approval, settings, and\nwebServer services the plugin uses."
+    },
+    {
+      "section": "Usage",
+      "text": "- **Click the chip** above the composer to toggle Auto Mode for all\n  sessions. The switch is durable (`auto-mode` settings namespace) and\n  survives restarts. No chat message is produced — the chip itself is the\n  only feedback.\n- The chip polls `/api/auto-mode/state` every 3\n  seconds (plus window-focus refresh), so it reflects the mode within\n  seconds of any toggle.\n- Config default: `dsh-auto-mode.enabled` (default `false`)."
+    },
+    {
+      "section": "How it works",
+      "text": "The plugin registers an `approval/request` waterfall listener. When Auto Mode\nis on it claims every request with `allowed-once` — before the web UI answerer\ncan forward it to the browser. When off it delegates via `next()` and the\nnormal approval flow applies."
+    },
+    {
+      "section": "How it works",
+      "text": "**The listener is registered on the ROOT context, with `global` and `prepend`.**\ndsh-session >= 0.1.5 dispatches this event through `scopeTarget(req.agent,\nreq.agent)`, and Cordis's dispatch filter admits a listener only when its\ncontext carries no scope or is scoped to that agent (or an ancestor). A\nlistener registered on the plugin's own bundle-scoped context is filtered out\nof that dispatch and never runs — Auto Mode would silently do nothing. The root\ncontext is scope-less, which the filter admits unconditionally; `prepend`\nsorts this listener ahead of the browser answerer, whose pending answer would\notherwise stop the waterfall first."
+    },
+    {
+      "section": "How it works",
+      "text": "The profile keeps this bundle **first** in `dsh.profile.bundles` so its row\nprecedes the UI answerer row."
+    },
+    {
+      "section": "How it works",
+      "text": "**Safety invariant**: `danger-full-access` escalations of SHELL commands\n(pwsh/bash) are auto-granted EXCEPT when the command is a destructive delete.\nThe listener resolves the real command text of the escalating tool call\n(through the request's callId against the session log) and matches it against\nthe Windows accident shapes — recursive deletes (`Remove-Item -Recurse`,\n`rm -rf`, `rd /s`), wildcard deletes, drive-root deletes, trailing-backslash\nquote path bugs (the classic \"delete a link and wipe its target/root\" shape),\nand junction/symlink-targeted deletes. Matched commands fall through to the\ninteractive answerer, so the browser always asks you before any such\nfull-access delete. Filesystem tools (edit/write/read/fs-*) take structured\npath arguments, not command strings, so their escalations are always\nauto-approved under Auto Mode. The model-facing prompt states the same rule:\ndestructive shell deletes show an approval prompt, anything else that needs\nfull access is auto-approved."
+    },
+    {
+      "section": "Safety",
+      "text": "Auto Mode grants every request, including destructive ones. The runtime\ncontext warns the model to use extra care with irreversible or costly\noperations, and destructive shell deletes — recursive, wildcard, drive-root,\nor junction/symlink-targeted — always require your explicit approval even in\nAuto Mode. Filesystem tools never prompt. Click the chip to turn the mode off\nat any time."
+    },
+    {
+      "section": "Known limitations",
+      "text": "- **Hot-reload breaks auto-grant**: this plugin must register its approval\n  listener before the web UI answerer. A clean boot guarantees that (the\n  profile keeps this bundle first). `dev_reload_package` re-registers the\n  listener late, so after hot-reloading this plugin you must restart the web\n  service for auto-grant to work again.\n- **Narration sentence suppressed by router-family plugins**: the\n  `auto-mode:state` runtime-context entry is cleared by plugins that wipe\n  `contexts` on `system-prompt/assemble` (dsh-mode-boost and the\n  router-standard preset do this by design). The composer status chip always\n  shows the mode regardless; if you want the model to see it too, avoid\n  mounting those plugins alongside this one."
+    },
+    {
+      "section": "License",
+      "text": "MIT © Igumi-BeXst"
+    }
+  ],
+  "skipped": []
+}

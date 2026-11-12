@@ -1,0 +1,254 @@
+{
+  "repo": "Smile-Wood/dsh-session-delete",
+  "commit": "0c79e543c0583fa80ac145763898a36e33229263",
+  "extracted_at": "2026-11-11T14:48:26.374123+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 49247,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 475,
+      "Markdown": 550,
+      "Other": 55,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "SECURITY.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/ai-authorship.md",
+      "host.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-session-delete",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "Add a Delete Session action to the DeepSeek Harness sidebar, removing the Session log and its projection cache.",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "session"
+    ],
+    "license": "MIT",
+    "exports": {
+      ".": "./host.js",
+      "./client": "./client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "host.js",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-workspace",
+          "@deepseek-ai/dsh-client-ui-primitives"
+        ]
+      }
+    },
+    "scripts": {
+      "check": "node --check host.js && node --check client.js"
+    },
+    "engines": {
+      "node": ">=22"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: session-delete\n      name: 'dsh-session-delete'"
+    }
+  ],
+  "entries": [
+    "host.js",
+    "client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "host.js:84"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-10-12T04:11:32Z",
+    "created_at": "2026-10-12T04:09:43Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "host.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-session-delete",
+      "text": "Add a **Delete Session** action to the [DeepSeek Harness](https://github.com/deepseek-ai) (DSH)\nsidebar. Choosing it permanently removes the Session's stored log and its projection cache, and\ndrops the sidebar row without a page reload."
+    },
+    {
+      "section": "dsh-session-delete",
+      "text": "> [!IMPORTANT]\n> **This project was written by AI.** The code, this README, and every other file in this\n> repository were produced by an AI coding agent (see [AI authorship](#ai-authorship)). It was\n> reviewed and tested against a real DSH install before publication, but you should treat it as\n> AI-generated software: read the source before you run it, and expect rough edges outside the\n> paths that were exercised.\n\n---"
+    },
+    {
+      "section": "Why this plugin exists",
+      "text": "DSH has no API for deleting a Session. As of the versions this was built against:"
+    },
+    {
+      "section": "Why this plugin exists",
+      "text": "| Candidate | What it actually does |\n| --- | --- |\n| `sessionController` (Host `ctx.remote.session`) | `resolveAgent` / `inspect` / `list` / `search` / `create` / `selectModel` / `rename` / `fork` / `prompt` / `cancel` / `page` / `projections` — **no delete** |\n| `sessionPersistence` | `create` / `open` / `flush` / `stat` / `list` — an append-only log, **no delete** |\n| `workspaceRegistry.delete(id)` | Deletes a *Workspace registration* while deliberately retaining the directory and **every Session log** |\n| `sessions` (client) | `retain` / `using` / `refreshProjections` / `search` / `fork` / `scope` / `binding` — **no delete** |"
+    },
+    {
+      "section": "Why this plugin exists",
+      "text": "So the only way to offer the feature is to compose the official seams in the right order. This\nplugin does exactly that, and nothing else."
+    },
+    {
+      "section": "How it works",
+      "text": "The Host half registers one loopback route, `POST /plugins/session-delete/delete`, and the browser\nhalf adds a row to each Session's `...` menu that calls it.\n\nDeletion runs as five steps:"
+    },
+    {
+      "section": "How it works",
+      "text": "1. **Stop the Session** — `workspaceRegistry.archiveSession(id, { stopActivity: true })`. This is\n   the official \"stop this Session's activity\" path; it fans out `workspace/session-stop`, which\n   `dsh-agent`, `dsh-jobs`, `dsh-schedule` and `dsh-subagent` all listen to.\n2. **Detach the live Session** — `ctx.sessions.store.get(id).detach()`. The store keeps entries in\n   a non-public map, and calling the entry's own `detach` is the single seam that raises\n   `session/disposed`.\n3. **Remove the sidebar row** — `session/disposed` → `api-session/removed`\n   (`dsh-api-session-controller`) → `ctx.remote.$on(\"api-session/removed\", …)` on the client. That\n   chain is the only reason the row disappears without a reload.\n   A **cold** Session (one restored from disk that was never opened in this process) has no store\n   entry, so `detach` cannot fire. For that case the plugin emits `api-session/removed` itself —\n   the same signal, by the same name. Nothing on the Host listens for that event, so this is\n   side-effect free.\n4. **Forget the membership** — `detachSession` on every Workspace, plus `unarchiveSession` and\n   `unpinSession`, so no archived or pinned ghost survives.\n5. **Remove th"
+    },
+    {
+      "section": "How it works",
+      "text": "The SQLite session index is *derived* from persistence state, so it converges on its own during the\nnext reconcile — the plugin does not touch it."
+    },
+    {
+      "section": "Files touched on disk",
+      "text": "Everything the plugin removes lives under `$DSH_HOME` (default `~/.dsh`):\n\n```\n$DSH_HOME/\n  sessions/<encoded-cwd>/<session-id>/session.v4.jsonl[.zstd]   <- removed\n  storages/session_projcache/sessions/<session-id>.json         <- removed\n  storages/workspace.json                                       <- membership updated in place"
+    },
+    {
+      "section": "Install",
+      "text": "The plugin installs as a **profile bundle**, using DSH's own plugin command:\n\n```sh\ndsh plugin --profile web add github:Smile-Wood/dsh-session-delete\n```\n\nFrom a local checkout instead of a git host:\n\n```sh\ndsh plugin --profile web add C:\\path\\to\\dsh-session-delete\n```"
+    },
+    {
+      "section": "Install",
+      "text": "Use the profile you actually launch DSH with (`web` is the DSH Desktop default, and is also what\n`dsh plugin …` assumes when you omit `--profile`). `dsh` is a shim into the packaged CLI, placed on\n`PATH` once DSH Desktop has been started at least once."
+    },
+    {
+      "section": "Install",
+      "text": "> [!NOTE]\n> **The repository must be public for the `github:` shorthand.** pnpm probes the HTTPS URL first and\n> only falls back to SSH when that probe fails, which is what happens for a private repository or a\n> nonexistent one. On a machine where outbound SSH (port 22) is blocked, that fallback fails with\n> `ssh: connect to host github.com port 22: Connection refused`. For a private repository, use an\n> explicit HTTPS spec and let git's credential helper authenticate:\n>\n> ```sh\n> dsh plugin --profile web add git+https://github.com/Smile-Wood/dsh-session-delete.git\n> ```"
+    },
+    {
+      "section": "Install",
+      "text": "Then reload the DSH page in your browser so it picks up the browser bundle, and open a Session's\n`...` menu in the sidebar. **DSH itself does not need restarting.**\n\nTo update after new commits land, re-run the same command:\n\n```sh\ndsh plugin --profile web add github:Smile-Wood/dsh-session-delete\n```"
+    },
+    {
+      "section": "Install",
+      "text": "Re-running `add` *is* the update path: pnpm re-resolves the ref, and a changed shipped file lands in\na new content-addressed store directory, so DSH imports a **new module URL** and the Host half\ngenuinely reloads. See [Host reload semantics](#host-reload-semantics).\n\nTo remove it again:\n\n```sh\ndsh plugin --profile web remove dsh-session-delete\n```"
+    },
+    {
+      "section": "Install",
+      "text": "That prunes the dependency, drops the name from `dsh.profile.bundles`, and unloads both halves —\nverified live: the route stops answering and the browser bundle leaves the client-module graph.\n\n> [!NOTE]\n> For a **local-path** install the profile entry is a `link:`, and pnpm was observed to leave the\n> symlink at `$DSH_HOME/profiles/<profile>/node_modules/dsh-session-delete` behind after a `remove`.\n> It is inert, but delete it by hand if you want the tree clean. Git installs are unaffected."
+    },
+    {
+      "section": "What `dsh plugin add` actually does",
+      "text": "`dsh plugin` is a thin front end for pnpm: it forwards its arguments to pnpm **inside the profile\ndirectory** (`$DSH_HOME/profiles/<profile>/`). The part that makes the plugin load is what DSH does\nnext — it reconciles the profile manifest and, for every dependency that was just added and declares\na `dsh.bundle.patch`, appends its package name to `dsh.profile.bundles`:"
+    },
+    {
+      "section": "What `dsh plugin add` actually does",
+      "text": "```jsonc\n// $DSH_HOME/profiles/web/package.json, after the add\n{\n  \"dependencies\": {\n    \"dsh-session-delete\": \"git+https://github.com/Smile-Wood/dsh-session-delete.git\"\n\n`dsh.profile.bundles` is the **only** thing that decides what loads. That array is why one command\nis sufficient and no `$DSH_HOME/cordis.patch.yml` row is required.\n\nA dependency that declares no `dsh.bundle` is installed as a plain dependency and skipped, with a\nwarning:"
+    },
+    {
+      "section": "What `dsh plugin add` actually does",
+      "text": "```\ndsh: warning: <name> declares no dsh.bundle — installed as a plain dependency, not a profile layer\n```\n\nThe bundled [`cordis.patch.yml`](cordis.patch.yml) is the patch this profile layer reads:\n\n```yaml\n- insert:\n    - id: session-delete\n      name: 'dsh-session-delete'\n```\n\n`name` is the **package name**, not a path — the profile resolves it from its own `node_modules`."
+    },
+    {
+      "section": "What `dsh plugin add` actually does",
+      "text": "> [!NOTE]\n> `client.js` registers itself under the name `dsh-session-delete`, which must stay\n> **character-for-character identical** to `name` in `package.json`. client-modules derives the\n> browser bundle's id from the enclosing `package.json` and rejects a bundle that registers under\n> anything else — and the only symptom is a menu row that silently never appears."
+    },
+    {
+      "section": "Host reload semantics",
+      "text": "Node's ESM registry caches modules by **resolved URL** and offers no invalidation hook. That has one\npractical consequence:\n\n> **Editing an installed `host.js` in place does not take effect in a running DSH.**\n\nHow much that bites depends on how you installed:"
+    },
+    {
+      "section": "Host reload semantics",
+      "text": "- **From git**, pnpm copies the package into its content-addressed store. A changed file produces a\n  new store directory, so re-running `add` yields a new URL and the Host half reloads.\n- **From a local checkout** (`dsh plugin … add C:\\path\\to\\…`), the profile entry is a `link:`, so\n  `node_modules/dsh-session-delete` is a symlink to your working copy. Edits land on the *same* URL\n  and are never re-imported, no matter how often you save."
+    },
+    {
+      "section": "Host reload semantics",
+      "text": "So if you are iterating on `host.js` itself, install from a git spec (or restart DSH) rather than\nrelying on a linked checkout.\n\nA second wrinkle follows from the same design: a route-table entry can outlive the fiber that\nregistered it, and `webServer.register` throws on a duplicate path. `host.js` therefore evicts\nretired generations' paths (`STALE_ROUTES`) before claiming its own. If you fork this and add\ngenerations, extend that list."
+    },
+    {
+      "section": "Host reload semantics",
+      "text": "The route path itself, `/plugins/session-delete/delete`, is deliberately **stable**, because the\nbrowser bundle ships with it baked in."
+    },
+    {
+      "section": "Configuration",
+      "text": "The plugin takes no configuration. The `id` in the patch file is arbitrary; pick something unique\nto your install so it does not collide with another row."
+    },
+    {
+      "section": "Security notes",
+      "text": "- The route is served by the Host's web server and inherits its access policy. On DSH Desktop the\n  desktop web server rejects browser requests that its access policy denies (HTTP 403) before the\n  handler runs.\n- The handler accepts only `POST`, caps the body at 64 KiB, and validates `sessionId` against\n  `/^[A-Za-z0-9._:@-]{1,200}$/` — an id cannot escape its own directory.\n- There is no authentication beyond the Host's own browser-access decision. If you expose a DSH\n  web server beyond loopback, understand that this route deletes files."
+    },
+    {
+      "section": "Limitations",
+      "text": "- **Deletion is permanent.** There is no trash and no undo. The confirmation dialog is the only\n  guard.\n- **Path shape is version-dependent.** Step 5 assumes the JSONL persistence layout\n  (`$DSH_HOME/sessions/<encoded-cwd>/<id>/` and `storages/session_projcache/sessions/`). A DSH\n  release that changes either layout will need this plugin updated; step 5 would silently remove\n  nothing rather than fail loudly.\n- **Non-public seam.** Step 2 reaches into `ctx.sessions.store`, which is not a public API. If DSH\n  renames or hides it, the live-Session branch degrades to the cold-Session path (which still\n  removes the bytes and the sidebar row, via step 3's explicit emit).\n- **Installation needs `dsh` and pnpm.** Both ship with DSH Desktop. There is no dependency-free\n  install path any more — the plugin is a profile bundle, and installing one means letting DSH\n  reconcile its profile manifest.\n- **`remove` can leave a dangling symlink for local-path installs.** If you installed with\n  `dsh plugin … add C:\\path\\to\\dsh-session-delete`, the profile entry is a `link:`. Removing it\n  prunes the manifest and the lockfile, but the symlink at\n  `$DSH_HOME/profiles/<profile>/node_modules/dsh-s"
+    },
+    {
+      "section": "Testing",
+      "text": "Syntax:\n\n```sh\nnpm run check      # node --check host.js && node --check client.js\n```\n\nThe end-to-end verification performed before publication, on Windows with Node 24:\n\n1. Run `dsh plugin --profile <profile> add <spec>` and confirm the name appears in\n   `dsh.profile.bundles` and the Loader entry is active.\n2. `POST` the route with a bogus id — expect `200` and a report naming the steps that were skipped:"
+    },
+    {
+      "section": "Testing",
+      "text": "```sh\n   curl -X POST http://127.0.0.1:<port>/plugins/session-delete/delete \\\n     -H 'content-type: application/json' -d '{\"sessionId\":\"bogus\"}'\n   ```"
+    },
+    {
+      "section": "Testing",
+      "text": "3. Create a throwaway Session artifact and projection-cache file, delete it through the route, and\n   confirm both paths are gone while real Sessions are untouched.\n4. Confirm the sidebar row appears in the Session `...` menu and that deleting removes it without a\n   reload.\n5. Run `dsh plugin --profile <profile> remove dsh-session-delete` and confirm the route stops\n   answering and the bundle leaves the client-module graph."
+    },
+    {
+      "section": "Repository layout",
+      "text": "```\nhost.js                     Host half: the deletion route and its five steps\nclient.js                   Browser half: the Session-menu row\ncordis.patch.yml            Bundle patch, resolved by package name\ndocs/ai-authorship.md       How this project was produced"
+    },
+    {
+      "section": "AI authorship",
+      "text": "This repository is AI-generated. It was written end to end by an AI coding agent running inside\nDSH, driven by a human who specified the goal (\"deploy a plugin that lets me delete sessions from\nDSH; write the code yourself\") and steered the debugging.\n\nWhat that means in practice, stated plainly:"
+    },
+    {
+      "section": "AI authorship",
+      "text": "- **The code is AI-written.** The human did not hand-author the implementation. Their contribution\n  was the objective, the constraints, the review, and the decision to publish.\n- **The design rests on reverse-engineered internals.** The five-step deletion sequence was\n  derived by reading DSH's shipped JavaScript, not from public documentation. Some of it uses\n  non-public seams (notably `ctx.sessions.store`), which is why the limitations above are spelled\n  out rather than buried.\n- **Testing was manual and narrow.** There is no test suite. Verification covered the paths listed\n  under [Testing](#testing); other paths are untested.\n- **No warranty.** See [LICENSE](LICENSE) — MIT, provided \"as is\". Given that this plugin deletes\n  files permanently, back up `$DSH_HOME` before first use."
+    },
+    {
+      "section": "AI authorship",
+      "text": "Fuller account: [`docs/ai-authorship.md`](docs/ai-authorship.md)."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)."
+    }
+  ],
+  "skipped": []
+}

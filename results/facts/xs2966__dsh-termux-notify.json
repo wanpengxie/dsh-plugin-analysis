@@ -1,0 +1,335 @@
+{
+  "repo": "xs2966/dsh-termux-notify",
+  "commit": "56529f55d5cfb3b3d1340322d54a8b4a6da18fca",
+  "extracted_at": "2026-11-12T12:35:25.854988+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 202174,
+    "lines_by_language": {
+      "JSON": 45,
+      "JavaScript": 3585,
+      "Markdown": 402,
+      "Other": 3,
+      "Shell": 150,
+      "YAML": 72
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "client/client.js",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "scripts/check-channel.sh",
+      "scripts/check-client-bundle.mjs",
+      "scripts/check-host.mjs",
+      "scripts/check-integration.sh",
+      "test/client.mjs",
+      "test/integration.mjs",
+      "test/run.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-termux-notify",
+    "version": "0.1.0",
+    "private": true,
+    "description": "DSH 插件：需要用户选择、或一轮结果出现时，通过 Termux 给手机发送系统通知；内置设置页与环境自检",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "termux",
+      "notification"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./client/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "client",
+      "scripts",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    },
+    "scripts": {
+      "test": "node test/run.mjs && node test/integration.mjs && node test/client.mjs"
+    },
+    "license": "MIT",
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# ============================================================================\n# dsh-termux-notify —— DSH bundle patch（挂载声明）\n# ============================================================================\n# 这是插件的“挂载声明”。DSH 启动时按 bundle 层栈叠加各插件 patch，本文件把本插件\n# 插入 Web profile 的配置树。\n#\n# 安装（推荐）：\n#   dsh plugin --profile web add link:/data/data/com.termux/files/home/dsh/plugins/dsh-termux-notify\n# 然后确认 web profile 的 package.json 里 dsh.profile.bundles 含有 \"dsh-termux-notify\"。\n#\n# 覆盖配置：在 ~/.dsh/profiles/web/cordis.patch.yml（用户层）里按 id 追加一行。\n# 注意：patch 是「整份 config 替换」而不是合并，所以覆盖时请把想保留的键一并写出；\n# 未写出的键会由插件内部的默认值补齐。\n# ============================================================================\n\n- insert:\n    - id: dsh-termux-notify\n      name: dsh-termux-notify\n      config:\n        # —— 总开关与触发点 ——\n        enabled: true\n        notifyOnQuestion: true      # ask_user_question / 计划审阅等“需要你选择”\n        notifyOnApproval: true      # 敏感工具的一次性授权请求\n        notifyOnTurnEnd: true       # 一轮结束、结果出现\n\n        # —— 噪声控制 ——\n        notifyChildSessions: false  # 子 agent 会话的轮次结束不通知\n        minTurnDurationMs: 0        # 只通知耗时 >= 该值的轮次（0 = 每轮都通知）\n        throttleMs: 1500            # 同内容 1.5s 内只发一次\n\n        # —— 内容 ——\n        includeSnippet: true        # 结果类通知附上模型最后一段文本\n        snippetChars: 120\n        longTurnMs: 60000           # 耗时达到该值用「✅ 长任务完成」的说法\n        clearStale: true            # 回到对话时（新一轮开始 / 回答完提问审批）撤销还没点掉的通知\n\n        # —— 通知外观 ——\n        priority: high              # 「需要你操作」时的优先级（结果类固定 default）\n        sound: true\n        vibrateMs: 1000             # 默认振动 1 秒；0 = 不振动；也可写 \"500,1000,200\"\n        # 振动方式：termux-api = 额外调 `termux-vibrate -d <ms>`，直接走系统 Vibrator，\n        # 不受通知渠道设置影响（通知自带的 --vibrate 在 Android 8+ 上常被渠道设置忽略）。\n        # notification = 只用 termux-notification 的 --vibrate（pattern 只能走这条）。\n        vibrateVia: termux-api\n        vibrateForce: true          # termux-vibrate -f：系统静音/仅振动模式下也振\n        # 悬浮通知：只有「需要你操作」的通知弹横幅；结果类不弹，避免打断。\n        headsUp: true\n        # 悬浮通道 id：换一个新值（如 dsh-heads-up2）可建一个未被改过设置的全新通道，\n        # 用于修复「重要性被系统/用户调低过」导致不弹横幅的旧通道。\n        headsUpChannel: dsh-heads-up\n        group: dsh\n        notificationId: dsh\n\n        # —— 语音通知（termux-tts-speak）——\n        voice: false\n        voiceTemplate: '{speech}'   # {speech}=场景短句；也可用 {title} {content} 自定义\n        voiceLanguage: ''           # 例如 zh / en；留空由引擎决定\n        # 语速 / 音调：Termux:API 每次都会 setSpeechRate/setPitch，不传即 1.0，\n        # 所以它会覆盖系统「文字转语音」里的设置；想和手机一致就填成同一个值。\n        voiceRate: 1\n        voicePitch: 1\n\n        # —— 点击通知打开系统浏览器进 DSH 页面（推荐保持开启）——\n        # 通知只负责提醒，真正的操作回浏览器里做；通知栏上的操作太容易误触。\n        # 留空则恢复 termux-notification 的默认行为：点开 Termux 应用。\n        tapUrl: 'http://127.0.0.1:3080/'\n\n        # —— 排障 ——\n        appProbe: true              # 启动时探测 Termux:API 应用，缺失则直接停用（否则会挂起）\n        disableAfterFailures: 3\n        execTimeoutMs: 8000\n        dryRun: false               # true = 只写日志，便于验证逻辑\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "client/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/index.js:248"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/",
+      "where": "cordis.patch.yml:66"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/",
+      "where": "lib/index.js:142"
+    },
+    {
+      "host": "f-droid.org",
+      "url": "https://f-droid.org/packages/com.termux.api/",
+      "where": "lib/index.js:852"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/",
+      "where": "lib/index.js:869"
+    },
+    {
+      "host": "f-droid.org",
+      "url": "https://f-droid.org/packages/com.termux.api/",
+      "where": "scripts/check-channel.sh:28"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/termux/termux-api/releases",
+      "where": "scripts/check-channel.sh:29"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/",
+      "where": "test/run.mjs:182"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/",
+      "where": "test/run.mjs:235"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-09-25T13:14:15Z",
+    "created_at": "2026-09-25T05:13:39Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-09-25T13:14:15Z",
+      "inactive_days": 47,
+      "commit_count": 9,
+      "checked_at": "2026-11-12T12:35:25.854988+00:00",
+      "signals": [
+        "list:pushed_at=2026-09-25T13:14:15Z",
+        "list:commits=9"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "client/client.js",
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json",
+    "test/client.mjs",
+    "test/integration.mjs",
+    "test/run.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-termux-notify",
+      "text": "给 [DSH](https://github.com/deepseek-ai/deepseek-harness) 加一条通知通道：**需要你选择、或一轮结果出来时，用 Termux 给手机发系统通知。**\n\n点一下通知，直接用系统浏览器回到 DSH 页面 —— 不用在通知栏上做任何操作。\n\n---"
+    },
+    {
+      "section": "它解决什么问题",
+      "text": "在 Termux 里跑 DSH 时，你通常会切到别的 App 等结果。于是有两种尴尬：\n\n- 模型其实在等你选一个选项，你却不知道，一直在傻等；\n- 一轮跑完了，你也一直在傻等。\n\n装了这个插件，这两种时刻都会推到手机通知栏。"
+    },
+    {
+      "section": "效果",
+      "text": "通知分成两类，处理方式完全不同：**需要你操作的会弹横幅打断你，结果类只安静地进通知栏。**"
+    },
+    {
+      "section": "一、需要你操作（高优先级 + 悬浮横幅 + 一句短语音）",
+      "text": "| 场景 | 悬浮标题 | 悬浮正文 | 语音 |\n| --- | --- | --- | --- |\n| 需要你选择（`ask_user_question`、计划审阅…） | `❓ 需要选择` | 问题摘要 + 选项 | 需要你选择，{摘要} |\n| 需要确认工具调用 | `⚠️ 需要确认` | 工具：{工具中文名} | 需要你确认，{工具中文名} |\n| 权限请求 | `🔐 权限请求` | {resource} | 请求权限，{resource} |"
+    },
+    {
+      "section": "二、结果 / 状态（默认优先级，**不弹横幅**，语音只有一句）",
+      "text": "| 场景 | 悬浮标题 | 悬浮正文 | 语音 |\n| --- | --- | --- | --- |\n| 任务完成 | `✅ 任务完成` | 本轮对话已结束 + 会话标题 + 结果摘要 | 任务完成 |\n| 长任务完成（默认 ≥ 60 秒） | `✅ 长任务完成` | 耗时 {duration} + 会话标题 + 结果摘要 | 长任务完成 |\n| 出错 | `❌ 出错了` | {error 摘要} | 任务出错 |\n| 被中止 | `⏹ 已中止` | 用户取消了操作 | 任务已中止 |\n\n三条设计原则：\n\n- **标题就是 emoji + 2~4 个字**，正文只放关键变量 —— 扫一眼就知道发生了什么，不用点开；\n- **语音只留「动作 + 对象」**：TTS 念超过十来个字就显得啰嗦，连续触发时尤其明显。\n  工具名会先映射成中文口语（`bash` → 命令行、`str_replace_editor` → 编辑文件），\n  否则 TTS 念英文变量名很生硬；\n- **区分优先级**：只有「需要你操作」的才用高优先级 + 悬浮横幅，\n  「任务完成」这类非紧急消息不会弹出来打断你。"
+    },
+    {
+      "section": "二、结果 / 状态（默认优先级，**不弹横幅**，语音只有一句）",
+      "text": "其余默认行为：**振动 1 秒**、**点通知用浏览器打开 DSH 页面**、通知栏上没有按钮，\n以及**回到对话时自动清掉过时通知**：新一轮开始、或你在浏览器里回答完提问/审批，那条提醒就会自己消失\n（点过的通知本来就由 Android 自动消失，这里清的是没点过的积压）。\n\n---"
+    },
+    {
+      "section": "前置条件",
+      "text": "1. **Termux 环境里能跑 DSH Web**（`dsh web`）。\n2. **安装 `termux-api` 包**：\n\n```bash\n   pkg install termux-api\n   ```\n\n3. **安装「Termux:API」应用**（APK，必须单独装，只装上面的包不够）。\n   插件**强依赖 Termux API 一路通道**：没有 `termux-notification` + Termux:API 应用就发不出通知\n   （插件会在启动时探测，缺失就停用并在设置页的「检测环境」里写清原因）：\n\n- F-Droid：<https://f-droid.org/packages/com.termux.api/>\n   - 或 GitHub Releases：<https://github.com/termux/termux-api/releases>"
+    },
+    {
+      "section": "前置条件",
+      "text": "> ⚠️ 这一步不能省。缺少 Termux:API 应用时，`termux-notification` **不会报错，而是一直挂起**，\n   > 所以插件会在启动时探测它，发现缺失就直接停用并写一条警告日志（避免每次通知都留下一个僵尸进程）。\n\n4. 顺手检查一下通道是否通（装完应用后跑）：\n\n```bash\n   PLUGIN_DIR=\"$HOME/.dsh/profiles/web/node_modules/dsh-termux-notify\"\n   bash \"$PLUGIN_DIR/scripts/check-channel.sh\"\n   ```\n\n它会依次检查 `termux-notification` 命令、Termux:API 应用，并带 10 秒硬超时真发一条测试通知。\n   退出码 `0/1/2/3` 分别表示：可用 / 缺命令 / 缺应用 / 超时。\n\n---"
+    },
+    {
+      "section": "推荐方式：把仓库地址发给 DSH，让它自己装",
+      "text": "在 DSH 的对话框里粘上这一行，然后说一句「帮我安装这个插件」：\n\n```\nhttps://github.com/xs2966/dsh-termux-notify\n```\n\nDSH 会自己去看这个仓库、把它装进 `web` profile、并告诉你需要重启。你只需要在最后重启一次 DSH。\n\n重启方式：在跑 `dsh web` 的那个 Termux 会话里按 `Ctrl+C`，然后照你平时的方式重新启动（如果用了一键启动脚本，就是 `~/dsh/start_dsh-terminal.sh`）。\n\n> 因为 profile 的 `patchReload` 是 `startup`，**装完必须重启一次**才会加载新插件。"
+    },
+    {
+      "section": "手动安装（可选）",
+      "text": "如果不想让 DSH 自己动手：\n\n```bash"
+    },
+    {
+      "section": "如果 dsh 在 PATH 里",
+      "text": "dsh plugin --profile web add github:xs2966/dsh-termux-notify"
+    },
+    {
+      "section": "Termux 上一般要显式用 node 启动（node_modules/.bin/dsh 的 shebang 在本机不可用）",
+      "text": "node \"$HOME/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js\" plugin --profile web add github:xs2966/dsh-termux-notify\n```\n\n这条命令会把这个包写进 `$HOME/.dsh/profiles/web/package.json` 的依赖和 `dsh.profile.bundles`。\n装完同样要重启 DSH。\nbash\nnode \"$HOME/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js\" --profile web --dump-config | grep -A 25 dsh-termux-notify\n```\n\n---"
+    },
+    {
+      "section": "装完先做这三件事",
+      "text": "重启 DSH 之后：\n\n1. **看设置里有没有新页面**：打开 **设置 → Termux 通知**。\n   它是设置左侧导航里独立的一页（不在「插件」分区里）。\n2. **点页面顶部的「检测环境」**：会逐项检查插件开关、`termux-notification` 命令、Termux:API 应用、\n   点击行为和振动方式，每一项都给出状态和修复提示。\n3. **点「发一条测试通知」**：会真的发一条通知。看到通知后**点它一下**，\n   应该用系统浏览器打开 DSH 页面，同时伴随一次振动。\n   旁边还有「清空旧通知」，随时手动清掉本插件之前发过的通知。\n\n三步都通过就装好了。任何一步有 ✗，按提示修即可（提示里会写清楚要执行什么命令）。\n\n想更彻底地验证，可以跑一次完整自检 —— 它会检查 profile 组合、宿主半侧能否按包名 import、\n客户端 bundle 能否被发现，以及（在源码仓库里）跑全部测试："
+    },
+    {
+      "section": "装完先做这三件事",
+      "text": "```bash\nPLUGIN_DIR=\"$HOME/.dsh/profiles/web/node_modules/dsh-termux-notify\"\nbash \"$PLUGIN_DIR/scripts/check-integration.sh\"\n```\n\n> 安装副本里没有 `test/`，所以最后一步会提示「跳过测试套件」——这是正常的，\n> 决定装不装得上的三项检查都会照常跑。\n\n---"
+    },
+    {
+      "section": "设置",
+      "text": "打开 **设置 → Termux 通知**。所有改动**立即生效**，不需要重启，也不需要按保存：\n\n- 开关和下拉选完就写入；\n- 文本框在**失焦或回车**时提交，`Esc` 撤销本次输入；\n- 改过的字段会标「已覆盖」，右侧有「默认」按钮可以单独恢复；\n- 页面底部「全部恢复默认」清掉所有个人覆盖。"
+    },
+    {
+      "section": "常用设置项",
+      "text": "| 设置 | 默认值 | 说明 |\n| --- | --- | --- |\n| 总开关 | 开 | 关掉后完全不发通知 |\n| 需要你选择时 | 开 | `ask_user_question`、计划审阅等等待你回答的请求 |\n| 需要授权时 | 开 | 敏感工具的一次性授权请求 |\n| 结果出现时 | 开 | 一轮结束（`turn/end`） |\n| 子 agent 轮次也通知 | 关 | 子 agent 的轮次默认不打扰你 |\n| 最短耗时（毫秒） | `0` | 填 `5000` 就只通知耗时 ≥ 5 秒的轮次，过滤掉秒回的小轮次 |\n| 长任务阈值（毫秒） | `60000` | 耗时达到该值的轮次用「✅ 长任务完成」的说法 |\n| 回到对话时清空过时通知 | 开 | 三个触发点：**新一轮开始**、**你回答完提问**、**审批被决定**。撤销本插件发过、还没点掉的通知。**只撤自己的 tag**，不动别的应用；子 agent 的轮次不会清掉主会话的提醒 |\n| 附带结果摘要 | 开 | 把模型最后一段文本放进通知正文 |\n| 摘要长度（字符） | `120` | 摘要截断长度 |\n| 优先级（需要你操作时） | `high` | `high` / `low` / `max` / `min` / `default`；结果类固定 `default` |\n| 提示音 | 开 | |\n| 振动 | `1000` | 毫秒；`0` = 不振动；也可写 `500,1000,200` 这种 pattern |\n| 振动方式 | `termux-api` | `termux-api` = 调用 `termux-vibrate`（推荐，不受通知渠道设置影响）；`notification` = 用通知自带的 `--vibrate` |\n| 静音也振动 | 开 | 对应 `termux-vibrate -f`：系统静音/仅振动模式下也振 |\n| 悬浮通知 | 开 | 「需要你操作」的通知用**重要性 HIGH** 的专用通道弹横幅；结果类不弹，避免打断 |\n| 悬浮通道 | `dsh-heads-up` | 通道 id。改成新值（如 `dsh-heads-up2`）会建一个**全新通道**，用来修复被调低过重要性的旧通道 |\n| 点击通知打开 | `http://127.0.0.1:3080/` | 点通知时用 `termux-open-url` 打开这个地址；留空则改为打开 Termux 应用 |\n| 通知分组 / id 前缀 | `dsh` | 同类通知覆盖上一条，三类各占一条 |\n| 语音通知 | 关 | 额外调 `termux-tts-speak` 把通知念出来（走 `NOTIFICATION` 音频流） |\n| 播报内容模板 | `{speech}` | `{"
+    },
+    {
+      "section": "配置文件位置（可选）",
+      "text": "设置页写的是**用户覆盖**，存在 `$HOME/.dsh/settings.yaml` 的 `termux-notify:` 段。\n\n想改**部署默认值**（对这台机器上所有会话生效、且不受个人覆盖影响），在\n`$HOME/.dsh/profiles/web/cordis.patch.yml` 里按 `id` 覆盖：\n\n```yaml\n- insert:\n    - id: dsh-termux-notify\n      name: dsh-termux-notify\n      config:\n\n> patch 是**整份 config 替换**而不是逐键合并：没写出来的键会由插件内置默认值补齐，\n> 所以只写你关心的几个键是安全的。\n>\n> 优先级：内置默认 < patch 部署配置 < `settings.yaml` 用户覆盖（设置页）。\n\n---"
+    },
+    {
+      "section": "常见问题",
+      "text": "**收不到通知**\n\n1. 先跑 `scripts/check-channel.sh`（见上文），它会直接告诉你是哪一层的问题。\n2. 日志里出现「未找到 termux-notification 命令」→ 执行 `pkg install termux-api`。\n3. 日志里出现「Termux:API 应用未安装，通知已停用」→ 装上那个 APK，然后**重启 DSH**。\n4. 也可能是 Termux 被系统冻结或杀掉了。给 Termux 和 Termux:API **关掉电池优化**，\n   并在 Termux 的通知里打开 `acquire wakelock`。\n\n**振动不生效**"
+    },
+    {
+      "section": "常见问题",
+      "text": "- 确认「振动」不是 `0`；\n- 默认的「振动方式」是 `termux-api`，它会调用 `termux-vibrate`，不经过通知渠道，\n  比通知自带的 `--vibrate` 可靠得多（Android 8+ 上后者常被通知**渠道**设置忽略）；\n- 如果当初改成了 `notification`，改回 `termux-api`；\n- 检查系统里没有禁用 Termux:API 的振动权限；\n- 「静音也振动」打开时会带 `-f`，系统静音/仅振动模式下也会振；\n- 填的是 `500,1000,200` 这种 pattern 时只能走通知渠道（`termux-vibrate` 只接受单个毫秒数），\n  检测页会说明这一点。\n\n**通知一直赖在通知栏里不消失**"
+    },
+    {
+      "section": "常见问题",
+      "text": "- 点过的通知由 Android 自动消失（Termux:API 设了 `autoCancel`）；\n- **没点过的**会在你回到对话时被自动清掉：新一轮开始，或在浏览器里回答完提问 / 审批。\n  想确认开关是否打开，看设置页的「回到对话时清空过时通知」，环境检测里也有「清空旧通知」一项；\n- 想立刻手动清，点设置页的「清空旧通知」按钮；\n- 如果你压根没回对话（只是切到别的 App 看了看），通知会留着 —— 那时它其实还没过期。\n\n**悬浮通知不弹横幅**\n\n按这个顺序排查（前两条最常见）："
+    },
+    {
+      "section": "常见问题",
+      "text": "1. **只有「需要你操作」的才弹横幅** —— 「任务完成」这类结果类**故意不弹**，免得打断你。\n   想确认横幅是否正常，点设置页的「发一条测试通知」，它每次都用全新的通知 id，一定会弹。\n2. **屏幕必须是亮的**。Android 在息屏、或免打扰模式下不弹横幅，通知只会进通知栏。\n3. 检查系统里 Termux:API 的「悬浮通知 / 横幅通知 / 弹出通知」权限\n   （不少国产 ROM 单独有这一项且默认关闭），以及是否处于勿扰模式。\n4. 弹横幅由**通道重要性**决定。插件会建一个重要性 HIGH 的通道（默认 `dsh-heads-up`）。\n   如果你（或系统）把这个通道的重要性调低过，**程序改不回来** —— Android 以用户设置为准。\n   这时把设置页的「悬浮通道」改成新值（例如 `dsh-heads-up2`），插件就会建一个全新的 HIGH 通道。\n5. 点一次设置页的「检测环境」：它每次都会重新断言一遍通道。"
+    },
+    {
+      "section": "常见问题",
+      "text": "> 顺带说明一个已修的坑：Termux:API 把 `--id` 当通知 tag 用，**同一个 tag 重发是「更新」已有通知**，\n> 而 Android 不会为更新弹横幅。所以「需要你操作」的通知每次都换一个新 tag\n> （代价是这类通知不再互相覆盖，会在通知栏里各占一条）；结果类仍用固定 tag 覆盖上一条。\n\n**语音的语速 / 音调和我在手机「文字转语音」里设置的不一样**\n\n这是 Termux:API 的固定行为，不是插件改写你的设置。它每次播报都会调用：\n\n```java\nmTts.setPitch(...);                                          // 不传 -p 就是 1.0\nmTts.setSpeechRate(intent.getFloatExtra(\"rate\", 1.0f));       // 不传 -r 就是 1.0\n```"
+    },
+    {
+      "section": "常见问题",
+      "text": "也就是**无论你手机里配的是多少，它都会按参数重设一遍，缺省值就是 1.0** —— 于是你手机里的语速被盖掉了。\n而那个值在 Termux 里读不到（`settings get secure tts_default_rate` 需要 `INTERACT_ACROSS_USERS` 权限），\n插件没法自动跟随。\n\n想和手机一致，就在设置页把「播报语速」「播报音调」填成手机里的同一个值即可。\n手机上的语速滑块一般会显示倍率（例如 `1.0x` / `1.3x`），照着填就行。\n\n**语音通知不出声**\n\n先在 Termux 里手敲一次，这是最快的判断：\n\n```bash\ntermux-tts-speak 测试\n```"
+    },
+    {
+      "section": "常见问题",
+      "text": "- **能出声** → 引擎没问题，去设置页确认「语音通知」是打开的（默认关闭）；\n- **一直卡住不返回**（按 `Ctrl+C` 退出）→ TTS 引擎**被占住或排队堵住了**。常见于短时间内反复触发播报、\n  或上一次被强杀后残留了等待中的请求；**重启 Termux（或重开 Termux 会话）即可恢复**，实测恢复正常后\n  4 个字约 2.7 秒。插件侧也做了防护：超时按文本长度自适应（20–90 秒），卡住时会被杀掉且不会留下挂起进程；\n  上一条还在念时会跳过新的而不是排队；连续失败到阈值后本次运行**自动停止播报**并在日志里说明；\n- **报错** → 去上面那个系统设置里安装 / 选择一个引擎，再跑 `termux-tts-engines` 应输出 JSON；\n- 播报走 `NOTIFICATION` 音频流，所以**系统静音时通常不出声** —— 这是 Android 的行为，不是插件问题；\n- 「播报语言」填了引擎不支持的语言时可能不出声，留空让引擎自选即可。"
+    },
+    {
+      "section": "常见问题",
+      "text": "> 另外：上一条还在念的时候来了新通知，插件会**跳过**这次的播报而不是排队 ——\n> 通知是即时提醒，排队念一串过期消息没有意义。\n\n**点通知没有打开浏览器**\n\n- 检查「点击通知打开」是否被清空了（留空会改为打开 Termux 应用）；\n- 确认地址和 DSH 实际监听的地址一致（默认 `http://127.0.0.1:3080/`）；\n- 确认 `termux-open-url` 可用（它随 `termux-tools` 提供，检测页会检查）。\n\n**看不到「Termux 通知」这一页**\n\n- 确认装完之后**重启过 DSH**（profile 的 `patchReload` 是 `startup`）；\n- 跑一次 `scripts/check-integration.sh`，它会指出是 profile 组合、宿主半侧还是客户端 bundle 的问题；\n- 它是设置左侧导航里独立的一页，不在「插件」分区里。\n\n**想先确认接线对不对，但不想被通知打扰**"
+    },
+    {
+      "section": "常见问题",
+      "text": "把「只写日志（dry-run）」打开，然后提问一次或跑完一轮，日志里会出现\n`[dry-run] 【需操作】❓ 需要选择 :: … :: 语音「需要你选择，…」` 这样的记录。\n\n---"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\nnode \"$HOME/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js\" plugin --profile web remove dsh-termux-notify\n```\n\n然后检查 `$HOME/.dsh/profiles/web/package.json` 的 `dsh.profile.bundles` 里是否还留着\n`dsh-termux-notify` —— 有的话删掉那一行。最后重启 DSH。\n\n如果之前在设置页里改过值，可以顺手删掉 `$HOME/.dsh/settings.yaml` 里的 `termux-notify:` 段。\n\n---"
+    },
+    {
+      "section": "工作原理（给好奇的人）",
+      "text": "插件挂三个**只读旁路**观测点，不改变 DSH 原有行为：\n\n| 观测点 | 类型 | 用途 |\n| --- | --- | --- |\n| `user-questions/request` | Cordis waterfall | 需要人类回答（提问、计划审阅） |\n| `approval/request` | Cordis waterfall | 敏感操作的一次性授权 |\n| `session/event` 的 `turn/end` | 事件流 | 一轮结束、结果出现 |\n\n两个 waterfall 监听器都是「先发通知，再 `next()` 委托」，所以下游的回答者/审批者行为完全不变；\n通知全部 fire-and-forget，异常只写日志，永远不会影响 agent 运行。\n\n几个实现上的选择："
+    },
+    {
+      "section": "工作原理（给好奇的人）",
+      "text": "- **必须 `prepend`**：Cordis 的 waterfall 里不调用 `next()` 就等于否决整条链。若追加在末尾，\n  就要等真正的回答者（Web 前端）先交出结果 —— 也就是用户**已经答完**才轮到发通知，通知就失去意义了。\n- **启动探测 + 硬超时**：Termux:API 应用缺失时 `termux-notification` 会一直挂起等待广播回应，\n  所以启动时先探测、缺失就停用；真发时用 `spawn` + `detached` 起子进程，超时对整个**进程组**发 `SIGKILL`\n  （只杀直接子进程会留下挂起的广播进程）。\n- **振动走 `termux-vibrate`**：直接调用系统 Vibrator 服务，不经过通知渠道，\n  绕开 Android 8+ 上「渠道设置把 `--vibrate` 吃掉」这个常见问题。\n- **悬浮通知要绕一层**：Android 8+ 上「弹不弹横幅」由**通道重要性**决定，而不是 `--priority`。\n  Termux:API 建通道时从 intent 的 `priority` extra 读重要性，但随包的 `termux-notification-channel`\n  包装脚本**不传**这个 extra（建出来是 DEFAULT，不弹横幅），所以插件直接调底层的\n  `libexec/termux-api NotificationChannel ... --es priority high` 来建通道。\n  另一个坑：给 `--channel` 传一个**不存在的通道 id，通知会被系统直接丢弃** ——\n  因此插件先确认通道建好，建不成就退回默认通道，绝不引用不确定存在的通道。\n- **清空旧通知**：`termux-notification-remove <tag>` 就是 `manager.cancel(tag, 0)`，没有批量接口，\n  所以插件**记下自己发过的每个 tag**（含悬浮通知用的全新 tag），再在「用户明显回到对话里」时逐个撤销：\n  根会话的 `turn/start`、`user-questions/request` 落定、`approval/request` 落定。\n  后面两个触发点是必须的 —— **在浏览器里回答提问时那一轮不会重启**，只看 `turn/start` 的话，\n  那条「需要你选择」会一直赖在通知栏里。\n  清空会先等「在途的发送」落定，否则「刚发出就被回答」会因为 tag 还没登记而漏掉那一条；\n  子 agent 会话的轮次很频繁，因此不触发（否则主会话的提醒会被子会话清掉）。\n- **语速/音调必须显式传**：Termux:API 每次都会 `setSpeechRate`/`setPitch"
+    },
+    {
+      "section": "开发与测试",
+      "text": "仓库里的客户端 bundle 是手写的（`window.__ModuleLoader__.load` + CJS 风格 `require`），\n**不需要 tsdown/vite 构建**，改完刷新页面即可。\n\n```bash\ngit clone https://github.com/xs2966/dsh-termux-notify\ncd dsh-termux-notify\n\nnpm test          # 三套一起跑\n\n`test/integration.mjs` 需要 `@deepseek-ai/cordis` 与 `@deepseek-ai/dsh-scope`，\n所以测试只在**仓库里**跑得起来（安装副本不含 `test/`，由 `scripts/check-integration.sh` 自动跳过）。\n其中有一项会真的起一个 `sleep 30` 子进程，验证超时兜底确实杀掉了整个进程组；\n悬浮通知的用例还专门覆盖了「通道建不成时绝不引用它」（引用不存在的通道会让通知被系统丢弃）。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

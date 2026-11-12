@@ -1,0 +1,280 @@
+{
+  "repo": "loongWoong/dsh-plugins",
+  "commit": "856899ada1ab773973f71bbca8baf77f4f81c866",
+  "extracted_at": "2026-11-12T00:17:24.461742+00:00",
+  "tree": {
+    "files": 34,
+    "bytes": 347536,
+    "lines_by_language": {
+      "JSON": 358,
+      "JavaScript": 5899,
+      "Markdown": 415,
+      "Other": 29,
+      "YAML": 187
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "packages/dsh-goal-auto-resume/README.md",
+      "packages/dsh-goal-auto-resume/cordis.patch.yml",
+      "packages/dsh-goal-auto-resume/package.json",
+      "packages/dsh-memarc/README.md",
+      "packages/dsh-memarc/cordis.patch.yml",
+      "packages/dsh-memarc/package.json",
+      "packages/dsh-model-reasoning/README.md",
+      "packages/dsh-model-reasoning/cordis.patch.yml",
+      "packages/dsh-model-reasoning/package.json",
+      "packages/dsh-session-branches/README.md",
+      "packages/dsh-session-branches/cordis.patch.yml",
+      "packages/dsh-session-branches/package.json",
+      "packages/dsh-session-git/README.md",
+      "packages/dsh-session-git/cordis.patch.yml",
+      "packages/dsh-session-git/package.json",
+      "pnpm-workspace.yaml"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugins",
+    "version": "0.1.1",
+    "description": "Aggregate DSH plugin bundle — one install, five plugins: dsh-memarc (long-term memory + session archive), dsh-session-git (export/import sessions as committed JSON), dsh-session-branches (session fork tree), dsh-goal-auto-resume (re-arm unfinished goals), dsh-model-reasoning (per-model reasoning capability & effort editor). Declares dsh.bundle, so the whole repository installs as a single profile layer: no clone, no build.",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/loongWoong/dsh-plugins.git"
+    },
+    "keywords": [
+      "deepseek",
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "dsh-bundle",
+      "plugin-bundle"
+    ],
+    "homepage": "https://github.com/loongWoong/dsh-plugins#readme",
+    "bugs": {
+      "url": "https://github.com/loongWoong/dsh-plugins/issues"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "packages",
+      "README.md",
+      "LICENSE"
+    ],
+    "exports": {
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "scripts": {
+      "test": "node packages/dsh-memarc/test/behavior.mjs && node packages/dsh-session-git/test/unit.mjs && node packages/dsh-model-reasoning/test/unit.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plugins — 聚合装配清单（aggregate assembly manifest）\n#\n# 仓库根本身就是一个 bundle：`package.json` 的 `dsh.bundle.patch` 指向这里，所以\n# `dsh plugin --profile web add github:loongWoong/dsh-plugins` 一条命令就把五个插件\n# 全部装上——profile 只把**直接依赖**中声明了 `dsh.bundle.patch` 的包并进 layer 栈\n# （`@deepseek-ai/dsh/plugin` 的 reconcile），本包是那唯一的直接依赖，五个成员由这\n# 份清单逐行插进 composition。本包**没有** `dependencies`：成员代码就在 `packages/`\n# 里，随包一起落地，不需要被 npm 安装。\n#\n# 为什么行名用相对路径而不是包名：pnpm 安装 git 依赖时，包内的 `file:./packages/x`\n# 会被解析到**消费者目录**（`ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND`），`workspace:*` 也\n# 拿不到被拉取的 workspace（`ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`）；而 pnpm 的严格布局\n# 又不会把传递依赖提升到 profile 顶层的 `node_modules`，按包名解析必然落空。dsh 的\n# `anchorInsertedPluginNames` 把 `insert` 行里以 `./` 开头的 `name` 重写成**本文件旁边**\n# 的 file URL（其注释原文：relative names continue to resolve beside the\n# configuration file），Host 半区于是直接从安装目录里的成员入口加载。\n#\n# Client 半区同理：`@deepseek-ai/dsh-client-modules` 的 `locatePkgJson` 认 path-like\n# 行名，并从入口文件向上找到最近的 `package.json` 作为归属包，于是成员自己的\n# `dsh.client.platform` / `exports[\"./client\"]` 照常生效。仓库根自己没有浏览器半区，\n# 所以不能声明 `dsh.client`（声明了却没有 `./client` 导出会让 client-modules 直接报错）。\n#\n# 行内容与各成员包里的 `cordis.patch.yml` 一一对应——单独安装某个插件时用的是它自己\n# 那份（那时行名是包名）。改成员插件的入口或装配方式时，两份要一起改。\n- insert:\n    # memarc：长期记忆库（.dsh-memory/memory.json）+ 会话归档管理。只消费 host\n    # 服务（fs、sandboxPolicy、workspaceRegistry、sessionQuery、sessions、\n    # connection、tools），不发布服务，因此不需要 isolate realm。\n    - id: memarc\n      name: './packages/dsh-memarc/lib/index.js'\n\n    # session-git：把工作区会话导出为 <project>/.dsh-sessions/ 下的 JSON 以便随\n    # 代码提交，并能导回成可继续的会话。Host 行（fs、sandboxPolicy、sessionQuery、\n    # sessionPersistence、tools）。\n    - id: session-git\n      name: './packages/dsh-session-git/lib/index.js'\n\n    # session-branches：按工作区把会话 fork 关系（parentSession / subagent 血缘）\n    # 画成树。Host 行（sessionQuery、connection）；浏览器半区挂 shell.overlay 浮动\n    # 面板 + 一个设置分区。\n    - id: session-branches\n      name: './packages/dsh-session-branches/lib/index.js'\n\n    # goal-auto-resume：异常停止（报错、中断、max-tokens、崩溃恢复、driver 排队\n    # 失败）后重新武装未完成的目标，让原生 goal-round-driver 自动续下一轮。\n    - id: goal-auto-resume\n      name: './packages/dsh-goal-auto-resume/lib/index.js'\n\n    # model-reasoning：直接编辑 llm-pi-ai 命名空间里的模型推理能力（思考等级 +\n    # wire 值、路由默认、图片输入、上下文窗口、最大输出、按协议的兼容开关），\n    # 写完即生效。Host 行消费 settings、llm、connection。\n    - id: model-reasoning\n      name: './packages/dsh-model-reasoning/lib/index.js'\n\n# ── Harness 0.1.5 兼容：给 connection 行补回 webServer ──────────────────────\n# `ctx.connection.rpc.handle()` 经 `HostConnectionService.register()` 在**连接\n# 插件自己的 fiber** 上解析 `owner.webServer`。dsh-client-connection 0.1.2-rc.1\n# 的插件级 inject 是 [\"webServer\",\"credentials\"]；0.1.5-rc.2 把 `webServer`\n# 从插件级 inject 移除（`/api` 挂载改走动态子 inject），于是任何第三方注册都抛\n# `cannot get property \"webServer\" without inject`，对应行直接加载失败——本仓库\n# 五个成员以及 dsh-context 等第三方插件全部中招。Loader 会把 row 级 `inject`\n# 合并进该行 fiber 的依赖表（`Inject.resolve(entry.options.inject, fiber.inject)`），\n# 所以按 0.1.2 的语义重申这份 inject，即可在 0.1.5 上一次性修好所有消费方，\n# 0.1.2 及更早版本无副作用。成员包内各自的 `cordis.patch.yml` 也带一份，单独\n# 安装某个成员时用那一份；请与 @deepseek-ai/dsh-web-app 的 connection 行保持同步。\n- id: connection\n  inject: [webRuntime, webServer]\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins.git",
+      "where": "package.json:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins#readme",
+      "where": "package.json:18"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/issues",
+      "where": "package.json:20"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins.git",
+      "where": "packages/dsh-goal-auto-resume/package.json:35"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/issues",
+      "where": "packages/dsh-goal-auto-resume/package.json:39"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/tree/main/packages/dsh-goal-auto-resume#readme",
+      "where": "packages/dsh-goal-auto-resume/package.json:41"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins.git",
+      "where": "packages/dsh-memarc/package.json:54"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/issues",
+      "where": "packages/dsh-memarc/package.json:58"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/tree/main/packages/dsh-memarc#readme",
+      "where": "packages/dsh-memarc/package.json:60"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins.git",
+      "where": "packages/dsh-model-reasoning/package.json:46"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/issues",
+      "where": "packages/dsh-model-reasoning/package.json:50"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/tree/main/packages/dsh-model-reasoning#readme",
+      "where": "packages/dsh-model-reasoning/package.json:52"
+    },
+    {
+      "host": "192.168.22.217",
+      "url": "http://192.168.22.217:8000/v1",
+      "where": "packages/dsh-model-reasoning/test/unit.mjs:95"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins.git",
+      "where": "packages/dsh-session-branches/package.json:50"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/issues",
+      "where": "packages/dsh-session-branches/package.json:54"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/tree/main/packages/dsh-session-branches#readme",
+      "where": "packages/dsh-session-branches/package.json:56"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins.git",
+      "where": "packages/dsh-session-git/package.json:50"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/issues",
+      "where": "packages/dsh-session-git/package.json:54"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/loongWoong/dsh-plugins/tree/main/packages/dsh-session-git#readme",
+      "where": "packages/dsh-session-git/package.json:56"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-14T03:56:40Z",
+    "created_at": "2026-09-02T08:08:35Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "packages/dsh-goal-auto-resume/lib/index.js",
+    "packages/dsh-memarc/lib/index.js",
+    "packages/dsh-memarc/test/behavior.mjs",
+    "packages/dsh-model-reasoning/lib/index.js",
+    "packages/dsh-model-reasoning/test/unit.mjs",
+    "packages/dsh-session-branches/lib/index.js",
+    "packages/dsh-session-git/lib/index.js",
+    "packages/dsh-session-git/test/unit.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugins",
+      "text": "DeepSeek Harness（DSH）插件集：长期记忆、会话归档、会话 Git 化、会话分支树、Goal 自动续跑、模型推理能力/推理强度编辑。\n\n**本仓库自身就是一个可安装单元**：根 `package.json` 声明了 `dsh.bundle`，根 `cordis.patch.yml` 是聚合装配清单，所以插件中心 / hub 的「按仓库一键安装」直接把整个仓库当成一个插件装进 profile——无需克隆、无需构建。"
+    },
+    {
+      "section": "插件一览",
+      "text": "| 包名 | 功能 | 组成 |\n|---|---|---|\n| [`dsh-memarc`](packages/dsh-memarc) | 长期记忆库（per-workspace JSON）+ 会话归档管理（归档/全文搜索/批量恢复/彻底删除）+ 设置页 | host + client |\n| [`dsh-session-git`](packages/dsh-session-git) | 把 DSH 会话导出为 `<项目>/.dsh-sessions/*.json` 随 Git 提交，团队任何人可一键导入为可继续会话 | host + client |\n| [`dsh-session-branches`](packages/dsh-session-branches) | 会话分支关系树（fork / 子代理），侧边栏浮动面板 + 设置页，点击即打开 | host + client |\n| [`dsh-goal-auto-resume`](packages/dsh-goal-auto-resume) | Goal 因错误/中断/max-tokens/崩溃异常停止后自动重新武装续跑（带退避与安全阀） | host |\n| [`dsh-model-reasoning`](packages/dsh-model-reasoning) | 三段式设置页（全局策略 / 路由概览 / 模型明细）编辑推理能力与推理强度：思考等级映射（wire 值）、上下文/输出上限、协议兼容开关，缺能力的模型行内一键声明；另有输入框里模型下拉左侧的会话级强度滑杆。直写 `llm-pi-ai` 命名空间即时生效 | host + client |"
+    },
+    {
+      "section": "推理强度：两层控制",
+      "text": "| 位置 | 作用范围 | 落到哪里 |\n|---|---|---|\n| 设置页「推理能力」· ① 全局滑杆 | 勾选的每个路由 | `providers.<路由>.reasoning`（可顺带写 `agent-default-model.reasoningEffort`） |\n| 输入框 · 模型下拉左侧的滑杆 | 当前会话 | 会话的模型选择本身，与模型下拉、`/model` 共用同一份状态；优先于路由默认 |\n\n滑杆写入前按该路由**模型实际支持的等级**适配——请求路径对不支持的等级直接抛 `UNSUPPORTED_REASONING_EFFORT`，不会降级，所以预览必须说清「这一档在这条路由上实际会写成什么」。条目上缺 `reasoningEfforts` 的模型可以被顺带声明：「没有推理元数据」是**配置缺口**，不是模型不会思考。细节见 [dsh-model-reasoning README](packages/dsh-model-reasoning/README.md#推理强度的两层控制)。"
+    },
+    {
+      "section": "环境要求",
+      "text": "- DeepSeek Harness（`@deepseek-ai/dsh`）**≥ 0.1.1-rc.2**（实测到 0.1.5-rc.1）。插件消费 DSH 的内部服务与事件（`fs`、`sessionQuery`、`sessions`、`connection`、`goals`、`agent/*`、`turn/end` 等），这些契约**没有稳定性承诺**——DSH 升级后如遇不兼容，请在本仓库 issue 里反馈。\n- **Harness 0.1.5-rc 的 `webServer` 兼容补丁（已内置）**：`@deepseek-ai/dsh-client-connection` 从 0.1.5-rc 起把 `webServer` 从连接插件的插件级 `inject` 里移除（`/api` 挂载改走动态子 inject），但 `ctx.connection.rpc.handle()` 仍然经**连接插件自己的 fiber** 解析 `owner.webServer`，于是所有第三方 RPC 通道注册都会抛 `cannot get property \"webServer\" without inject` 并让所在行加载失败（本仓库的设置页插件、goal-auto-resume 守护页以及 `dsh-context` 等第三方插件都受影响）。本仓库的聚合根与每个成员的 `cordis.patch.yml` 都带一条 row 级补丁 `- id: connection` / `inject: [webRuntime, webServer]`，把 0.1.2 的依赖表补回去：0.1.5-rc 上恢复注册，0.1.2 及更早版本无副作用。若你手工编写 composition 而绕开这些 bundle 清单，需要自己补这一条。\n- peer 依赖（`@deepseek-ai/cordis`、`@deepseek-ai/dsh-tools`、`react`）由 DSH 进程加载插件时提供，**无需安装**。本仓库零运行时依赖，离线也能装。"
+    },
+    {
+      "section": "方式一：整仓库一键安装（推荐，也是 hub 走的路）",
+      "text": "```powershell\ndsh plugin --profile web add github:loongWoong/dsh-plugins\n```\n\n一条命令装五个插件。`dsh plugin` 是 pnpm 转发器：装完后它会按**已安装状态**做 reconcile——凡依赖里声明了 `dsh.bundle.patch` 的包自动进入 profile 的 `dsh.profile.bundles` 层栈，所以 `dsh.profile.bundles` 里只会出现一个 `dsh-plugins`，不需要手工登记。重启 DSH 后，根装配清单把五行插进 composition。\n\n卸载：`dsh plugin --profile web remove dsh-plugins`（同样自动从层栈摘掉）。"
+    },
+    {
+      "section": "方式二：只装其中某个插件",
+      "text": "```powershell\ndsh plugin --profile web add \"github:loongWoong/dsh-plugins#path:packages/dsh-memarc\"\n```\n\n此时那个成员包自己就是 layer，用它包内的 `cordis.patch.yml`（行名是包名）。`#path:` 子路径是 pnpm 特性，npm 不支持；DSH profile 本身就用 pnpm，无需额外配置。"
+    },
+    {
+      "section": "方式三：本地开发（改源码即时生效）",
+      "text": "```powershell"
+    },
+    {
+      "section": "在仓库根目录执行；dsh plugin 会把相对路径 spec 重写成绝对路径，不会自连 profile",
+      "text": "dsh plugin --profile web add .\n```\n\npnpm 对 `file:` 依赖默认做拷贝，源码改动后需再跑一次 `dsh plugin --profile web install`；想让编辑实时生效可用 directory junction，见 [`dsh-session-git` README 的「本地开发」](packages/dsh-session-git/README.md#本地开发源码目录与-node_modules-的链接)。"
+    },
+    {
+      "section": "整仓库 vs 单插件的区别",
+      "text": "| | 整仓库（方式一） | 单插件（方式二） |\n|---|---|---|\n| profile 依赖 | 1 个 `dsh-plugins` | N 个成员包 |\n| `dsh.profile.bundles` | `dsh-plugins` 一层 | 每个成员各一层 |\n| 生效的装配清单 | 仓库根 `cordis.patch.yml` | 成员包内 `cordis.patch.yml` |\n| 装配行 `name` | 相对路径 `./packages/<pkg>/lib/index.js` | 包名 `dsh-<pkg>` |\n| 升级 | 一次更新五个插件 | 逐个更新 |"
+    },
+    {
+      "section": "整仓库 vs 单插件的区别",
+      "text": "**为什么根清单用相对路径而不是包名**：pnpm 安装 git 依赖时，包内的 `file:./packages/x` 会被解析到消费者目录（`ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND`），`workspace:*` 也拿不到被拉取的 workspace（`ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`），而 pnpm 的严格布局不会把传递依赖提升到 profile 顶层 `node_modules`——按包名解析必然落空。DSH 的 `anchorInsertedPluginNames` 会把 `insert` 行里以 `./` 开头的 `name` 重写成**该清单文件旁边**的 file URL，Host 半区于是直接从安装目录里的成员入口加载；Client 半区由 `@deepseek-ai/dsh-client-modules` 的 `locatePkgJson` 沿同一个入口向上找到成员自己的 `package.json`，成员各自的 `dsh.client.platform` / `exports[\"./client\"]` 照常生效。因此聚合根**没有** `dependencies`，也**不能**声明 `dsh.client`（自己既无浏览器半区也无 `./client` 导出，声明了会让 client-modules 直接报错）。"
+    },
+    {
+      "section": "整仓库 vs 单插件的区别",
+      "text": "> 改某个成员插件的入口路径或装配方式时，仓库根 `cordis.patch.yml` 和该成员包内的 `cordis.patch.yml` 两份要一起改。\n\n已实测路径：临时 git 仓库 → `dsh plugin --profile probe add git+file:///...` → 只装 1 个包、`dsh.profile.bundles` 自动出现 `dsh-plugins` → `dsh --profile probe --dump-config` 中五行分别解析到 `node_modules/dsh-plugins/packages/*/lib/index.js`，四个客户端半区的归属清单各自正确。"
+    },
+    {
+      "section": "说明与注意事项",
+      "text": "- **bundle id 冲突**：每个插件向 composition 插入自己的行（短 id 如 `session-git`、`memarc`）。若同时安装的其他插件占用了相同 id 会加载冲突，改对应 `cordis.patch.yml` 的 id 即可。\n- **不要同时用两种方式**：整仓库安装与单插件安装若同时启用，同一个插件会被挂两次（两个 layer、重复的服务/工具注册）。选一种即可。\n- **生效方式**：Host 半区改动需重启 DSH 进程；Client 半区（设置页/浮层/输入框控件）重启后刷新页面生效。\n- **卸载**：见上面的 `remove` 命令。`dsh-memarc` 的记忆文件保留在各工作区 `.dsh-memory/`，`dsh-session-git` 导出的会话文件保留在各项目 `.dsh-sessions/`，均不受卸载影响。"
+    },
+    {
+      "section": "测试",
+      "text": "```powershell\nnpm test"
+    },
+    {
+      "section": "或逐个运行：",
+      "text": "node packages/dsh-memarc/test/behavior.mjs\nnode packages/dsh-session-git/test/unit.mjs\nnode packages/dsh-model-reasoning/test/unit.mjs\n```\n\n测试自包含（在临时目录 stub 掉 peer 依赖），用系统 Node 直接运行即可——无需安装依赖、无需 DSH 进程。"
+    },
+    {
+      "section": "维护者清单",
+      "text": "1. 在 GitHub 创建仓库并 push 本目录（`pi-web-main/`、`scratch/` 已进 `.gitignore`，是本地参考资料，不属于可安装内容）；\n2. 打 tag：`git tag v0.1.0 && git push --tags`，使用者可用 `#v0.1.0` 锁定版本；\n3. 提交 hub / 插件中心条目时 `install` 字段填 `dsh plugin --profile web add github:loongWoong/dsh-plugins`；\n4. **npm 名称**：`dsh-plugins` 在 npm 上已被他人占用（一个无关的 `dsp` CLI）。git 安装不受影响；若要发 npm 需换名或加 scope。五个成员名（`dsh-memarc` 等）目前未被占用，成员各自发布后，用户可直接 `dsh plugin --profile web add dsh-memarc` 按包名安装。"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

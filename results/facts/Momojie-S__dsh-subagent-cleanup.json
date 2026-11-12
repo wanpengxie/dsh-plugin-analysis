@@ -1,0 +1,160 @@
+{
+  "repo": "Momojie-S/dsh-subagent-cleanup",
+  "commit": "83d3a749a480012aea771a0f3ea8b3cce9aaf01b",
+  "extracted_at": "2026-11-11T12:55:27.023698+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 106014,
+    "lines_by_language": {
+      "JSON": 442,
+      "JavaScript": 266,
+      "Markdown": 205,
+      "Other": 29,
+      "TypeScript": 761,
+      "YAML": 363
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/design/overview.md",
+      "package-lock.json",
+      "package.json",
+      "pnpm-lock.yaml",
+      "scripts/build.mjs",
+      "src/index.ts",
+      "test-cleanup.mjs",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "@momojie-s/dsh-subagent-cleanup",
+    "version": "0.2.0",
+    "description": "DSH 插件: 子agent会话清理 —— 会话自清(枚举本会话后代,归档/删除已停稳记录)+ 运维侧跨 workspace 大扫除(严格冷判据)",
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml"
+    ],
+    "license": "MIT",
+    "scripts": {
+      "build": "node scripts/build.mjs",
+      "build:watch": "tsc --watch",
+      "prepare": "node scripts/build.mjs",
+      "test": "node test-cleanup.mjs",
+      "clean": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\""
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "devDependencies": {
+      "@types/node": "^22.20.1",
+      "typescript": "^5.9.3"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-session": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-subagent": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-system-prompt": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-tools": "^0.2.0-rc.2",
+      "@deepseek-ai/dsh-util-values": "^0.2.0-rc.2",
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "engines": {
+      "node": ">=24"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# @momojie-s/dsh-subagent-cleanup 组合包 patch 层：被 profile bundles 列表引用时应用。\n# 行 name 用包名（非 file:// URL），由 Node 模块解析到已安装的包。\n# 工具默认名 subagent_cleanup / subagent_cleanup_global，与内置工具不冲突。\n- insert:\n    - id: subagent-cleanup\n      name: '@momojie-s/dsh-subagent-cleanup'\n      config:\n        defaultIdleHours: 24        # 运维大扫除的默认闲置门槛（小时）\n        settleBufferMs: 30000       # inactive(仅磁盘)子级的写入缓冲（毫秒）\n        liveBufferMs: 600000        # running(在内存)子级需静默多久才可处置（毫秒）\n        registerOfficialArchive: true  # 归档前先登记官方归档集合（workspaceRegistry 不可用时自动退化为纯搬移）\n        pruneProjcache: true           # 处置后删除该会话的持久投影缓存记录（进程内残影到下次重启为止）\n"
+    }
+  ],
+  "entries": [
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/index.ts:307"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@types/node": "^22.20.1",
+      "typescript": "^5.9.3"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 9,
+    "pushed_at": "2026-10-30T02:05:40Z",
+    "created_at": "2026-08-25T19:29:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "scripts/build.mjs",
+    "src/index.ts",
+    "test-cleanup.mjs"
+  ],
+  "readme": [
+    {
+      "section": "@momojie-s/dsh-subagent-cleanup",
+      "text": "DSH 插件:**子 agent 会话清理**——长期自主会话收尾时清掉自己攒下的子 agent 对话,或从运维侧跨 workspace 清理冷记录堆积。默认归档(可逆),可选彻底删除。"
+    },
+    {
+      "section": "一句话作用",
+      "text": "DSH 官方没有会话删除能力(API 只有归档隐藏,不减少 `session.list` 负担;官方 README 明言删除是\"later product decision\")。长期自主会话持续产生子 agent 会话记录,几十上百个堆积后拖慢 Web GUI(实测 664 条 ≈ 1s/880KB)。本插件提供两个模型可调用的工具补上这块:\n\n- **`subagent_cleanup`(会话自清)**:清理\"本会话自己的\"子 agent 及更深层后代。通过子 agent 服务枚举(`listDescendants`)确定归属与状态,只处置已停稳的(正在跑的、刚结算仍在写的、活祖先名下的都跳过),无闲置小时门槛。\n- **`subagent_cleanup_global`(运维大扫除)**:跨 workspace 按目录形态扫描(裸 UUID = 子 agent,`session-` 前缀主会话绝不触碰),只处置\"当前 DSH 进程启动后从未写入 && 闲置超阈值(默认 24h)\"的冷记录;支持 workspace 子串过滤和 `parent` 点名。"
+    },
+    {
+      "section": "环境要求",
+      "text": "- DSH `>= 0.1.5-rc.1`(已验证至 `0.2.1-rc.5`);host 半部插件,无浏览器组件,任意 profile 可用\n- Windows / Linux / macOS(`fs.rename` 同卷移动;DSH home 与 sessions 同盘)\n- **0.2.0 机制注**:归档模式会先调官方 `workspaceRegistry.archiveSession` 登记 id 再搬移;workspace 包未挂载的 profile 自动退化为纯搬移(功能不损失,仅少官方归档集合语义)"
+    },
+    {
+      "section": "用法",
+      "text": "装好后无需配置。对话里直接说:\n\n- \"把这次任务攒的子agent会话清掉\"(长期会话收尾)→ 模型调 `subagent_cleanup`\n- \"清理 StarRail 的旧子agent会话\" / \"全局大扫除一下子agent记录\" → `subagent_cleanup_global`\n- 工具结果返回:处置清单、跳过分类计数、释放空间、归档 manifest 路径\n\n参数要点(两个工具同构):`mode: archive(默认)/ delete(不可恢复)`,`dryRun: true` 只看清单;自清支持 `ids: [...]` 点名自己的后代;大扫除支持 `workspace` 子串 / `parent` 会话 id / `minIdleHours`。"
+    },
+    {
+      "section": "用法",
+      "text": "**归档 = 两步**(0.2.0 起):①把 id 登记进官方归档集合(数据尚在盘上,通过官方存在性检查;会话仍有活动则拒绝并跳过该候选)——Web UI 的工作区侧栏按官方集合过滤归档行、归档视图可一键恢复、归档闸门阻止其继续跑模型;②再把目录移入 `sessions-archive`(物理减负:列表/磁盘真正变小)。两种动作都会顺带删除该会话在 `storages/session_projcache` 的持久投影缓存记录(0.2.0 官方新增的缓存,自身无清理机制;进程内残影到下次重启为止,归档会话不会再被读取,无实际影响)。\n\n**历史回填**:`subagent_cleanup_global` 传 `backfillArchiveSet: true`——不清理,只把历史 manifest 里的已归档 id 逐个补登记进官方归档集合(搬回 → 登记 → 搬回,幂等;先 `dryRun: true` 预览)。一次性维护操作,建议空闲时跑。"
+    },
+    {
+      "section": "安装",
+      "text": "```powershell\ndsh plugin --profile web add <本仓库路径>   # 开发机本地"
+    },
+    {
+      "section": "或",
+      "text": "dsh plugin --profile web add github:Momojie-S/dsh-subagent-cleanup\n```\n\n安装后**重启 DSH** 生效(bundle 层启动时快照)。"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认 | 说明 |\n|---|---|---|\n| `toolSelf` | `subagent_cleanup` | 自清工具的模型可见名 |\n| `toolGlobal` | `subagent_cleanup_global` | 大扫除工具的模型可见名 |\n| `home` | `DSH_HOME` 环境变量,再退 `~/.dsh` | DSH home 覆盖 |\n| `archiveRoot` | `<home>/sessions-archive` | 归档目标根 |\n| `defaultIdleHours` | `24` | 大扫除闲置门槛(小时) |\n| `settleBufferMs` | `30000` | 仅磁盘子级的写入缓冲(毫秒) |\n| `liveBufferMs` | `600000` | 在内存子级需静默多久才可处置(毫秒) |\n| `registerOfficialArchive` | `true` | 归档前登记官方归档集合;`false` 退回纯搬移 |\n| `pruneProjcache` | `true` | 处置后删除该会话的持久投影缓存记录 |"
+    },
+    {
+      "section": "验证",
+      "text": "插件加载成功后 DSH 日志出现一行:\n\n```\nsubagent-cleanup: active (tools subagent_cleanup/subagent_cleanup_global, home C:\\...\\.dsh, idle gate 24h, official-archive-set on, projcache prune on)\n```\n\n会话里让模型执行 `dryRun: true` 的大扫除,返回的 `skippedByReason` 有合理分布(正在跑的 `possibly-live`/`attached-unknown` 被跳过)即为判据生效。\n\n机制总览、安全边界与决策记录见 [docs/design/overview.md](docs/design/overview.md)。"
+    }
+  ],
+  "skipped": []
+}

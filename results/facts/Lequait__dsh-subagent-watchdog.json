@@ -1,0 +1,195 @@
+{
+  "repo": "Lequait/dsh-subagent-watchdog",
+  "commit": "f5a9f0343f80d80fd2bf1130ce1185e6c3f56f1c",
+  "extracted_at": "2026-11-11T12:01:41.068726+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 42872,
+    "lines_by_language": {
+      "JSON": 171,
+      "JavaScript": 860,
+      "Markdown": 125,
+      "Other": 34,
+      "YAML": 17
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "awesome-entry.yml",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/config.js",
+      "lib/schema.js",
+      "lib/util.js",
+      "lib/watchdog.js",
+      "market/icon.svg",
+      "market/index.json",
+      "package-lock.json",
+      "package.json",
+      "scripts/make-market-index.mjs",
+      "tests/watchdog.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-subagent-watchdog",
+    "version": "0.1.0",
+    "description": "子代理被上游断线打死时，替它给父代理报丧：监听 agent/error，确认子代理没有恢复后，向父代理投递一条可处理的中断通知。 Notify the parent agent when a subagent dies from an upstream failure instead of finishing.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./lib/*": "./lib/*"
+    },
+    "files": [
+      "index.js",
+      "lib/",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=20",
+      "dsh": ">=0.2.0-rc.1"
+    },
+    "scripts": {
+      "test": "node --test tests/*.test.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "subagent",
+      "watchdog",
+      "agent-teams"
+    ],
+    "license": "MIT",
+    "dependencies": {
+      "schemastery": "^3.18.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: subagent-watchdog\n      name: dsh-subagent-watchdog\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_APP_ASAR",
+      "kind": "env",
+      "where": "scripts/make-market-index.mjs:24"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "scripts/make-market-index.mjs:26"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Lequait/dsh-subagent-watchdog",
+      "where": "awesome-entry.yml:1"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Lequait/dsh-subagent-watchdog",
+      "where": "market/index.json:77"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Lequait/dsh-subagent-watchdog",
+      "where": "scripts/make-market-index.mjs:95"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Lequait/dsh-subagent-watchdog/raw/main/market/index.json",
+      "where": "scripts/make-market-index.mjs:118"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "schemastery": "^3.18.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-11-04T20:10:49Z",
+    "created_at": "2026-11-04T19:55:42Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/config.js",
+    "lib/schema.js",
+    "lib/util.js",
+    "lib/watchdog.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-subagent-watchdog",
+      "text": "子代理被上游断线打死时，替它给父代理报丧。\n\n> When a subagent dies from an upstream disconnect, the harness fires\n> `agent/error` on the **child** but never tells the **parent**. The child just\n> becomes `idle`, which is indistinguishable from \"finished normally\" and\n> \"waiting for me\". The parent then waits forever. This plugin closes that gap."
+    },
+    {
+      "section": "问题",
+      "text": "DSH 的 `AgentStatus` 只有 `'idle' | 'running'`，没有 `failed`：\n\n- `agent/status` 的 `idle` 语义是 *\"no driver remains scheduled or active\"*；\n- `list_agents` 只展示 `running` / `inactive`；\n- 父级的 `subagent-settled` notice 在断线路径上不会发出。\n\n所以「正常跑完」「在等我回话」「上游断线死了」三者在父代理看来完全一样。唯一可靠的信号是轮询任务板（任务仍 `in_progress` 但成员 `inactive`），这在多代理编排里不可接受。"
+    },
+    {
+      "section": "它做什么",
+      "text": "1. 在 root scope 监听 `agent/error`（root 监听器能收到所有 agent 的事件）。\n2. 解析子代理的父代理：先按创建归属 `ctx.agents.isOwnedBy()`，再退回 fork 谱系 `session.header.parentSession`。\n3. 等 `settleDelayMs`（默认 2.5s）。\n   - 子代理已经回到 `running` → 说明 harness 自己重试成功了，**不发**。\n   - 子代理仍是 `idle` → 它没恢复，**发**。\n4. 用 `parent.followup(message)` 投递一条可处理的通知：父代理空闲时会被唤醒，正在跑时排到当前轮之后。\n\n它**不重试任何东西**，也不改会话历史——只负责让父代理知道「这个子代理死了，你来决定」。"
+    },
+    {
+      "section": "方式一：绝对路径（本地开发，无需 npm）",
+      "text": "在 `~/.dsh/cordis.patch.yml` 追加：\n\n```yaml\n- insert:\n    - id: subagent-watchdog\n      name: \"H:/AI/dsh-subagent-watchdog/index.js\"\n```\n\nloader 会把绝对路径转成 `file://` URL，不需要 profile `node_modules` 链接。注意必须是 `- insert:` 列表——profile 层的 patch 是 id-targeted 的，裸 `- id:` 会被当成「patch 已存在条目」。\n\n依赖 `schemastery` 需要在插件目录里 `npm install` 一次。"
+    },
+    {
+      "section": "方式二：从仓库安装",
+      "text": "```bash\ndsh plugin --profile <name> add git+https://github.com/Lequait/dsh-subagent-watchdog.git\n```"
+    },
+    {
+      "section": "方式三：从插件市场安装",
+      "text": "把下面这个索引地址加进 Discover 的索引源，然后在市场里装：\n\n```\nhttps://github.com/Lequait/dsh-subagent-watchdog/raw/main/market/index.json\n```\n\njsDelivr 镜像（国内更快）：\n\n```\nhttps://cdn.jsdelivr.net/gh/Lequait/dsh-subagent-watchdog@main/market/index.json\n```"
+    },
+    {
+      "section": "配置",
+      "text": "全部可选，写在 patch 条目的 `config:` 下：\n\n```yaml\n- insert:\n    - id: subagent-watchdog\n      name: \"H:/AI/dsh-subagent-watchdog/index.js\"\n      config:"
+    },
+    {
+      "section": "配置",
+      "text": "| 选项 | 默认 | 说明 |\n| --- | --- | --- |\n| `enabled` | `true` | 总开关 |\n| `settleDelayMs` | `2500` | `agent/error` 之后等多久再判定死亡。期间恢复成 `running` 就不发 |\n| `cooldownMs` | `60000` | 同一个子代理两次通知的最小间隔 |\n| `maxPerChild` | `5` | 同一个子代理的通知上限（每进程） |\n| `notifyOnDisposed` | `true` | 子代理带着未处理失败被 dispose 时也报 |\n| `dryRun` | `false` | 只写日志不投递，首次安装建议先开 |\n| `messagePrefix` | `[subagent-watchdog]` | 通知前缀 |"
+    },
+    {
+      "section": "父代理收到的通知",
+      "text": "```\n[subagent-watchdog] 子代理中断\n\n子代理: 01J8X...\n层级: 1"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **只覆盖「错误后停住」这一种死法。** 如果上游是静默挂起（流一直不返回、也不报错），`agent/error` 不会触发，本插件也不会说话。那种情况要靠 provider 的 `streamIdleTimeoutMs`（默认 5 分钟）把它变成 `TIMEOUT`。\n- **可能重复通知。** 如果 harness 某天补上了断线路径的 `subagent-settled` notice，父代理会同时收到官方通知和本插件的通知。通知正文里已写明「若已收到正常完成通知请忽略」。\n- **不区分错误类型。** 工具报错、provider 断线、上下文溢出都会触发 `agent/error`。判定标准是「错误之后没有恢复」，而不是错误码。\n- 依赖 `ctx.agents` 服务；`inject = ['agents']` 保证它在服务就绪后才挂载。"
+    },
+    {
+      "section": "相关",
+      "text": "- 官方讨论：<https://github.com/deepseek-ai/deepseek-harness/discussions/12200>\n- 文档：`/reference/subsystems/core`（`agent/*` 事件）、`/reference/subsystems/subagent`、`/reference/subsystems/llm-streaming`"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

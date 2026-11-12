@@ -1,0 +1,207 @@
+{
+  "repo": "Ezisup/dsh-stop-kills-jobs",
+  "commit": "3ccf336eab84ac882927e17132232572b9c0c428",
+  "extracted_at": "2026-11-11T09:58:00.287641+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 52621,
+    "lines_by_language": {
+      "JSON": 58,
+      "JavaScript": 802,
+      "Markdown": 353,
+      "Other": 39,
+      "Python": 145,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "PUBLISHING.md",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "market_check.py",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-stop-kills-jobs",
+    "version": "0.1.0",
+    "description": "Pressing Stop on a DSH turn also ends the background jobs that turn started, so a finished job cannot wake the model for a turn you already cancelled.",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Ezisup/dsh-stop-kills-jobs.git"
+    },
+    "homepage": "https://github.com/Ezisup/dsh-stop-kills-jobs#readme",
+    "bugs": {
+      "url": "https://github.com/Ezisup/dsh-stop-kills-jobs/issues"
+    },
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-settings"
+        ],
+        "platform": "web"
+      }
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "jobs",
+      "background-jobs",
+      "cancel",
+      "stop",
+      "agent",
+      "cordis"
+    ],
+    "author": "Ezisup",
+    "publishConfig": {
+      "access": "public"
+    },
+    "engines": {
+      "node": ">=20"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-stop-kills-jobs bundle patch: inserts this plugin into a profile's layer stack.\n# Installed with:\n#   dsh plugin --profile <name> add /path/to/dsh-stop-kills-jobs\n- insert:\n    - id: dsh-stop-kills-jobs\n      name: 'dsh-stop-kills-jobs'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ezisup/dsh-stop-kills-jobs.git",
+      "where": "package.json:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ezisup/dsh-stop-kills-jobs#readme",
+      "where": "package.json:10"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Ezisup/dsh-stop-kills-jobs/issues",
+      "where": "package.json:12"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-09-29T07:06:37Z",
+    "created_at": "2026-09-29T06:54:00Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-stop-kills-jobs",
+      "text": "按下对话的**停止**按钮时，除了中断当前回复，还会**结束这一轮发起的后台任务**。"
+    },
+    {
+      "section": "解决的问题",
+      "text": "后台任务（`run_in_background: true` 的 bash、后台子代理）拿到 job id 之后，\n**就不再跟随对话的中断信号了**。这是 DSH 的明确设计 —— `dsh-tool-bash` 自己的模块文档写着：\n\n> Background calls register process handles with `ctx.jobs`; their work uses\n> **job cancellation rather than the tool-call signal** after an id is returned.\n\n代码里这个对比很直白：\n\n| | 前台命令 | 后台命令 |\n|---|---|---|\n| 调用 | `ctx.shell.run({... signal: exec.signal})` | `jobs.start({... owner: exec.agent ...})` |\n| 按停止 | ✅ 传了 `signal`，会被杀掉 | ❌ **没有传 signal** |"
+    },
+    {
+      "section": "解决的问题",
+      "text": "后果就是：你按了停止，任务还在跑；跑完之后它的完成通知会**唤醒模型**，\n为一次你已经取消的对话**多花一次请求** —— 而你还得再点一次停止。\n\n这个插件把这个缺口补上：它监听 UI 同样在监听的 `turn/end` 事件，\n认出「用户按了停止」这个原因，然后取消该会话自己的后台任务。"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\ndsh plugin --profile web add link:/xxx/dsh-stop-kills-jobs\n```\n\n装完**重启 DSH** 生效（客户端部分需要重新加载）。"
+    },
+    {
+      "section": "设置",
+      "text": "设置位置：**设置 → 插件 → 插件配置**，和「插件市场」「Shell」「Agent loop」等并列。\n\n> 这些开关确定后基本不会再改，所以做成插件配置里的一张卡片，\n> 而不是占用设置栏顶层 —— 顶层要留给经常调整的项。\n> 卡片**默认折叠**，只显示标题和一行说明，和旁边的 Shell / Agent loop 等保持一致，\n> 点标题才展开开关，不占版面。折叠箭头用的是同一套 `IconChevronDownOutline14` 图标。\n\n**总开关联动**：关闭总开关后，「停止时结束什么」整段隐藏（因为此时插件不做任何事），\n但**已保存的设置原样保留**，重新开启即恢复 —— 不会因为关一下就被重置。\n\n**正文分两段**，因为它们不是一类东西：\n\n| 分段 | 内容 | 与 Stop 的关系 |\n|---|---|---|\n| 停止时结束什么 | 后台命令 / 后台子代理 | 受总开关管辖 |\n| 插件自身的输出 | 显示提示 / 输出日志 | **无关**，任何时候都生效 |"
+    },
+    {
+      "section": "设置",
+      "text": "平铺成一张列表时，「显示提示」「输出日志」会被误读成也会随停止按钮被终止 ——\n这是分段的原因。\n\n卡片标题为「停止时结束后台任务」（英文界面显示 \"End background jobs on Stop\"）：\n\n| 开关 | 默认 | 说明 |\n|---|---|---|\n| 启用 | 开 | 总开关。关掉即完全恢复 DSH 原行为 |\n| 后台命令（bash） | 开 | 是否结束 `run_in_background` 的 bash 任务 |\n| 后台子代理（subagent） | 开 | 是否结束后台子代理 |\n| 在对话中显示提示 | 开 | 在设置页显示最近结束的任务 |\n| 输出详细日志 | 关 | 把每次判断写进服务端日志，排查问题用 |"
+    },
+    {
+      "section": "卡片里没有长篇说明",
+      "text": "正文只有开关本身，没有\"为什么需要它\"那类解释 —— 会装这个插件的人看名字就知道用途，\n展开后应该直接看到可调项。改这个插件时不要再把说明加回去。"
+    },
+    {
+      "section": "卡片是怎么进到「插件配置」的",
+      "text": "那个标签页会遍历宿主已注册的 settings namespace，逐个配对同 key 的卡片：\n\n```js\nconst served = new Set(mirrored.view?.namespaces.map((v) => v.ns) ?? [])\nentries().flatMap((e) => served.has(e.options.key) ? [e.options.key] : [])\n```\n\n所以 `settings.plugin.item` 注册时的 `key` **必须等于**插件注册的 settings\nnamespace（`stop-kills-jobs`）。key 写错不会报错，只是**卡片静默消失** ——\n排查时先看这一点。\n\n**作用范围**：只影响**当前会话**发起的任务，**不会**碰其他会话。\n子代理任务注册时用的是 `owner: parent`，所以它的 `ownerSession` 就是父会话 id ——\n一个过滤条件就同时覆盖了「本会话 + 它派生的子代理」，不用走任何树。"
+    },
+    {
+      "section": "实测结果",
+      "text": "在独立实例上、用**真实鼠标/键盘事件**（CDP `Input.dispatchMouseEvent`）驱动真实 GUI 测得：\n\n| 场景 | Stop 后存活的后台进程 | 结论 |\n|---|---|---|\n| 插件**启用** | 0 | ✅ 任务被结束 |\n| 插件**禁用** | 1 | ✅ 任务存活（恢复原行为）|\n\n两个基线都是 0，所以这个对照是可信的。\n\n其他已验证项：\n\n- 配置接口返回正确的 schema 默认值\n- 设置页 5 个开关全部渲染，点击后**持久化生效**（`verbose` 往返 true→false→true）\n- **回归**：正常跑完的回合**不会**误杀自己的后台任务\n- **回归**：没有后台任务时按停止是干净的空操作，无报错\n\n服务端日志（开启 verbose 时）："
+    },
+    {
+      "section": "实测结果",
+      "text": "```\n[stop-kills-jobs] watching for stopped turns\n[stop-kills-jobs] kill bash-2 -> requested\n[stop-kills-jobs] stopped 1 job(s) on user Stop: bash-2\n[stop-kills-jobs] disabled; leaving jobs alone"
+    },
+    {
+      "section": "1. 作业访问是按「所有者身份」授权的",
+      "text": "这是这个插件最容易写错的地方。第一版写的是 `jobs.list()`，\n日志显示 `total_jobs=0` —— **明明有任务在跑却看不见**。\n\n根因在 `dsh-jobs-local` 的隔离栅栏：\n\n```js\nassertAccess(job, caller) {\n    if (job.owner !== void 0 && job.owner.id !== caller?.id)\n        throw new Error(`job ${job.id} belongs to another session`);\n}\n\n传 `undefined` 等于「无代理调用者」，**永远匹配不上有主作业**。\n必须先用 `ctx.agents.get(session.id)` 拿到那个会话的 Agent 再传进去：\n\n```js\nconst caller = ctx.agents.get(sessionId)   // 这是授权凭据，不是查表便利\njobs.list(caller)\njobs.kill(job.id, caller, reason)\n```"
+    },
+    {
+      "section": "2. 识别「用户按停止」要精确匹配",
+      "text": "```js\nreason?.kind === 'aborted' && reason?.reason?.kind === 'user'\n```\n\n只看 `aborted` 不够 —— 父代理中断、插件 hook 也都会 abort，\n为那些情况取消用户的任务是意外行为。取消原因一共四种：\n`'user'` / `'parent'` / `'hook'` / `'disposed'`，只有 `'user'` 是停止按钮。"
+    },
+    {
+      "section": "3. `ctx.logger` 在这个部署里是黑洞",
+      "text": "两个坑叠在一起：\n\n- `ctx.logger` 是**可调用对象**，要先传频道名：`ctx.logger('name').warn(...)`。\n  写成 `ctx.logger.warn(...)` 会拿到 `undefined`，被可选链**静默吞掉**。\n- 更关键的是：**这个部署没有安装任何 logger exporter**，\n  所以即使调用方式对了，`ctx.logger` 的输出也没有任何地方显示。\n\n所以诊断信息走 `process.stderr`（带 `[stop-kills-jobs]` 前缀），\n它能进服务端日志和启动它的终端。一个「verbose 开关写进虚空」的功能，\n本身就和这个插件要消灭的静默失败是同一类问题。"
+    },
+    {
+      "section": "4. 客户端插件必须声明 `inject`",
+      "text": "client 半边如果用了 `ctx.locale` / `ctx.slots` 却没声明依赖：\n\n```\nfailed to apply loader entry: cannot get property \"locale\" without inject\n```\n\n而且失败方式是**整个界面渲染不出来**（页面只有 \"Failed to load plugins\"），\n不是只有这个插件坏掉。所以必须：\n\n```js\nconst inject = [\"slots\", \"locale\"];\nexports.inject = inject;\n```"
+    },
+    {
+      "section": "5. 插件在工作区里，解析不到 `@deepseek-ai/*`",
+      "text": "插件放在 `~/dsh_projects/` 下，在 `$DSH_HOME/profiles` 树**之外**，\nNode 向上找 `node_modules` 时永远走不到 DSH 在\n`~/.dsh/profiles/node_modules` 挂的 fallback。加载会直接失败：\n\n```\nCannot find package '@deepseek-ai/schemastery'\n```\n\n运行 `tools/link-runtime-deps.sh` 只给**实际用到的**包建软链（不是整个 scope），\n保持依赖集可见且最小。\n\n> **`pnpm install` 之后需要重新跑这个脚本**（如果软链被清掉）。"
+    },
+    {
+      "section": "文件",
+      "text": "| 路径 | 说明 |\n|---|---|\n| `lib/index.js` | host 半边：监听 `turn/end`、取消任务、配置路由 |\n| `lib/client.js` | client 半边：设置页 UI |\n| `cordis.patch.yml` | 把插件插进 profile 层栈 |\n| `tools/` | 安装/自检脚本（WSL 用，避免 Windows PATH 破坏引号） |\n| `verify_plugin.py` | 端到端验证（配置 + 启用/禁用对照） |\n| `regression.py` | 回归验证 |\n| `verify_result.json` | 验证结果记录 |"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\ndsh plugin --profile web remove dsh-stop-kills-jobs\n```\n\n然后重启 DSH。"
+    }
+  ],
+  "skipped": []
+}

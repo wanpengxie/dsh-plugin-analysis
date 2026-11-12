@@ -1,0 +1,211 @@
+{
+  "repo": "whitesandshi/dsh-codex-relay-monitor",
+  "commit": "40f525caf09e069496787348d518271c03063536",
+  "extracted_at": "2026-11-12T10:41:06.444309+00:00",
+  "tree": {
+    "files": 14,
+    "bytes": 65195,
+    "lines_by_language": {
+      "JSON": 41,
+      "JavaScript": 480,
+      "Markdown": 131,
+      "Other": 246,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/widget-reroute.png",
+      "docs/widget.png",
+      "icon.svg",
+      "index.js",
+      "launch-widget.vbs",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "widget.ps1"
+    ]
+  },
+  "manifest": {
+    "name": "@local/codex-relay-monitor",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Floating status window for the Codex relay and desktop logs.",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "widget.ps1",
+      "launch-widget.vbs",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: codex-relay-monitor\n      name: '@local/codex-relay-monitor'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:33"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-11-05T09:59:42Z",
+    "created_at": "2026-11-05T09:59:31Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-11-05T09:59:42Z",
+      "inactive_days": 7,
+      "commit_count": 1,
+      "checked_at": "2026-11-12T10:41:06.444309+00:00",
+      "signals": [
+        "list:pushed_at=2026-11-05T09:59:42Z",
+        "list:commits=1"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "Codex 链路监控（DSH 插件）",
+      "text": "在 DeepSeek Harness 里常驻一个置顶小窗，实时显示你的 Codex 现在是在跑任务、还是卡在过载重试 / 断流重连；\n以及这次请求服务端到底给了哪个模型。"
+    },
+    {
+      "section": "它能看出什么",
+      "text": "- **任务是否在跑**：请求发出到流结束之间算「运行中」，结束后最多 5 秒回到「空闲」。\n- **过载 / 断流**：`server_is_overloaded`、`http 429/5xx` 记为过载；`connect/read error`、`stream error`、`stream ended early` 记为断流重连。\n- **模型有没有被换**：把请求头里的 `model=` 和服务端 `response.created` 里的 `model` 对比，不一致时整行变红并在计数里累计。\n- **Codex 自己的重连**：`tpp-local-executor` 的 reconnect episode、`app_server_connection` 的 `reconnectAttempt`。"
+    },
+    {
+      "section": "工作原理",
+      "text": "```\nCodex ──> 127.0.0.1:8787 relay ──> 上游\n                 │ 写 relay.log\n                 ▼\n        ┌──────────────────┐      GET /codex-relay/status      ┌──────────────┐\n\n- **Host 半身**（`index.js`）：增量 tail `relay.log` 和 Codex 桌面日志，维护每个请求的状态，注册 `GET /codex-relay/status` 返回 JSON 快照。\n- **Client 半身**（`client.js`）：空实现。界面不在 Harness 页面里，避免遮挡对话。\n- **小窗**（`widget.ps1` + `launch-widget.vbs`）：WPF 置顶窗口，每 2 秒拉一次接口；拖动标题区移动，右上角 `×` 关闭。插件启用时启动，停用/退出时按 PID 关掉。"
+    },
+    {
+      "section": "安装",
+      "text": "1. 克隆或下载本仓库到本地，例如 `D:\\tools\\dsh-codex-relay-monitor`。\n2. 用 DSH 的 `plugin_manager` 把它装成 bundle：\n\n```\n   plugin_manager install_bundle  target: <仓库绝对路径>\n   ```\n\n也可以手工把它写成一条 `cordis.patch.yml` 的 row（包名 `@local/codex-relay-monitor`）。\n3. 装完小窗会自动出现在屏幕右侧；Harness 页面不需要刷新（页面里本来就没有 UI）。"
+    },
+    {
+      "section": "依赖",
+      "text": "- **Windows**：小窗是 WPF + Windows PowerShell 5.1（`widget.ps1` 必须带 UTF-8 BOM）。\n- **DeepSeek Harness**：使用了 `ctx.webServer.register` 与 `dsh.bundle` / `dsh.client` 清单。\n- **codex-overload-fix**（推荐）：默认从 `%USERPROFILE%\\.codex-overload-fix\\relay.log` 读 relay 日志。"
+    },
+    {
+      "section": "配置",
+      "text": "在 patch 行里给插件加 `config`，全部可选：\n\n```yaml\n- insert:\n    - id: codex-relay-monitor\n      name: '@local/codex-relay-monitor'\n      config:"
+    },
+    {
+      "section": "识别哪些日志行",
+      "text": "relay（`relay.py`）：\n\n```\n2026-11-05 16:12:31 [14959] POST /responses (97856B) | model=gpt-6.1-sol effort=medium ...\n2026-11-05 16:12:43 [14959] attempt 1: retryable (error event overload: server_is_overloaded)\n2026-11-05 16:13:46 [14959] attempt 4: ok, streaming (served=gpt-6.1-sol)\n2026-11-05 16:14:20 [14959] stream finished in 34.0s\n\nCodex 桌面日志："
+    },
+    {
+      "section": "识别哪些日志行",
+      "text": "```\n... [tpp-local-executor] Local Work executor connection observation ... event=episode_started phase=reconnect\n... [AppServerConnection] app_server_connection.state_changed ... reconnectAttempt=2 ...\n```"
+    },
+    {
+      "section": "让 relay 补两处日志（推荐）",
+      "text": "上游 `relay.py` 默认不记录「服务端实际模型」和「流什么时候结束」。不打这两个补丁也能跑，\n但「换模型检测」会失效、「任务结束」只能退化成 3 分钟静默判定。改动只有两处：\n\n```python"
+    },
+    {
+      "section": "attempt()：把服务端在 response.created 里报的模型记下来",
+      "text": "_served = (_ev.get(\"response\") or {}).get(\"model\") if _ev else None\nif _served:\n    observed[\"served\"] = _served\n    _tag = f\"[served={_served}] [from={cport}] \"\n```\n\n```python"
+    },
+    {
+      "section": "_proxy()：成功行带上 served，并在流真正结束时补一行",
+      "text": "log(f\"[{cport}] attempt {attempt_no}: ok, streaming\"\n    + (f\" (served={served})\" if served else \"\"))\nstream_started = time.time()\ntry:\n    self._stream_back(resp_headers, prelude, conn, resp)\nfinally:\n    log(f\"[{cport}] stream finished in {time.time() - stream_started:.1f}s\")\n```"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 一次只显示最新的一条请求；多会话并发时其余请求只计入计数。\n- `running` 依赖 relay 的结束行；没有结束行时，3 分钟无新日志即判空闲。\n- 小窗位置不记忆，每次启动回到右侧默认位置；DSH 崩溃时小窗会残留（显示「接口未连接」）。\n- 只读本机日志与本地端口，不联网、不解析对话内容。"
+    },
+    {
+      "section": "License",
+      "text": "MIT\n\n---"
+    },
+    {
+      "section": "English",
+      "text": "A tiny always-on-top widget for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) that shows what your\nlocal [Codex](https://openai.com/codex) is doing: the in-flight request (model, body size, attempt, elapsed), overload\nretries and dropped streams in the last five minutes, and whether the server actually served the model you asked for."
+    },
+    {
+      "section": "English",
+      "text": "The Host half tails `relay.log` from [codex-overload-fix](https://github.com/NewBeeM4n/codex-overload-fix) and the Codex\ndesktop logs, then serves one JSON snapshot at `GET /codex-relay/status`. The widget is a WPF window that polls it every\ntwo seconds, so nothing is drawn inside the Harness page. Windows only for the widget; the Host half is plain Node."
+    }
+  ],
+  "skipped": []
+}

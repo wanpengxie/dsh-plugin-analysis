@@ -1,0 +1,188 @@
+{
+  "repo": "ryasrk/dsh-vision-patch",
+  "commit": "1853e3131ee12da9787cd629f47760d4c8fbb993",
+  "extracted_at": "2026-11-12T04:00:55.429732+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 92649,
+    "lines_by_language": {
+      "JSON": 45,
+      "JavaScript": 1594,
+      "Markdown": 522,
+      "Other": 2,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "client/client.js",
+      "cordis.patch.yml",
+      "lib/host.js",
+      "lib/index.js",
+      "package.json",
+      "tests/client.test.mjs",
+      "tests/cordis-proxy.test.mjs",
+      "tests/host.test.mjs",
+      "tests/spike.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-vision-patch",
+    "description": "Per-model and per-route image-input (vision) checkboxes on the Models page's custom-provider cards, writing through the llm-pi-ai settings namespace.",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "lib/index.js",
+    "scripts": {
+      "test": "node --test \"tests/**/*.test.mjs\""
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "link:/home/ryasr/deepseek-harness/vendor/cordis"
+    },
+    "license": "MIT",
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "vision",
+      "settings",
+      "llm-pi-ai"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-api-remotes",
+          "@deepseek-ai/dsh-client-ui-settings-models"
+        ]
+      }
+    },
+    "files": [
+      "lib",
+      "client",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./client/client.js"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch: inserts this plugin into a profile's layer stack.\n# No loader config is needed: the plugin's whole contribution is its client\n# bundle, which registers a provider-card extension on the Models settings\n# page and writes image-input declarations through the settings Remote.\n- insert:\n    - id: dsh-vision-patch\n      name: 'dsh-vision-patch'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "client/client.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {
+      "@deepseek-ai/cordis": "link:/home/ryasr/deepseek-harness/vendor/cordis"
+    }
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 16,
+    "pushed_at": "2026-09-10T08:46:57Z",
+    "created_at": "2026-09-03T02:00:50Z"
+  },
+  "runtime_files": [
+    "client/client.js",
+    "cordis.patch.yml",
+    "lib/host.js",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-vision-patch",
+      "text": "A plugin with two halves on the `llm-pi-ai` settings namespace. The client\ncard on the Models page declares which models accept image input, per model\nand per route, and picks a per-route **vision fallback model**. The host half\nuses that fallback to describe images so a turn never dies on an image the\nmain model cannot read."
+    },
+    {
+      "section": "dsh-vision-patch",
+      "text": "The card renders inside every provider card the Models page draws for a\n`llm-pi-ai` route (saved rows, first-run setup rows, add-provider drafts) and\nwrites through the settings Remote. The host half adds no HTTP route of its\nown; it registers a single `agent/pre-step` interceptor."
+    },
+    {
+      "section": "What it does",
+      "text": "- **Per-model checkbox** — `input: ['text', 'image']` on the model's stored\n  entry. Unchecked *removes* the `input` key entirely, so the model inherits\n  the installed catalog's capability (it never writes `['text']`, which would\n  forbid images outright).\n- **Route-wide checkbox** — `defaultInput: ['text', 'image']` (set/unset via\n  path ops) for every model on the route that declares no list of its own.\n- **Vision fallback model** — a per-route dropdown of the route's\n  vision-capable models (those that declare images themselves or inherit them\n  from the route). The picked model is stored as `visionFallbackModel`.\n- **Model filter** — a search box appears once a route lists more than 8\n  models; the count line shows how many models currently declare images.\n- **Live refresh** — the card re-reads after each write and follows\n  `settings/document-updated`, so edits made elsewhere on the page converge."
+    },
+    {
+      "section": "What it does",
+      "text": "A provider with no stored profile (never saved from the Models page) shows\nguidance text instead of checkboxes."
+    },
+    {
+      "section": "Vision fallback (host)",
+      "text": "A provider route in the `llm-pi-ai` settings namespace may carry a\n`visionFallbackModel` field: `{ provider?: string; model: string }`. The\n`provider` defaults to the route itself; `model` names a vision-capable model\non it. An absent field turns the feature off for that route. The Models card's\ndropdown writes this field; the host reads the same stored profile, so the two\nsides always agree."
+    },
+    {
+      "section": "Vision fallback (host)",
+      "text": "When the host's `agent/pre-step` interceptor sees a step whose user message\ncontains an `image` content block AND the step's route (from\n`agent.options.provider`) has a configured `visionFallbackModel`, it:"
+    },
+    {
+      "section": "Vision fallback (host)",
+      "text": "1. streams the turn to the fallback vision model via the `llm` service's\n   `stream({ provider, model, messages, signal })` to describe the image(s);\n2. replaces each `image` block in the user message with a `text` block holding\n   that description; and\n3. returns the rewritten messages, so the main model continues on the\n   description."
+    },
+    {
+      "section": "Vision fallback (host)",
+      "text": "It does not inspect the active main model's modality: it describes whenever a\nfallback is configured and an image is present. If the describe fails, times\nout, no fallback is configured, or the `llm` service is unavailable, the\ninterceptor delegates unchanged (`next()`), so the image falls through to the\nharness's default handling and the turn is never blocked."
+    },
+    {
+      "section": "Host service access (why `ctx.get`, not `ctx.<name>`)",
+      "text": "The host half runs as a Cordis plugin, so its `ctx` is a Cordis Proxy. Reading a\nservice property the plugin did not declare in `inject` **throws**\n(`cannot get property \"<name>\" without inject`) — and it throws on the property\nread itself, so optional chaining (`ctx?.settings?.describe`) is not a safe\nprobe either. The strict `ctx.get(name)` is the only read that answers\n`undefined` for an absent service, so every optional service read in\n`lib/host.js` goes through it."
+    },
+    {
+      "section": "Host service access (why `ctx.get`, not `ctx.<name>`)",
+      "text": "- **`settings` is a Host service, not the Client Remote.** The host reads\n  `ctx.get('settings')` and calls `describe()`, which returns a **synchronous\n  array** of namespace descriptors. `ctx.remote.settings` is a Client-only\n  Remote whose calls answer a `{ ok, value }` envelope; that shape does not\n  exist on the host. The client half of this plugin is what uses the Remote.\n- **Never add a bare `ctx.<service>` read.** It will boot-fail the whole\n  profile at load time rather than degrade at runtime."
+    },
+    {
+      "section": "Durability & logging",
+      "text": "When the interceptor describes an image it rewrites the user's own message,\nreplacing each `image` content block with a `text` block holding the\ndescription. That rewritten text is **not stamped with a plugin `source`\nkind**. The whole host seam is validated only against mocks — there is no live\nhost to confirm a new, non-catalog `source` kind is accepted — and rewriting an\nalready-present user message (rather than appending a fresh one) risks\nclobbering the harness's own `source` marker on that message. Durability of the\ninjected wording is therefore the harness's call; this plugin makes the\ninjection **observable instead**, via the host logger:"
+    },
+    {
+      "section": "Durability & logging",
+      "text": "- `info` when a describe is attempted (an image is present, a fallback model is\n  configured, and `ctx.llm.stream` is available);\n- `debug` when the describe yields no usable text and the interceptor delegates\n  unchanged (`next()`);\n- `debug` when a description is actually injected and the turn enters rewritten;\n- `debug` when a describe is skipped because one is already in flight for the\n  same agent (the per-agent concurrency guard)."
+    },
+    {
+      "section": "Durability & logging",
+      "text": "All logging is guarded (`ctx?.logger?.info?.(...)` / `debug` / `warn?.(...)`), so\nan absent logger is harmless. A silent describe is never silent in the logs: if\nthe user believes an image was described but no text assembled (for example the\nreal `ctx.llm.stream` chunk shape differs from the mock), the debug line names\nthe agent that fell back to `next()` unchanged."
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add github:ryasrk/dsh-vision-patch\n```\n\nThe profile's `dsh.profile.bundles` list picks the package up automatically\n(its `package.json` declares `dsh.bundle.patch`). Restart the web host so the\nnew bundle layer composes, then reload the Models page."
+    },
+    {
+      "section": "Layout",
+      "text": "| Path | Role |\n| --- | --- |\n| `cordis.patch.yml` | inserts the `dsh-vision-patch` loader row |\n| `lib/index.js` | host entry — `apply(ctx)` registers the `agent/pre-step` interceptor via `lib/host.js` |\n| `lib/host.js` | host helpers: the `agent/pre-step` handler that describes images and rewrites the turn, plus the settings fallback reader |\n| `client/client.js` | browser bundle: the card (image-input checkboxes + vision fallback dropdown), registered on the `settings.models.provider-card` slot keyed `llm-pi-ai` |\n| `package.json` | `dsh.bundle.patch` + `dsh.client` (web platform, inject edges) |"
+    },
+    {
+      "section": "Layout",
+      "text": "The client bundle requires only `react` (a platform seed word); it needs no\nbuild step and has no runtime dependencies."
+    },
+    {
+      "section": "How it writes",
+      "text": "All writes go through `ctx.remote.settings` against the `llm-pi-ai` namespace,\ncarrying the revision the last read observed (`settings-conflict` on a lost\nrace):"
+    },
+    {
+      "section": "How it writes",
+      "text": "- route-wide toggle → `mutate` path ops on `['providers', <route>, 'defaultInput']`\n- vision fallback → `mutate` path ops on `['providers', <route>, 'visionFallbackModel']` (`set` the `{ model }` choice, `unset` to clear)\n- per-model → `update` merge restating the whole stored `models` list (path\n  ops cannot address array elements), every untouched field merge-preserved.\n\nWrites that land return the namespace's post-write view, which folds straight\nback into the card."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```bash\ndsh plugin --profile web remove dsh-vision-patch\n```\n\n(Then restart the web host so the bundle layer leaves the composition.)"
+    }
+  ],
+  "skipped": []
+}

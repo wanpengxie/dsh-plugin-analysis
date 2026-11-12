@@ -1,0 +1,180 @@
+{
+  "repo": "rezon-aki/dsh-compaction-effort-inherit",
+  "commit": "1ba5ebd8ed72b286eea9f8eb617f2c6efa3600f6",
+  "extracted_at": "2026-11-12T03:41:04.806911+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 20511,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 102,
+      "Markdown": 270,
+      "Other": 24,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/ACCEPTANCE.md",
+      "docs/DESIGN.md",
+      "lib/decide.js",
+      "lib/index.js",
+      "package.json",
+      "test/decide.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-compaction-effort-inherit",
+    "version": "0.1.0",
+    "description": "DSH plugin: compaction keeps the session's reasoning effort, so DeepSeek's prefix cache still hits instead of re-billing the whole context.",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "compaction",
+      "prefix-cache",
+      "reasoning-effort",
+      "cordis"
+    ],
+    "license": "MIT",
+    "scripts": {
+      "test": "node --test test/*.test.mjs"
+    },
+    "dsh": {
+      "engines": {
+        "dsh": ">=0.1.7-rc.2"
+      },
+      "compatibility": {
+        "dsh": ">=0.1.7-rc.2 <0.2.0",
+        "dshReleases": {
+          "0.1.7-rc.2": "compatible"
+        },
+        "profiles": [
+          "web"
+        ]
+      },
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-compaction-effort-inherit bundle patch：把 host 半区插进 profile 的插件 roster。\n# 用 `dsh plugin --profile <name> add <路径或 git 地址>` 安装后本层自动生效；\n# 不要再往 profile 的 cordis.patch.yml 手动 insert 同一 id（重复 id 会让加载器报错起不来）。\n- insert:\n    - id: compaction-effort-inherit\n      name: 'dsh-compaction-effort-inherit'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-09-29T11:47:18Z",
+    "created_at": "2026-09-29T11:46:57Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/decide.js",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-compaction-effort-inherit · 压缩不再作废前缀缓存",
+      "text": "**简体中文** · [English](README.en.md)\n\n[](LICENSE)\n[](cordis.patch.yml)\n[](test/decide.test.mjs)\n\n> 让上下文压缩的摘要请求**沿用会话当前的思考档位**——否则它会落到另一个缓存桶里，把整个上下文按未缓存价重算一遍。\n\n**为什么有这个项目**：官方 `compaction-basic` 会重放整段对话前缀去调摘要模型，本意就是复用 provider 的 warm prefix cache。但它从会话请求头里只取了 `provider` / `model`，**把 `reasoningEffort` 丢掉了**；缺失的档位由 LLM 层用适配器默认值补上。DeepSeek 的前缀缓存**按思考档位分桶**——同前缀、同档位命中，换了档位则 `cache_read_input_tokens` 归零。于是会话跑在 `max` 时，每次压缩都要为整段上下文再付一次全价。"
+    },
+    {
+      "section": "实测：换档位就是全量 miss",
+      "text": "同一段全新前缀，只改 `output_config.effort`，直接打 `api.deepseek.com/anthropic`（model `deepseek-flash`）：\n\n| 调用 | 档位 | input | cacheRead | 判定 |\n|---|---|---|---|---|\n| 1 | high（冷启） | 7094 | 0 | MISS |\n| 2 | high（同档） | 182 | **6912** | HIT |\n| 3 | **max**（换档） | 7094 | **0** | **MISS** |\n| 4 | max（同档） | 182 | 6912 | HIT |\n| 5 | **off**（thinking disabled） | 7069 | **0** | **MISS** |\n| 6 | off（同档） | 157 | 6912 | HIT |\n| 7 | high（切回来） | 182 | 6912 | HIT |\n| 8 | high，`max_tokens` 改 8 倍 | 182 | 6912 | HIT |"
+    },
+    {
+      "section": "实测：换档位就是全量 miss",
+      "text": "两个结论：**档位进缓存键**（第 3、5 行），**`max_tokens` 不进**（第 8 行）。每个档位各自留桶、互不干扰（第 7 行）。"
+    },
+    {
+      "section": "装完什么样",
+      "text": "同一个会话、同一段前缀，走真实 DSH 压缩调用路径（`ctx.llm.stream` + `purpose: 'compaction'`）：\n\n| 状态 | 会话档位 | input | cacheRead | 判定 |\n|---|---|---|---|---|\n| 装之前 | max | 8030 | 0 | MISS |\n| 装之后 | max | 158 | **7552** | HIT |\n| 装之后（high 会话） | high | 222 | **7808** | HIT |\n| 卸载之后 | max | 7710 | 0 | MISS |\n\n第三行是重点：它读会话自己的档位，不是写死成某一个值。"
+    },
+    {
+      "section": "安装",
+      "text": "**方式一：DSH 插件面板** —— 侧栏 →「插件」→「添加插件」：\n\n```\ngithub:rezon-aki/dsh-compaction-effort-inherit\n```\n\n**方式二：命令行**：\n\n```bash\ndsh plugin --profile web add github:rezon-aki/dsh-compaction-effort-inherit\n```\n\n装完重启 profile。\n\n卸载：\n\n```bash\ndsh plugin --profile web remove dsh-compaction-effort-inherit\n```\n\n插件不写文件、不写设置、不加工具、没有客户端资源，卸载即净。"
+    },
+    {
+      "section": "安全边界",
+      "text": "- **不碰官方插件**：不 patch 它的文件、不包装它的类、不改它的配置。挂点只有一处——`llm/stream` 事件（`dsh-session-title`、`dsh-session-checkpoint-policy`、`dsh-llm/invariant` 用的是同一个 seam）。\n- **只影响压缩调用**：非 `purpose: 'compaction'` 的请求在第一道判断就放行，主对话、子 agent、会话标题全不受影响。\n- **fail-open**：监听体整体 try/catch，任何异常直接放行，插件坏了也不会阻断压缩。\n- **零依赖、零构建**：手写 ESM，没有运行时依赖，没有构建步骤。"
+    },
+    {
+      "section": "它怎么做到的",
+      "text": "```js\nctx.on('llm/stream', (options, next) => {\n  if (options.purpose !== 'compaction') return next()\n  try {\n    const effort = inheritEffort(options, ctx.sessions.get(options.sessionId)?.requestHeader?.())\n\n三个容易踩的点，细节见 [docs/DESIGN.md](docs/DESIGN.md)："
+    },
+    {
+      "section": "它怎么做到的",
+      "text": "1. **必须原地改 `options`**。cordis 的 `next` 不接受参数，返回 `next({ ...options })` 是静默无效的。\n2. **档位取自 `session.requestHeader()`**，也就是\"上一个真正发出去的请求用了什么档位\"——那才是当前热着的缓存桶。这也与 agent-loop 自己的解析规则一致（请求头里带 `adapterDefaults.reasoningEffort: true` 时双方都忽略它）。\n3. **跨路由放行**：有人给压缩配了另一个 `summarizationProvider/Model` 时，继承过来的档位可能不被目标模型支持。"
+    },
+    {
+      "section": "边界",
+      "text": "- 只在**会话显式档位 ≠ 适配器默认档位**时有可观测收益。会话本来就在 `high`（适配器默认）时，两个请求本就同桶。\n- 不改变压缩行为本身：摘要区间、保留策略、`maxTokens` 都不动（实测 `max_tokens` 不进缓存键）。\n- 不管 `session-title`：适配器对它强制 `off`，且它没有可复用的前缀。\n- 只验证过 DSH `0.1.7-rc.2` + profile `web`。"
+    },
+    {
+      "section": "开发",
+      "text": "```bash\nnpm test        # node --test，7 条判定用例\n```\n\n实测记录（怎么做、数字从哪来）在 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。"
+    },
+    {
+      "section": "dsh-compaction-effort-inherit",
+      "text": "[简体中文](README.md) · **English**\n\n[](LICENSE)\n[](cordis.patch.yml)\n\n> Make the compaction summarization call **inherit the session's reasoning effort** — otherwise it lands in a different provider cache bucket and re-bills the whole context at full price."
+    },
+    {
+      "section": "dsh-compaction-effort-inherit",
+      "text": "**Why this exists.** DSH's official `compaction-basic` replays the conversation prefix so the summarization call can reuse the provider's warm prefix cache. But it reads only `provider` / `model` from the session's request header and **drops `reasoningEffort`**; the missing value is then filled in from the adapter default. DeepSeek's prefix cache is **bucketed by thinking strength**: same prefix and same effort hits, a different effort reports `cache_read_input_tokens: 0`. So a session running at `max` pays a full-price re-read of its entire context on every compaction."
+    },
+    {
+      "section": "Measured",
+      "text": "Same fresh prefix, only `output_config.effort` changed, against `api.deepseek.com/anthropic` (model `deepseek-flash`):\n\n| Call | effort | input | cacheRead | |\n|---|---|---|---|---|\n| high (cold) | high | 7094 | 0 | MISS |\n| high again | high | 182 | 6912 | HIT |\n| **mode changed** | **max** | 7094 | **0** | **MISS** |\n| max again | max | 182 | 6912 | HIT |\n| thinking disabled | off | 7069 | 0 | MISS |\n| high again | high | 182 | 6912 | HIT |\n| high, `max_tokens` × 8 | high | 182 | 6912 | HIT |"
+    },
+    {
+      "section": "Measured",
+      "text": "Effort is part of the cache key; `max_tokens` is not.\n\nThrough the real DSH compaction path, on a session routed at `max`:\n\n| | input | cacheRead | |\n|---|---|---|---|\n| before | 8030 | 0 | MISS |\n| after | 158 | 7552 | HIT |\n| after (session at `high`) | 222 | 7808 | HIT |\n| after removal | 7710 | 0 | MISS |"
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh plugin --profile web add github:rezon-aki/dsh-compaction-effort-inherit\n```\n\nRestart the profile. Remove with `dsh plugin --profile web remove dsh-compaction-effort-inherit`."
+    },
+    {
+      "section": "Safety",
+      "text": "- **The official plugin is untouched**: no patching, no wrapping, no reconfiguring. One `llm/stream` listener on the same seam `dsh-session-title` and `dsh-session-checkpoint-policy` already use.\n- **Compaction calls only**; every other request returns through untouched.\n- **Fail-open**: any failure in the listener falls through to the original call.\n- Zero dependencies, zero build step, no files or settings written."
+    },
+    {
+      "section": "Safety",
+      "text": "Details: [docs/DESIGN.md](docs/DESIGN.md) · measurements: [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)."
+    }
+  ],
+  "skipped": []
+}

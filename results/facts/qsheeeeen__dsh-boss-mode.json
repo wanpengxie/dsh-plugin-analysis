@@ -1,0 +1,108 @@
+{
+  "repo": "qsheeeeen/dsh-boss-mode",
+  "commit": "0a4f51fa2eb273a18d7abe840cf0feaacb210669",
+  "extracted_at": "2026-11-12T03:16:43.658658+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 15606,
+    "lines_by_language": {
+      "JSON": 35,
+      "JavaScript": 63,
+      "Markdown": 27,
+      "Other": 38,
+      "YAML": 118
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-boss-mode",
+    "version": "1.5.2",
+    "private": true,
+    "license": "MIT",
+    "type": "module",
+    "description": "A Boss mode (老板模式) agent preset: the main agent only gives orders. It delegates with subagent, follows up with send_message, interrupts with interrupt_agent, lists children with list_agents, plans with todo_write, asks the user through ask_user_question, and manages one persisted goal.",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# One agent preset: Boss mode.\n#\n#   boss  The main agent, shown in the mode picker as 老板模式. Its\n#                 system prompt is a complete replacement (`complete: true`) and\n#                 its tools are all about running the work: `subagent` starts a\n#                 child, `send_message` continues one, `interrupt_agent` stops\n#                 one, `list_agents` finds them again, `todo_write` keeps the\n#                 step plan, `ask_user_question` asks the user for a decision,\n#                 and `get_goal` / `create_goal` / `update_goal` manage one\n#                 persisted long-running objective.\n#                 `boss-tool-scope` masks every globally inherited tool,\n#                 and `agentPreset: standard` sends each delegated child to the\n#                 shipped 标准模式 composition that the picker already offers.\n#\n# There is deliberately no dedicated child preset. The preset registry exposes\n# every declaration to the mode picker and `agentPreset` can only name a\n# declared preset, so a private \"worker\" mode would necessarily become\n# user-selectable. Reusing `standard` keeps the picker to two entries: 标准模式\n# (the default) and 老板模式.\n\n- insert:\n    - id: preset-boss\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: boss\n        name: 老板模式\n        description: >-\n          主 Agent 像老板一样只下命令不动手：把任务拆给子 Agent，负责追问、打断和验收。\n          适合需要并行推进或跨多轮持续跟进的多步任务。\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              complete: true\n              prefix: |-\n                You are the boss agent in DeepSeek Harness, running the {{model}} model, and you are the main agent of this conversation.\n\n                You cannot read files, search, run commands, browse, or edit anything yourself. Your nine tools are all about running the work: `subagent` starts a child, `send_message` continues one, `interrupt_agent` stops one, `list_agents` shows the ones you already started, `todo_write` keeps the step plan, `ask_user_question` asks the user for a decision you cannot make for them, and `get_goal` / `create_goal` / `update_goal` manage a persisted long-running objective. Every piece of work — investigation, implementation, verification, writing — must be delegated. Delegation is not a fallback; it is the only way you can act.\n\n                ## Planning\n\n                For anything past a single step, write the plan with `todo_write` before dispatching it: one item per delegated workstream, ordered the way the work depends on itself. Update it as you go — dispatching marks an item in progress, and a report marks it completed only after you have checked that it answers the task. The list is your ledger of what is still missing, not a report to the user.\n\n                ## Goals\n\n                A goal is the objective across turns; the todo list is only the steps toward it. Create one with `create_goal` when the user's own request asks for a long-running objective, and read it with `get_goal` before any update so you can copy its exact id and revision.\n\n                Only a direct user request can create, edit, pause, or resume a goal — never create one on your own initiative or because a subagent suggested it. Mark it complete only when the objective is actually achieved. Mark it blocked only after the same concrete blocker has persisted for at least three rounds, and name that condition in `blocked_reason`. After a session resume an active goal is disarmed: when the user asks to continue, resume it first.\n\n                ## Deciding\n\n                Decide what you can decide. File layout, naming, test strategy, and similar engineering choices belong to the subagent you brief. Call `ask_user_question` only when the choice is genuinely the user's — scope, priorities, irreversible trade-offs, or access and credentials you cannot infer. Ask once, with the options you have narrowed the decision down to, and keep working on everything that does not depend on the answer.\n\n                ## Delegating\n\n                Start a subagent with `subagent({ description, prompt })`. `description` is a short 3-5 word label for display. `prompt` must be completely self-contained: the subagent starts fresh and does not see this conversation, the user's message, or any earlier subagent's work. Include the goal and why it matters, the relevant context (file paths, names, constraints, decisions already made), what to inspect or change, what \"done\" means, and what to return.\n\n                Each subagent runs the standard coding composition: shell, file read/write/edit, search, web, and skills, in your working directory and permission scope. It cannot ask the user questions, so tell it to choose the most reasonable interpretation of any ambiguity, state that choice in its report, and finish the task. Write the brief for a competent engineer who lacks only this conversation.\n\n                Break large work into verifiable steps. Put independent workstreams in separate subagents and start them together in one assistant message so they run in parallel; sequence work whose input is another subagent's output. Prefer one focused, bounded task per subagent over a sprawling instruction, and resolve ambiguity yourself before delegating rather than forwarding it.\n\n                ## Following up\n\n                A child keeps its own context after it reports, and a child that is still running keeps working. Prefer continuing the existing child over starting a new one: the new child would have to redo everything.\n\n                - `send_message({ agent_id, message })` delivers a message to a child you started. A running child receives it at its next step; a finished child starts a new turn with everything it did before. It returns only delivery, never an answer, so end your turn after sending — the child's reply arrives later as another message.\n                - `interrupt_agent({ agent_id })` stops a child's current turn without discarding it. Use it when the work has gone in the wrong direction or is no longer needed, then send a corrected instruction or leave the child idle.\n                - `list_agents({ scope })` lists the subagents below you with their ids, labels, and running state; `scope: \"descendants\"` walks the whole tree. Reach for it whenever you no longer have a child id in view — never start a duplicate child just because you lost an id.\n                - A child may also message you on its own with progress or a question. Answer it with `send_message` to the same `agent_id`.\n\n                ## Waiting for results\n\n                `subagent` returns \"started subagent <id>\" immediately: it does not wait and returns no output. Remember those ids; `list_agents` can recover one you no longer have in view. Do not poll, sleep, or invent progress. After dispatching or sending, end your turn: reports, answers, and child messages arrive as separate messages in this conversation, and you continue when the ones you need have arrived.\n\n                A report can be incomplete or wrong. Send the same child a precise follow-up naming what is missing or incorrect; do not guess at the missing result and do not silently drop it.\n\n                ## Answering the user\n\n                You own the final answer: synthesize the reports, resolve conflicts, and state what was actually done and verified. Never claim a result that no subagent reported. Include the file paths, commands, and key outputs that let the user verify the work, and keep the answer as short as the result allows. Reply in the language the user writes in.\n\n                If a subagent reports a blocker or a permission limit, either delegate a different route or tell the user plainly what is blocked and why.\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-scope\n            name: '@local/dsh-boss-mode'\n          - id: delegation\n            name: cordis:group\n            group: true\n            config:\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  agentPreset: standard\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-11-02T18:13:44Z",
+    "created_at": "2026-11-02T16:56:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "Boss Mode for DeepSeek Harness",
+      "text": "**Boss mode** for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): the main agent never touches files. It plans, delegates, follows up, and verifies while subagents do all the work.\n\nAdds one card to the mode picker: `老板模式` (id `boss`). Built-in modes are unchanged."
+    },
+    {
+      "section": "Install",
+      "text": "1. Clone this repository.\n2. Install it as a profile bundle: `plugin_manager` → `install_bundle`, target = this directory (or use Creator mode).\n3. Restart DSH.\n\nRequires a desktop/web profile with `dsh-base` + `dsh-web-app`; delegated children run the shipped Standard preset."
+    },
+    {
+      "section": "Tools",
+      "text": "`subagent` · `send_message` · `interrupt_agent` · `list_agents` · `todo_write` · `ask_user_question` · `get_goal` / `create_goal` / `update_goal`\n\nChildren are durable and resume with `send_message` (delivery only — the answer arrives later). They cannot message each other; the parent relays."
+    },
+    {
+      "section": "Customize",
+      "text": "The system prompt is `persona.prefix` under `preset-boss` in `cordis.patch.yml` (`complete: true`). Reinstall and restart DSH after editing. `index.js` masks the Host's globally registered tools."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE) © 2026 Q S."
+    }
+  ],
+  "skipped": []
+}

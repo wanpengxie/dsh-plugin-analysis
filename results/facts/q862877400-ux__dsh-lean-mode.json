@@ -1,0 +1,176 @@
+{
+  "repo": "q862877400-ux/dsh-lean-mode",
+  "commit": "62284cd4589ccd1c843b198f021435a5b079c47b",
+  "extracted_at": "2026-11-12T02:58:45.678749+00:00",
+  "tree": {
+    "files": 19,
+    "bytes": 164476,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 1591,
+      "Markdown": 1489,
+      "Other": 28,
+      "YAML": 179
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "THIRD-PARTY.md",
+      "cordis.patch.yml",
+      "descriptions.json",
+      "docs/authoring-mcp-tools.md",
+      "docs/core-requirement.md",
+      "docs/tool-description-style.md",
+      "docs/when-to-use.md",
+      "index.mjs",
+      "package.json",
+      "skills/lean-descriptions/SKILL.md",
+      "skills/lean-tool-presentation/SKILL.md",
+      "tools/curate-pending.mjs",
+      "tools/lean-lint.mjs",
+      "tools/lean-selftest.mjs",
+      "tools/validate-descriptions.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-lean-mode",
+    "version": "1.0.1",
+    "private": true,
+    "type": "module",
+    "main": "./index.mjs",
+    "exports": {
+      ".": "./index.mjs",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.mjs",
+      "cordis.patch.yml",
+      "skills",
+      "docs",
+      "tools",
+      "README.md",
+      "README.zh.md",
+      "LICENSE",
+      "THIRD-PARTY.md"
+    ],
+    "description": "让 AI 用更精简的方式调用工具，省 token、反应更快。",
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "plugin",
+      "tools",
+      "context"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# ══ lean-mode bundle ══════════════════════════════════════════════════\n# 装上本 bundle ⇒ ① 挂上 lean-mode 插件（profile 层）② 声明「Lean 模式」preset。\n# 卸载本 bundle ⇒ 两者一起消失，呈现恢复原样。\n# ★ 不需要修改任何核心包。\n# ═════════════════════════════════════════════════════════════════════\n\n# ① 插件：只在 preset 名为 lean 的会话上做变换\n- insert:\n    - id: lean-mode\n      name: '@local/dsh-lean-mode'\n      config:\n        presets:\n          - lean\n        # 描述字符上限。实测（第三方 Sciverse MCP）：250 是「不再丢\n        # Use when / Not for」的最小值，取 300 留余量。\n        maxChars: 300\n        # 覆盖表：命中 active 且 basedOn 哈希匹配则用表文本，否则回落压缩。\n        descriptions: true\n        # 未命中且「压缩会损坏」的工具自动登记到 pending，供离线 skill 补表。\n        table: descriptions.json\n        pending: descriptions.pending.json\n\n# ② 「Lean 模式」preset 声明（组成 = 官方标准模式；呈现由上面的插件按 preset 名决定）\n- insert:\n    - id: preset-lean\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: lean\n        name: Lean 模式\n        description: 工具呈现为「浅而准」形态（lean-mode 插件按此模式生效）。\n        order: 8\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              suffix: Your working directory is the current project workspace.\n              prefix: You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n            config:\n              # 本插件自带两个 skill：skills/lean-tool-presentation（呈现规范）、\n              # skills/lean-descriptions（离线补描述表）。customSkillDirs 的 rank 是 300：project(100/200) 之下、\n              # user-dsh(400)/user-agents(500)/bundled(600) 之上。\n              #\n              # 路径必须从【插件包自身的 package.json】解析，不能用 baseUrl：\n              # baseUrl 指向配置文件所在目录（app-boot/src/index.ts L1222），\n              # 不是插件目录。这里照官方 preset 的做法用 createRequire().resolve()。\n              customSkillDirs:\n                - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@local/dsh-lean-mode/package.json')), 'skills')\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              # 0.2.2 起 list_agents 由上面主入口自己注册，独立的 /list-agents 子路径已从\n              # package.json exports 中删除；再写这一行会让整个 preset 组合失败。\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n                  backgroundMode: continuable\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n\n"
+    }
+  ],
+  "entries": [
+    "index.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 18,
+    "pushed_at": "2026-11-01T03:09:27Z",
+    "created_at": "2026-10-06T05:29:45Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.mjs",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-lean-mode",
+      "text": "**English** | [中文](README.zh.md)\n\n> A [DeepSeek Harness](https://github.com/deepseek-ai) plugin that presents every tool to the model in a **lean, executable** form — **install it and it just works**, remove it and the old form is back. **No core changes.**\n\n---"
+    },
+    {
+      "section": "The problem",
+      "text": "Tool schemas are sent on **every** request. In a deployment with hundreds of MCP tools they dominate the context:\n\n| Deployment | Tools | Tool schemas | Share of the first request |\n|---|---|---|---|\n| Default `standard` preset (measured on a real deployment) | **84** | **89 KB** | **~22,300 of 36,264 tokens — 61.6%** |\n| All MCP tools mounted | **731** | **988 KB** | **~275,000 tokens — 27.5% of a 1M window** |"
+    },
+    {
+      "section": "The problem",
+      "text": "Most of that is JSON-Schema punctuation the model rarely needs: nested descriptions, deep objects, defaults. The **names** and the **top-level contract** are what make a call possible."
+    },
+    {
+      "section": "What this plugin does",
+      "text": "1. **Shrinks each tool's parameter schema to its top-level contract** — top-level keys, `required`, each key's `type`\n and a short `enum` when declared. Descriptions and defaults are dropped. **Nested object structure is preserved** (recursively expanded: keys, types and `required` all survive).\n2. **Appends a `tools:catalog` prompt section** listing **every** tool — including the ones the model is unlikely to recall — with the exact argument envelope and a one-line purpose."
+    },
+    {
+      "section": "Why the envelope must survive",
+      "text": "In a real catalogue **64% of tools take a single required wrapper key** (commonly `params`). Collapse the schema to an open `{type:'object'}` and the model flattens the arguments, so every call is rejected:\n\n| Channel shape | Calls that actually execute |\n|---|---|\n| Open skeleton `additionalProperties: true`\n | **1.7%** |\n| **Top-level contract kept** | **95.0%** |"
+    },
+    {
+      "section": "Measured effect",
+      "text": "Same model, same 199-task set, same catalogue:\n\n| Tools | Baseline (full schemas) | **lean** | Ratio |\n|---|---|---|---|\n| 26 | ~5,340 tok | ~2,385 tok | 0.45 |\n| **84** (a real deployment's default preset) | ~22,300 tok | **~9,400 tok** | **0.42** |\n| **731** (every MCP tool) | **~275,000 tok** | **~68,000 tok** | ★ **0.247** |\n\nEnd-to-end callability (tool name in the catalogue **and** the emitted arguments satisfy the real schema):"
+    },
+    {
+      "section": "Measured effect",
+      "text": "| Presentation | End-to-end |\n|---|---|\n| Full JSON Schema | 95.0% |\n| **lean** | **89.9%** |\n| Open skeleton only | 1.7% |"
+    },
+    {
+      "section": "Install",
+      "text": "**From GitHub** (verified end to end: installed this way, the mode appears in the UI preset menu and takes effect)\n\n```powershell\ndsh plugin --profile web add github:q862877400-ux/dsh-lean-mode\n```\n\n**From a local checkout**\n\n```powershell\ndsh plugin --profile web add <path to this directory>\n```\n\n**Uninstall**\n\n```powershell\ndsh plugin --profile <profile> remove @local/dsh-lean-mode\n```"
+    },
+    {
+      "section": "Install",
+      "text": "The bundle carries both the plugin row and a **Lean mode** preset declaration, so once installed the mode appears in the UI's preset menu; removing the bundle removes both."
+    },
+    {
+      "section": "How it works",
+      "text": "`system-prompt/assemble` is a **waterfall** whose contract states *the returned value is authoritative*, and *scoped listeners receive only that scope's assemblies*. This plugin therefore:\n\n- registers a **profile-level** listener, so it sees every assembly;\n- asks `agentPresets.composedPreset(agent.ctx)` which preset the assembly's agent runs under;\n- transforms **only** when that preset is one it was configured for."
+    },
+    {
+      "section": "How it works",
+      "text": "```js\nexport function apply(ctx, config) {\n  const wanted = config?.presets            // e.g. ['lean']\n  ctx.on('system-prompt/assemble', async (assembly, context, next) => {\n    const base = await next()\n\nIt uses **only upstream APIs** — no new `tools.mode` value, no patched package."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n|---|---|---|\n| `presets` | `undefined` | Preset ids this applies to. Omit to apply to **every** session. |\n| `shape` | `true` | Project parameters to the top-level contract. |\n| `catalog` | `true` | Append the `tools:catalog` section. |"
+    },
+    {
+      "section": "Limitations",
+      "text": "- ★ **All figures were measured on one local deployment** (731-tool catalogue unioned from real sessions; 199 tasks; a single model). Ratios will differ elsewhere — **re-measure before relying on them**.\n- ★ Callability is judged as **\"the emitted call is valid against the real schema\"**, not \"the tool succeeded on a machine\".\n- ★ End-to-end accuracy (89.9% vs 95.0%) is a **single-run** figure on that task set.\n- ★ The catalogue **repeats each tool's one-line purpose**, so the win grows with the **size of the parameters**, not merely the count of tools."
+    },
+    {
+      "section": "Writing tool definitions",
+      "text": "**The normative source for model-facing tool definitions (name / description / parameter schema) is DSH's own [`agent-experience`](https://github.com/deepseek-ai) skill** — `app/source/.agents/skills/agent-experience/SKILL.md`. This plugin does not define a competing standard.\n\nUse the docs below only for the **lean presentation layer** on top of it:"
+    },
+    {
+      "section": "Writing tool definitions",
+      "text": "| Doc | Read it when |\n|---|---|\n| [`docs/tool-description-style.md`](docs/tool-description-style.md) | Writing descriptions; §10 covers the one real conflict with `agent-experience` |\n| [`docs/authoring-mcp-tools.md`](docs/authoring-mcp-tools.md) | Authoring MCP tools for DSH under lean |\n| [`docs/when-to-use.md`](docs/when-to-use.md) | Deciding which of the three presentation tiers to use |\n| [`docs/core-requirement.md`](docs/core-requirement.md) | Why the plugin exists |\n| [`skills/lean-tool-presentation/SKILL.md`](skills/lean-tool-presentation/SKILL.md) | Agent-facing summary of all of the above |"
+    },
+    {
+      "section": "Writing tool definitions",
+      "text": "**Check your tools mechanically:** `node tools/lean-lint.mjs tools.json` — reports real information loss, the pending-curation list, and the byte ledger."
+    },
+    {
+      "section": "License",
+      "text": "MIT. See [LICENSE](LICENSE) and [THIRD-PARTY.md](THIRD-PARTY.md) — `cordis.patch.yml` restates a preset composition from DeepSeek Harness (MIT, Copyright (c) 2026 DeepSeek); the plugin source is original."
+    }
+  ],
+  "skipped": []
+}

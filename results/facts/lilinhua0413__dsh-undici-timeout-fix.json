@@ -1,0 +1,199 @@
+{
+  "repo": "lilinhua0413/dsh-undici-timeout-fix",
+  "commit": "abcc8fc9215af195c056567f7f9ffbc4bf2d7777",
+  "extracted_at": "2026-11-11T23:40:43.498710+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 12791,
+    "lines_by_language": {
+      "JSON": 30,
+      "JavaScript": 22,
+      "Markdown": 273,
+      "Other": 23,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-undici-timeout-fix",
+    "version": "1.1.0",
+    "description": "Removes undici's 300s body timeout so long local-model prefills are not cut off mid-stream.",
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "cordis",
+      "undici",
+      "timeout",
+      "local-model",
+      "lm-studio",
+      "prefill"
+    ],
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+      ".": "./index.js"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "engines": {
+      "node": ">=22.19"
+    },
+    "dependencies": {
+      "undici": "^8.10.2"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The bundle selects itself; this layer inserts no plugin row of its own.\n# When you install by hand, add the row to your profile patch instead:\n#\n#   - insert:\n#       - id: undici-timeout-fix\n#         name: 'dsh-undici-timeout-fix'\n#\n# Installing through `dsh plugin add` or the plugin manager writes that row for you.\n[]\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "undici": "^8.10.2"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-12T12:06:27Z",
+    "created_at": "2026-10-12T11:49:25Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-undici-timeout-fix",
+      "text": "Fixes DSH cutting off local-model requests after exactly five minutes of silence.\n\nEnglish | [简体中文](#简体中文)"
+    },
+    {
+      "section": "What this fixes",
+      "text": "When a local model spends more than five minutes on prompt prefill, the request dies with\n`terminated` and the model server logs `Client disconnected`.\n\nThe cause is **not** a DSH setting. Node's built-in `fetch` runs on undici, whose connection-level\n`bodyTimeout` defaults to `300,000ms`. That timer is an *idle* timer: every body chunk resets it.\nA model that is busy prefilling sends no bytes at all, so undici destroys the socket the moment\nthe five minutes run out."
+    },
+    {
+      "section": "What this fixes",
+      "text": "`streamIdleTimeoutMs` does not help here. It configures DSH's own watchdog, which is a separate\ntimer and — before this plugin — fired at the same 300,000ms mark. Raising it just lets undici\nwin the race, which is why the error changes from `stream idle timeout after 300000ms` to the\nbare `terminated`."
+    },
+    {
+      "section": "How it works",
+      "text": "DSH reaches the network through pi-ai calling the openai SDK, and that SDK uses the **global**\n`fetch` (`Shims.getDefaultFetch()`). Replacing undici's global dispatcher therefore covers model\nrequests without patching DSH itself:\n\n```js\nimport { Agent, setGlobalDispatcher } from 'undici'\n\nsetGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 }))\n```\n\n`0` **disables** undici's timers rather than setting a duration."
+    },
+    {
+      "section": "From a release tarball (no registry needed)",
+      "text": "Download `dsh-undici-timeout-fix-1.1.0.tgz` from the repository's Releases page, then:\n\n```sh\ndsh plugin --profile <your-profile> add /path/to/dsh-undici-timeout-fix-1.1.0.tgz\n```\n\nThe one dependency (`undici`) is still resolved from a registry you can reach, so a local npm\nmirror or a proxy works fine."
+    },
+    {
+      "section": "From npm",
+      "text": "```sh\ndsh plugin --profile <your-profile> add dsh-undici-timeout-fix\n```\n\nOr through the plugin manager in the DSH UI: add the package name `dsh-undici-timeout-fix` and\npoint the install source at a registry that serves it.\n\nInstalling by hand? Add the row to your profile's `cordis.patch.yml`:\n\n```yaml\n- insert:\n    - id: undici-timeout-fix\n      name: 'dsh-undici-timeout-fix'\n```"
+    },
+    {
+      "section": "Restart required",
+      "text": "**Fully quit DSH and start it again.** The dispatcher is installed while the plugin loads, so a\nrunning process keeps whatever it already set. On macOS use `Cmd+Q` — closing the window is not\nenough, because the process survives.\n\nSkipping the restart is the most common reason for \"it still fails\"."
+    },
+    {
+      "section": "Also configure `streamIdleTimeoutMs`",
+      "text": "This plugin removes the transport ceiling, but it also removes DSH's own backstop. With no upper\nbound at all, a genuinely wedged connection can hang forever. Keep a large but finite watchdog on\nthe provider that talks to your local model:\n\n```yaml\n- id: llm-pi-ai\n  name: \"@deepseek-ai/dsh-llm-pi-ai\"\n  config:\n    providers:\n\nDo this for **every** provider you point at a local model. A provider without the key falls back\nto the 300,000ms default."
+    },
+    {
+      "section": "Also configure `streamIdleTimeoutMs`",
+      "text": "You can also prefer a finite transport timeout over disabling it entirely:\n\n```js\nsetGlobalDispatcher(new Agent({ headersTimeout: 3_600_000, bodyTimeout: 3_600_000 }))\n```"
+    },
+    {
+      "section": "Verify",
+      "text": "Send a request whose prefill exceeds five minutes. If it completes, the fix is live.\n\nYou can also confirm which timer fired by reading the error:\n\n| Error | Meaning |\n|---|---|\n| `terminated` | undici's transport timer — this plugin's concern |\n| `pi-ai stream idle timeout after xxxms` | DSH's watchdog — raise `streamIdleTimeoutMs` |"
+    },
+    {
+      "section": "Do not set proxy environment variables",
+      "text": "`HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` make `dsh-http-proxy` install its own Agent during\nboot, which carries the same five-minute limit and replaces this plugin's. DSH installs the proxy\nbefore plugins load, so this plugin always wins *only when no proxy is configured*."
+    },
+    {
+      "section": "Platform status",
+      "text": "| Platform | Status |\n|---|---|\n| macOS (Darwin 24, Node 24.21.0 / undici 7.29.1 built in) | Tested, working |\n| Windows | Untested — please open an issue with your result |\n\nThe code has no platform-specific paths, file writes, or process spawning, and depends only on\n`undici`, so it should behave identically on Windows. It has not been verified there yet."
+    },
+    {
+      "section": "Notes",
+      "text": "- This bundle declares no `peerDependencies`, so DSH's plugin version-compatibility check does not\n  block installation.\n- pnpm's `minimumReleaseAge` policy (24 hours by default) blocks freshly published versions. If\n  installation reports an older version, install an exact one: `dsh plugin add dsh-undici-timeout-fix@1.1.0`."
+    },
+    {
+      "section": "License",
+      "text": "MIT\n\n---"
+    },
+    {
+      "section": "简体中文",
+      "text": "修复 DSH 使用本地大模型时，静默满五分钟后请求被切断的问题。"
+    },
+    {
+      "section": "解决的问题",
+      "text": "本地模型做 prompt 预处理（prefill）超过五分钟时，请求会以 `terminated` 失败，模型服务端日志出现\n`Client disconnected`。\n\n原因**不在 DSH 配置**。Node 内置 `fetch` 基于 undici，其连接级 `bodyTimeout` 默认 `300,000ms`。\n该计时器统计的是**空闲时长**：每收到一个 body 数据块就重置。正在 prefill 的模型一个字节都不发，\n于是五分钟一到 undici 直接销毁 socket。\n\n`streamIdleTimeoutMs` 解决不了这个问题。它配置的是 DSH 自己的看门狗，是另一个计时器——而且在装本插件\n之前，它同样在 300,000ms 处触发。把它调大只是让 undici 抢先触发，所以报错会从\n`stream idle timeout after 300000ms` 变成一个光秃秃的 `terminated`。"
+    },
+    {
+      "section": "原理",
+      "text": "DSH 经由 pi-ai 调用 openai SDK 发起请求，而该 SDK 使用**全局** `fetch`（`Shims.getDefaultFetch()`）。\n因此替换 undici 的全局 dispatcher 就能覆盖模型请求，无需改动 DSH 本体：\n\n```js\nimport { Agent, setGlobalDispatcher } from 'undici'\n\nsetGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 }))\n```\n\n`0` 表示**禁用** undici 的计时器，而不是某个时长。"
+    },
+    {
+      "section": "从 Release 附件安装（无需registry）",
+      "text": "从仓库的 Releases 页面下载 `dsh-undici-timeout-fix-1.1.0.tgz`，然后：\n\n```sh\ndsh plugin --profile <你的 profile> add /path/to/dsh-undici-timeout-fix-1.1.0.tgz\n```\n\n唯一的依赖（`undici`）仍会从你能访问到的 registry 解析，所以内网 npm 镜像或代理都可以。"
+    },
+    {
+      "section": "从 npm 安装",
+      "text": "```sh\ndsh plugin --profile <你的 profile> add dsh-undici-timeout-fix\n```\n\n也可以在 DSH 界面里安装：包名填 `dsh-undici-timeout-fix`，安装源指向提供该包的 registry。\n\n手动安装时，在 profile 的 `cordis.patch.yml` 里加一行：\n\n```yaml\n- insert:\n    - id: undici-timeout-fix\n      name: 'dsh-undici-timeout-fix'\n```"
+    },
+    {
+      "section": "必须重启",
+      "text": "**完全退出 DSH 后重新启动。** dispatcher 在插件加载时安装，已运行的进程会继续沿用它之前的状态。\nmacOS 上请用 `Cmd+Q`——只关窗口不够，进程仍然存活。\n\n漏掉重启是\"怎么还是不行\"最常见的原因。"
+    },
+    {
+      "section": "同时配置 `streamIdleTimeoutMs`",
+      "text": "本插件移除了传输层的上限，同时也移除了 DSH 自身的兜底。完全没有上限时，真正卡死的连接可能永远挂着。\n请为每个指向本地模型的 provider 配一个足够大但有限的看门狗：\n\n```yaml\n- id: llm-pi-ai\n  name: \"@deepseek-ai/dsh-llm-pi-ai\"\n  config:\n    providers:\n\n**每个**指向本地模型的 provider 都要配。漏配的会退回默认的 300,000ms。\n\n如果你更想设一个有限值而不是完全禁用：\n\n```js\nsetGlobalDispatcher(new Agent({ headersTimeout: 3_600_000, bodyTimeout: 3_600_000 }))\n```"
+    },
+    {
+      "section": "验证",
+      "text": "发一个 prefill 超过五分钟的请求。正常完成即表示生效。\n\n也可以通过报错文本判断是哪个计时器触发的：\n\n| 报错 | 含义 |\n|---|---|\n| `terminated` | undici 传输层计时器——本插件负责的范围 |\n| `pi-ai stream idle timeout after xxxms` | DSH 看门狗——调大 `streamIdleTimeoutMs` |"
+    },
+    {
+      "section": "不要设置代理环境变量",
+      "text": "`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 会让 `dsh-http-proxy` 在 boot 阶段安装它自己的 Agent，\n它同样带五分钟限制，并会替换掉本插件。DSH 先装 proxy、后加载插件，所以**只有不设代理时本插件才一定生效**。"
+    },
+    {
+      "section": "平台状态",
+      "text": "| 平台 | 状态 |\n|---|---|\n| macOS（Darwin 24，Node 24.21.0，内建 undici 7.29.1） | 已测试，可用 |\n| Windows | **未测试**——欢迎提 issue 分享你的结果 |\n\n代码不含任何平台相关路径、文件写入或进程调用，唯一依赖是 `undici`，因此在 Windows 上行为应当一致，\n但尚未实测验证。"
+    },
+    {
+      "section": "其他说明",
+      "text": "- 本 bundle 未声明 `peerDependencies`，因此不受 DSH 插件版本兼容性检查拦截。\n- pnpm 的 `minimumReleaseAge` 策略（默认 24 小时）会拦截刚发布的版本。若安装提示装了旧版本，\n  请指定精确版本：`dsh plugin add dsh-undici-timeout-fix@1.1.0`。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

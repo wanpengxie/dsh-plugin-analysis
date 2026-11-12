@@ -1,0 +1,215 @@
+{
+  "repo": "quei4r/dsh-client-open-in-vscode",
+  "commit": "18185c3070a96746f9a5ee074656ede3db1fb6b6",
+  "extracted_at": "2026-11-12T03:17:49.074994+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 41206,
+    "lines_by_language": {
+      "JSON": 41,
+      "JavaScript": 675,
+      "Markdown": 164,
+      "Other": 23,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-client-open-in-vscode",
+    "description": "Click a file path in the chat UI to open it in the running VS Code window owning the matching workspace; Edit/Write rows open a diff of that exact change (webview-safe host route behind the loopback/Origin trust fence).",
+    "version": "0.7.1",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/quei4r/dsh-client-open-in-vscode.git"
+    },
+    "author": "quei4r",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "license": "MIT",
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "vscode",
+      "open-file",
+      "integration"
+    ],
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "README.en.md"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: ui-open-in-vscode\n      name: dsh-client-open-in-vscode\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "${host.replace(",
+      "url": "http://${host.replace(/^[^@",
+      "where": "index.js:81"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/quei4r/dsh-client-open-in-vscode.git",
+      "where": "package.json:14"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 9,
+    "pushed_at": "2026-08-20T10:53:07Z",
+    "created_at": "2026-08-19T12:38:10Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-client-open-in-vscode",
+      "text": "中文 | [English](README.en.md)\n\nDeepSeek Harness（DSH）Web 界面的插件：**点击聊天 UI 里的文件路径，在已打开的、工作区匹配的 VS Code 窗口中打开该文件**。"
+    },
+    {
+      "section": "功能",
+      "text": "捕获阶段拦截以下元素的点击：\n\n| UI 元素 | 识别方式 |\n|---------|---------|\n| 工具卡片路径（Write/Edit/Read 等） | `button.*_fileLink`，文本即路径（可为工作区相对路径，按当前会话 cwd 补全） |\n| 「产物」chips | `[data-produced-files-row] button[title]` |\n| 正文里的文件提及链接 | `title` 为绝对路径的 a/button/[role=link] |\n\n命中后 `POST /plugin-open-in-vscode` → 宿主执行 `code --goto --reuse-window <path>`，VS Code 内部按工作区归属路由窗口并提到前台。"
+    },
+    {
+      "section": "功能",
+      "text": "**Edit/Write 行为（v0.6）**：点击文件变更行（Edit/Write 等）的路径时，打开**那次编辑的全文件 diff**。原理是 `git apply` 的逆向：行数据自带该次编辑的前后片段（改动 ± 上下文行），把片段拼回完整文件即得两版全文——先试**磁盘当前文件**（覆盖未提交与已提交的编辑，已提交的文件本身就含改后文本），再试 **git HEAD 版本**（覆盖工作区已被还原/改写的编辑）；任一基底含片段且唯一命中即重建成功，展示仍走标准 `code --diff`。重建不出（后续提交改写了同一区域）时回退显示行内片段 diff；**运行中/失败**的调用因改动尚未落盘也走片段预览。临时文件 10 分钟后清理；无 diff 数据的行（Read/Bash 等）仍为直接打开。\n\n> 历史编辑也能正确显示：已提交的编辑从提交内容里重建（v0.5 的 HEAD-vs-工作区方案对已提交编辑会显示\"无更改\"，已废弃）。多窗口时 diff 两侧均为临时文件，窗口路由回落到同 authority 的**最近活跃窗口**。"
+    },
+    {
+      "section": "功能",
+      "text": "多窗口时的路由规则（VS Code 窗口管理器行为）：先按 remote authority 过滤候选窗口（只考虑连接到同一主机/本地的窗口），再看**文件的绝对路径落在哪个已打开工作区文件夹内**——多根 workspace 按根目录声明顺序取第一个命中，多个单文件夹窗口都包含该文件时取**路径最深**的那个；都不命中时回退到同 authority 的**最近活跃窗口**。会话 cwd 只用于把相对路径补全成绝对路径，不参与窗口匹配。\n\n- **Alt+点击**：绕过拦截，走产品原逻辑\n- 操作后页面底部有 toast 反馈（成功/失败）"
+    },
+    {
+      "section": "安全",
+      "text": "路由与框架 `/api` 同款信任闸门：Host 必须是 loopback（防 DNS rebinding）、`Sec-Fetch-Site: cross-site` 拒绝、携带 `Origin` 时必须与 Host 一致（防网页 drive-by POST）。也就是说**其它网站无法借你的浏览器触发本机 VS Code 打开文件**；路径仅接受绝对路径且不经 shell（`execFile` 参数数组）。"
+    },
+    {
+      "section": "为什么不用 `vscode://file/...`",
+      "text": "v0.1 用锚点跳转 `vscode://` 协议 —— 在真实浏览器里没问题，但 DSH GUI 常跑在 **VS Code webview** 里，webview 导航到该协议会**直接黑屏**。v0.2 起改为宿主侧 `code --goto`，webview 安全。"
+    },
+    {
+      "section": "安装",
+      "text": "假设 `DSH_HOME` 为 `~/.dsh`（默认值）：\n\n1. 复制包到 web profile 的 node_modules：\n\n```bash\n   cp -r dsh-client-open-in-vscode ~/.dsh/profiles/web/node_modules/\n   ```\n\n2. 编辑 `~/.dsh/profiles/web/cordis.patch.yml`，加入：\n\n```yaml\n   - insert:\n       - id: ui-open-in-vscode\n         name: dsh-client-open-in-vscode\n   ```\n\n3. 重启 `dsh web`（本插件的 Host 半需要在启动时注册 HTTP 路由，仅刷新页面不够）。\n\n验证组合（可选）：\n\n```bash\ndsh --profile web --dump-config | grep ui-open-in-vscode\n```"
+    },
+    {
+      "section": "要求",
+      "text": "- 系统 PATH 里有 `code` CLI（VS Code 标准安装自带）\n- 桌面会话（X11/Wayland），宿主进程能拉起 GUI 窗口"
+    },
+    {
+      "section": "卸载",
+      "text": "1. 从 `cordis.patch.yml` 删除该 `- insert:` 段；\n2. 删除 `~/.dsh/profiles/web/node_modules/dsh-client-open-in-vscode`；\n3. 重启 `dsh web`。"
+    },
+    {
+      "section": "文件说明",
+      "text": "| 文件 | 说明 |\n|------|------|\n| `index.js` | Host 半：注册 `POST /plugin-open-in-vscode` 路由（loopback/Origin 信任闸门），`execFile('code', ['--goto','--reuse-window', path])` |\n| `client.js` | 浏览器半：点击拦截 + fetch POST + toast（`window.__ModuleLoader__` 格式） |\n| `cordis.patch.yml` | 插件插入配置（`dsh plugin add` / 市场安装所需） |\n| `package.json` | 包清单，含 `dsh.bundle` + `dsh.client.platform: \"web\"` 声明 |\n\n兼容性：随 `@deepseek-ai/dsh` 0.1.0-rc.6 的 web profile 测试通过。产品 DOM 的 class/hash 若在新版本变动，`client.js` 里 `targetPath()` 的选择器需要跟进调整。"
+    },
+    {
+      "section": "dsh-client-open-in-vscode",
+      "text": "[中文](README.md) | English\n\nPlugin for the DeepSeek Harness (DSH) web UI: **click a file path in the chat UI to open it in the already-running VS Code window whose workspace matches**."
+    },
+    {
+      "section": "Features",
+      "text": "Clicks on the following elements are intercepted in the capture phase:\n\n| UI element | Detection |\n|------------|-----------|\n| Tool-card paths (Write/Edit/Read, etc.) | `button.*_fileLink`, text is the path (may be workspace-relative, resolved against the session cwd) |\n| \"Produced files\" chips | `[data-produced-files-row] button[title]` |\n| File mention links in messages | a/button/[role=link] whose `title` is an absolute path |"
+    },
+    {
+      "section": "Features",
+      "text": "On a hit, `POST /plugin-open-in-vscode` → the host runs `code --goto --reuse-window <path>`; VS Code routes the window by workspace ownership and brings it to the front."
+    },
+    {
+      "section": "Features",
+      "text": "**Edit/Write behavior (v0.6)**: clicking the path on a file-change row (Edit/Write, etc.) opens a **full-file diff of that exact edit**. It works like reverse `git apply`: the row's payload carries the edit's before/after hunks (change ± context lines); stitching the hunks back into a complete file yields both full versions. It first tries the **current file on disk** (covers uncommitted and committed edits — a committed file already contains the post-edit text), then the **git HEAD version** (covers edits whose target was later reverted/rewritten); if either base contains the hunks and matches uniquely, the reconstruction succeeds and display still goes through standard `code --diff`. When reconstruction is impossible (later commits rewrote the same region), it falls back to an inline hunk diff; **in-flight/failed** calls also use the hunk preview since the change has not landed on disk. Temp files are cleaned up after 10 minutes; rows without diff data (Read/Bash, etc.) still open directly."
+    },
+    {
+      "section": "Features",
+      "text": "> Historical edits diff correctly too: committed edits are reconstructed from the committed content (the v0.5 HEAD-vs-worktree approach showed \"no changes\" for committed edits and is deprecated). In multi-window setups both diff sides are temp files and window routing falls back to the **most recently active** window of the same authority."
+    },
+    {
+      "section": "Features",
+      "text": "Multi-window routing (VS Code window-manager behavior): candidate windows are first filtered by remote authority (only windows connected to the same host/local), then by **which opened workspace folder contains the file's absolute path** — multi-root workspaces take the first root in declaration order; when several single-folder windows contain the file, the **deepest** path wins; with no match at all it falls back to the **most recently active** window of the same authority. The session cwd is only used to complete relative paths into absolute ones; it plays no role in window matching."
+    },
+    {
+      "section": "Features",
+      "text": "- **Alt+click**: bypasses the interception and uses the product's native behavior\n- A toast at the bottom of the page reports the outcome (success/failure)"
+    },
+    {
+      "section": "Security",
+      "text": "The route uses the same trust fence as `/api`: Host must be loopback (DNS-rebinding protection), `Sec-Fetch-Site: cross-site` is rejected, and when `Origin` is present it must match the Host (drive-by POST protection). That means **other websites cannot use your browser to make local VS Code open files**; paths must be absolute and never pass through a shell (`execFile` with an argument array)."
+    },
+    {
+      "section": "Why not `vscode://file/...`",
+      "text": "v0.1 jumped to the `vscode://` protocol via an anchor — fine in a real browser, but the DSH GUI often runs inside a **VS Code webview**, and a webview navigating to that protocol **black-screens**. Since v0.2 the host side uses `code --goto`, which is webview-safe."
+    },
+    {
+      "section": "Install",
+      "text": "Assuming `DSH_HOME` is `~/.dsh` (the default):\n\n1. Copy the package into the web profile's node_modules:\n\n```bash\n   cp -r dsh-client-open-in-vscode ~/.dsh/profiles/web/node_modules/\n   ```\n\n2. Edit `~/.dsh/profiles/web/cordis.patch.yml` and add:\n\n```yaml\n   - insert:\n       - id: ui-open-in-vscode\n         name: dsh-client-open-in-vscode\n   ```\n\n3. Restart `dsh web` (the host half registers its HTTP route at startup — a page refresh alone is not enough).\n\nOptionally verify the composition:"
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ndsh --profile web --dump-config | grep ui-open-in-vscode\n```"
+    },
+    {
+      "section": "Requirements",
+      "text": "- The `code` CLI on PATH (ships with standard VS Code installs)\n- A desktop session (X11/Wayland) so the host process can raise GUI windows"
+    },
+    {
+      "section": "Uninstall",
+      "text": "1. Remove the `- insert:` block from `cordis.patch.yml`;\n2. Delete `~/.dsh/profiles/web/node_modules/dsh-client-open-in-vscode`;\n3. Restart `dsh web`."
+    },
+    {
+      "section": "Files",
+      "text": "| File | Purpose |\n|------|---------|\n| `index.js` | Host half: registers the `POST /plugin-open-in-vscode` route (loopback/Origin trust fence), `execFile('code', ['--goto','--reuse-window', path])` |\n| `client.js` | Browser half: click interception + fetch POST + toast (`window.__ModuleLoader__` format) |\n| `cordis.patch.yml` | Plugin insert config (needed for `dsh plugin add` / marketplace install) |\n| `package.json` | Package manifest with `dsh.bundle` + `dsh.client.platform: \"web\"` declarations |"
+    },
+    {
+      "section": "Files",
+      "text": "Compatibility: tested against the web profile of `@deepseek-ai/dsh` 0.1.0-rc.6. If product DOM classes/hashes change in a new version, the selectors in `targetPath()` inside `client.js` need updating."
+    }
+  ],
+  "skipped": []
+}

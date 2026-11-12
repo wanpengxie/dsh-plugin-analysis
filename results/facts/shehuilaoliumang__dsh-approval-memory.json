@@ -1,0 +1,168 @@
+{
+  "repo": "shehuilaoliumang/dsh-approval-memory",
+  "commit": "4200f563364882615a273d1efafa6215f31bb8c6",
+  "extracted_at": "2026-11-12T04:25:45.171912+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 35791,
+    "lines_by_language": {
+      "JSON": 37,
+      "JavaScript": 731,
+      "Markdown": 97,
+      "Other": 33,
+      "YAML": 27
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/sim.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-approval-memory",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Remembers repeated sandbox-escalation approvals per session (default) or per workspace (opt-in), so the same operation only asks once.",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/en.json",
+      "locale/zh.json",
+      "icon.svg",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-approval-memory\n      name: '@local/dsh-approval-memory'\n      config:\n        rememberAcrossSessions: false\n        storageDir: ''\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "index.js:527"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "test/sim.mjs:137"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "test/sim.mjs:149"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "test/sim.mjs:157"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "test/sim.mjs:179"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-31T07:37:43Z",
+    "created_at": "2026-10-31T07:28:05Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-approval-memory",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai) host plugin that remembers the sandbox-escalation approvals you already gave, so the same operation asks only once per session (default) or per workspace (opt-in).\n\nDSH（DeepSeek Harness）审批记忆插件：沙箱越界重试的审批，同一类操作你点过一次「允许」之后不再反复询问；点过「拒绝」也记住。\n\n它**不做自动审批**，也**不扩大沙箱**：沙箱仍是 `workspace-write`，越界写入照样被拒绝；插件只是复用你对某次越界重试的回答。"
+    },
+    {
+      "section": "背景：为什么不是 Auto review",
+      "text": "DSH 自带的实验包 `@deepseek-ai/dsh-experimental-auto-review`（Auto review）走的是另一条路：把会话切到 `danger-full-access`（无文件沙箱），用模型逐次审查工具调用。它确实能减少点击，但代价是丢掉操作系统级的文件沙箱。\n\n本插件反过来：保留 `workspace-write` + `ask` 审批，只在「需要你审批的越界重试」上复用你上次的答案。它不介入其它审批（安装插件、问答等仍逐次询问）。"
+    },
+    {
+      "section": "两档记忆",
+      "text": "| 档位 | 配置 | 作用范围 | 存储 |\n| --- | --- | --- | --- |\n| 会话档（默认） | `rememberAcrossSessions: false` | 仅当前会话 | 内存，会话关闭 / 应用重启即失效 |\n| 跨会话档 | `rememberAcrossSessions: true` | 按工作区跨会话 | `<profile>/approval-memory/<工作区哈希>.json` |\n\n跨会话档每个工作区一个文件，互不污染；文件里记录工作区路径和规则，规则格式为「工具名 + 升级目标模式 + 操作签名」。"
+    },
+    {
+      "section": "什么算「同类操作」",
+      "text": "- 沙箱升级的目标模式相同（如 `danger-full-access`）；\n- 工具相同；\n- 操作相同：\n  - shell 类（`command`）：空白规范化后的命令文本完全一致；\n  - 文件类（`file_path` / `path`）：解析后的绝对路径一致（Windows 下大小写不敏感）；\n  - 其它（如 `run_code` 的 `code`）：参数去掉 `sandbox_permissions` / `justification` 后稳定序列化哈希。\n\n即：`npm test` 放行过一次，下次 `npm test` 不再问；`npm run build` 仍会再问一次。"
+    },
+    {
+      "section": "安装",
+      "text": "插件以本地 bundle 形式安装（bundle 自带 `cordis.patch.yml`，装好即全 profile 生效，不需要手改 profile）：\n\n```powershell"
+    },
+    {
+      "section": "plugin_manager action=install_bundle target=D:\\path\\to\\dsh-approval-memory",
+      "text": "```\n\n卸载：\n\n```powershell"
+    },
+    {
+      "section": "plugin_manager action=remove_bundle target=@local/dsh-approval-memory",
+      "text": "```"
+    },
+    {
+      "section": "使用",
+      "text": "| 命令 | 作用 |\n| --- | --- |\n| `/approval-memory` | 查看档位、已记规则数、记忆文件路径 |\n| `/approval-memory workspace` | 临时切到跨会话档（仅本次运行） |\n| `/approval-memory session` | 临时切到会话档（仅本次运行） |\n| `/approval-memory clear` | 清空当前会话与当前工作区的记忆 |\n\n持久切换档位：设置 → 插件 → 审批记忆 → 「跨会话记住审批」。\n\n插件代码更新后需要让正在运行的实例重新加载（DSH 中按重载/刷新按钮，或重启应用），仅改文件不会热替换已加载的 host 插件。"
+    },
+    {
+      "section": "安全模型",
+      "text": "- **只复用既有审批**：`tools/pre-execute` 记录带 `sandbox_permissions` + `justification` 的调用，`approval/request` 用同一个 `callId` 对上后才可能复用答案；对不上、参数缺失、非升级审批一律交给原生弹窗（fail closed）。\n- **不制造权限**：插件返回的只有 `allowed-once` / `rejected`，从不自行发起执行，也不改变会话的沙箱模式或审批策略。\n- **防自举**：任何命令/路径命中记忆存储目录的调用一律不记忆，避免 Agent 先把规则写进存储文件再借此自我放行。\n- **不联网**：插件不发起网络请求，也不读取工作区内容做判断；只读自己写的规则文件。\n- **存储位置**：跨会话规则只写在 profile 目录（`$DSH_PROFILE_DIR/approval-memory`，否则 `~/.dsh/approval-memory`），不写进你的工作区。"
+    },
+    {
+      "section": "存储与清理",
+      "text": "- 清空跨会话记忆：删除 `approval-memory` 目录，或 `/approval-memory clear`。\n- 规则文件是可编辑的 JSON：任何能写 profile 目录的进程都能改它，请把它当作本地配置看待；不需要跨会话记忆时请关闭该档位。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 依赖审批请求携带与工具调用一致的 `callId`（DSH 内置工具满足；第三方工具若不带 `callId`，不会被复用）。\n- 精确匹配：命令改一个字就会重新询问。\n- 只对沙箱升级审批生效；其它审批不记忆。\n- 会话档在应用重启后丢失（刻意的安全取舍）。\n- 实验性 API：依赖 DSH 的 `tools/pre-execute`、`approval/request`、`commands` 等扩展点，DSH 版本升级后可能需要适配（开发时针对 0.2.1-rc.5 验证）。"
+    },
+    {
+      "section": "开发与测试",
+      "text": "```powershell\nnode --check index.js\nnode test/sim.mjs\n```\n\n`test/sim.mjs` 不依赖 DSH 运行时，用伪 ctx 直接驱动事件回调，覆盖：首问委托原生弹窗、同类复用、不同操作仍问、拒绝记忆、非升级审批不拦截、存储目录防自举、跨会话落盘与重启复用、斜杠命令。\n\nCI：见 `.github/workflows/ci.yml`（Node 20/22/24）。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,225 @@
+{
+  "repo": "Lingrui98/dsh-plugin-team-model-routing",
+  "commit": "1a1801e551736fe2c457cc7d2b6b05708e732a01",
+  "extracted_at": "2026-11-11T12:08:05.928666+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 57858,
+    "lines_by_language": {
+      "JSON": 63,
+      "JavaScript": 1011,
+      "Markdown": 371,
+      "Other": 30,
+      "YAML": 22
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "logic.js",
+      "package.json",
+      "test/logic.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-team-model-routing",
+    "version": "1.0.0",
+    "description": "Let an Agent Teams Lead choose the provider, model, and reasoning effort of each teammate it spawns.",
+    "license": "MIT",
+    "author": "lingruigou",
+    "type": "module",
+    "icon": "./icon.svg",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/Lingrui98/dsh-plugin-team-model-routing.git"
+    },
+    "homepage": "https://github.com/Lingrui98/dsh-plugin-team-model-routing#readme",
+    "bugs": {
+      "url": "https://github.com/Lingrui98/dsh-plugin-team-model-routing/issues"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "logic.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/*.json",
+      "LICENSE",
+      "README.md",
+      "README.zh.md"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "cordis",
+      "agent-teams",
+      "subagent",
+      "llm-routing",
+      "model-selection"
+    ],
+    "meta": {
+      "title": "Team Model Routing",
+      "description": "Spawn teammates on a chosen provider, model, and reasoning effort, validated against the Subagent model-selection allowlist."
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Team Model Routing: add the routed-spawn tool and the teammate routing hook.\n#\n# The routing hook rewrites a teammate's resolved AgentOptions before its first\n# model request is prepared, so the Team tool row needs no provider indirection.\n# The override below only restates the row's own defaults, keeping this bundle\n# correct even if an earlier layer left a wrapper provider name behind.\n\n- insert:\n    - id: team-model-routing\n      name: 'dsh-plugin-team-model-routing-next'\n      config:\n        toolName: spawn_teammate_routed\n        listToolName: list_teammate_models\n        routeTtlMs: 120000\n\n# `config` is replaced wholesale by the Loader: restate every field the row needs.\n- id: tool-agent-team\n  name: '@deepseek-ai/dsh-experimental-tool-agent-team'\n  config:\n    freshProvider: spawn\n    forkProvider: fork\n\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/Lingrui98/dsh-plugin-team-model-routing.git",
+      "where": "package.json:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Lingrui98/dsh-plugin-team-model-routing#readme",
+      "where": "package.json:13"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/Lingrui98/dsh-plugin-team-model-routing/issues",
+      "where": "package.json:15"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-15T07:37:07Z",
+    "created_at": "2026-10-15T07:33:38Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "logic.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "Team Model Routing (`dsh-plugin-team-model-routing`)",
+      "text": "Let an Agent Teams **Lead** choose the `provider`, `model`, and\n`reasoning_effort` of each teammate it spawns, validated against the Subagent\nmodel-selection allowlist."
+    },
+    {
+      "section": "Why it needs a plugin",
+      "text": "`spawn_teammate` (shipped) carries no route fields, and\n`ctx.agentTeams.spawnTeammate()` forwards only a provider *name* to\n`ctx.subagents.startContinuable()`, which is where `agentOptions` live."
+    },
+    {
+      "section": "Why it needs a plugin",
+      "text": "A teammate is a **continuable** child: the continuation registry materializes it\nthrough `ctx.agents.create()` and **never calls a subagent provider's\n`start()`**. So wrapping a subagent provider (the obvious first idea) can never\nroute a teammate — the wrapper is simply never asked to start it, and the\nteammate silently ends up on the inherited route."
+    },
+    {
+      "section": "The seam that works",
+      "text": "```\nspawn_teammate_routed            record route by (Lead, teammate name, context)\n        ↓\nagentTeams.spawnTeammate(...)    shipped Team service, unchanged contract\n        ↓\n\nTwo facts make this work, both verified in the installed sources:"
+    },
+    {
+      "section": "The seam that works",
+      "text": "- `agent/pre-step` is an awaited waterfall that runs **before** `step()` →\n  `prepareRequest()` (`dsh-agent-loop/lib/index.js:902-925 → 978 → 1050`).\n- `prepareRequest()` reads `this.options` on **every** step\n  (`dsh-agent-loop/lib/index.js:1168-1173`), and the loop and the Agent object\n  share one `options` reference (`:774`, `:1739`)."
+    },
+    {
+      "section": "The seam that works",
+      "text": "The order matters in the other direction too: the child's initial prompt is\nsubmitted *after* creation and the loop appends it to the transcript only\n*inside* that first step, so the teammate name must be read from the step's\nclaimed messages (`payload.messages`), with the transcript as a fallback for a\nresumed teammate. Reading the session snapshot at `agent/created` time finds\nnothing — that was the first implementation's fatal flaw."
+    },
+    {
+      "section": "Tools",
+      "text": "| Tool | Purpose |\n|---|---|\n| `spawn_teammate_routed` | Same contract as `spawn_teammate`, plus `provider` / `model` / `reasoning_effort`. Omit all three to inherit the Lead route. |\n| `list_teammate_models` | Lists selectable providers, then selectable models for one provider, then that model's reasoning efforts. |\n\nBoth are installed in the **Lead's own Agent scope** (never globally), so\nteammates do not see them."
+    },
+    {
+      "section": "Allowlist",
+      "text": "When `@deepseek-ai/dsh-tool-subagent/model-selection-settings` is\n`enabled: true`, explicit routes outside `allowedModels` are rejected **before**\nthe teammate is created. Pure inheritance is never restricted. An enabled but\nempty allowlist makes every route unselectable rather than failing inheritance."
+    },
+    {
+      "section": "Allowlist",
+      "text": "The route is also validated through `llm.resolveCallConfig()`, so an unknown\nmodel or an unsupported reasoning effort fails with the adapter's own message\ninstead of surfacing later as a failed turn."
+    },
+    {
+      "section": "Config",
+      "text": "```yaml\n- id: team-model-routing\n  name: 'dsh-plugin-team-model-routing'\n  config:\n    toolName: spawn_teammate_routed\n\n`freshProvider` / `forkProvider` are the provider names handed to the shipped\nTeam service; they must name registered subagent providers (`spawn`, `fork`)."
+    },
+    {
+      "section": "Known limits",
+      "text": "- **The route is process-local.** It lives in the plugin's memory, so it applies\n  while the child is created in this process. A teammate cold-resumed after a\n  Harness **restart** falls back to the `agentOptions` recorded in its\n  `subagent/descriptor`. Making that survive a restart needs a durable record and\n  is the natural follow-up.\n- **`agent.options` is a runtime object**, not part of the public `Agent`\n  interface. The rewrite is the reason this stays a plugin rather than a\n  one-line change; upstream, the clean fix is to let the provider contribute\n  `agentOptions` through `ContinuableCreateSpec` (or to accept `agentOptions` on\n  the team spawn request). The upstream repository does not accept external PRs\n  — publish this as a `dsh-plugin`, and raise the API gap in Discussions.\n- A recorded route that is never claimed (a spawn that failed before the child\n  existed) expires after `routeTtlMs` and is harmless."
+    },
+    {
+      "section": "Test",
+      "text": "```sh\nnode packages/team-model-routing/test/logic.test.mjs\n```\n\n18 checks over route validation, allowlist enforcement, discovery rendering, the\nclaim store, and teammate-name extraction. It covers `logic.js` only — the\n`agent/pre-step` seam itself needs a live run."
+    },
+    {
+      "section": "Install",
+      "text": "Published as [`dsh-plugin-team-model-routing`](https://www.npmjs.com/package/dsh-plugin-team-model-routing)\non npm, source at [Lingrui98/dsh-plugin-team-model-routing](https://github.com/Lingrui98/dsh-plugin-team-model-routing).\n\n```sh\nnpm install dsh-plugin-team-model-routing\n```\n\nor point the plugin manager at the installed package or a workspace directory:\n\n```js\nplugin_manager({ action: 'install_bundle', target: 'dsh-plugin-team-model-routing' })\n```"
+    },
+    {
+      "section": "Install",
+      "text": "Installing loads the module once; because Node caches ES modules by resolved\npath, **replacing this package's code requires a Harness restart** to take\neffect in a running process."
+    },
+    {
+      "section": "Repository layout",
+      "text": "```\nindex.js            Cordis Host plugin: tools, routing hook, Provider wiring\nlogic.js            dependency-free routing/claim logic (unit-tested)\ncordis.patch.yml    Loader patch: this row + the tool-agent-team config\nlocale/{en,zh}.json Plugin Manager display metadata\n\n`npm pack` ships `index.js`, `logic.js`, `cordis.patch.yml`, `icon.svg`,\n`locale/*.json`, `LICENSE`, and both READMEs."
+    },
+    {
+      "section": "Verified live",
+      "text": "Observed on the `desktop` profile, 2026-10-15, with the profile's\n`subagentModelSelection` allowlist enabled:"
+    },
+    {
+      "section": "Verified live",
+      "text": "| Check | Evidence |\n|---|---|\n| Route reaches the child | `spawn_teammate_routed({ provider: 'model-server', model: 'glm-5.3', reasoning_effort: 'high' })` → host log `team-model-routing: teammate \"confirm-route\" now runs on model-server/glm-5.3 (effort high)`, and `list_agents` reported that teammate as `model: \"glm-5.3\"` while the Lead was `gpt-6.1-sol` and the profile default is `bosc/deepseek-flash`. |\n| `list_agents` reads the applied route | `list_agents` shows the rewritten `model` for the routed teammate, and `gpt-6.1-sol` (the inherited route) for teammates created before this plugin existed. |\n| Allowlist rejects before creation | `spawn_teammate_routed({ provider: 'bosc', model: 'gpt-5.6-luna' })` → `Error: teammate LLM route \"bosc/gpt-5.6-luna\" is not allowed by the Subagent model-selection allowlist; allowed: model-server/glm-5.3, kimi-code/k3, bosc/gpt-5.6-sol, model-server/kimi-k3, bosc/deepseek-flash` — no teammate was created. |\n| Both tools are live in the Lead scope | `Tool.listTools` lists `spawn_teammate_routed` (with `provider`/`model`/`reasoning_effort`) and `list_teammate_models`. |"
+    },
+    {
+      "section": "Verified live",
+      "text": "Not covered by the live run: the `fork` context, and route survival across a\nteammate cold-resume (see Known limits)."
+    },
+    {
+      "section": "Releasing a new version",
+      "text": "The package is `dsh-plugin` shaped: `dsh.bundle.patch` points at\n`cordis.patch.yml`, the manifest carries display `meta`, `icon.svg`, `locale/{en,zh}.json`,\nand it is `type: module`. To release:"
+    },
+    {
+      "section": "Releasing a new version",
+      "text": "1. Bump `version` in `package.json` (npm rejects a re-publish of an existing version).\n2. `node test/logic.test.mjs` — 18 checks must pass.\n3. `npm pack --dry-run` — confirm the tarball is the 10 files listed under\n   [Repository layout](#repository-layout).\n4. `npm publish` — the npm account has 2FA enabled, so pass `--otp=<code>` or use a\n   granular token with **bypass 2FA** enabled. When a code is needed, ask for one\n   interactively rather than storing it.\n5. `git commit` and `git push` the release.\n6. If the package name ever changes, update the `name:` line in `cordis.patch.yml`\n   to match — the Loader resolves the row by that string."
+    },
+    {
+      "section": "Inviting the upstream fix",
+      "text": "The `agent/pre-step` rewrite in this package is a workaround for a missing\nupstream extension point: a continuable-subagent provider cannot contribute\n`agentOptions`, because the provider's `start()` is never called for continuable\nchildren. If that gap is closed, this package keeps its tools and drops the\nworkaround."
+    },
+    {
+      "section": "Inviting the upstream fix",
+      "text": "The upstream repository does not accept external PRs, so the way to raise it is a\nGitHub Discussion. Ready-to-post write-ups live in the workspace's `proposal/`\ndirectory (they are not part of the npm tarball):\n\n- `proposal/discussion-post.zh.md` — the post itself (Chinese, copy-paste).\n- `proposal/upstream-continuable-agent-options.zh.md` — full proposal with the\n  exact code paths and test points.\n- `proposal/upstream-continuable-agent-options.md` — the same in English."
+    },
+    {
+      "section": "Inviting the upstream fix",
+      "text": "Post it in `deepseek-ai/deepseek-harness` → Discussions → **Show Your Plugins!**\n(to introduce this package) or **Ideas** (to raise the API gap). Note that a\nDiscussion there needs write permission on that repository, which an outside\ncontributor does not have — the prepared text is meant to be pasted by a human."
+    }
+  ],
+  "skipped": []
+}

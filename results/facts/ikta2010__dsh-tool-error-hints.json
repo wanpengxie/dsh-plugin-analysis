@@ -1,0 +1,135 @@
+{
+  "repo": "ikta2010/dsh-tool-error-hints",
+  "commit": "def96301372e2e8f30bdebedb30efff0b98b2710",
+  "extracted_at": "2026-11-11T21:43:24.004099+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 18920,
+    "lines_by_language": {
+      "JSON": 27,
+      "JavaScript": 282,
+      "Markdown": 76,
+      "Other": 21,
+      "Shell": 39,
+      "YAML": 13
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "install.sh",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-tool-error-hints",
+    "version": "0.1.0",
+    "description": "给失败的工具结果追加可执行提示（路径不存在时给出最近的已存在目录），治弱模型瞎猜路径",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0",
+      "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0",
+      "@deepseek-ai/schemastery": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ikta2010/dsh-tool-error-hints.git"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-tool-error-hints 自带激活补丁（作为 bundle 层被应用）。\n# `insert:` 把条目追加到 profile 插件树顶层。\n- insert:\n    - id: tool-error-hints\n      name: 'dsh-tool-error-hints'\n      config:\n        enabled: true\n        # 解析相对路径时依次尝试的根目录\n        roots:\n          - /nas/dsh\n        maxEntries: 24\n        # 同一路径本轮最多提示 2 次，防刷屏\n        maxHintsPerPath: 2\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_TOOL_HINTS_LOG_DIR",
+      "kind": "env",
+      "where": "lib/index.js:45"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/ikta2010/dsh-tool-error-hints.git",
+      "where": "package.json:24"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-09-18T22:15:01Z",
+    "created_at": "2026-09-18T15:45:32Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tool-error-hints",
+      "text": "给**失败的工具结果**追加一条可执行的提示，治\"弱模型瞎猜路径\"。"
+    },
+    {
+      "section": "为什么需要（有真实数据）",
+      "text": "2026-09-13 对真实会话 `session-7b9b38a1`（本地 27B 跑长任务）的 796 条 `tool/result` 取证：\n\n- **失败 92 条（12%）**\n- 最高频形态：`ls: cannot access '<path>': No such file or directory [exit code: 2]`\n\n问题不在报错文案，而在**报错只说\"不存在\"、不说\"哪儿存在\"**：\n本地模型反复瞎猜绝对路径（`/nas/dsh/docker/dsh`、`/home/ikta/bin/wake-v100.sh`），\n而压缩之后它会**退回已经纠正过的错误写法**——同一个错路径能再错 4 次。"
+    },
+    {
+      "section": "它做什么",
+      "text": "挂在 `tools/post-execute`（waterfall），在失败结果之后注入一条 `source.kind='plugin'` 的提示：\n\n| 识别到的失败 | 注入的提示 |\n|---|---|\n| 路径不存在 | **最近的已存在祖先目录**及其内容（模型据此即可改对）+ 工作区根提示 |\n| 命令不存在 | 说明容器内没有该可执行文件，建议先 `command -v` 探测 |\n| 权限不足 | 说明以非 root 运行，`sudo`/`apt-get`/写 `/var` 会失败 |\n| 把目录当文件读 | 提示改用 `ls` |"
+    },
+    {
+      "section": "误报防护（重要）",
+      "text": "`grep 未找到匹配项`、`(无匹配)`、`no matches` 都是**合法的空结果**，不是错误。\n自测时踩过这个坑，因此按证据强度分两级：\n\n- **STRONG**（`No such file or directory` / `cannot access` / `文件不存在` …）→ 抽不到路径也给兜底提示\n- **WEAK**（泛化的 `not found` / `未找到` / `找不到`）→ **必须先抽出像路径的 token** 才提示\n\n自测用例 **10/10 通过**（5 类真报错都提示、5 类正常输出零误伤）。"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml\n- id: tool-error-hints\n  name: 'dsh-tool-error-hints'\n  config:\n    enabled: true"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\nbash /nas/dsh/工具/dsh-tool-error-hints/install.sh\ndsh-restart\n```\n\n**激活方式**：`~/.dsh/profiles/web/cordis.patch.yml` 里的 `insert:` 条目。\n**不要**写进 `package.json` 的 `dsh.profile.bundles` —— 实测 `dsh web` 每次启动\n会把 `package.json` 还原成出厂版本，写进去的会被冲掉（见 `dsh-loop-breaker` 的同类记录）。"
+    },
+    {
+      "section": "确证是否真的加载",
+      "text": "`dump-config` 只组合配置树、**不 import 模块**，所以\"配置里有\"不等于\"加载了\"。\n插件在 `apply()` 时写一行**加载心跳**：\n\n```bash\ntail -1 ~/.dsh-logs/tool-error-hints-loaded.log"
+    },
+    {
+      "section": "2026-09-13T14:10:00.000Z pid=12345 roots=/nas/dsh maxEntries=24",
+      "text": "```"
+    },
+    {
+      "section": "设计约束",
+      "text": "- **只读**：仅 `existsSync`/`readdirSync`/`statSync`，绝不执行命令、绝不写文件\n- **不覆盖工具结果**：只通过 `additionalContexts` 追加，不改写工具输出本身\n- **异常全吞**：提示插件绝不能影响正常工具流程"
+    }
+  ],
+  "skipped": []
+}

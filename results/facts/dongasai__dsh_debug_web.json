@@ -1,0 +1,186 @@
+{
+  "repo": "dongasai/dsh_debug_web",
+  "commit": "e851751fdd3ab3fe27ec5ae514250e1c62d8c550",
+  "extracted_at": "2026-11-11T19:15:46.880453+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 48119,
+    "lines_by_language": {
+      "JSON": 36,
+      "JavaScript": 660,
+      "Markdown": 284,
+      "Other": 21,
+      "YAML": 16
+    },
+    "outline": [
+      "AGENTS.md",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@dongasai/dsh-debug-web",
+    "version": "0.1.0",
+    "private": true,
+    "license": "MIT",
+    "type": "module",
+    "description": "Model-facing dsh_debug_web tool: run JavaScript inside the live Harness page and read its captured console output, riding the existing Cordis Host-to-Client inspect channel.",
+    "meta": {
+      "title": "网页调试 dsh_debug_web",
+      "description": "注册一个模型工具 dsh_debug_web，通过已存在的 Cordis Inspect 通道请求浏览器页面：在页面里执行 JS 拿到真实渲染结果，并读取页面自己捕获的 console 错误/警告缓冲。"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "README.md",
+      "AGENTS.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-cordis-client-runner"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 模型侧「网页调试」桥（@dongasai/dsh-debug-web）\n#\n# 宿主层一行插件，注册一个模型工具 dsh_debug_web。工具本身不实现浏览器逻辑：\n# 它把请求转发给宿主已有的 cordisInspect 服务（- id: cordis-host-runner 提供），\n# 由该服务广播到页面，页面半边（client.js）注册的 DebugWeb provider 执行并回传。\n#\n# 依赖（都在宿主层，同层注入即可解析）：\n#   - tools          ：工具注册表\n#   - cordisInspect  ：跨端 Inspect 通道（@deepseek-ai/dsh-cordis-host-runner）\n#\n# 为什么放宿主层一行而不是 preset 行：与 @dongasai/dsh-sidebar-terminal 同理，\n# 宿主层工具注册进全局层，本 profile 的每个 agent 都能调用；放 preset 要整份照抄\n# preset-standard 的 plugins 列表，升级 dsh 就得重新同步。\n- insert:\n    - id: dsh-debug-web\n      name: '@dongasai/dsh-debug-web'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-25T04:05:55Z",
+    "created_at": "2026-10-25T04:05:19Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-debug-web — 让 agent 在页面里执行 JS、读控制台",
+      "text": "DSH 官方给模型的客户端感知只有只读 Inspect：能读槽位树、主题令牌、Service/Event 契约，**读不到 DOM、读不到控制台、不能执行代码**。本插件补的就是这一半：一个模型工具 `dsh_debug_web`，请求浏览器页面执行 JavaScript 并取回结果，同时把页面自己捕获的 `console`/异常缓冲交给模型。\n\n它**不新造协议**：请求走的是 DSH 已有的 Cordis Host→Client Inspect 通道（`cordis/inspect-query`），本包只在两端各挂一层——宿主侧一个工具，页面侧一个 Inspect Provider。\n\n| 文档 | 只写 | 不写 |\n| --- | --- | --- |\n| README（本文） | 怎么装、怎么用、参数口径、排错、验证、边界 | 设计取舍、给 agent 的约束 |\n| [AGENTS.md](AGENTS.md) | 给 agent 的硬规则与改动连带项 | 用户用法 |"
+    },
+    {
+      "section": "功能",
+      "text": "**模型能力**（一个工具，四个动作）\n\n| action | 作用 | 必填 |\n| --- | --- | --- |\n| `pages` | 列出响应页面：pageId、URL、标题、视口、可见性、已捕获条数 | — |\n| `eval` | 在页面里执行表达式或语句体，支持 `await`，返回 JSON 值 | `code` |\n| `logs` | 读页面捕获的 console/异常缓冲，可按 `since` / `level` / `limit` 切片 | — |\n| `clear` | 清空缓冲并返回清掉多少条 | — |\n\n**页面能力**（客户端半边自动做，不需要用户操作）\n\n- 包一层 `console.log/info/warn/error/debug`，保留原输出。\n- 挂 `window.onerror`（捕获阶段，含 `<script>`/`<img>` 资源加载失败）与 `unhandledrejection`。\n- 300 条环形缓冲，单条正文截到 2000 字符，序号单调递增，不落盘、不发送。"
+    },
+    {
+      "section": "功能",
+      "text": "**不提供**：截图、网络瀑布、DOM 快照接口、宿主文件访问。这些不在本插件的通道里（见[已知边界](#已知边界)）。"
+    },
+    {
+      "section": "方式一：本地目录（开发时用这个）",
+      "text": "```bash\ndsh plugin --profile web add link:/data/ai/dsh/dsh_debug_web\n```\n\n装成 `link:` 依赖，改代码立刻是「已装的那份」。"
+    },
+    {
+      "section": "方式二：命令行 · git 源（分发）",
+      "text": "```bash\ndsh plugin --profile web add github:dongasai/dsh_debug_web\ndsh plugin --profile web add github:dongasai/dsh_debug_web#0.1\n```\n\n仓库地址 <https://github.com/dongasai/dsh_debug_web>，`#0.1` 钉在已推送的 tag 上；tag 被改动或删除后这条会装失败。"
+    },
+    {
+      "section": "方式三：Web 界面",
+      "text": "DSH Web → 左侧栏**插件** → **添加插件** → 填本仓库绝对路径 → **安装** → 点**立即启用**。\n\n四条通用坑：\n\n1. `--profile` 必填，不写直接报 `required option '--profile <name> not specified'`。\n2. 只加依赖不加 `dsh.profile.bundles` = 装了不挂载（本包带 `dsh.bundle`，装完会自动进 bundles）。\n3. git 规格必须 `github:` / `git+`，`git@…` 会被 pnpm 当本地路径，装出死链。\n4. 钉版本的 tag 必须真实存在。"
+    },
+    {
+      "section": "2. 让两半各就各位",
+      "text": "| 改了哪半 | 怎么生效 |\n| --- | --- |\n| `client.js`（页面侧 Provider） | **刷新浏览器页面**即可，不需要重启 Harness |\n| `index.js` / `cordis.patch.yml` / `package.json` 的 `dsh.*` | **重启 `dsh web`** |\n\n装完第一次必须重启一次：工具是在宿主启动合成插件行时注册的。"
+    },
+    {
+      "section": "3. 确认它在工作",
+      "text": "```bash\ndsh --profile web --dump-config | grep -A1 dsh-debug-web\n```\n\n期望：\n\n```yaml\n- id: dsh-debug-web\n  name: '@dongasai/dsh-debug-web'\n```\n\n重启后让模型调一次 `dsh_debug_web`，`action=pages`。成功的样子：\n\n```\n响应页面 1 个（查询广播到所有已连接页面，宿主只采纳第一个有效结果）：\n- pageId=page-xxxxxxxx visible 1440x900 Harness <http://127.0.0.1:3080/...>；已捕获 0 条，缓冲区 0 条\n```\n\n看不到工具 → 宿主半边没挂上（重启）；工具报 `provider-missing` → 页面还是旧的客户端半边（刷新）。"
+    },
+    {
+      "section": "结构",
+      "text": "| 文件 | 作用 |\n| --- | --- |\n| [index.js](index.js) | 宿主半边：注册 `dsh_debug_web`，把 action 转成 Inspect 查询并渲染结果 |\n| [client.js](client.js) | 页面半边：捕获 console/异常，注册 `DebugWeb` provider 执行 `eval` |\n| [cordis.patch.yml](cordis.patch.yml) | 宿主层装配行（`- id: dsh-debug-web`） |\n| [package.json](package.json) | `dsh.bundle` + `dsh.client`（`platform: web`、`immediately: true`） |\n\nHost `inject`：`tools`、`cordisInspect`。后者由 `@deepseek-ai/dsh-cordis-host-runner` 提供，**缺失时本插件不会激活**（没有别的通道可用）。\n\n占用的扩展点："
+    },
+    {
+      "section": "结构",
+      "text": "| 扩展点 | 注册物 |\n| --- | --- |\n| 宿主工具 | `dsh_debug_web`（全局层，本 profile 每个 agent 都可见） |\n| 客户端 Inspect Provider | id `DebugWeb`，方法 `pages` / `logs` / `eval` / `clear` |\n\n槽位、页签、路由**都不占**——本插件没有界面。"
+    },
+    {
+      "section": "通道契约",
+      "text": "一次调用的完整路径：\n\n```\n模型 → dsh_debug_web(index.js)\n     → ctx.cordisInspect.query('client', 'DebugWeb', <method>, <input>, agent, signal)\n     → 宿主广播 cordis/inspect-query 给所有已连接页面\n     → 每个页面的 DebugWeb provider 执行，第一个有效结果被采纳\n\n`action` → `method` 一一对应。input 只在下面这些字段里取值，多传未声明字段会被宿主 `validateInput` 拒绝（`additionalProperties: false`）："
+    },
+    {
+      "section": "通道契约",
+      "text": "| method | input | 说明 |\n| --- | --- | --- |\n| `pages` | 无 | 空对象即全部省略 |\n| `logs` | `since?` `level?` `limit?` | `since` 是 seq；`limit` 默认 100、上限 300 |\n| `eval` | `code`（必填） `pageId?` | `pageId` 不匹配的页面直接拒绝本次查询 |\n| `clear` | `pageId?` | 返回 `cleared` 条数 |\n\n共通口径："
+    },
+    {
+      "section": "通道契约",
+      "text": "- **超时**：宿主默认等 10000ms（`cordis-host-runner` 的 `clientInspectTimeoutMs`），页面侧 `eval` 自己 3000ms 先超时，所以模型拿到的通常是可读的错误而不是\"通道超时\"。\n- **首答优先**：查询是广播，所有已连接的 Harness 页面都会执行，只有第一个有效结果被采纳，其余被取消（`cancelled`）。\n- **错误口径**：页面 provider 抛错 → `provider-error: <message>`；方法不存在 → `method-missing`；页面没连 → `has no connected Harness page`。"
+    },
+    {
+      "section": "安全模型",
+      "text": "1. **`eval` 等于页面同权**：它在用户的浏览器标签页里以该页面的权限执行，能读写 localStorage、发同源请求、改 DOM。想安全就只用只读表达式。\n2. **通道里没有审批闸门**：`cordis_inspect_query` 与 Inspect 通道本身不做二次确认；本插件也没加。要不要给 `eval` 加审批是使用者的选择，不是内建保证。\n3. **信任围栏只有\"本机 + 已连接页面\"**：谁能操作这个 Harness 页面，谁就能让模型在页面里执行代码。它不是沙箱，也不隔离同源资源。\n4. **缓冲不离开页面**：捕获的日志只存在页面内存里，由宿主按需拉取，不写磁盘、不发第三方。\n\n**这不是什么**：不是权限隔离，不是审计日志，不是远端浏览器控制（它只作用于已经打开这个 URL 的那个标签页）。"
+    },
+    {
+      "section": "与 Agent 的关系",
+      "text": "- 工具只有一个：`dsh_debug_web`。参数里**没有**\"宿主路径\"\"shell\"\"目标机器\"——它只能作用于当前连接的页面。\n- 多标签页有歧义：先 `action=pages` 拿 `pageId`，再把它传给 `eval`/`logs`，否则可能打到后台标签页。\n- 页面侧读的是**插件加载之后**的日志；插件装好前的历史输出拿不到。\n- 不给模型截图与网络请求的能力：那需要 CDP 层，不在本通道里。"
+    },
+    {
+      "section": "排错",
+      "text": "| 症状 | 原因 | 处置 |\n| --- | --- | --- |\n| 工具列表里没有 `dsh_debug_web` | 宿主半边没生效 | 重启 `dsh web`；确认 `--dump-config` 里有 `dsh-debug-web` 行 |\n| `provider-missing: Client inspect provider \"DebugWeb\" is unavailable` | 页面还是旧 bundle | 刷新浏览器页面 |\n| `has no connected Harness page` | 没有页面连着（全关或断线） | 打开/刷新 Harness 页面 |\n| 报超时 `after 10000ms` | 页面在执行长任务、或标签页被节流 | 把慢活拆小；切到该标签页再试 |\n| `rejected input: ... additionalProperties` | 传了方法未声明的字段 | 只传表里那几列 |\n| `returned non-JSON value` | provider 返回了函数/循环引用 | 用能 JSON 化的表达式（DOM 节点会自动转 outerHTML 前缀） |\n| `eval 失败：... 超时：超过 3000ms` | 页面侧 `Promise` 没在 3s 内完成 | 缩短等待，或改用 `logs` 看异步结果 |\n| `页面 page-xxx 跳过` | `pageId` 指到了另一个标签页 | 用 `action=pages` 的当前 pageId |\n| 日志条数比自己看到的多 | 别的页面也在回 | 只有一个响应是正常的，缓冲各自独立 |\n| `eval` 里读不到别人控制的变量 | 页面是打包产物，模块不挂 `window` | 用 DOM/`fetch`/`localStorage` 侧证据，别指望内部符号 |\n| 刷新后日志全没了 | 缓冲在内存里，随页面重载清空 | 重要的先 `logs` 读完再刷新 |\n| 装了但界面没有任何变化 | 本插件没有界面 | 它只加工具，去工具列表/模型侧看 |"
+    },
+    {
+      "section": "怎么验证",
+      "text": "**命令行**\n\n```bash\nnode --check index.js && node --check client.js   # 两半语法\nnode probe-debug-web.mjs                          # 31 例探针，见下表（探针不进仓库）\n```"
+    },
+    {
+      "section": "怎么验证",
+      "text": "| 覆盖面 | 例数 | 覆盖点 |\n| --- | --- | --- |\n| 客户端 manifest | 2 | id、方法清单、描述与 schema 齐全 |\n| `eval` | 6 | 表达式 / `await` / 语句体 / DOM 兜底 / 语法错 / 执行期 console |\n| 捕获与缓冲 | 5 | console 三级别、`error` 事件、`unhandledrejection`、环形上限 300、seq 不回退 |\n| `logs` | 2 | `since` 增量、`level` 过滤、`limit` clamp |\n| 定向与清理 | 3 | pageId 不匹配拒绝 / 匹配执行、`clear` 保留 seq |\n| HMR | 1 | 重载后钩子不重复安装（一次 `console.log` 只记 1 条） |\n| 宿主工具 | 12 | 注册形态、四个 action 透传、缺参拒绝、无 agent 兜底、通道失败文案 |\n\n**浏览器清单**"
+    },
+    {
+      "section": "怎么验证",
+      "text": "- [ ] 重启后工具列表出现 `dsh_debug_web`。\n- [ ] `action=pages` 返回当前 pageId 与真实视口。\n- [ ] `eval` 读 `document.title` 与页面标签一致。\n- [ ] `eval` 计算样式值（如 `getComputedStyle(document.body).backgroundColor`）与 F12 一致。\n- [ ] `eval` 里 `console.warn('x')` 后，`action=logs level=warn` 能查到，且 F12 里也有这条。\n- [ ] 页面上故意抛一个未捕获异常，`action=logs level=error` 能看到消息与来源行。\n- [ ] `clear` 之后 `pages` 的 `buffered` 归零、`captured` 不回退。\n- [ ] 多标签页时传错 `pageId` 得到\"跳过\"报错，传对能执行。\n- [ ] 刷新页面后缓冲清空、`pageId` 变化。"
+    },
+    {
+      "section": "已知边界",
+      "text": "| 边界 | 原因 | 代价 |\n| --- | --- | --- |\n| 查询广播到**所有**已连接页面 | 通道没有\"定向某个页面\"的字段 | 不传 `pageId` 时，`eval` 的副作用可能在每个标签页各跑一次 |\n| 10 秒通道上限 | `clientInspectTimeoutMs` 默认 `10000` | 长轮询、watch 型需求做不了；页面侧 3s 先失败 |\n| 只有第一个结果被采纳 | 首答优先 | 多页面时无法比较各页结果 |\n| 无 push | 通道是请求/响应 | 日志只能模型主动拉，不能\"出错即通知\" |\n| 装好之前的日志拿不到 | 钩子在插件加载时安装 | 排查早期启动错误得先刷新再复现 |\n| 缓冲区在内存里 | 不落盘 | 页面重载即丢；单页上限 300 条 |\n| 只覆盖 `console` 五级与两类未捕获异常 | 没包 `console.trace`/`assert`、没接 `fetch` 失败 | 网络错误要从 `error` 事件或自己的 try/catch 里看 |\n| 返回值必须是无损 JSON | Host 侧 `validateOutput` 硬校验 | 返回函数/循环引用会整条查询失败 |\n| `eval` 不支持顶层 `await import()` 的模块图操作以外的注入 | 只有 `AsyncFunction` 上下文 | 拿不到打包器的模块表，只能用页面现有全局 |\n| 不能截图、不能读网络瀑布 | 那需要 CDP，本通道没有 | 视觉回归、性能分析要另找工具 |"
+    },
+    {
+      "section": "相关文件",
+      "text": "| 文件 | 关系 |\n| --- | --- |\n| [index.js](index.js) | 宿主半边；改工具参数、渲染、错误文案看这里 |\n| [client.js](client.js) | 页面半边；改捕获范围、缓冲口径、`eval` 语义看这里 |\n| [cordis.patch.yml](cordis.patch.yml) | 装配行；改插件 id 要连 `package.json` 与 notes 一起改 |\n| [AGENTS.md](AGENTS.md) | 给 agent 的硬规则：两半生效、provider id、schema 一致性 |\n| [LICENSE](LICENSE) | MIT |\n| `@deepseek-ai/dsh-cordis-host-runner/lib/index.js` | 通道宿主侧：`queryClient`、超时、输出校验 |\n| `@deepseek-ai/dsh-cordis-client-runner/lib/client.js` | 通道页面侧：`ClientCordisInspectRegistry.register/query` |"
+    },
+    {
+      "section": "许可证",
+      "text": "[MIT](LICENSE) © 2026 dongasai"
+    }
+  ],
+  "skipped": []
+}

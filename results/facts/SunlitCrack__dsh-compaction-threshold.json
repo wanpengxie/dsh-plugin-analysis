@@ -1,0 +1,152 @@
+{
+  "repo": "SunlitCrack/dsh-compaction-threshold",
+  "commit": "b21f304cd38c5406df7a85871a6186db58c72aa0",
+  "extracted_at": "2026-11-11T15:02:47.973274+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 30202,
+    "lines_by_language": {
+      "JSON": 43,
+      "JavaScript": 601,
+      "Markdown": 95,
+      "Other": 40,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-compaction-threshold",
+    "version": "0.1.0",
+    "description": "DSH 会话压缩阈值设置：在「插件」页本插件的配置卡里调自动压缩触发点与保留比例，保存即时写进 agent preset 隔离的压缩引擎",
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "compaction",
+      "context",
+      "settings"
+    ],
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE",
+      "package.json"
+    ],
+    "scripts": {
+      "check": "node --check lib/index.js && node --check lib/client.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-slots",
+          "@deepseek-ai/dsh-client-ui-settings-general"
+        ]
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# DSH profile layer: register the plugin's Host and browser halves.\n- insert:\n    - id: dsh-compaction-threshold\n      name: dsh-compaction-threshold\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:86"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-28T09:48:38Z",
+    "created_at": "2026-10-16T16:59:48Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-compaction-threshold",
+      "text": "在 **插件 → dsh-compaction-threshold** 的配置卡里调 DSH 的会话压缩阈值，保存后即时生效，不需要重启。\n\n| 设置项 | 默认 | 范围 | 说明 |\n| --- | ---: | --- | --- |\n| 触发阈值 | 80% | 17–90 | 自动压缩在**已路由模型上下文窗口**的百分之多少处触发 |\n| 保留近期对话 | 16% | 1–89 | 压缩时逐字保留的最近对话比例，必须小于触发阈值 |\n| 自动压缩 | 开 | — | 关闭后不再自动压缩，手动 `/compact` 仍可用 |\n\n例：窗口 1,000,000 的模型，触发阈值 80% → 800,000 tokens 处压缩，逐字保留 160,000 tokens。"
+    },
+    {
+      "section": "为什么不能只改 profile 配置",
+      "text": "DSH 内核**本来就带压缩**（`@deepseek-ai/dsh-compaction-basic`，默认 `thresholdRatio = 0.8` /\n`retainRatio = 0.16`），但在 web / desktop 装配下**改不到**：\n\n- 组合里**进程级**那一行 `compaction-basic` 是被禁用的；\n- 每个 **agent preset 在自己的隔离 realm 里各挂一个** `BasicCompactionEngine`\n  （`presets/cordis/agent.cordis.yml` 的 `compaction` 组，`isolate: { compaction: true }`）；\n- 往 `~/.dsh/profiles/<name>/cordis.patch.yml` 写同 id 行**不落到会话实际用的那个引擎**。"
+    },
+    {
+      "section": "实现要点（内核 0.1.5-rc.2 实测）",
+      "text": "1. **取得引擎**：`ctx.get('agentPresets').serviceFor(agent, 'compaction')`\n   → 返回该会话所在 preset 隔离 realm 内的 `BasicCompactionEngine`。\n2. **改值的正确姿势是「替换整个 config 对象」，不能原位赋值**：\n   - `Object.isFrozen(engine.config) === true`，而 `config` 属性本身 `writable: true`；\n   - 原位赋值在 ESM 严格模式下抛 `TypeError: Cannot assign to read only property 'thresholdRatio'`，\n     被 `try/catch` 吞掉就等于**静默什么都没做**（这点极易踩坑）；\n   - 引擎每次决策都重新读 `this.config`，所以整体替换即热更新。实测替换后 45 秒回读仍是新值。\n3. **枚举存活会话用 `ctx.get('agents').list()`**：\n   `sessionPersistence.list()` 的条目形状是 `{ header, revision, sizeBytes }`，\n   会话 id 在 `entry.header.id` 里、**顶层没有 id**；照顶层取会永远扫到 0 个会话。\n4. **两条落地路径**：\n   - 保存设置时立即扫描存活会话写入（实测 1.5 秒内引擎即为新值）；\n   - 每个 step 边界 `ctx.on('agent/pre-step', …, { prepend: true })` 再兜底同步一次。"
+    },
+    {
+      "section": "实现要点（内核 0.1.5-rc.2 实测）",
+      "text": "不改压缩算法、不碰会话日志：摘要生成、消息替换、checkpoint、持久化、溢出恢复\n全部仍是官方 `compaction-basic` 负责。设置值持久化在设置存储（命名空间\n`dsh-compaction-threshold`），进程重启后由 step 边界重新应用。"
+    },
+    {
+      "section": "安装（本机 DSH Desktop）",
+      "text": "Desktop 独占 profile 装配，`dsh plugin add` 在本机不可用。走本地热装配：\n\n```\nnpm pack                                  # → dsh-compaction-threshold-0.1.0.tgz"
+    },
+    {
+      "section": "dev_install_package(dir, profile='desktop')",
+      "text": "```\n\n本插件宿主半边只 import `@deepseek-ai/schemastery`（`0.2.0` 起 `@deepseek-ai/dsh-settings`\n的 `installSettingsSection` / `settingsNamespace` 已删除，导入它们会让宿主起不来）。\nlink 安装的插件目录没有自己的 `node_modules`，因此目录内建立一个**指回内核同一份**的\nnode_modules/@deepseek-ai/schemastery → <app>/dsh/node_modules/@deepseek-ai/schemastery\n```\n\n（`<app>` = 官方 Harness 安装目录，例如 `D:\\DeepSeek Harness\\resources\\app`。\n注意**不要**指向社区 Desktop 或其它副本：目标一旦被卸载/移动，悬空链接会让插件\n`failed to import`、宿主启动报错。）"
+    },
+    {
+      "section": "dev_install_package(dir, profile='desktop')",
+      "text": "装完**硬刷新页面**（Ctrl+Shift+R），在 **插件 → dsh-compaction-threshold** 的配置卡里\n即可看到本行（0.2.0 起第三方插件的配置卡在插件页，不在「设置 → 通用」）。\n\n> ⚠️ 改本插件的代码后需要**重启 DSH Desktop** 才生效：本机 super-injector 的\n> `dev_reload_package` 拿不到 `loader.internal`，只会\"重新装配\"旧模块；\n> 且 `dev_install_package` 见到已存在的 loader entry 会跳过 create。重启后由\n> profile 的 bundles 列表正常装配。"
+    },
+    {
+      "section": "验证",
+      "text": "宿主日志（`%APPDATA%\\DSH Desktop\\logs\\host\\dsh-<日期>.log`）里会有：\n\n```\n[dsh-compaction-threshold] audit-><写入路径> {\"event\":\"applied\",\"thresholdRatio\":0.62,…}\n```\n\n同时会往下列第一个可写目录追加一行 JSONL 审计（`dsh-compaction-threshold.jsonl`）：\n`$DSH_HOME` → `~/.dsh` → 本插件目录。"
+    },
+    {
+      "section": "限制",
+      "text": "- 只调**阈值类**策略；压缩范围选择、摘要质量、按模型覆盖（`modelPolicies`）、\n  摘要模型选择不在本插件范围内。\n- 只支持**百分比**；按绝对 Token 设阈值需要知道每个模型窗口，未做。\n- 若别处设过 `retainTokens`，本插件会清掉它（与 `retainRatio` 互斥）。\n- 某个 preset 若没有压缩组（不压缩的 preset），`serviceFor` 拿不到引擎，本插件对它无效。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,143 @@
+{
+  "repo": "shifan3/dsh-approve-for-me",
+  "commit": "5f6e15854d251c495a14f37f476459100377194b",
+  "extracted_at": "2026-11-12T04:29:56.016020+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 35683,
+    "lines_by_language": {
+      "JSON": 24,
+      "JavaScript": 521,
+      "Markdown": 294,
+      "Other": 24,
+      "YAML": 42
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "host-code.js",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-approve-for-me",
+    "version": "0.1.0",
+    "description": "Approve-for-me mode for DeepSeek Harness: an LLM safety reviewer auto-approves ordinary approval requests, while destructive high-risk commands still ask the human.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "approval",
+      "auto-approve",
+      "safety"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-approve-for-me bundle patch.\n# The package declares this file in package.json via dsh.bundle.patch, so\n# `dsh plugin --profile web add dsh-approve-for-me` (or a local path) adds\n# the package to dsh.profile.bundles automatically and this layer applies on\n# the next boot.\n#\n# 1) Add the fourth permission preset, \"auto-approve\" (帮我批准). A patch\n#    replaces the targeted row's whole config, so the three stock presets are\n#    restated exactly as dsh-base defines them.\n- id: permission\n  config:\n    presets:\n      read-only:\n        sandbox: read-only\n        approval: ask\n      workspace-write:\n        sandbox: workspace-write\n        approval: ask\n      danger-full-access:\n        sandbox: danger-full-access\n        approval: never\n      auto-approve:\n        sandbox: workspace-write\n        approval: ask\n        name: '帮我批准'\n        description: '低危操作由 deepseek-v4-flash 判定后自动放行；高危或不确定的操作仍需人工授权。'\n\n# 2) Mount the plugin. The row id is what profile patches target for config\n#    overrides (e.g. enabled: false). The preset name above is what the plugin\n#    matches against the session's current permission preset.\n- insert:\n    - id: approve-for-me\n      name: 'dsh-approve-for-me'\n      config:\n        enabled: true\n        provider: deepseek-official\n        model: deepseek-v4-flash\n        presetName: auto-approve\n        maxTokens: 256\n        summaryMaxChars: 12000\n        timeoutMs: 15000\n        temperature: 0\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-08-17T09:15:23Z",
+    "created_at": "2026-08-17T01:43:41Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-approve-for-me",
+      "text": "中文说明见 [README.zh.md](README.zh.md)。\n\nA [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) host plugin that adds an **approve-for-me** approval mode."
+    },
+    {
+      "section": "dsh-approve-for-me",
+      "text": "When enabled, every approval request that reaches the DSH answerer chain is judged by an LLM safety reviewer against a summary of the prior conversation. The model answers `ALLOW` or `REJECT`. Destructive high-risk commands — `rm -r`, `rm -rf`, `drop table`, `drop database`, and friends — skip the model entirely and are sent to the normal interactive user prompt."
+    },
+    {
+      "section": "dsh-approve-for-me",
+      "text": "> The plugin does **not** add a new `approve-for-me` policy enum (that is hardcoded in the host package `dsh-user-approval`). It works inside the existing `ask` approval policy: the plugin's enabled state *is* the mode switch. The DSH approval audit events (`approval/asked` + `approval/decided`) are still recorded normally."
+    },
+    {
+      "section": "Behavior",
+      "text": "- Listens on `approval/request` with `prepend: true`, so it runs before the interactive (user-prompt) answerer.\n- Extracts the concrete action text for the request:\n  - `command` from bash-family tool-call arguments,\n  - tool arguments JSON for other tools,\n  - or the request `reason` as a fallback.\n- If the action (or the request reason) matches a high-risk pattern → `next()`, i.e. the normal user approval prompt.\n- Otherwise it sends the LLM:\n  - the **conversation summary** (most recent ~12k chars of user messages, assistant tool activity, and tool calls),\n  - the **requested action** (tool name, reason, command/args).\n- The model must reply with exactly one word: `ALLOW` or `REJECT`.\n  - `ALLOW` → `allowed-once`\n  - `REJECT` → `rejected`\n  - unparseable / timeout / model error / no model service → `next()` (falls back to asking the user; never silently allows, never silently rejects)"
+    },
+    {
+      "section": "High-risk patterns",
+      "text": "The following are matched as exact patterns against the extracted action text (case-insensitive regex, no `g` flag):"
+    },
+    {
+      "section": "High-risk patterns",
+      "text": "- `rm -r`, `rm -rf`, `rm -fr`, `rm -R`, `rm -rfv`, ... (any `rm` with an `r` flag)\n- `rm ... /` (recursive/force remove targeting the filesystem root)\n- `drop table`, `drop database`, `drop schema`\n- `truncate table ...`\n- `delete from ...`\n- `mkfs`, `mkfs.ext4`, ...\n- `dd if=`\n- `shred`, `wipefs`\n- `git push -f` / `git push --force`\n- `git reset --hard`\n- `chmod -R 777`, `chown -R`\n- fork bomb `:(){ :|:& };:`"
+    },
+    {
+      "section": "Option A: `dsh plugin add` (recommended)",
+      "text": "The package declares `dsh.bundle.patch`, so `dsh plugin add` installs it and\nadds it to the profile's `dsh.profile.bundles` automatically — no manual\npatch editing.\n\nClone the repo, then from the directory that contains it run:\n\n```bash\ngit clone https://github.com/shifan3/dsh-approve-for-me.git\ndsh plugin --profile web add ./dsh-approve-for-me\n```\n\nOr by absolute path:\n\n```bash\ndsh plugin --profile web add /path/to/dsh-approve-for-me\n```\n\nOr, once it is published to npm:"
+    },
+    {
+      "section": "Option A: `dsh plugin add` (recommended)",
+      "text": "```bash\ndsh plugin --profile web add dsh-approve-for-me\n```\n\nThen restart `dsh web`. The command runs `pnpm add` inside\n`~/.dsh/profiles/web/`, then reconciles `dsh.profile.bundles` against the\ninstalled package. The row that activates the plugin lives in this repo's\n`cordis.patch.yml`."
+    },
+    {
+      "section": "Option B: manual home patch layer",
+      "text": "If you prefer not to use `dsh plugin`, clone the repo into your DSH home and\ninsert the row into `~/.dsh/cordis.patch.yml` yourself (applies to every\nprofile):\n\n```bash\nmkdir -p ~/.dsh/plugins\ngit clone https://github.com/shifan3/dsh-approve-for-me.git ~/.dsh/plugins/approve-for-me\n```\n\nThen create or extend `~/.dsh/cordis.patch.yml` with:\n\n```yaml\n- insert:\n    - id: approve-for-me\n      name: '../../plugins/approve-for-me/lib/index.js'\n      config:"
+    },
+    {
+      "section": "Option B: manual home patch layer",
+      "text": "Then restart `dsh web`. The relative `name` resolves against each profile\ndirectory (`~/.dsh/profiles/<name>/`), so `../../plugins/...` reaches\n`~/.dsh/plugins/...` for the shipped `web`, `tui`, and `cc-tui` profiles.\n\n> If you previously installed via Option B and then switch to Option A,\n> remove the `approve-for-me` insert from `~/.dsh/cordis.patch.yml` first so\n> the row is not defined twice."
+    },
+    {
+      "section": "Enable / disable / configure",
+      "text": "- Disable: set `enabled: false` in the row config and restart.\n  - Option A: add an id-targeted override to the profile patch\n    (`~/.dsh/profiles/web/cordis.patch.yml`):\n    ```yaml\n    - id: approve-for-me\n      config:\n        enabled: false\n    ```\n  - Option B: edit the insert block in `~/.dsh/cordis.patch.yml`.\n- Uninstall:\n  - Option A: `dsh plugin --profile web remove dsh-approve-for-me`, then restart.\n  - Option B: remove the `insert` block (or the whole patch file), then restart.\n- Config keys (all optional):\n  - `enabled` (default `true`)\n  - `provider` (default `deepseek-official`)\n  - `model` (default `deepseek-v4-flash`)\n  - `maxTokens` (default `512`)\n  - `summaryMaxChars` (default `12000`)\n  - `timeoutMs` (default `60000`)\n  - `reasoningEffort` (default `off`; keep it `off` so the verdict is not consumed by reasoning tokens)"
+    },
+    {
+      "section": "Install (dynamic, per-run)",
+      "text": "If you prefer not to write to `~/.dsh`, you can load `host-code.js` as a dynamic Cordis Host package (does not survive restart):\n\n- Web UI: open the Cordis panel → new Plugin (id prefix such as `afm`) → paste `host-code.js` as the Host code → run.\n- With `cordis_define` / `cordis_run`: read `host-code.js` and pass it as `code.host`."
+    },
+    {
+      "section": "Files",
+      "text": "- `lib/index.js` — static host plugin (ESM, no runtime dependencies).\n- `host-code.js` — dynamic Cordis Host package variant (same logic, sandbox-safe subset).\n- `cordis.patch.yml` — bundle patch (declared via `dsh.bundle.patch`) that activates the plugin row."
+    },
+    {
+      "section": "Limitations",
+      "text": "- The dynamic variant runs in the DSH dynamic-host vm sandbox: no `setTimeout` / `AbortController`, so its timeout relies on the LLM adapter's `streamIdleTimeoutMs` (default 300s). The static variant uses a real `AbortSignal.timeout`.\n- The session approval policy still displays as `ask`; the plugin is a prepended answerer, not a new policy enum.\n- Only one approve-for-me answerer should be active: if you load both the static and the dynamic variant, the later-prepended one wins."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

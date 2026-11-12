@@ -1,0 +1,133 @@
+{
+  "repo": "ThomasTZh/dsh-chat-preset",
+  "commit": "baaf5755623942f3a33eb7877b777f909794633b",
+  "extracted_at": "2026-11-11T15:16:42.532784+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 13505,
+    "lines_by_language": {
+      "JSON": 14,
+      "JavaScript": 140,
+      "Markdown": 95,
+      "Other": 25,
+      "YAML": 53
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "THIRD_PARTY.md",
+      "cordis.patch.yml",
+      "lib/guard.js",
+      "package.json",
+      "test/guard.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-chat-preset",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "exports": {
+      "./guard": "./lib/guard.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Chat preset: an API-backed chat mode whose model can only reason, use the\n# web tools, and load local skill instructions. Shells, editing, task tools,\n# and workspace file tools are out.\n- insert:\n    - id: preset-chat\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: chat\n        name: Chat\n        description: Web chat with search, fetch, reasoning, and skill loading. No shell, edits, or workspace file tools.\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                You are a helpful AI assistant. Give accurate, clear, and direct answers.\n\n                You can search the web with web_search and read a specific page with web_fetch. Use them when the question needs current or external information, and cite the source URLs you rely on. If a search fails or a page cannot be fetched, say so and answer from what you know, marking uncertainty.\n\n                Reason carefully before answering, especially for complex or multi-step questions. Do not claim to have read files, run commands, or accessed anything outside this conversation, the web tools, and any skill instructions you load.\n              complete: true\n              includeRuntimeContext: false\n          - id: web-only\n            name: '@local/dsh-chat-preset/guard'\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          # Local skill discovery and the `skill` catalog/loader, so chat mode\n          # can follow user-level skills such as ub-mode. Discovery alone does\n          # not grant file or shell tools; the web-only guard below decides\n          # which of these tools stay visible.\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              search: true\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n"
+    }
+  ],
+  "entries": [
+    "lib/guard.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-11-01T12:05:07Z",
+    "created_at": "2026-11-01T12:05:02Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/guard.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-chat-preset",
+      "text": "A DeepSeek Harness bundle that registers a `chat` agent preset: a plain helpful assistant with web access and local skills, and no way to touch the filesystem or run a command."
+    },
+    {
+      "section": "Abstract",
+      "text": "The harness composes behaviour from bundles, presets, and plugins. This bundle adds one preset row and one guard plugin, so a session can be switched to a chat mode whose model can search, fetch, and load skill instructions, and nothing else. A preset-scope tool restriction would also filter the preset's own tools, so the restriction is applied per agent once that agent exists."
+    },
+    {
+      "section": "What it registers",
+      "text": "One preset, mounted from [`cordis.patch.yml`](cordis.patch.yml):\n\n| Field | Value |\n|---|---|\n| `id` | `chat` |\n| `name` | Chat |\n| `order` | 5 |\n| persona | helpful assistant, cites sources, marks uncertainty, never claims to have run something it did not |\n| tools | `web_search`, `web_fetch`, `skill` |\n| compaction | basic compaction plus `/compact` |"
+    },
+    {
+      "section": "What it registers",
+      "text": "The persona is `complete: true`, so it replaces rather than extends the host prompt, and `includeRuntimeContext` is off: chat mode does not get the workspace facts injected."
+    },
+    {
+      "section": "Why a guard instead of a config flag",
+      "text": "The preset's own tools are registered in the shared preset scope, and the host also registers a few global tools such as `working_directory`. A restriction applied at the preset scope would filter the preset's own tools too, and would miss the globals. So the restriction is applied per agent, once the agent exists."
+    },
+    {
+      "section": "Why a guard instead of a config flag",
+      "text": "[`lib/guard.js`](lib/guard.js) listens for `agent/created`, reads the tools that agent can actually see, keeps `web_search` and `web_fetch`, adds `skill` when it is present, and calls `agent.ctx.tools.restrict({ allow })`."
+    },
+    {
+      "section": "Why a guard instead of a config flag",
+      "text": "Reading the allow list from the visible tools rather than hard-coding it means a search-only or fetch-only web configuration still produces the right restriction instead of an empty one. If no web tool is registered at all, the guard logs a warning and leaves the inherited tools unrestricted, which is a deliberate failure mode: it prefers a visible configuration error over silently removing a tool the user asked for."
+    },
+    {
+      "section": "Why the skill tool survives",
+      "text": "`skill` reads only the skill files that the discovery provider exposes. It never resolves a workspace path, so keeping it does not widen filesystem access. Dropping it would make user-level skills unreachable in the one mode that most needs them."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\nDSH_HOME=${DSH_HOME:-$HOME/.dsh}\ngit clone https://github.com/ThomasTZh/dsh-chat-preset \\\n  \"$DSH_HOME/local-plugins/dsh-chat-preset\"\n```\n\nRegister it in `$DSH_HOME/profiles/web/package.json` as a dependency:\n\n```json\n\"@local/dsh-chat-preset\": \"link:<absolute path to $DSH_HOME>/local-plugins/dsh-chat-preset\"\n```\n\nand list `@local/dsh-chat-preset` in `dsh.profile.bundles`, then:\n\n```sh\ncd \"$DSH_HOME/profiles/web\" && pnpm install\n```"
+    },
+    {
+      "section": "Install",
+      "text": "`dsh plugin --profile web add \"<path-to-this-clone>\"` performs the same registration through the harness CLI."
+    },
+    {
+      "section": "Verification",
+      "text": "| Check | Command | Result |\n|---|---|---|\n| Unit tests | `node --test test/guard.test.mjs` | pass, 6 tests |\n| Module parses | `node --check lib/guard.js` | pass |\n| Install layout | clone into a temporary `DSH_HOME`, then check the package and its patch arrive | pass; `pnpm install` and a harness restart were not run |"
+    },
+    {
+      "section": "Verification",
+      "text": "**Not tested:** a full preset switch in a freshly installed harness. The machine this bundle was written on runs the preset, but no separate live check was repeated from this repository."
+    },
+    {
+      "section": "Limitations",
+      "text": "- The guard restricts tools, not prompts. A chat session can still load any skill the discovery provider exposes, by design.\n- The preset rows name shipped harness packages (`@deepseek-ai/dsh-agent-preset`, `dsh-persona`, `dsh-agent-instructions`, and the skill and compaction plugins). They are resolved from the harness install and are not vendored here."
+    },
+    {
+      "section": "Acknowledgements",
+      "text": "The harness and its shipped packages are the work of the DeepSeek Harness project [1]."
+    },
+    {
+      "section": "References",
+      "text": "1. DeepSeek Harness. <https://github.com/deepseek-ai/deepseek-harness>. MIT."
+    }
+  ],
+  "skipped": []
+}

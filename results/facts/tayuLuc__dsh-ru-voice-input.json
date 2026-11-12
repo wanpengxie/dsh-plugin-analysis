@@ -1,0 +1,388 @@
+{
+  "repo": "tayuLuc/dsh-ru-voice-input",
+  "commit": "ad7ab7bbbd533e8a3442352753f3d8476826892b",
+  "extracted_at": "2026-11-12T05:47:53.891783+00:00",
+  "tree": {
+    "files": 26,
+    "bytes": 193685,
+    "lines_by_language": {
+      "JSON": 51,
+      "JavaScript": 3097,
+      "Markdown": 171,
+      "Other": 70,
+      "Python": 134,
+      "YAML": 77
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/assets/gigaam_v3_features.onnx",
+      "lib/assets/v3_vocab.txt",
+      "lib/gigaam/decode.js",
+      "lib/gigaam/e2e-worker.js",
+      "lib/gigaam/engines.js",
+      "lib/gigaam/index.js",
+      "lib/gigaam/lexicon.js",
+      "lib/gigaam/metal-worker.js",
+      "lib/gigaam/model-source.js",
+      "lib/gigaam/sidecar.py",
+      "lib/gigaam/worker.js",
+      "lib/registry.js",
+      "lib/wave.js",
+      "package.json",
+      "scripts/models.mjs",
+      "scripts/selftest.mjs",
+      "test/lexicon.mjs",
+      "test/parity.mjs",
+      "test/provider.mjs",
+      "test/registry.mjs",
+      "test/stubs/cordis.mjs",
+      "test/stubs/schemastery.mjs",
+      "test/warmth.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-ru-voice-input",
+    "version": "0.9.8",
+    "description": "Russian-first Voice input bundle for DeepSeek Harness: a microphone in the composer that already understands Russian. Local GigaAM v3 CTC (int8) is the default recognizer, ru is the default language, and the speech registry is forked so switching recognizers actually works.",
+    "license": "MIT",
+    "type": "module",
+    "main": "lib/gigaam/index.js",
+    "exports": {
+      ".": "./lib/gigaam/index.js",
+      "./lib/gigaam/index.js": "./lib/gigaam/index.js",
+      "./wave": "./lib/wave.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "cordis.patch.yml",
+      "lib/assets/*",
+      "README.md",
+      "scripts/*.mjs",
+      "lib/**/*.js",
+      "test/**/*.mjs",
+      "LICENSE",
+      "lib/**/*.py"
+    ],
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0",
+      "dsh": ">=0.2.1-rc.2"
+    },
+    "dependencies": {
+      "@deepseek-ai/dsh-experimental-api-speech-to-text": "0.2.1-rc.4",
+      "@deepseek-ai/dsh-experimental-client-ui-voice-input": "0.2.1-rc.4",
+      "@deepseek-ai/dsh-experimental-speech-to-text": "0.2.1-rc.4",
+      "onnxruntime-node": "1.30.0",
+      "transcribe-cpp": "0.2.4"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.3"
+    },
+    "scripts": {
+      "test": "node test/registry.mjs && node test/lexicon.mjs",
+      "test:provider": "node test/provider.mjs /tmp/stt-fixtures/short5.wav /Users/user/.dsh/models/gigaam-v3-ctc auto",
+      "test:warmth": "node test/warmth.mjs /Users/user/.dsh/models/gigaam-v3-ctc",
+      "selftest": "node scripts/selftest.mjs",
+      "models": "node scripts/models.mjs",
+      "test:parity": "node test/parity.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-ru-voice-input bundle layer.\n#\n# One install gives a composer microphone that already understands Russian.\n#\n# The layer order is the application order (app-boot: readProfilePatches\n# concatenates bundle patches in dsh.profile.bundles order, then the profile\n# patch, then home/overlays; composeEntries folds them in one applyEntryPatches\n# pass). Two rules of that fold decide every row shape below (read from the\n# app-boot 0.2.1-rc.4 source and measured live 30.10, `dsh --dump-config`\n# warnings — this exact file lost three times to not knowing them):\n#   - `name` on a row is a MISMATCH GUARD, never a rename: a row whose name\n#     differs from the module the id already holds is skipped;\n#   - a row for an id no earlier layer inserted is \"not found\"; only the\n#     nameless `{insert: [...]}` append runs unconditionally.\n# The stock voice bundle is listed AFTER ours, so a named row of ours for a\n# stock id (ui-voice-input, sensevoice) is always a preview for its own\n# entries and never overrides theirs; the profile's own user patch applies\n# after every bundle and is the legal override layer (that is where the\n# operator's Settings toggles live).\n#\n#   1. speech-to-text: the id belongs to the stock voice bundle when that\n#      bundle is installed (its layer applies after ours; the fold skips a\n#      named row whose name clashes with the entry the id holds), so in a\n#      stock-bundle profile the STOCK registry runs and the profile's user\n#      patch carries the selection config (a nameless config-only row merges\n#      by id). Where no stock bundle exists, the insert below mounts our fork\n#      (contract-fork of the registry + configure() provider-switch fix +\n#      live-set/persist-attempt write).\n#   2. the default recognizer is the local Russian GigaAM v3 CTC provider, and\n#      the default language is ru, so a fresh profile works with no clicks.\n#   3. SenseVoice is absent by design: it ships no Russian, and its 239 MB\n#      download is not a cost a Russian profile should pay.\n#\n# Rows 1 and 2 use relative module specifiers, which the loader resolves inside\n# this package. That is what makes the bundle self-contained: a git-installed\n# package cannot depend on its own subdirectories, so the forks must live here.\n# The registry id belongs to the stock voice bundle in a profile that installs\n# it (its layer applies after ours; a named row of ours for that id is skipped\n# by the fold — measured 30.10). The stock rc.4 registry is the mount there:\n# it gained provider configure() (the historic fork fix is moot) and the\n# selection persistence rides the host's volatile path. The fork insert below\n# is scoped to a fresh profile WITHOUT the stock bundle: the insert creates the\n# entry when nobody owns the id; there the fork is the mount, so it must select\n# GigaAM itself — that is the provider's `setAsDefaultProvider` config below\n# (the stock registry's own defaults name `sensevoice-local`, which exists\n# only in the stock bundle).\n- insert:\n    - id: speech-to-text\n      name: ./lib/registry.js\n      config:\n        defaultProvider: gigaam-v3-ctc-local\n        language: ru\n    - id: speech-to-text-gigaam\n      name: ./lib/gigaam/index.js\n      # Self-select at mount: the registry defaults to a provider that is not\n      # registered in this bundle, so a fresh install would boot with a dead\n      # selection and the mic UI's \"Speech recognition is not ready\" card.\n      # Idempotent (configuring to the same selection) and best-effort (a\n      # rejected write is a warn, the mount survives).\n      # Written out in full so the provider's settings card materialises every\n      # knob instead of showing a blank one. The values are the schema defaults:\n      # edit them here, or from the plugin details, to pin a different engine,\n      # model, quant or execution provider.\n      config:\n        setAsDefaultProvider: true\n        engine: auto\n        e2eModel: ctc\n        ortModel: gigaam-v3-e2e-ctc\n        ortProviders: CPUExecutionProvider\n        e2ePythonPath: ''\n        backend: metal\n        threads: 2\n        idleTimeoutMs: 120000\n        lexiconPath: ''\n        lexiconThreshold: 0.8\n\n\n"
+    }
+  ],
+  "entries": [
+    "lib/gigaam/index.js",
+    "lib/wave.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "GIGAAM_WORKER_OPTIONS",
+      "kind": "env",
+      "where": "lib/gigaam/e2e-worker.js:27"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "lib/gigaam/e2e-worker.js:62"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:174"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:176"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:237"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:238"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:239"
+    },
+    {
+      "name": "GIGAAM_MLX_PYTHON",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:296"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:298"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:299"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/gigaam/index.js:300"
+    },
+    {
+      "name": "GIGAAM_WORKER_OPTIONS",
+      "kind": "env",
+      "where": "lib/gigaam/metal-worker.js:21"
+    },
+    {
+      "name": "GIGAAM_ENGINE",
+      "kind": "env",
+      "where": "lib/gigaam/sidecar.py:64"
+    },
+    {
+      "name": "GIGAAM_E2E_MODEL",
+      "kind": "env",
+      "where": "lib/gigaam/sidecar.py:68"
+    },
+    {
+      "name": "GIGAAM_ORT_MODEL",
+      "kind": "env",
+      "where": "lib/gigaam/sidecar.py:72"
+    },
+    {
+      "name": "GIGAAM_ORT_PROVIDERS",
+      "kind": "env",
+      "where": "lib/gigaam/sidecar.py:73"
+    },
+    {
+      "name": "GIGAAM_WORKER_OPTIONS",
+      "kind": "env",
+      "where": "lib/gigaam/worker.js:16"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/models.mjs:24"
+    },
+    {
+      "name": "HF_HOME",
+      "kind": "env",
+      "where": "scripts/models.mjs:25"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "scripts/selftest.mjs:23"
+    },
+    {
+      "name": "DSH_PARITY_PROFILE",
+      "kind": "env",
+      "where": "test/parity.mjs:27"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "test/provider.mjs:20"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co",
+      "where": "lib/gigaam/index.js:68"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co",
+      "where": "lib/gigaam/index.js:143"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/aystream/gigaam-mlx.git",
+      "where": "lib/gigaam/index.js:337"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co",
+      "where": "lib/gigaam/model-source.js:61"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co",
+      "where": "test/provider.mjs:72"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co",
+      "where": "test/provider.mjs:93"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co",
+      "where": "test/warmth.mjs:69"
+    },
+    {
+      "host": "huggingface.co",
+      "url": "https://huggingface.co",
+      "where": "test/warmth.mjs:76"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-experimental-api-speech-to-text": "0.2.1-rc.4",
+      "@deepseek-ai/dsh-experimental-client-ui-voice-input": "0.2.1-rc.4",
+      "@deepseek-ai/dsh-experimental-speech-to-text": "0.2.1-rc.4",
+      "onnxruntime-node": "1.30.0",
+      "transcribe-cpp": "0.2.4"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 7,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 35,
+    "pushed_at": "2026-10-29T12:43:49Z",
+    "created_at": "2026-09-27T09:09:12Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/gigaam/engines.js",
+    "lib/gigaam/index.js",
+    "lib/gigaam/lexicon.js",
+    "lib/gigaam/model-source.js",
+    "lib/registry.js",
+    "lib/wave.js",
+    "package.json",
+    "scripts/models.mjs",
+    "scripts/selftest.mjs",
+    "test/lexicon.mjs",
+    "test/parity.mjs",
+    "test/provider.mjs",
+    "test/registry.mjs",
+    "test/warmth.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-ru-voice-input",
+      "text": "Русский Voice input для **DeepSeek Harness**. Одна установка — и в композере микрофон,\nкоторый сразу понимает русский."
+    },
+    {
+      "section": "Зачем он существует",
+      "text": "Штатный плагин **Voice input** заточен под китайский: единственный провайдер — SenseVoice,\nи в релизном чекпойнте русского нет. Замер на Apple M1 (26.09.2026, 28.6 с русской речи):\nSenseVoice int8 вернул **пустую расшифровку** (0 слов, WER 100 %) и всё равно занял ~600 МБ RAM.\n\nЗамеры — на M1 / 8.6 ГБ, синтез речи macOS `say -v Milena`. Это смоук, а не бенчмарк."
+    },
+    {
+      "section": "Установка",
+      "text": "```bash\ndsh plugin --profile web add https://github.com/tayuLuc/dsh-ru-voice-input\n```\n\nПерезапустите Web UI. Дальше — кнопка микрофона между моделью и Send: нажать, разрешить\nдоступ, записать, Stop. Расшифровка вставляется в черновик.\n\nПервое использование скачивает и проверяет модель (ревизия и SHA-256 закреплены) в\n`~/.dsh/models/gigaam-v3-ctc/`. SenseVoice не качается: в этом бандле его нет, у него нет\nрусского."
+    },
+    {
+      "section": "Установка",
+      "text": "Если pnpm ругается на `ERR_PNPM_IGNORED_BUILDS` — разрешите сборку нативного рантайма в\n`~/.dsh/profiles/<profile>/pnpm-workspace.yaml`:\n\n```yaml\nallowBuilds:\n  onnxruntime-node: true\n  koffi: true\n```"
+    },
+    {
+      "section": "Что внутри",
+      "text": "Один пакет, четыре слоя, формально те же четыре строки, что у штатного Voice input:"
+    },
+    {
+      "section": "Что внутри",
+      "text": "| Слой | Что это |\n|---|---|\n| `./lib/registry.js` | исторический форк `speech-to-text` (чин `configure()` для 0.1.x); с rc.3 штатный реестр умеет provider configure, слой монтируется штатным пакетом |\n| `./lib/gigaam/index.js` | провайдер GigaAM v3 CTC на `onnxruntime-node` или `transcribe-cpp` |\n| `@deepseek-ai/dsh-experimental-api-speech-to-text` | мост браузер↔хост, штатный |\n| `@deepseek-ai/dsh-experimental-client-ui-voice-input` | кнопка микрофона, штатная |"
+    },
+    {
+      "section": "Что внутри",
+      "text": "Дефолты: распознаватель `gigaam-v3-ctc-local`, язык `ru`. Свежий профиль работает без кликов.\n\nСлои 1 и 2 заданы относительными спецификаторами — загрузчик их резолвит внутри пакета.\nТак бандл остаётся самодостаточным: пакет, поставленный из git, не может зависеть от\nсобственных подкаталогов."
+    },
+    {
+      "section": "Движки",
+      "text": "Движок выбирается конфигом `engine`. По умолчанию `auto`: на Apple Silicon берётся `mlx`,\nвезде остальное — `onnx-asr`."
+    },
+    {
+      "section": "Движки",
+      "text": "| `engine` | Что внутри | Mac | Nvidia | CPU | Пунктуация |\n|---|---|---|---|---|---|\n| `auto` | выбирает сам | есть | есть | есть | **есть** |\n| `mlx` | `gigaam-mlx`, чистый MLX | есть | нет | нет | **есть** |\n| `onnx-asr` | `onnx-asr`, e2e через onnxruntime | есть | есть, CUDA | есть | **есть** |\n| `gguf` | GGUF Q8_0 через `transcribe-cpp` | есть, Metal | есть, CUDA | есть | нет |\n| `onnx` | int8 через `onnxruntime-node` | есть | есть | есть | нет |"
+    },
+    {
+      "section": "Движки",
+      "text": "Замеры на Apple M1, прогретые, русская речь 5 с и 28.6 с:\n\n| движок | RTF 5 с | RTF 28.6 с |\n|---|---|---|\n| `mlx` (e2e ctc) | 0.027 | 0.017 |\n| `onnx-asr` (e2e ctc) | 0.048 | — |\n| `gguf` (Q8_0) | — | 0.016 |\n| `onnx` (int8) | 0.038 | 0.043 |\n\n**Пунктуацию дают только e2e-движки.** Словарь CTC-голов GigaAM — 34 токена: `▁`, 32 русские\nбуквы и `<blk>`. Знаков препинания в нём нет физически, поэтому `gguf` и `onnx` не могут их\nвыдать ни при какой настройке."
+    },
+    {
+      "section": "Движки",
+      "text": "Пример одного и того же места: `панель а показывает` (CTC) против `Панель A показывает` (e2e).\n\nКванты зависят от платформы, и это учтено: MLX-кванты годятся только на Apple Silicon, GGUF\nработает и через Metal, и через CUDA, а ONNX int8 — единый формат для всех."
+    },
+    {
+      "section": "Python-движки",
+      "text": "Python ≥ 3.10 и `ffmpeg` в PATH:\n\n```bash\nuv venv ~/.dsh/venvs/gigaam-mlx --python 3.12\nuv pip install --python ~/.dsh/venvs/gigaam-mlx/bin/python \\\n  \"gigaam-mlx @ git+https://github.com/aystream/gigaam-mlx.git\"\nuv pip install --python ~/.dsh/venvs/gigaam-mlx/bin/python onnx-asr onnxruntime"
+    },
+    {
+      "section": "Python-движки",
+      "text": "Один venv обслуживает оба сайдкара; на не-Apple достаточно поставить только `onnx-asr`.\nПуть ищется так: `e2ePythonPath`, иначе `$GIGAAM_MLX_PYTHON`, иначе\n`<dsh home>/venvs/gigaam-mlx/bin/python`. Веса движок качает сам в кэш Hugging Face.\n\n**Цена первого запроса.** В свежем процессе движок компилирует пайплайн: первый ответ ~1.7 с\nпротив 0.13 с прогретого. `idleTimeoutMs: 0` ставить не стоит — воркер должен переживать\nпаузу между записями."
+    },
+    {
+      "section": "Словарь",
+      "text": "Распознаватели маленькие, и имена они коверкают. Ни один из рантаймов не умеет hotword-биасинг,\nпоэтому коррекция идёт по тексту после распознавания.\n\nСловарь — JSON-массив в `~/.dsh/stt-lexicon.json`:\n\n```json\n[\"Sisyphus\", \"авто-брайн\", \"dsh\", \"GigaAM\", \"obsidian\"]\n```"
+    },
+    {
+      "section": "Словарь",
+      "text": "Термин подставляется только если его **нет** в тексте и найденное слово **достаточно**\nпохоже (`lexiconThreshold`, по умолчанию 0.8). Порог режет и ложные срабатывания, и случаи\nвроде `Сизифус` → `Sisyphus`: восстановить тяжёлую транслитерацию строковой мерой нельзя, и\nгадать хуже, чем оставить слово как есть. Чистые случаи вроде `дш` → `dsh` и `гигаам` →\n`GigaAM` ловятся, потому что сводятся через одну раскладку букв."
+    },
+    {
+      "section": "Почему реестр форкнут",
+      "text": "Штатный `configure()` проверяет **текущий** язык против **нового** провайдера:\n\n```js\nconst id = patch.providerId ?? this.config.defaultProvider.get();\nthis.selectedProvider(id, patch.language ?? this.config.language.get());\n```\n\nИз-за этого смена распознавателя невозможна, когда сохранённый язык не входит в список нового\nпровайдера. В настройках это выглядит как «выбрал — откатило», и выхода нет: выбрать русский\nможно только у провайдера, который русский уже поддерживает."
+    },
+    {
+      "section": "Почему реестр форкнут",
+      "text": "Фикс: голое переключение провайдера берёт язык, который новый провайдер принимает, — сначала\nсохранённый, иначе первый в его списке. Явно заданный язык по-прежнему проверяется и по-прежнему\nотвергается вслух.\n\nКонтракт сервиса не изменён: имя `speechToText`, схема конфига и все методы те же, поэтому\nштатные мост и UI работают против форка без изменений."
+    },
+    {
+      "section": "Проверка",
+      "text": "```bash\nnpm test                              # реестр (11 проверок) + словарь (12 проверок)\nnode test/provider.mjs <clip.wav>     # провайдер: регистрация, prepare, расшифровка\n```\n\nУ провайдера есть отрицательный контроль: тишина обязана дать пустой текст, иначе сломанная\nмодель прошла бы как рабочая.\n\nЖивой замер движка:"
+    },
+    {
+      "section": "Проверка",
+      "text": "```bash\nnode test/provider.mjs <clip.wav> ~/.dsh/models/gigaam-v3-ctc auto   # или onnx-asr, mlx, gguf, onnx\nnode scripts/models.mjs                  # что лежит на диске и что можно убрать\nnode scripts/selftest.mjs <clip.wav> ~/.dsh/models/gigaam-v3-ctc onnx  # замер только Node-движков\n```"
+    },
+    {
+      "section": "Что дальше",
+      "text": "**RNNT вместо CTC в движке `e2e`.** Сейчас по умолчанию `ctc` — он быстрее. `rnnt` заявлен\nточнее (~77× против ~330× realtime у автора на M2 Max), обе ветки с пунктуацией. Переключается\nконфигом `e2eModel`, без переустановки.\n\n**Память.** По умолчанию воркер освобождается через 120 с простоя. `idleTimeoutMs: 0`\nдержит его загруженным постоянно — на ноутбуке этого стоит избегать."
+    },
+    {
+      "section": "Лицензия",
+      "text": "MIT. Форк реестра — производная от `@deepseek-ai/dsh-experimental-speech-to-text` (база 0.2.1-rc.2, `lib/` идентичен 0.1.7-rc.2). Совместимость с хостом задаётся `engines.dsh` (`>=0.2.1-rc.2`), а не пином версии: гейт dsh-app-boot проверяет бандл по этой строке.\nВеса модели не входят в поставку: провайдер тянет их сам по закреплённой ревизии."
+    }
+  ],
+  "skipped": [
+    "node_modules"
+  ]
+}

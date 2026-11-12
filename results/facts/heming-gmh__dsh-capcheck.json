@@ -1,0 +1,161 @@
+{
+  "repo": "heming-gmh/dsh-capcheck",
+  "commit": "b2aa2b88c77d2929a3db8c89cc16817f8c639e48",
+  "extracted_at": "2026-11-11T21:06:46.339924+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 38823,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 521,
+      "Markdown": 191,
+      "Other": 3,
+      "YAML": 191
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "bin/batch-npm.js",
+      "bin/batch.js",
+      "bin/cli.js",
+      "cordis.patch.yml",
+      "data/capability-tiers.yaml",
+      "package.json",
+      "reports/ecosystem-capability-landscape-v0.md",
+      "src/extract-inject.js",
+      "src/plugin.js",
+      "src/resolve-entry.js",
+      "src/scan-npm.js",
+      "src/scan-package.js",
+      "src/scan-remote.js",
+      "src/tiers.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-capcheck",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "V0 capability-disclosure scanner for DeepSeek Harness (DSH) cordis plugins: reports which sensitive services (credentials/shell/approval/sandbox/fs/tools...) a plugin declares or references before you trust it.",
+    "license": "MIT",
+    "main": "src/plugin.js",
+    "bin": {
+      "dsh-capcheck": "./bin/cli.js"
+    },
+    "files": [
+      "src",
+      "bin",
+      "data",
+      "cordis.patch.yml"
+    ],
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "security",
+      "supply-chain"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "acorn": "^8.14.0",
+      "acorn-walk": "^8.3.4",
+      "js-yaml": "^4.1.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-tools": "*"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-capcheck\n      name: dsh-capcheck\n"
+    }
+  ],
+  "entries": [
+    "src/plugin.js",
+    "bin/cli.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "acorn": "^8.14.0",
+      "acorn-walk": "^8.3.4",
+      "js-yaml": "^4.1.0"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-08-19T08:23:35Z",
+    "created_at": "2026-08-19T07:59:07Z"
+  },
+  "runtime_files": [
+    "bin/cli.js",
+    "cordis.patch.yml",
+    "src/extract-inject.js",
+    "src/plugin.js",
+    "src/resolve-entry.js",
+    "src/scan-npm.js",
+    "src/scan-package.js",
+    "src/tiers.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-capcheck",
+      "text": "看一个 DSH 插件装上之后实际能碰到你机器上的什么 —— 纯静态分析，不执行插件代码。"
+    },
+    {
+      "section": "例子",
+      "text": "```\n$ node bin/cli.js <本地已装的 dsh-ssh 插件目录>\n\n[HIGH]  tools        (declared=true)\n  [MEDIUM] webServer   (declared=true)\n\n这个插件全程没有声明或引用 ctx.shell / ctx.sandbox / ctx.approval。它的 SSH 命令执行走的是自己内置的 ssh2 库，绕开了 DSH 官方的审批和沙箱——能执行远程命令这件事，对官方的安全机制来说是看不见的。"
+    },
+    {
+      "section": "目前扫到的几个例子",
+      "text": "- dsh-ssh：如上，远程命令执行绕过了官方审批。\n- dshmarket（插件市场）：通过 ctx.inject(['loader'], ...) 拿到了 cordis Loader 的控制权，理论上可以静默启停机器上任何其它插件。目前扫到权限最重的一个。\n- dsh-provenance、dsh-plugin-check、dsh-egress-guard 这几个做安全体检的插件，自己也都注册了新的 agent 工具。\n\n完整的扫描方法和数据在 reports/ecosystem-capability-landscape-v0.md。"
+    },
+    {
+      "section": "用法",
+      "text": "命令行：\n\n```sh\nnode bin/cli.js <本地插件目录>       # 扫一个已经装在本机的插件\nnode bin/batch-npm.js <npm包名>     # 扫真实发布的 npm tarball，推荐用这个\n```\n\n也可以直接装成 DSH 插件：\n\n```sh\ndsh plugin --profile web add dsh-capcheck\n```\n\n装好之后可以直接让模型帮你查，比如问它\"用 dsh_capcheck 看看这个插件装了会碰到什么\"。已经在 headless profile 里跑通过，模型能正确调用工具并给出结构化结果。"
+    },
+    {
+      "section": "背景",
+      "text": "DSH 的 cordis 插件本质上就是普通的 Node 模块，直接跑在宿主进程里，没有权限沙箱这一层——官方文档里写的原话是把动态插件当成 bash access 来对待。也就是说一个插件装进去之后，理论上能碰到你的 API Key、能执行命令、能绕开审批。dsh-capcheck 做的事情是在你安装之前，先看看这个插件的代码里声明或引用了哪些敏感能力。"
+    },
+    {
+      "section": "能力分级表",
+      "text": "这张表是整个项目的核心，三种检测信号最终都会往这张表上查。分级逻辑是一个梯子，越往上代表插件拿到之后能造成的破坏越大：\n\n```mermaid\nflowchart TD\n    U[\"⚪ unknown\\n没登记的服务\\n默认当高风险处理，不会当成安全\"] -->|人工登记后归类| L\n    U --> M\n    U --> H\n\n实际扫描时命中的能力也会按这五档统计，V0 阶段扫过的 18 个插件（4 个官方包 + 14 个真实发布的社区插件）一共命中了 28 项能力，分布是这样：\n\n```mermaid\npie showData\n    title V0 扫描命中的 28 项能力，按分级分布\n    \"critical\" : 2\n    \"high\" : 7\n\n表本身在 data/capability-tiers.yaml，纯文本可以直接编辑，欢迎针对没登记的服务提 PR。"
+    },
+    {
+      "section": "怎么检测",
+      "text": "三种信号，按可信度从高到低：\n\n1. inject 数组声明。cordis 框架自带的依赖注入机制，static inject = [...] 这种写法，是框架强制要求的，可信度最高。\n2. 裸成员访问，比如 ctx.credentials、ctx.shell。只认对象字面上是 ctx 或 context 的情况，避免误判——之前踩过一个坑，某插件里 client.shell(...) 其实是第三方 ssh2 库自己的方法，跟 ctx.shell 完全无关，后来加了这个限制才排除掉。\n3. package.json 里的依赖声明，不用下载代码就能先粗筛一轮。\n\n三种信号命中的服务名都会去查上面那张能力分级表。"
+    },
+    {
+      "section": "局限",
+      "text": "- 直接扫 GitHub 仓库经常扫不到东西，因为很多插件的构建产物只在发布时打进 npm tarball，没有提交到 git。实测样本里这个情况出现的概率超过一半，所以推荐用 bin/batch-npm.js 扫真实发布的 tarball。\n- package.json 的 main/exports 字段写法很不统一，很多插件只写 exports 而且形状还不一样，已经在 src/resolve-entry.js 里做了兼容处理。\n- 裸成员访问检测是启发式的，检测不到经过改名或者解构之后的访问。\n- 能力分级表目前只覆盖了官方包和几个比较知名的第三方服务，其它一律 unknown，需要持续补充。\n- 还没有做动态验证。一个存心要绕过检测的插件完全可以不声明 inject，靠间接方式拿到引用，这种情况只有真的把插件加载起来、用 Proxy 记录实际访问才能抓到。"
+    },
+    {
+      "section": "目录结构",
+      "text": "```\nsrc/extract-inject.js   静态分析，提取 inject 声明和裸成员访问\nsrc/resolve-entry.js    解析 package.json 的 main/exports\nsrc/tiers.js            读取能力分级表\nsrc/scan-package.js     扫本地已装目录"
+    },
+    {
+      "section": "现状",
+      "text": "本地扫过 4 个官方 @deepseek-ai/dsh-* 包，用真实 npm tarball 扫过 15 个已发布的社区插件，14 个成功（唯一失败的 petdex 是因为它的 package.json 既没写 main 也没写 exports，报告里标成了扫描不完整，不会当成安全）。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

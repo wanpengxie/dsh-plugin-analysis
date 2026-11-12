@@ -1,0 +1,168 @@
+{
+  "repo": "d3vmeh/dsh-context-budget",
+  "commit": "296176e9cad45d35bd1d9769388bfa36b513c4ba",
+  "extracted_at": "2026-11-11T18:50:17.398354+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 83231,
+    "lines_by_language": {
+      "JSON": 1407,
+      "JavaScript": 608,
+      "Markdown": 84,
+      "Other": 22,
+      "YAML": 15
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "package-lock.json",
+      "package.json",
+      "src/index.js",
+      "test/budget.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-context-budget",
+    "version": "0.2.1",
+    "description": "Keeps a local model's context at a size the GPU handles well: measured prefill speed, hard ceiling, early compaction for DeepSeek Harness",
+    "license": "MIT",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "llama.cpp",
+      "context",
+      "compaction"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/d3vmeh/dsh-context-budget.git"
+    },
+    "scripts": {
+      "test": "vitest run"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-compaction": ">=0.1.1-rc.2"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-compaction": "^0.1.1-rc.2",
+      "semver": "^7.8.5",
+      "vitest": "^4.1.11"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle layer for dsh-context-budget: inserts the plugin with no providers guarded.\n# Configure it from your profile's cordis.patch.yml with an override row:\n#\n# - id: context-budget\n#   config:\n#     providers:\n#       llamacpp:\n#         hardCeilingTokens: 120000\n#         maxColdPrefillMs: 600000\n#         action: warn\n- insert:\n    - id: context-budget\n      name: dsh-context-budget\n      config:\n        providers: {}\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/d3vmeh/dsh-context-budget.git",
+      "where": "package.json:26"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/dsh-compaction": "^0.1.1-rc.2",
+      "semver": "^7.8.5",
+      "vitest": "^4.1.11"
+    }
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-10-04T04:19:55Z",
+    "created_at": "2026-08-29T23:49:27Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-context-budget",
+      "text": "A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that keeps a local model's context at a size your GPU handles well."
+    },
+    {
+      "section": "dsh-context-budget",
+      "text": "dsh compacts a conversation when it reaches a fixed fraction of the model's declared context window. On local hardware the declared window is not very practical. For example, a 27B model that advertises 256K may read prompts at 300 tokens per second when the context is small and at 70 tokens per second past 100K. So a turn could take a few seconds to start early in the conversation, but later in the same session take half an hour. Also, the GPU may hang before the window is full. This plugin measures how expensive the context has become and warns or compacts early before that point."
+    },
+    {
+      "section": "What it checks",
+      "text": "Before every agent step, for each guarded provider route:\n\n| Check | Setting | Trips when |\n|---|---|---|\n| Hard ceiling | `hardCeilingTokens` | the context is larger than this many tokens |\n| Observed slowness | `maxTtftMs` | the last reply on this context took longer than this before its first token |\n| Predicted slowness | `maxColdPrefillMs` | context size divided by the measured prefill rate exceeds this (the wait if the server's prompt cache were lost) |"
+    },
+    {
+      "section": "What it checks",
+      "text": "Any configured check can be tripped. If you leave the check unset, it is skipped. The prefill rate is measured on every model request from the time to the first chunk and the uncached prompt tokens the server reported."
+    },
+    {
+      "section": "Install",
+      "text": "```\ndsh plugin --profile web add dsh-context-budget\n```\n\nThen in `~/.dsh/profiles/web/cordis.patch.yml`:\n\n```yaml\n- id: context-budget\n  config:\n    providers:\n      llamacpp:\n\nThe provider key is the route name from your dsh settings. Each provider entry needs at least one check. After installing the plugin, restart `dsh web` and open a new session.\n\nCheck the composed config with `dsh --profile web --dump-config`."
+    },
+    {
+      "section": "What it does when a check trips",
+      "text": "- `warn`: prints one line to the dsh terminal, naming the check and the current values, as well as an estimate of what compacting now would cost:\n\n```\n  context-budget: llamacpp session=d1e4be82 predicted: cold prefill 37.2 min > 10.0 min (152340 tokens, rate 68 tok/s, compacting now ~41.2 min)\n  ```"
+    },
+    {
+      "section": "What it does when a check trips",
+      "text": "- `compact`: prints the same line, then asks dsh's compaction engine to summarize everything except the most recent `retainTokens`, cut at a tool-call boundary. The outcome is printed too (`compacted N items (~T tokens)` or `compaction failed: ...; continuing`). The step always continues."
+    },
+    {
+      "section": "What it does when a check trips",
+      "text": "Compaction itself costly on local runs ( summary prompt and the rewritten context both prefill cold) which is what the `compacting now` estimate shows, so a lower ceiling with a larger `retainTokens` usually costs less overall than many small compactions."
+    },
+    {
+      "section": "`/context-budget`",
+      "text": "Type it in a session to see the current values:\n\n```\ncontext-budget (llamacpp / qwen3.8-long)\n  context: 152340 tokens   ceiling 110000   [TRIP]\n  last ttft: 41 s   limit 180 s\n  measured rate: 68 tok/s (3 samples)"
+    },
+    {
+      "section": "`/context-budget`",
+      "text": "Each sample line shows when it was measured, how many uncached tokens the server had to read, the wait for the first token, and whether the server answered partly from its prompt cache (warm) or read everything fresh (cold). Warm samples have flattering timings; the list makes that visible."
+    },
+    {
+      "section": "Notes",
+      "text": "- Works with any provider dsh streams from since nothing talks to the model server directly. Measurements come from dsh's own usage reports and wall-clock timing.\n- The plugin runs beside dsh's `compaction-basic`, which keeps its own threshold. Setting a per-model `thresholdRatio` there gives you a static ceiling with no plugin. The plugin adds the measured checks and the cost estimate.\n- Compaction summary requests are not measured, and an observed slow reply is forgotten once the context has been rewritten so one compaction does not trigger another.\n- If the session's agent preset has no compaction engine, `compact` behaves as `warn` (logged once per session).\n- Log lines are printed only when a check trips; a session that stays under the limits prints nothing."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,192 @@
+{
+  "repo": "imrcpan/dsh-retry",
+  "commit": "5f7d28f1f562fd11da0d50007c02fc6d62ec583a",
+  "extracted_at": "2026-11-11T21:45:55.760654+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 22841,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 286,
+      "Markdown": 164,
+      "Other": 24,
+      "YAML": 56
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "example/cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/index.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-retry",
+    "version": "0.1.0",
+    "description": "A retry executor plugin for DeepSeek Harness model requests: fixed-schedule retries, tuned for relay endpoints and unstable upstreams.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "example",
+      "README.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "retry",
+      "backoff"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/imrcpan/dsh-retry.git"
+    },
+    "homepage": "https://github.com/imrcpan/dsh-retry#readme",
+    "engines": {
+      "node": ">=20.3.0",
+      "dsh": ">=0.2.1-rc.2"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node --test"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-retry bundle layer: mount the fixed schedule executor and retire the\n# bundled one, whose provider retryPolicy can only express exponential backoff.\n#\n# This file applies as one bundle layer before the profile's cordis.patch.yml,\n# so a user layer can still override the row or change the schedule by id.\n- insert:\n    - id: dsh-retry\n      name: \"dsh-retry\"\n      config:\n        schedule: [2000, 5000, 5000, 5000, 10000]\n        tailDelayMs: 20000\n        retryableCodes:\n          - EMPTY_RESPONSE\n          - RATE_LIMIT\n          - SERVER\n          - TIMEOUT\n          - TRANSPORT\n          - PI_AI_ERROR\n          - AUTH\n          - QUOTA\n          - ACCOUNT_QUOTA\n          - ACCOUNT_TOKEN_INVALID\n          - INVALID_CREDENTIAL\n          - MALFORMED_RESPONSE\n          - HTTP_*\n# Two executors would compete for the same failure, so disable the bundled one.\n- id: llm-retry\n  disabled: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/imrcpan/dsh-retry.git",
+      "where": "package.json:27"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/imrcpan/dsh-retry#readme",
+      "where": "package.json:29"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 15,
+    "pushed_at": "2026-11-04T15:30:12Z",
+    "created_at": "2026-11-04T14:28:45Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-retry",
+      "text": "A retry executor plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) model requests: fixed-schedule retries, tuned for relay endpoints and unstable upstreams."
+    },
+    {
+      "section": "Quick start",
+      "text": "```bash\ndsh plugin --profile web add github:imrcpan/dsh-retry\n```\n\nDeepSeek Harness retries failed model requests at the agent step boundary. The bundled executor (`@deepseek-ai/dsh-llm-retry`) takes its wait from a provider `retryPolicy` that only exposes exponential backoff (`initialDelayMs`, `maxDelayMs`, `jitterRatio`). This plugin replaces that curve with an explicit schedule:"
+    },
+    {
+      "section": "Quick start",
+      "text": "| retry | 1 | 2 | 3 | 4 | 5 | 6 and later |\n| --- | --- | --- | --- | --- | --- | --- |\n| wait | 2s | 5s | 5s | 5s | 10s | 20s, unlimited |\n\nA retried step is re-run inside the same open turn against the same durable history, so no partial answer is duplicated and the model never sees the retry."
+    },
+    {
+      "section": "Built for relay and pooled upstreams",
+      "text": "A relay endpoint is a third-party API proxy that fans one key out across a pool\nof upstream accounts. It fails per account, not per request: a 401, an exhausted\nquota or a 404 on one backend says nothing about the next attempt, and a public\ngateway in front of the pool adds 5xx pages of its own. This executor is tuned\nfor that deployment and for unstable networks:"
+    },
+    {
+      "section": "Built for relay and pooled upstreams",
+      "text": "- **Per-account failures are retried.** `AUTH`, `QUOTA`, `ACCOUNT_QUOTA`,\n  `ACCOUNT_TOKEN_INVALID` and `INVALID_CREDENTIAL` are retried, and the\n  `HTTP_*` prefix covers every unclassified 4xx, so `HTTP_404` is repeated\n  instead of ending the turn.\n- **Gateway noise is retried.** Cloudflare and proxy 5xx answers classify as\n  `SERVER`, including HTML error pages that never parse as JSON.\n- **Corrupt streams are retried.** A broken SSE frame classifies as\n  `MALFORMED_RESPONSE`.\n- **Waits stay short and predictable.** 2s, 5s, 5s, 5s, 10s, then every 20s\n  without limit, so a short wobble costs seconds instead of an exponential climb\n  toward a ceiling.\n- **No duplicated output.** Recovery re-runs the step against the durable\n  history, so a retried request never repeats a half-finished answer."
+    },
+    {
+      "section": "Built for relay and pooled upstreams",
+      "text": "The executor does not rotate accounts by itself: a retry only re-issues the\nrequest, so the relay has to select a different upstream for the next attempt."
+    },
+    {
+      "section": "Why a separate executor",
+      "text": "- Fixed delays: 2s, 5s, 5s, 5s, 10s, then a steady 20s tail instead of exponential growth.\n- One unlimited tail, for upstreams that eventually recover.\n- Prefix matching for failure-code families, so `HTTP_*` covers unclassified 4xx statuses such as `HTTP_404`.\n- Standard `llm/retry` events, so the Chat retry status row and the Trajectory panel keep working."
+    },
+    {
+      "section": "Requirements",
+      "text": "- DeepSeek Harness `0.2.1-rc.5` (other releases may differ).\n- Node.js `>=20.3`, which provides `AbortSignal.any`."
+    },
+    {
+      "section": "Install",
+      "text": "The package is a DSH bundle: `package.json` declares `dsh.bundle.patch`, so the\nstandard install also mounts the executor and retires the bundled one. No\nhand-written patch is required.\n\n```bash\ndsh plugin --profile web add github:imrcpan/dsh-retry\n```\n\nRestart the profile afterwards; the composition is read at boot. The row then\nappears under Plugins, where its `config` is editable.\n\nThe shipped layer ([cordis.patch.yml](./cordis.patch.yml)) inserts the executor\nand disables `llm-retry`:"
+    },
+    {
+      "section": "Install",
+      "text": "```yaml\n- insert:\n    - id: dsh-retry\n      name: \"dsh-retry\"\n      config:\n\nDisabling `llm-retry` matters: two mounted executors would compete for the same\nfailure and both write retry chain state. Keep the row disabled if the profile\noverrides it."
+    },
+    {
+      "section": "Install from a checkout",
+      "text": "Install the checkout as a bundle so its manifest applies:\n\n```bash\ndsh plugin --profile web add /absolute/path/to/dsh-retry\n```\n\nA plain `file:` dependency is also accepted, but then no bundle layer is\napplied and the block above has to be copied into the profile's\n`cordis.patch.yml` by hand:\n\n```json\n{\n  \"dependencies\": {\n    \"dsh-retry\": \"file:./plugins/dsh-retry\"\n  }"
+    },
+    {
+      "section": "Configuration",
+      "text": "| key | default | meaning |\n| --- | --- | --- |\n| `schedule` | `[2000, 5000, 5000, 5000, 10000]` | wait in milliseconds before retries 1..n; the array length is the bounded head |\n| `tailDelayMs` | `20000` | wait for every retry after the schedule is exhausted |\n| `retryableCodes` | see below | failure codes that are worth repeating |"
+    },
+    {
+      "section": "Configuration",
+      "text": "A `retryableCodes` entry ending in `*` is a prefix rule. `HTTP_*` matches `HTTP_404`, `HTTP_409`, `HTTP_422` and any other unclassified status. A bare `*` is rejected because it would match every failure."
+    },
+    {
+      "section": "Default retryable codes",
+      "text": "| code | typical cause |\n| --- | --- |\n| `EMPTY_RESPONSE` | a completed response with no content blocks |\n| `RATE_LIMIT` | HTTP 429 or a provider rate-limit error |\n| `SERVER` | HTTP 5xx, including gateway and Cloudflare 5xx responses |\n| `TIMEOUT` | a request or stream deadline |\n| `TRANSPORT` | connection reset, socket error, truncated stream |\n| `PI_AI_ERROR` | an upstream error the pi-ai adapter could not classify |\n| `AUTH` | HTTP 401 or 403; with a pooled account upstream another account may succeed |\n| `QUOTA`, `ACCOUNT_QUOTA` | exhausted balance or account quota |\n| `ACCOUNT_TOKEN_INVALID` | a stored account token rejected with 401 |\n| `INVALID_CREDENTIAL` | a malformed credential entry in the pool |\n| `MALFORMED_RESPONSE` | a corrupt SSE frame or a mismatched event type |\n| `HTTP_*` | unclassified 4xx statuses such as `HTTP_404`, `HTTP_409`, `HTTP_422` |"
+    },
+    {
+      "section": "Not retried",
+      "text": "| code | why |\n| --- | --- |\n| `CONTEXT_WINDOW_EXCEEDED` | compaction owns the recovery; retrying would loop |\n| `INVALID_REQUEST` | the request itself is wrong, so another account cannot help |\n| `NO_ADAPTER`, `UNSUPPORTED_REASONING_EFFORT` | configuration errors |\n| `MISSING_CREDENTIAL` | no credential is configured for the route |\n| `ACCOUNT_SIGN_IN_REQUIRED` | a human has to sign in |\n| `ABORTED` | cancellation must stay terminal |\n| `UNKNOWN` | the fallback code for foreign errors, unsafe to repeat without limit |"
+    },
+    {
+      "section": "Not retried",
+      "text": "Add any of them to `retryableCodes` if your deployment disagrees."
+    },
+    {
+      "section": "What you see",
+      "text": "Each planned retry appends a durable `llm/retry` event, then `llm/retry-started` once the wait ends. The Chat transcript renders a row such as `Retrying model request (2/5) . 4s` with an expandable failure reason and delay, and the Trajectory panel lists the attempt, error code and delay. Retries 6 and later render with an unlimited maximum."
+    },
+    {
+      "section": "What you see",
+      "text": "No toast is raised, no partial output from a failed attempt is kept, and the model sees nothing: it only receives the rebuilt request for the step that is being retried. Every attempt is a separately billed provider request."
+    },
+    {
+      "section": "Limitations",
+      "text": "- The retry chain counter lives in memory per session. A host restart ends the turn, so nothing is lost that a durable counter would have preserved.\n- Only agent-loop requests are retried. Direct `ctx.llm.stream()` callers stay single-attempt.\n- The tail is genuinely unlimited. When the upstream never recovers, the turn stays in the retrying state until it is stopped.\n- Retrying pooled credential and quota failures assumes the pool rotates on the next attempt. A permanently exhausted pool loops every 20 seconds."
+    },
+    {
+      "section": "License",
+      "text": "MIT."
+    }
+  ],
+  "skipped": []
+}

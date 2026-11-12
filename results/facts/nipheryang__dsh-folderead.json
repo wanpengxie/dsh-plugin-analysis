@@ -1,0 +1,405 @@
+{
+  "repo": "nipheryang/dsh-folderead",
+  "commit": "5221eb9b8ac3c59ca21f21c113134b51be7c3f31",
+  "extracted_at": "2026-11-12T02:03:13.892186+00:00",
+  "tree": {
+    "files": 22,
+    "bytes": 1027171,
+    "lines_by_language": {
+      "JSON": 78,
+      "JavaScript": 16875,
+      "Markdown": 2211,
+      "Other": 62,
+      "YAML": 32
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "LICENSE.dsh-multi-folder.txt",
+      "README.en.md",
+      "README.md",
+      "check-tautologies.mjs",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/absorb-secondary-dirs-design.md",
+      "docs/absorb-secondary-dirs-plan.md",
+      "docs/pdf-preview-design.md",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "secondary-dirs-intercept.js",
+      "secondary-dirs.js",
+      "selftest-client.mjs",
+      "selftest-intercept.mjs",
+      "selftest-secondary-dirs.mjs",
+      "selftest.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-folderead",
+    "version": "0.2.0",
+    "description": "DeepSeek Harness 插件：在右侧栏浏览与管理工作区文件——树形展开、附加工作区外目录（模型可读写、文件保持原位）、把文件/文件夹引用到对话、面板内只读预览（Markdown/代码/图片/PDF），删除移入废纸篓。",
+    "type": "module",
+    "icon": "./icon.svg",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/nipheryang/dsh-folderead.git"
+    },
+    "homepage": "https://github.com/nipheryang/dsh-folderead#readme",
+    "bugs": {
+      "url": "https://github.com/nipheryang/dsh-folderead/issues"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "file-manager",
+      "file-explorer",
+      "workspace"
+    ],
+    "engines": {
+      "node": ">=20",
+      "dsh": ">=0.2.0-rc.2"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "secondary-dirs.js",
+      "secondary-dirs-intercept.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/",
+      "vendor/pdfjs/",
+      "LICENSE",
+      "LICENSE.dsh-multi-folder.txt"
+    ],
+    "publishConfig": {
+      "access": "public"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-sidebar-right",
+          "@deepseek-ai/dsh-client-ui-slots"
+        ]
+      }
+    },
+    "scripts": {
+      "test": "node selftest.mjs && node selftest-client.mjs && node selftest-secondary-dirs.mjs && node selftest-intercept.mjs",
+      "check": "node check-tautologies.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-folderead —— 工作区文件管理插件。\n#\n# 安装方式：dsh plugin add dsh-folderead（npm），或 dsh plugin add github:nipheryang/dsh-folderead\n# 本地开发：plugin_manager action=install_bundle target=<本目录绝对路径>\n# 卸载方式：plugin_manager action=remove_bundle target=dsh-folderead\n#\n# 设计要点：\n# - 双面插件（Host 半 + 浏览器半）。Host 半（exports \".\"）跑在 Host 进程里，\n#   负责真正的文件系统操作，并注册 /file-manager/* HTTP 路由；\n#   package.json 的 dsh.client 让浏览器半（exports \"./client\"）在 Web GUI 里加载。\n# - Host 半只 import node: 内置模块：本包以 link: 方式装进 profile，符号链接下\n#   bare import 解析不到 profile 的 node_modules，用内置模块规避这个坑。\n# - 写操作限定在两类位置：已注册的工作区根，以及该工作区**已附加**的目录。附加目录\n#   由用户在界面上亲手选定，清单由本插件自己维护，落在 <DSH_HOME>/storages/file-manager/\n#   （首次使用时从 dsh-multi-folder 的旧清单导入一次），其中的文件保持原位、直接操作。\n#   附加会同时把该目录的读写权限交给模型：沙箱换根由本插件自己的拦截层完成\n#   （secondary-dirs-intercept.js 接管 tools/execute 上的 write / edit / bash / pwsh），\n#   界面上如实标注这一点。其余例外是 export（导出到工作区外），它必须由用户在选择器里\n#   亲手选目标目录、并在界面上二次确认。\n# - 界面能力（浏览器半）：树形就地展开（懒加载 + 悬停预热）、引用文件/文件夹到对话（chip）、\n#   面板内只读预览（Markdown 含 GFM 表格 / 代码 / 图片可滚动 / **PDF 由随包自带的 pdf.js 渲染**）、\n#   在访达中显示、以及把删除改为移入废纸篓（失败即中止，绝不静默硬删）。\n# - 本包**随包带第三方代码**：pdfjs-dist@6.3.289（Apache-2.0）在 vendor/pdfjs/，逐字节原样未改，\n#   由 Host 半的静态分发路由（/file-manager/vendor/pdfjs/*）提供给浏览器半；来源、版本、\n#   两个 .mjs 的 sha256、随目录保留的三份许可见 vendor/pdfjs/VENDOR.md。\n#   为什么自带而不是用宿主的内置阅读器：本平台主窗口没有开 Electron 的 plugins，内置 PDF 阅读器\n#   不可用（证据见 docs/pdf-preview-design.md §1）；而本插件要能独立发布，不能挂到别的插件上。\n# - 拦截层与 system prompt 段逐字移植自 dsh-multi-folder@0.3.3（MIT，\n#   Copyright (c) 2025 Yutong Zou），完整许可证见同目录 LICENSE.dsh-multi-folder.txt。\n- insert:\n    - id: dsh-folderead\n      name: dsh-folderead\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "secondary-dirs.js:18"
+    },
+    {
+      "name": "DFM_STORAGE_ROOT",
+      "kind": "env",
+      "where": "secondary-dirs.js:23"
+    },
+    {
+      "name": "DFM_SOURCE_ROOT",
+      "kind": "env",
+      "where": "secondary-dirs.js:25"
+    },
+    {
+      "name": "DFM_STORAGE_ROOT",
+      "kind": "env",
+      "where": "selftest-intercept.mjs:150"
+    },
+    {
+      "name": "DFM_SOURCE_ROOT",
+      "kind": "env",
+      "where": "selftest-intercept.mjs:153"
+    },
+    {
+      "name": "DFM_TEST_PARENT",
+      "kind": "env",
+      "where": "selftest-intercept.mjs:412"
+    },
+    {
+      "name": "DFM_STORAGE_ROOT",
+      "kind": "env",
+      "where": "selftest-intercept.mjs:692"
+    },
+    {
+      "name": "DFM_STORAGE_ROOT",
+      "kind": "env",
+      "where": "selftest-intercept.mjs:708"
+    },
+    {
+      "name": "DFM_STORAGE_ROOT",
+      "kind": "env",
+      "where": "selftest-intercept.mjs:1035"
+    },
+    {
+      "name": "DFM_STORAGE_ROOT",
+      "kind": "env",
+      "where": "selftest-intercept.mjs:1074"
+    },
+    {
+      "name": "FOLDEREAD_SELFTEST_ROOT",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:82"
+    },
+    {
+      "name": "DFM_STORAGE_ROOT",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:99"
+    },
+    {
+      "name": "DFM_SOURCE_ROOT",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:101"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:174"
+    },
+    {
+      "name": "DFM_SOURCE_ROOT",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:175"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:176"
+    },
+    {
+      "name": "DFM_SOURCE_ROOT",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:177"
+    },
+    {
+      "name": "DFM_SOURCE_ROOT",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:180"
+    },
+    {
+      "name": "DFM_SOURCE_ROOT",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:185"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:186"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "selftest-secondary-dirs.mjs:187"
+    },
+    {
+      "name": "FOLDEREAD_SELFTEST_ROOT",
+      "kind": "env",
+      "where": "selftest.mjs:30"
+    },
+    {
+      "name": "DFM_STORAGE_ROOT",
+      "kind": "env",
+      "where": "selftest.mjs:125"
+    },
+    {
+      "name": "DFM_SOURCE_ROOT",
+      "kind": "env",
+      "where": "selftest.mjs:126"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "index.js:2029"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/nipheryang/dsh-folderead.git",
+      "where": "package.json:10"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/nipheryang/dsh-folderead#readme",
+      "where": "package.json:12"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/nipheryang/dsh-folderead/issues",
+      "where": "package.json:14"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "selftest-client.mjs:2303"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "selftest-client.mjs:2329"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "selftest-client.mjs:2429"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/",
+      "where": "selftest-client.mjs:2704"
+    },
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "selftest.mjs:1167"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 90,
+    "pushed_at": "2026-10-27T19:30:48Z",
+    "created_at": "2026-10-27T18:58:21Z"
+  },
+  "runtime_files": [
+    "check-tautologies.mjs",
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "secondary-dirs-intercept.js",
+    "secondary-dirs.js",
+    "selftest-client.mjs",
+    "selftest-intercept.mjs",
+    "selftest-secondary-dirs.mjs",
+    "selftest.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-folderead",
+      "text": "DeepSeek Harness（DSH）的右侧栏文件管理插件：在工作区里浏览、预览、编辑、整理文件，也可以把工作区之外的目录附加进来，让模型与你都能直接读写原文件。\n\n> **这是 DSH 插件，不是独立的 npm 库。** 它通过 DSH 的插件装载机制运行，需要宿主提供 `webServer`、`workspaceRegistry`、`fs`、`sandboxPolicy`、`systemPrompt` 五项服务，脱离 DSH 无法启动。"
+    },
+    {
+      "section": "安装",
+      "text": "需要 DSH `0.2.0-rc.2` 或更新，Node.js 20+。\n\n```sh"
+    },
+    {
+      "section": "从 npm",
+      "text": "dsh plugin add dsh-folderead"
+    },
+    {
+      "section": "或直接从 GitHub",
+      "text": "dsh plugin add github:nipheryang/dsh-folderead\n```\n\nDSH Desktop 也可以从应用内的 **Settings → Plugins** 安装（该 profile 归应用的插件管理器所有，CLI 在应用运行时不会改动它）。装完重启 `dsh web` 或应用。"
+    },
+    {
+      "section": "能力",
+      "text": "- **树形浏览**：目录就地展开，懒加载并按层缓存；悬停与按下时预热下一层。\n- **多位置切换**：位置胶囊在工作区与已附加目录之间切换，重名目录以父级消歧。\n- **附加工作区外的目录**：由你在原生目录选择器里亲手选定；其中的文件**保持原位**，插件直接操作原文件，不复制。\n- **引用到对话**：把文件或文件夹作为引用放进对话输入框。\n- **面板内预览**：Markdown（含 GFM 表格）、代码、图片、PDF。PDF 由随包自带的 `pdfjs-dist` 渲染，不依赖宿主的内置阅读器。\n- **面板内编辑**：带 mtime/size 冲突检查；文件在外部被截断时不给编辑入口，避免保存把内容写短。\n- **整理**：新建、移动、重命名、导入、导出、删除。删除**移入废纸篓**，不永久删除。\n- **在访达中显示**：优先走宿主官方通道，通道不可用时退回 `open -R`。"
+    },
+    {
+      "section": "权限与安全边界",
+      "text": "这个插件能写文件，边界值得读完再装。\n\n- **两类可写位置**：已注册的工作区根，以及该工作区**已附加**的目录。除此之外一律拒绝。\n- **附加即授权**：附加一个目录，等于同时把该目录的读写权限交给模型。界面上会如实标注这一点；沙箱换根由插件自己的拦截层完成（接管 `tools/execute` 上的 `write` / `edit` / `bash` / `pwsh`）。\n- **路径校验**：所有读写目标先做词法包含检查，再用 `realpath` 解析最近的已存在祖先，确保软链接不能被用来逃出所在位置。\n- **HTTP 路由只服务本机**：通过 socket 地址、`Host` 头、同源标记三重校验，只接受本机回环请求。\n- **导出需要亲手确认**：目标目录必须由你在原生选择器里选定，且请求带 `confirmOutside: true`。\n- **删除没有退路**：唯一的删除操作是移入废纸篓，逐项执行，任一项失败立刻中止并点名那一项；**没有任何退回永久删除的分支**。非 macOS 直接返回 `trash-unsupported`，同样不退回 `rm`。"
+    },
+    {
+      "section": "平台",
+      "text": "- 主要面向 macOS：删除依赖 `osascript` 驱动访达，首次使用可能弹 macOS 自动化授权；在访达中显示依赖 `open -R`。\n- 非 macOS 平台可以浏览、预览、编辑、引用，但**删除不可用**（返回 `trash-unsupported`）。"
+    },
+    {
+      "section": "开发",
+      "text": "源码是纯 JavaScript，无构建步骤，运行时只依赖 Node 内置模块；浏览器半由宿主注入 React。\n\n```sh\ngit clone https://github.com/nipheryang/dsh-folderead.git\ncd dsh-folderead\nnode selftest-client.mjs          # 浏览器半离线自测（React/DOM 桩，无需 DSH）\nnode selftest-secondary-dirs.mjs  # 存储层自测\n\nHost 半与拦截层自测会在**主工作区**里建夹具目录（故意不放临时区，否则沙箱围栏会无条件放行，\"忘了换根\"就测不出来）。它们默认取插件目录上三级作为工作区根；克隆到别处时，用环境变量指定：\n\n```sh\nFOLDEREAD_SELFTEST_ROOT=/path/to/workspace node selftest.mjs\nDFM_TEST_PARENT=/path/to/workspace node selftest-intercept.mjs\n```"
+    },
+    {
+      "section": "第三方",
+      "text": "- `vendor/pdfjs/` 是 [`pdfjs-dist`](https://www.npmjs.com/package/pdfjs-dist) `6.3.289` 的逐字节原样副本（Apache-2.0），来源、版本与文件哈希见 `vendor/pdfjs/VENDOR.md`。\n- 沙箱换根拦截层与 system prompt 段移植自 `dsh-multi-folder@0.3.3`（MIT，Copyright (c) 2025 Yutong Zou），完整许可证见 `LICENSE.dsh-multi-folder.txt`。"
+    },
+    {
+      "section": "许可",
+      "text": "[MIT](LICENSE)"
+    },
+    {
+      "section": "dsh-folderead",
+      "text": "A right-sidebar file manager for DeepSeek Harness (DSH): browse, preview, edit and organize files inside your workspace — or attach directories from outside it and let both you and the model read and write the originals in place.\n\n> **This is a DSH plugin, not a standalone npm library.** It runs through DSH's plugin loader and needs the host to provide `webServer`, `workspaceRegistry`, `fs`, `sandboxPolicy` and `systemPrompt`. It cannot start without DSH."
+    },
+    {
+      "section": "Install",
+      "text": "Requires DSH `0.2.0-rc.2` or newer and Node.js 20+.\n\n```sh"
+    },
+    {
+      "section": "from npm",
+      "text": "dsh plugin add dsh-folderead"
+    },
+    {
+      "section": "or straight from GitHub",
+      "text": "dsh plugin add github:nipheryang/dsh-folderead\n```\n\nOn DSH Desktop you can also install from **Settings → Plugins** in the app (that profile belongs to the app's plugin manager; the CLI will not touch it while the app is running). Restart `dsh web` or the app afterwards."
+    },
+    {
+      "section": "What it does",
+      "text": "- **Tree browsing** — directories expand in place, lazily loaded and cached per level, with the next level pre-warmed on hover and press.\n- **Multiple locations** — a location capsule switches between the workspace and attached directories; same-named directories are disambiguated by their parent.\n- **Attach directories outside the workspace** — chosen by you in a native picker. Files **stay where they are**; the plugin operates on the originals and never copies them.\n- **Reference into the conversation** — add a file or folder as a reference to the chat input.\n- **In-panel preview** — Markdown (with GFM tables), code, images and PDF. PDF is rendered by the bundled `pdfjs-dist`, not by the host's built-in viewer.\n- **In-panel editing** — guarded by an mtime/size conflict check; a file truncated outside the app gets no edit entry point, so saving cannot silently shorten it.\n- **Organize** — create, move, rename, import, export, delete. Delete **moves to the Trash**, never a permanent unlink.\n- **Reveal in Finder** — through the host's official channel when available, falling back to `open -R`."
+    },
+    {
+      "section": "Permissions and boundaries",
+      "text": "- **Two writable locations only** — the root of a registered workspace, and directories **attached** to that workspace. Everything else is refused.\n- **Attaching is authorization** — attaching a directory hands the model read/write access to it at the same time. The UI states this explicitly; the sandbox re-root is done by the plugin's own interceptor layer (taking over `write` / `edit` / `bash` / `pwsh` on `tools/execute`).\n- **Path validation** — every target is lexically contained first, then the nearest existing ancestor is resolved with `realpath`, so a symlink cannot be used to escape the location.\n- **HTTP routes are local-only** — triple-checked through socket address, `Host` header and a same-origin marker; only loopback requests are accepted.\n- **Export requires a deliberate choice** — the target directory must be picked by you in the native picker, and the request must carry `confirmOutside: true`.\n- **Delete has no fallback** — the only removal operation moves items to the Trash, one by one; the first failure aborts and names the item. There is **no branch that falls back to permanent deletion**. On non-macOS systems it returns `trash-unsupported` and still does not fal"
+    },
+    {
+      "section": "Platform",
+      "text": "- Targeted at macOS: deleting relies on `osascript` driving Finder (the first use may raise a macOS automation prompt), and reveal relies on `open -R`.\n- On non-macOS you can browse, preview, edit and reference, but **delete is unavailable** (it returns `trash-unsupported`)."
+    },
+    {
+      "section": "Development",
+      "text": "The source is plain JavaScript with no build step and no runtime dependencies beyond Node's built-in modules; React is injected by the host for the browser half.\n\n```sh\ngit clone https://github.com/nipheryang/dsh-folderead.git\ncd dsh-folderead\nnode selftest-client.mjs          # browser half, offline (React/DOM stubs, no DSH)\nnode selftest-secondary-dirs.mjs  # storage layer"
+    },
+    {
+      "section": "Development",
+      "text": "The host-half and interceptor tests create fixtures in the **main workspace** — deliberately not in the temp directory, because the sandbox would otherwise allow the temp path unconditionally and \"forgot to re-root\" could never be caught. They default to three levels above the plugin directory as the workspace root; when cloned elsewhere, point them at a real workspace:"
+    },
+    {
+      "section": "Development",
+      "text": "```sh\nFOLDEREAD_SELFTEST_ROOT=/path/to/workspace node selftest.mjs\nDFM_TEST_PARENT=/path/to/workspace node selftest-intercept.mjs\n```"
+    },
+    {
+      "section": "Third party",
+      "text": "- `vendor/pdfjs/` is a byte-for-byte copy of [`pdfjs-dist`](https://www.npmjs.com/package/pdfjs-dist) `6.3.289` (Apache-2.0). Source, version and file hashes are recorded in `vendor/pdfjs/VENDOR.md`.\n- The sandbox re-root interceptor and its system-prompt section are ported from `dsh-multi-folder@0.3.3` (MIT, Copyright (c) 2025 Yutong Zou); the full license is in `LICENSE.dsh-multi-folder.txt`."
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

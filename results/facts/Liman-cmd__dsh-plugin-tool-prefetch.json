@@ -1,0 +1,176 @@
+{
+  "repo": "Liman-cmd/dsh-plugin-tool-prefetch",
+  "commit": "eebd0d55c2462ac732426a1e35479056bc3b119e",
+  "extracted_at": "2026-11-11T12:06:03.607138+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 69198,
+    "lines_by_language": {
+      "JSON": 35,
+      "JavaScript": 1257,
+      "Markdown": 248,
+      "Other": 5,
+      "YAML": 37
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/interceptor-probe.md",
+      "index.js",
+      "interceptor-smoke.mjs",
+      "package.json",
+      "probe-local.mjs",
+      "session-extract-test.mjs",
+      "smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-tool-prefetch",
+    "version": "0.2.0",
+    "description": "工具调用预测与预取插件：以 Python 边车方式拉起 CT-GNN 预测网关，把预测工具与上游工具原生注册到 ctx.tools——预测下一个工具调用、分层预热（L0-L3）、在线命中率遥测、训练数据自动采集。",
+    "type": "module",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "main": "./index.js",
+    "exports": {
+      ".": {
+        "default": "./index.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "keywords": [
+      "deepseek-harness",
+      "dsh-plugin",
+      "mcp",
+      "prefetch",
+      "tool-call-prediction"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch: mounts the tool-prefetch plugin with its sidecar config.\n# Users override these values by copying this row into their own profile's\n# cordis.patch.yml (e.g. ~/.dsh/profiles/web/cordis.patch.yml).\n#\n# mode:\n#   tools        register all gateway tools; the model calls them explicitly.\n#                Data capture needs the agent to pass _gateway/history. This is\n#                the code-level fallback when mode is absent/unrecognised.\n#   probe        register nothing, change nothing -- only log what the tool\n#                pipeline hooks deliver (run once to verify the hooks fire).\n#   interceptor  (shipped default) register NO tools; hook the pipeline and,\n#                asynchronously, report every execution to the gateway. Zero\n#                model tokens and zero agent cooperation -- prediction/warming\n#                happen while the model is still writing. This is the\n#                transparent-acceleration mode.\n#   both         interceptor + register just the gw_* tools (so a user can\n#                still ask for stats / model status by hand).\n- insert:\n  - id: tool-prefetch\n    name: dsh-plugin-tool-prefetch\n    config:\n      mode: 'interceptor'\n      python: 'D:\\code\\my_job\\agent-tool-acceleration\\.venv\\Scripts\\python.exe'\n      repoRoot: 'D:\\code\\my_job\\agent-tool-acceleration'\n      # The deployment, NOT the paper benchmark: `runs/app_dsh/` is\n      # self-contained (its own telemetry, catalog and markov counts) and runs\n      # `predict.mode: markov`, so it learns from this harness's real calls.\n      #\n      # The old value pointed at a config whose model was trained on 16\n      # tau-bench *retail* tools. Its overlap with this deployment's tools is\n      # ZERO, so every score came out 0.0 and the \"ranking\" was alphabetical --\n      # a confident-looking answer carrying no information.\n      gatewayConfig: 'runs/app_dsh/config.yaml'\n      toolPrefix: ''\n      sessionFrom: 'agent'   # interceptor: use exec.agent for session grouping\n      initTimeoutMs: 60000\n      callTimeoutMs: 120000\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_TOOL_PREFETCH_REPO",
+      "kind": "env",
+      "where": "index.js:37"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 16,
+    "pushed_at": "2026-11-06T02:05:42Z",
+    "created_at": "2026-10-29T09:31:15Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-tool-prefetch",
+      "text": "DeepSeek Harness（dsh）插件：把 [agent-tool-acceleration](../mcp_prefetch_gateway)\n的工具调用预测网关作为 Python sidecar 拉起，将其工具（`gw_predict_next` /\n`gw_observe` / `gw_stats` / `gw_reset` + 代理的真实上游工具）**原生注册到\n`ctx.tools`**——不是 MCP 服务器配置，是正经插件：在 Settings → Plugins 可见、\n可启用/禁用（禁用即杀掉 sidecar）。\n\n零 npm 依赖（纯 JS + `node:child_process`），预测由论文的 CT-GNN 模型提供\n（CPU，~15 ms/次）。"
+    },
+    {
+      "section": "四种模式（`config.mode`）",
+      "text": "| mode | 注册工具吗 | 挂钩子吗 | 用途 |\n|---|---|---|---|\n| **`interceptor`**（随包默认）| ❌ | ✅ 自动采集+预测+预热 | **透明加速**：零 token、零 agent 配合；预测发生在模型还在写 reasoning 时 |\n| **`tools`** | ✅ 全部 24 个 | ❌ | v1 显式版：模型能主动调预测/遥测工具；采集需 agent 传参 |\n| **`probe`** | ❌ | ✅ 只写日志 | 一次性验证：确认 dsh 会触发钩子、`exec.agent` 是什么形状 |\n| **`both`** | 仅 `gw_*`（7 个）| ✅ | 隐形加速 + 保留人工查询/切模型入口 |\n\n> 代码内缺省值是 `tools`；随包的 `cordis.patch.yml` 显式设成 `interceptor`。\n> interceptor 若拉不起 sidecar（网关没装/路径错），钩子照常 `next()` 透传，\n> 只是不上报——不会挡住任何工具调用。\n\n切换只改配置值，不用动代码："
+    },
+    {
+      "section": "四种模式（`config.mode`）",
+      "text": "```yaml\n- insert:\n  - id: tool-prefetch\n    name: dsh-plugin-tool-prefetch\n    config:"
+    },
+    {
+      "section": "工具目录上报（自动，无需配置）",
+      "text": "插件在启动时取 `ctx.tools.schemas()`、并监听 `tools/change`（dsh 未过滤注册表通知，任何工具\n增删/权限变化都触发）增量上报实际工具集。网关据此与离线产物 diff——**这是\"命中率莫名下降\"\n最常见的隐藏原因**，现在会明确告警（`cli health` 或 `gw_tool_catalog` 可见）。"
+    },
+    {
+      "section": "自动换模型（`autoModelSwap`）",
+      "text": "飞轮过闸后会写网关配置，但运行中的网关是插件的子进程（不同进程），原先需重启 dsh 才生效。\n开着这个开关，插件定期调 `gw_apply_pending`，配置变了就地热切换。关掉即回到纯手动\n（只有显式 `gw_switch_model` / `cli switch-model` 才换）。"
+    },
+    {
+      "section": "验证钩子 + 用户消息采集（`mode: probe`）",
+      "text": "装好后重启 dsh、随便调一个工具，然后：\n\n```powershell\nGet-Content D:\\...\\agent-tool-acceleration\\mcp_prefetch_gateway\\logs\\probe.log -Tail 10\n```\n\n看到含 `agentId` + `sessionUserFound: true` 的 `pre_execute` 行 = 钩子可用**且**能从\n`agent.session.log` 挖出用户原文。**探针不改任何行为**（`next()` 原样透传，实测 0ms）。"
+    },
+    {
+      "section": "验证钩子 + 用户消息采集（`mode: probe`）",
+      "text": "用户消息藏在 `agent.session.log` 的 `user/message` 事件里，而注入的 AGENTS.md /\nskill 列表 / 时间上下文**同样是 `type:user/message` + `role:'user'`**，只有\n`data.source.kind` 不同（`agent-instructions` / `skill-catalog` / `time-context` …）。\n所以筛选用**白名单** `source.kind === 'user'`，不能只看 role。详见\n[`docs/interceptor-probe.md`](docs/interceptor-probe.md)。"
+    },
+    {
+      "section": "这个仓库包含什么 / 不包含什么",
+      "text": "**本仓只有\"桥\"（约 8 KB JS）**，不含预测、采集、训练的实现——它们在配套的\n网关项目 [agent-tool-acceleration](https://github.com/Liman-cmd/agent-tool-acceleration)：\n\n| 能力 | 在哪 | 本仓有吗 |\n|---|---|---|\n| 插件壳（拉起 sidecar、原生注册工具、转发调用）| `index.js`（本仓）| ✅ |\n| 预测（CT-GNN / markov 冷启动）| 网关 `mcp_prefetch_gateway/` | ❌ 需配套项目 |\n| 数据采集（step 事件 → 遥测）| 网关 `server.py` + `telemetry.py` | ❌ 需配套项目 |\n| 训练 / 再训（飞轮）| `scripts/retrain_gateway.py` + `src/train.py` | ❌ 需配套项目 |\n\n**因此：只装本插件跑不起来。** 完整依赖见下节。"
+    },
+    {
+      "section": "完整依赖（缺一不可）",
+      "text": "| 依赖 | 说明 |\n|---|---|\n| 网关项目 | `agent-tool-acceleration` 检出（**目前私有**，需权限）|\n| Python 环境 | `.venv` + `pip install -r requirements.txt`（torch 等，CPU 版即可）|\n| **模型产物** | `data/processed/model_*.pt` + `graph_*.pkl`（**被 gitignore，不在任何仓里**）|\n| **轨迹文件** | `data/processed/trajectories_*.jsonl`——⚠️ 不只是训练用：网关启动时要拿它拟合 BM25 词表 |\n| τ-bench 环境 | `data/raw/tau-bench`（真实零售数据库，`git clone https://github.com/sierra-research/tau-bench`）|\n\n有权限的人 → 跑 `scripts/setup_gateway.ps1` 一条命令备齐环境。"
+    },
+    {
+      "section": "装插件",
+      "text": "```powershell"
+    },
+    {
+      "section": "从 GitHub（推荐）",
+      "text": "npx @deepseek-ai/dsh plugin --profile web add github:Liman-cmd/dsh-plugin-tool-prefetch"
+    },
+    {
+      "section": "或本地路径（开发）",
+      "text": "npx @deepseek-ai/dsh plugin --profile web add ./dsh-plugin-tool-prefetch"
+    },
+    {
+      "section": "重启 dsh web；Settings → Plugins 里应出现 tool-prefetch",
+      "text": "npx @deepseek-ai/dsh web\n```\n\n> ⚠️ 本插件未附带预训练模型的可分发形态。换成**你自己的工具场景**时，retail 模型\n> 不适用——需要用你自己的数据重训（见\"数据飞轮\"），或先跑 `markov` 冷启动模式\n> （`predict.mode: markov`，零训练即可用）。"
+    },
+    {
+      "section": "配置",
+      "text": "插件默认值写在 `cordis.patch.yml`（指向本仓库路径）。换机器/换配置：把该行\n拷进你的 profile patch（`~/.dsh/profiles/web/cordis.patch.yml`）改值：\n\n```yaml\n- insert:\n  - id: tool-prefetch\n    name: dsh-plugin-tool-prefetch\n    config:"
+    },
+    {
+      "section": "行为要点",
+      "text": "- **冷启动异步**：sidecar 启动 ~20 s，不阻塞 dsh；工具就绪后自动出现。\n- **真实执行 + 自动对账**：代理工具真调上游（默认 τ-bench retail 真实数据库），\n  每次调用自动写入 session 状态并对账上一条预测（`_gateway.session_id` 可选携带）。\n- **数据飞轮**：所有真实调用自动落遥测 `step` 事件。查看采集进度：\n  `python -m mcp_prefetch_gateway.cli status --config <gateway yaml>`（会告诉你\n  距首次可训还差几条轨迹、按近期速率预计几天）；攒够后\n  `python scripts/retrain_gateway.py ...` 一键再训换模型。"
+    },
+    {
+      "section": "行为要点",
+      "text": "**要不要训 GNN？** 先看任务类型（论文结论）：短流程、无上下文依赖的任务，\n  `markov` 计数通常就够了，GNN 未必更好；多轮、上下文相关的任务 GNN 才显著领先。\n  所以对很多场景，\"自己的模型\"这个目标本身是多余的——计数版已随使用变准。\n- **与 MCP 配置互斥**：若之前在 `cordis.patch.yml` 配过 `mcp-prefetch`\n  （dsh-mcp-client 行），装本插件前删掉那行，避免 21 个工具注册两遍。"
+    },
+    {
+      "section": "排障",
+      "text": "| 症状 | 处置 |\n|---|---|\n| 工具一直不出现 | dsh 日志找 `[tool-prefetch]`；多半是 python 路径/产物路径错 |\n| 验证 sidecar 本身 | `node dsh-plugin-tool-prefetch/smoke.mjs`（不起 dsh 全链自测）|\n| 想换预测模型 | 改 `gatewayConfig` 指向别的 `configs/*.yaml` |"
+    },
+    {
+      "section": "许可",
+      "text": "MIT。预测器与数据来自本仓库论文项目（τ-bench 数据为 Sierra 官方开源实现）。"
+    }
+  ],
+  "skipped": []
+}

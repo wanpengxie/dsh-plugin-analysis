@@ -1,0 +1,226 @@
+{
+  "repo": "yuan-source-666/dsh-ptc-discipline",
+  "commit": "6567806ff6a7abab847f136ce73165e7c23d1024",
+  "extracted_at": "2026-11-12T13:31:16.035740+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 9438786,
+    "lines_by_language": {
+      "JSON": 53,
+      "JavaScript": 288,
+      "Markdown": 211,
+      "Other": 31,
+      "Python": 33,
+      "YAML": 155
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "assets/icon-180.png",
+      "cordis.patch.yml",
+      "docs/media/README.md",
+      "docs/media/cover.png",
+      "docs/media/preview.gif",
+      "docs/media/ptc-discipline-promo.mp4",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "scripts/make-icon.py",
+      "test/gate.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-ptc-discipline",
+    "version": "1.1.0",
+    "type": "module",
+    "description": "PTC agent preset with a hard goal + todo gate: no tool call succeeds until an active goal and an in-progress todo exist.",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/yuan-source-666/dsh-ptc-discipline.git"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "assets/icon-180.png",
+      "README.md"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "dsh",
+      "agent-preset",
+      "ptc",
+      "goal",
+      "todo",
+      "discipline"
+    ],
+    "scripts": {
+      "test": "node test/gate.test.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Agent preset \"ptc-discipline\": PTC 模式 + 强制的 goal / todo 纪律闸门。\n#\n# 与 preset-ptc 同源（同一套插件、同样的 mode: ptc 呈现），差别只有三处：\n#   1. 多一行 ptc-discipline（本包的守护插件，注册在 preset scope 上，只作用于本 preset 的 agent）；\n#   2. 保留 tool-goal / tool-todo，并显式打开 allowParallelInProgress；\n#   3. workflow 系仍然禁用——run_code 已经是唯一的代码入口，不再叠一层执行语义。\n#\n# 适配 DSH 0.2.2：@deepseek-ai/dsh-tool-subagent-control 的 ./list-agents 子路径已移除\n# （list_agents 并入主包注册），故只保留主包行；modelSelectionSettings 更名为\n# modelSelection / modelDiscovery；并补上官方 ptc 预设的 tool-executor-ptc。\n- insert:\n    - id: preset-ptc-discipline\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: ptc-discipline\n        name: PTC 纪律\n        description: PTC 模式（run_code + 生成 SDK），外加一个强制闸门——先立目标、先排待办，否则任何工具调用都被拒。\n        order: 60\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: tool-schedule\n            name: '@deepseek-ai/dsh-tool-schedule'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n            config:\n              blockedAfterConsecutiveRounds: 3\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the request shape stable. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelection: true\n                  modelDiscovery: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n              # PTC 下 run_code 已是唯一代码入口，workflow 的执行引擎不再叠加。\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                disabled: true\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n                disabled: true\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          # 呈现方式：只有 run_code 可被直接调用，其余工具走生成的 SDK。\n          - id: tool-presentation\n            name: '@deepseek-ai/dsh-agent-tool-presentation'\n            config:\n              mode: ptc\n          # 本 preset 的核心：把 goal + todo 变成硬前置条件。\n          - id: ptc-discipline\n            name: 'dsh-ptc-discipline'\n            config:\n              requireGoal: true\n              requireTodo: true\n              requireActiveTodo: true\n          - id: tool-executor-ptc\n            name: '@deepseek-ai/dsh-tool-executor-ptc'\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true\n          - id: tool-plugin-market\n            name: '@deepseek-ai/dsh-plugin-market/tools'\n            disabled: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/yuan-source-666/dsh-ptc-discipline.git",
+      "where": "package.json:9"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-11-06T06:40:41Z",
+    "created_at": "2026-11-04T04:35:52Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-11-06T06:40:41Z",
+      "inactive_days": 6,
+      "commit_count": 4,
+      "checked_at": "2026-11-12T13:31:16.035740+00:00",
+      "signals": [
+        "list:pushed_at=2026-11-06T06:40:41Z",
+        "list:commits=4"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "PTC Discipline / PTC 纪律",
+      "text": "一个 DSH agent preset：在 PTC 模式（`run_code` + 生成的 SDK 是唯一的代码入口）之上，\n再加一道**强制执行**的纪律闸门——没有目标、没有进行中的待办，任何工具调用都过不去。\n\nA DSH agent preset that layers a hard enforcement gate on top of PTC mode: every tool call is\nrefused until the session holds an active goal and an in-progress todo.\n\n```\nnpx dsh plugin add yuan-source-666/dsh-ptc-discipline\n```\n\n装好后在新建会话里选 **PTC 纪律** 这个 preset 即可生效。"
+    },
+    {
+      "section": "宣传视频",
+      "text": "[▶ 观看 49 秒宣传片](docs/media/ptc-discipline-promo.mp4) · [轻量 GIF 预览](docs/media/preview.gif)"
+    },
+    {
+      "section": "它做什么",
+      "text": "| | |\n| --- | --- |\n| 呈现方式 | `@deepseek-ai/dsh-agent-tool-presentation` 的 `mode: ptc`——模型只能直接调用 `run_code`，其余工具通过生成的 SDK 访问 |\n| 闸门 | 每次工具调用（含 `run_code` 里的 `await tools.xxx()` 子调用）都过 `ctx.tools.guard()` |\n| 放行条件 | 存在 `active` 的 goal，且 todo 列表非空、至少一条 `in_progress` |\n| 顺序 | 固定为 `create_goal` → `todo_write` → 其余一切 |\n\n被拒时返回的是可执行的原因，例如："
+    },
+    {
+      "section": "它做什么",
+      "text": "```\nDiscipline gate: no goal (call create_goal with the verifiable end condition); no todo list\n(call todo_write with the complete task list). Seed it from inside run_code first — create_goal,\nthen todo_write, then call \"write\".\n```"
+    },
+    {
+      "section": "闸门规则",
+      "text": "| 条件 | 不满足时的报错 |\n| --- | --- |\n| 存在 `active` 的 goal | `no goal (call create_goal …)` / `goal is \"paused\" (…)` |\n| todo 列表非空 | `no todo list (call todo_write …)` |\n| 至少一条 todo 是 `in_progress` | `no todo is in_progress …` / `every todo is completed …` |"
+    },
+    {
+      "section": "三类豁免",
+      "text": "- **`run_code` 本身**——PTC 的唯一直接入口，拦住它就是死锁。\n- **引导工具**——`create_goal` / `get_goal` / `update_goal` / `todo_write` /\n  `ask_user_question` / `skill` / `present`。不建纪律的工具不该被纪律拦住。\n- **非 root agent**——`create_goal` 要求 root agent 当前 turn 有真人消息，子 agent 永远满足不了；\n  不豁免会让所有 subagent 立刻死锁。"
+    },
+    {
+      "section": "服务缺失时 fail-open",
+      "text": "goal / sessionProjections 服务不可用时闸门不拦（而不是全拦），\n避免在没装 goal、todo 相关插件的组合里把 agent 彻底锁死。"
+    },
+    {
+      "section": "为什么用 guard，而不是只写提示词",
+      "text": "`ctx.tools.guard()` 挂在本 preset 的 **preset scope** 上。preset scope 是每个加入该 preset 的\nagent scope 的祖先，`guardReason` 沿 scope chain 由远及近求值，所以它精确覆盖「这个 preset 的\n所有 agent」，不外溢到别的 preset，也不需要任何全局状态。\n\n守卫在 `tools/pre-execute` waterfall **之后**执行，且任何守卫都不能强制放行另一个守卫的拒绝\n——这正是硬约束该在的位置。PTC 的 SDK 子调用走\n`scheduler.prepare` → `prepareExecution` → `preExecute` → `guardReason`，和原生调用同一条\n管道，所以 `await tools.write(...)` 同样过闸。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\nnpx dsh plugin add yuan-source-666/dsh-ptc-discipline\n```\n\n或者在支持 bundle 的应用里用 `plugin_manager`：\n\n```jsonc\n{ \"action\": \"install_bundle\", \"target\": \"yuan-source-666/dsh-ptc-discipline\" }\n```\n\n卸载：\n\n```jsonc\n{ \"action\": \"remove_bundle\", \"target\": \"dsh-ptc-discipline\" }\n```"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml\n- id: ptc-discipline\n  name: 'dsh-ptc-discipline'\n  config:\n    requireGoal: true          # 默认 true"
+    },
+    {
+      "section": "文件",
+      "text": "```\n.\n├── package.json          # dsh.bundle.patch 清单 + 图标/测试入口\n├── cordis.patch.yml      # preset 声明：24 个插件行，其中一行是本包\n├── index.js              # 守护插件：提示词段 + tools.guard"
+    },
+    {
+      "section": "测试",
+      "text": "```sh\nnpm test\n```\n\n`test/gate.test.mjs` 用假 Cordis 上下文断言 10 个场景，无外部依赖：\n\n```\nok  empty session (nothing seeded)      # write/bash 拒；引导工具与 run_code 放行\nok  goal active, no todos               # write 拒\nok  goal active, todos all pending      # write 拒\nok  goal active, one in progress        # write/bash 放行"
+    },
+    {
+      "section": "兼容性（DSH 0.2.2+）",
+      "text": "本预设跟随 DSH 0.2.2 的官方 `ptc` 预设做了对齐，闸门逻辑**完全未改动**：\n\n| 项目 | 0.2.2 的变化 | 本预设的处理 |\n| --- | --- | --- |\n| `dsh-tool-subagent-control/list-agents` | 该子路径已从 `exports` 移除，`list_agents` 并入主包注册 | 删除子路径行，保留 `dsh-tool-subagent-control` 主包行 |\n| `modelSelectionSettings` | 更名为 `modelSelection`，并新增 `modelDiscovery` | 改用新键名 |\n| `dsh-tool-executor-ptc` | 官方 ptc 预设新增 | 一并加入 |"
+    },
+    {
+      "section": "兼容性（DSH 0.2.2+）",
+      "text": "> 注意：如果删掉 `dsh-tool-subagent-control` 整行（而不只是 `list-agents` 子路径），\n> 子 agent 的 `send_message` / `interrupt_agent` 控制工具会一并消失，子 agent 只能\n> 一次性返回结果、无法再追问或中断。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- **todo 每个新 turn 会清空**（`todos` projection 在 `turn/start` 重置），goal 跨 turn 存活。\n  所以第二个请求开始时闸门会重新要求 `todo_write`——这是刻意的。\n- **只有 `run_code` 一个直接入口**：被拒时模型必须再写一个 `run_code` 程序把纪律补上，\n  系统提示词里给了现成的两行种子代码。\n- **plan 模式会打架**：plan-mode 的 guidance 说明规划阶段别用 `todo_write`，但闸门此时仍要求\n  todo。在 plan 下应当给这个 preset 关掉 `requireTodo`，或先建一个「写计划」的 todo。\n- **单测只覆盖闸门逻辑**：假上下文验证的是判定与豁免，不覆盖真实会话里的完整链路。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

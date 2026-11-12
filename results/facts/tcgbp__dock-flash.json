@@ -1,0 +1,407 @@
+{
+  "repo": "tcgbp/dock-flash",
+  "commit": "b2249310c813e96a30c5a2f248de15dbb5d7fad5",
+  "extracted_at": "2026-11-12T05:48:28.029406+00:00",
+  "tree": {
+    "files": 39,
+    "bytes": 1390950,
+    "lines_by_language": {
+      "JSON": 95,
+      "JavaScript": 1270,
+      "Markdown": 10516,
+      "Other": 259,
+      "TypeScript": 34,
+      "YAML": 167
+    },
+    "outline": [
+      ".github/workflows/sync-from-gitee.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "INTEGRATION.md",
+      "INTEGRATION.zh-CN.md",
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "assets/screenshot-1.png",
+      "assets/screenshot-2.png",
+      "cordis.patch.yml",
+      "docs/architecture-notes.md",
+      "docs/handoff-phase1.md",
+      "docs/refactor-coupling-map.md",
+      "docs/refactor-plan-core-adapter-split.md",
+      "docs/releasing.md",
+      "docs/screenshots.md",
+      "docs/submit/tcgbp__dock-flash.yml",
+      "docs/tabs-icon-preview.png",
+      "docs/tcgbp__dock-flash.yml",
+      "docs/testing-checklist.md",
+      "lib/client.js",
+      "package.json",
+      "pnpm-workspace.yaml",
+      "screenshots.json",
+      "screenshots.json.example",
+      "scripts/check-adapter-mount.mjs",
+      "scripts/check-docs-size.mjs",
+      "src/index.ts",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dock-flash",
+    "version": "3.0.3",
+    "description": "dock-base adapter for the DSH Quick Control panel — mounts the panel into the dock-base Workbench. The panel itself is the separate package `dsh-flash`.",
+    "license": "Apache-2.0",
+    "type": "module",
+    "main": "./dist/index.js",
+    "exports": {
+      ".": "./dist/index.js",
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "dist",
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/tcgbp/dock-flash.git"
+    },
+    "homepage": "https://github.com/tcgbp/dock-flash#readme",
+    "bugs": {
+      "url": "https://github.com/tcgbp/dock-flash/issues"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "dock",
+      "dock-base",
+      "workbench",
+      "adapter",
+      "quick-control",
+      "ui"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "dsh-flash",
+          "dock-base",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-api-remotes",
+          "@deepseek-ai/dsh-api-session-controller"
+        ],
+        "platform": "web"
+      }
+    },
+    "scripts": {
+      "build": "tsc -p tsconfig.json",
+      "typecheck": "tsc -p tsconfig.json --noEmit",
+      "check:docs": "node scripts/check-docs-size.mjs",
+      "check:overlay": "node scripts/check-adapter-mount.mjs"
+    },
+    "dependencies": {
+      "dsh-flash": "^1.0.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.0-rc.1 <5.0.0-0 || >=4.0.1-0 <5.0.0-0",
+      "dock-base": ">=0.1.2-0 <1.0.0-0 || >=0.2.0-0 <1.0.0-0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.4",
+      "@types/node": "^22.10.0",
+      "typescript": "^5.6.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dock-flash bundle layer — the dock-base ADAPTER.\n#\n# TWO rows, and the first one is not this package.\n#\n# The BROWSER half needs no row of its own here: the module loader\n# auto-discovers a client bundle from package.json `exports[\"./client\"]` +\n# `dsh.client` and serves it at /plugins/<pkg>/client.js.\n#\n# PITFALL: `name` is a PACKAGE NAME (resolved via the profile's node_modules),\n# NOT a relative path.\n#\n# WHY ROW 1 (the core) IS INSERTED BY THE ADAPTER\n# -----------------------------------------------\n# `dsh-flash` is a real `dependencies` entry of this package, so npm/pnpm\n# installs it and hoists it into the profile's node_modules. But a HOISTED\n# PACKAGE IS NOT A COMPOSED ROW: DSH composes the rows a profile names, plus\n# the rows a composed package's own bundle patch inserts. Nothing walks a\n# dependency's `dsh.bundle.patch` just because the dependency is present. So\n# without row 1 an adapter-only install would place the core on disk, load no\n# core plugin, publish no `dockFlashPanel` service, and leave the browser half\n# of the adapter waiting out its watchdog. The core's own patch inserts this\n# same row for the standalone-⚡-only install.\n#\n# A ROOT-LEVEL `insert` IS A LITERAL APPEND — `applyEntryPatches` does\n# `data.push(...insert)` and never dedupes by `id`. So a profile that lists\n# BOTH `dsh-flash` and `dock-flash` in `dsh.profile.bundles` composes this row\n# TWICE. That is survivable but not free: both rows carry `name: dsh-flash`, so\n# they share one Loader source and one client bundle, and the core's idempotent\n# `apply()` (early return when `ctx.get('dockFlashPanel')` exists) is what keeps\n# it a no-op rather than a double mount. Do NOT rely on that. A profile installs\n# exactly ONE of the two: the adapter alone, or the core alone.\n#\n# WHY THE ID IS `dock-flash` AND NOT `dsh-flash`\n# ----------------------------------------------\n# The entry id IS the settings namespace (docs/refactor-plan-core-adapter-split.md\n# §1.4, D1=M1). `dock-flash` is the id every published preference of this panel\n# already lives under — panel order, active skin, trigger position, alert\n# thresholds, and the `/plugins/dock-flash/…` routes — so keeping it means a\n# profile that upgrades across the split migrates nothing. The core's own\n# `cordis.patch.yml` derives the same id for the same reason.\n- insert:\n    # 1. The panel core. `name` is its package name; the id stays `dock-flash`.\n    - id: dock-flash\n      name: dsh-flash\n    # 2. This adapter. A distinct id because the core already owns `dock-flash`,\n    #    and its `name` is this package — which is what attaches `lib/client.js`\n    #    to a row, and the reason this host half exists at all.\n    - id: dock-flash-adapter\n      name: dock-flash\n"
+    }
+  ],
+  "entries": [
+    "dist/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DOCK_FLASH_BUNDLE",
+      "kind": "env",
+      "where": "scripts/check-adapter-mount.mjs:29"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "gitee.com",
+      "url": "https://gitee.com/lenin.guo/dock-flash.git",
+      "where": ".github/workflows/sync-from-gitee.yml:40"
+    },
+    {
+      "host": "x-access-token",
+      "url": "https://x-access-token:${{",
+      "where": ".github/workflows/sync-from-gitee.yml:41"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/awesome-dsh-plugin/awesome-dsh-plugin",
+      "where": "docs/submit/tcgbp__dock-flash.yml:3"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/tcgbp/dock-flash",
+      "where": "docs/submit/tcgbp__dock-flash.yml:5"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/tcgbp/dock-flash/releases/latest/download/dock-flash.tgz",
+      "where": "docs/submit/tcgbp__dock-flash.yml:11"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/awesome-dsh-plugin/awesome-dsh-plugin",
+      "where": "docs/tcgbp__dock-flash.yml:5"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/tcgbp/dock-flash",
+      "where": "docs/tcgbp__dock-flash.yml:46"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/tcgbp/dock-flash/releases/latest/download/dock-flash.tgz",
+      "where": "docs/tcgbp__dock-flash.yml:52"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/tcgbp/dock-flash.git",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/tcgbp/dock-flash#readme",
+      "where": "package.json:23"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/tcgbp/dock-flash/issues",
+      "where": "package.json:25"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "dsh-flash": "^1.0.0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.4",
+      "@types/node": "^22.10.0",
+      "typescript": "^5.6.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": true,
+    "commits": 270,
+    "pushed_at": "2026-10-22T08:03:29Z",
+    "created_at": "2026-09-19T07:22:42Z"
+  },
+  "runtime_files": [
+    "README.md",
+    "README.zh-CN.md",
+    "cordis.patch.yml",
+    "dist/index.js",
+    "lib/client.js",
+    "package.json",
+    "scripts/check-adapter-mount.mjs",
+    "scripts/check-docs-size.mjs",
+    "src/index.ts"
+  ],
+  "readme": [
+    {
+      "section": "dock-flash",
+      "text": "> The **dock-base adapter** for the DSH Quick Control panel — it mounts the panel\n> into the DSH Workbench through `ctx.workbench`. The panel itself (its component\n> tree, the `quickControl` switch registry, the skin system, the zh/en i18n, the\n> alert surfaces, the host routes and the standalone ⚡) is the separate package\n> **[`dsh-flash`](https://github.com/tcgbp/dsh-flash)**.\n\n**[中文文档](./README.zh-CN.md)**"
+    },
+    {
+      "section": "Core + adapter",
+      "text": "| Package | Role | Depends on dock-base? |\n| --- | --- | --- |\n| [`dsh-flash`](https://github.com/tcgbp/dsh-flash) **v1** | The panel **core**. Owns the React panel, the `quickControl` registry, the skin system, the alert surfaces, the standalone ⚡ and the whole host half (settings namespace, `/plugins/dock-flash/…` routes). | No — runs on its own |\n| **`dock-flash` v3** (this package) | The thin **adapter**. Registers the panel into a dock-base Workbench and claims it from the core. Publishes no service of its own. | Yes — `dock-base` is a **non-optional** peer |"
+    },
+    {
+      "section": "Core + adapter",
+      "text": "The two halves meet at exactly one object: the core's `dockFlashPanel` service. The\nadapter reads the panel through `panel.*` on that service and never reaches into the\ncore's internals, so the boundary is a closed set."
+    },
+    {
+      "section": "Core + adapter",
+      "text": "| What you want | Install | You get |\n| --- | --- | --- |\n| Workbench (dock-base) integration | `dock-flash@^3`, which pulls `dsh-flash` in — plus `dock-base` | Sidebar/floating panel, settings card, activity-bar ⚡, editor view, the `dock-flash:openQuickControl` command |\n| Only the standalone floating ⚡ | `dsh-flash` alone | A ⚡ trigger in the configured conversation slot → floating panel |"
+    },
+    {
+      "section": "Core + adapter",
+      "text": "> **This package is not the panel.** The switch registry, skins, i18n, alert routes\n> and the standalone trigger all live in `dsh-flash` — see the\n> [core README](https://github.com/tcgbp/dsh-flash#readme) for all of that. This\n> document covers the adapter and the split only."
+    },
+    {
+      "section": "Upgrading from `dock-flash` v2",
+      "text": "1. **A `^2.x` range keeps you on the old single package — nothing breaks by\n   default.** The split added a new major (`dock-flash@^3`) rather than replacing\n   v2. To move, install `dock-flash@^3`; it depends on `dsh-flash`, which npm\n   installs for you.\n2. **One profile edit is required and easy to miss.** In the profile's\n   `cordis.patch.yml` the entry carrying the panel settings is `- id: dock-flash`\n   with `name: dock-flash` — a non-insert patch whose `name:` is an **assertion**\n   about the target row's current specifier. After the split `id: dock-flash`\n   resolves to the core row, whose specifier is `dsh-flash`, so the assertion\n   mismatches, DSH prints\n   `patch: name mismatch for \"dock-flash\" (expected \"dsh-flash\", got \"dock-flash\"), skipping`,\n   and the whole `config:` block is **dropped** — silently reverting panel order,\n   skin and trigger position/size. **Fix:** change that entry's `name: dock-flash`\n   to `name: dsh-flash` and **keep `id: dock-flash`**. Do not delete the entry.\n3. **Do not hand-write the core row into the profile.** Installing `dock-flash@^3`\n   is the supported path; its bundle patch inserts the core row for you."
+    },
+    {
+      "section": "What this adapter does",
+      "text": "`lib/client.js` (470 lines) is the whole browser half: the former\n`//#region DockAdapter` block promoted to a package. It consumes the core's\n`dockFlashPanel` service and makes exactly **five** `ctx.workbench` registrations:"
+    },
+    {
+      "section": "What this adapter does",
+      "text": "| Registration | API | Id | Details |\n| --- | --- | --- | --- |\n| Sidebar panel | `ctx.workbench.registerPanel()` | `dock-flash:quick-control` | region `sideBar`, order 50 |\n| Plugin entry | `ctx.workbench.registerPlugin()` | `dock-flash` | Settings card; visibility toggle + Open |\n| Activity bar item | `ctx.workbench.registerActivityBarItem()` | `dock-flash:quick-control` | paneId `dock-flash:quick-control` |\n| Editor view | `ctx.workbench.registerEditorView()` | `dock-flash:quick-control` | draggable to a floating window |\n| Command | `ctx.workbench.registerCommand()` | `dock-flash:openQuickControl` | opens the view floating |"
+    },
+    {
+      "section": "What this adapter does",
+      "text": "**It publishes nothing** — no `quickControl`, no `dockFlashPanel`. The panel it\nrenders is wrapped in the core's `ErrorBoundary` and uses the core's `panel.Header`\nand `panel.icon`; user settings are read through `panel.i18n` / the panel service\nonly."
+    },
+    {
+      "section": "The claim handshake",
+      "text": "On mount the adapter calls `panel.host.claim()`, then `lease.confirm()`. The\nper-mount disposer calls `panel.host.releaseOne()` **only — never `release()`**. The\nwhole-host `panel.host.release()` is called only on the dock-hidden path (when\n`wb.getHiddenPluginIds()` contains `dock-flash`), which hands the panel back so the\ncore can put its standalone ⚡ back up."
+    },
+    {
+      "section": "The claim handshake",
+      "text": "The rationale matters: an earlier version also called `release()` in the per-mount\ndisposer, and that **broke the two-mount case** — dock-base can mount the panel\ntwice at once (the sidebar pane and a floating window). `release()` is the\nwhole-host release, so the first mount's teardown pulled the panel out from under\nthe second one that still held it. A per-mount disposer releases exactly one claim."
+    },
+    {
+      "section": "The claim handshake",
+      "text": "If the `workbench` service has not arrived yet, the adapter subscribes with\n`ctx.inject(['workbench'], …)` and mounts when it does, rather than assuming a load\norder; \"the service is coming\" and \"dock-base is not installed\" stay distinct. The\nadapter also refuses a `dockFlashPanel` whose `version !== 1`, leaving the core's ⚡\nin place rather than drawing half a panel."
+    },
+    {
+      "section": "The host half",
+      "text": "`src/index.ts` (34 lines) is a **deliberately empty** host plugin:\n\n```ts\nexport const name = 'dock-flash-adapter'\nexport const inject: string[] = []\n\nexport function apply(_ctx: Context): void {"
+    },
+    {
+      "section": "The host half",
+      "text": "It exports `name = 'dock-flash-adapter'`, **not `dock-flash`** — that name belongs\nto the core's host plugin, which owns the settings namespace. It exists for exactly\none reason: a client bundle attaches to a profile row whose specifier is the bare\npackage name, so a package with no host entry point has no row to hang its browser\nhalf on."
+    },
+    {
+      "section": "The host half",
+      "text": "**`inject: []` is deliberate.** Declaring `dockFlashPanel` there would make cordis\nsilently skip `apply()` while the service is absent, so a broken install would look\nidentical to \"not installed\". Instead `apply` resolves the service with\n`ctx.inject(['dockFlashPanel'], …)` and arms a **2000 ms watchdog** that logs this\nloud error instead of no-opping:"
+    },
+    {
+      "section": "The host half",
+      "text": "```\n[dock-flash] the core panel service (dockFlashPanel) never arrived — the dsh-flash core is not installed, or its client half did not load. The panel will not be mounted into the workbench. Install or reinstall it with `dsh plugin install dsh-flash`, then reload.\n```"
+    },
+    {
+      "section": "How the two rows are composed",
+      "text": "`cordis.patch.yml` inserts **two** rows:\n\n```yaml\n- insert:\n    - id: dock-flash\n      name: dsh-flash          # the CORE\n    - id: dock-flash-adapter"
+    },
+    {
+      "section": "How the two rows are composed",
+      "text": "**Why the core row is here.** A hoisted package is not a composed row. DSH composes\nthe rows a profile names, plus the rows a composed package's own bundle patch\ninserts; nothing walks a dependency's `dsh.bundle.patch` merely because the\ndependency is present. `dsh-flash` is a real `dependencies` entry, so it lands on\ndisk — but without the first row an adapter-only install would load no core plugin\nand publish no `dockFlashPanel`, and the adapter's watchdog would simply run out."
+    },
+    {
+      "section": "How the two rows are composed",
+      "text": "**Why the id stays `dock-flash`.** The entry id **is** the settings namespace.\nConsequently the settings namespace, the `dock-flash:*` switch ids, the\n`dock-flash:…` localStorage keys and the `/plugins/dock-flash/…` host routes all\nlegitimately stay `dock-flash`. **That is not a bug — do not \"correct\" those\nstrings anywhere.** Keeping the id is what makes the split migration-free.\n\nThe client module id is `dock-flash`; the core's is `dsh-flash` — two client\nmodules cannot share one require key."
+    },
+    {
+      "section": "Requirements",
+      "text": "| Requirement | Version / value | Notes |\n| --- | --- | --- |\n| `dock-base` | `>=0.1.2-0 <1.0.0-0 \\|\\| >=0.2.0-0 <1.0.0-0` | **peer, non-optional.** Provides the `ctx.workbench` service |\n| `@deepseek-ai/cordis` | `>=4.0.0-rc.1 <5.0.0-0 \\|\\| >=4.0.1-0 <5.0.0-0` | peer (bundled with DSH) |\n| `dsh-flash` | `^1.0.0` | regular `dependency` — the panel core |"
+    },
+    {
+      "section": "Requirements",
+      "text": "`dsh.client.inject` is\n`[\"dsh-flash\", \"dock-base\", \"@deepseek-ai/dsh-client-locale\", \"@deepseek-ai/dsh-api-remotes\", \"@deepseek-ai/dsh-api-session-controller\"]`,\nand `dsh.bundle.patch` points at `./cordis.patch.yml`. The official locale runtime is a load-order hint only,\nnever a peer dependency: DSH checks every `@deepseek-ai/dsh*` peer against its **own** runtime version, so\ndeclaring one can disable the whole plugin. The adapter claims **no locale namespace of its own** — every\nstring comes from the core's `panel.i18n`, which is itself a proxy over that service, so the language stays\nDSH's to decide either way."
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "- **A linked core needs its own `pnpm install`.** If you develop against a local\n  `dsh-flash` checkout (symlinked into the profile), that checkout must have its own\n  dependencies installed. Otherwise the core's host half fails to import with\n  `Cannot find package '@deepseek-ai/schemastery'`, and DSH reports\n  `dock-flash (dsh-flash): failed to import`.\n- **The panel never appears and the console shows the watchdog message.** The core's\n  client half did not load. Reinstall it: `dsh plugin install dsh-flash`, then\n  reload.\n- **Panel order, skin or trigger position reverted after the upgrade.** The profile\n  patch's `name:` assertion mismatched and the `config:` block was dropped — fix it\n  as described in [Upgrading from `dock-flash` v2](#upgrading-from-dock-flash-v2).\n  DSH prints `patch: name mismatch for \"dock-flash\" …` when this happens."
+    },
+    {
+      "section": "Development",
+      "text": "```sh\npnpm install\npnpm run build          # tsc → dist/index.js\npnpm run typecheck      # type check only\npnpm run check:docs     # instruction-file budget + link resolution\n\nFor development rules and constraints, see [AGENTS.md](./AGENTS.md). For what\nchanged in each release, see [CHANGELOG.md](./CHANGELOG.md)."
+    },
+    {
+      "section": "dsh-market listing screenshot (optional)",
+      "text": "If you want a screenshot on the plugin-market card, add a `screenshots.json` at the\nrepository root (next to `package.json`) and put the images in a `screenshots/`\ndirectory. This is optional and needs **no extra pull request** to the registry —\nthe market reads `screenshots.json` from your own repository. Example and enabling\nsteps: [docs/screenshots.md](./docs/screenshots.md)."
+    },
+    {
+      "section": "License",
+      "text": "[Apache License 2.0](./LICENSE)"
+    },
+    {
+      "section": "dock-flash",
+      "text": "> DSH 快捷控制面板的 **dock-base 适配器** —— 通过 `ctx.workbench` 把面板挂载进 DSH 工作台。\n> 面板本身（组件树、`quickControl` 开关注册表、皮肤系统、中英文国际化、告警表面、宿主路由与\n> 独立模式的 ⚡）是另一个独立包 **[`dsh-flash`](https://github.com/tcgbp/dsh-flash)**。\n\n**[English](./README.md)**"
+    },
+    {
+      "section": "核心 + 适配器",
+      "text": "| 包 | 角色 | 依赖 dock-base？ |\n| --- | --- | --- |\n| [`dsh-flash`](https://github.com/tcgbp/dsh-flash) **v1** | 面板**核心**。拥有 React 面板、`quickControl` 注册表、皮肤系统、告警表面、独立模式 ⚡，以及整个 Host 半（设置命名空间、`/plugins/dock-flash/…` 路由）。 | 否 —— 可单独运行 |\n| **`dock-flash` v3**（本包） | 很薄的**适配器**。把面板注册进 dock-base 工作台，并向核心认领它。自身不发布任何服务。 | 是 —— `dock-base` 是**非可选** peer |\n\n两半只在一个对象上会合：核心的 `dockFlashPanel` 服务。适配器只通过该服务上的 `panel.*`\n读取面板，从不触及核心内部，因此边界是一个封闭集合。"
+    },
+    {
+      "section": "核心 + 适配器",
+      "text": "| 你想要什么 | 安装 | 你得到什么 |\n| --- | --- | --- |\n| 工作台（dock-base）集成 | `dock-flash@^3`（会把 `dsh-flash` 一并拉入），外加 `dock-base` | 侧边栏/浮窗面板、设置卡片、活动栏 ⚡、编辑器视图、`dock-flash:openQuickControl` 命令 |\n| 只要独立的悬浮 ⚡ | 单独安装 `dsh-flash` | 在所选会话槽位注入 ⚡ 触发按钮 → 浮动面板 |\n\n> **本包不是面板。** 开关注册表、皮肤、国际化、告警路由与独立模式触发按钮都在 `dsh-flash`\n> 里 —— 这些内容请看[核心 README](https://github.com/tcgbp/dsh-flash#readme)。本文只讲适配器\n> 与这次拆分。"
+    },
+    {
+      "section": "从 `dock-flash` v2 升级",
+      "text": "1. **`^2.x` 依赖范围会让你继续留在旧的一体包上 —— 默认什么都不会坏。** 这次拆分新增了一个\n   大版本（`dock-flash@^3`），而不是替换 v2。要迁移，安装 `dock-flash@^3`；它依赖\n   `dsh-flash`，npm 会替你装好。\n2. **有一处 profile 编辑是必须的，而且很容易漏掉。** profile 的 `cordis.patch.yml` 里承载\n   面板设置的那条是 `- id: dock-flash` 配 `name: dock-flash` —— 一个非 insert 补丁，它的\n   `name:` 是对目标行**当前 specifier 的断言**。拆分后 `id: dock-flash` 解析到核心行，而核心行\n   的 specifier 是 `dsh-flash`，断言因此不匹配，DSH 会打印\n   `patch: name mismatch for \"dock-flash\" (expected \"dsh-flash\", got \"dock-flash\"), skipping`，\n   整个 `config:` 块被**丢弃** —— 面板顺序、皮肤与触发位置/大小会被静默还原。**修法：** 把该条\n   的 `name: dock-flash` 改成 `name: dsh-flash`，并**保留 `id: dock-flash`**。不要删除该条目。\n3. **不要手动把核心行写进 profile。** 安装 `dock-flash@^3` 才是受支持的路径，它的 bundle patch\n   会替你插入核心行。"
+    },
+    {
+      "section": "这个适配器做什么",
+      "text": "`lib/client.js`（470 行）就是整个浏览器半：原来的 `//#region DockAdapter` 区块被提升为一个包。\n它消费核心的 `dockFlashPanel` 服务，并且恰好做 **五** 个 `ctx.workbench` 注册："
+    },
+    {
+      "section": "这个适配器做什么",
+      "text": "| 注册项 | API | Id | 细节 |\n| --- | --- | --- | --- |\n| 侧边栏面板 | `ctx.workbench.registerPanel()` | `dock-flash:quick-control` | 区域 `sideBar`，order 50 |\n| 插件入口 | `ctx.workbench.registerPlugin()` | `dock-flash` | 设置卡片；可见性开关 + 打开按钮 |\n| 活动栏图标 | `ctx.workbench.registerActivityBarItem()` | `dock-flash:quick-control` | paneId `dock-flash:quick-control` |\n| 编辑器视图 | `ctx.workbench.registerEditorView()` | `dock-flash:quick-control` | 可拖出为浮动窗口 |\n| 命令 | `ctx.workbench.registerCommand()` | `dock-flash:openQuickControl` | 以浮动方式打开该视图 |"
+    },
+    {
+      "section": "这个适配器做什么",
+      "text": "**它不发布任何东西** —— 没有 `quickControl`，也没有 `dockFlashPanel`。它渲染的面板被包在核心的\n`ErrorBoundary` 里，并使用核心的 `panel.Header` 与 `panel.icon`；用户设置只通过 `panel.i18n` /\n面板服务读取。"
+    },
+    {
+      "section": "认领握手",
+      "text": "挂载时适配器调用 `panel.host.claim()`，然后 `lease.confirm()`。每次挂载的 disposer **只**调用\n`panel.host.releaseOne()` —— **绝不调用 `release()`**。整宿主级的 `panel.host.release()` 只在\ndock 隐藏路径上调用（当 `wb.getHiddenPluginIds()` 含 `dock-flash` 时），它把面板交还核心，让核心\n重新挂出自己的独立 ⚡。\n\n这条理由很关键：早先的版本在每次挂载的 disposer 里也调用了 `release()`，结果**弄坏了两处挂载的\n情形** —— dock-base 可能同时挂载面板两次（侧边栏与浮动窗口）。`release()` 是整宿主级的释放，于是\n第一处挂载的拆卸把面板从仍持有它的第二处挂载手里抽走了。每次挂载的 disposer 只释放一次认领。"
+    },
+    {
+      "section": "认领握手",
+      "text": "如果 `workbench` 服务还没到达，适配器用 `ctx.inject(['workbench'], …)` 订阅，并在它到达时挂载，\n而不是假设加载顺序；「服务稍后到」和「没装 dock-base」被区分开来。适配器还会拒绝\n`version !== 1` 的 `dockFlashPanel`，宁可保留核心的 ⚡，也不画出半个面板。"
+    },
+    {
+      "section": "Host 半",
+      "text": "`src/index.ts`（34 行）是一个**有意为空**的宿主插件：\n\n```ts\nexport const name = 'dock-flash-adapter'\nexport const inject: string[] = []\n\nexport function apply(_ctx: Context): void {\n\n它的 `name = 'dock-flash-adapter'`，**不是 `dock-flash`** —— 那个名字属于核心的宿主插件，设置\n命名空间归它所有。这个文件只为一个原因存在：client bundle 会挂在一条以裸包名为 specifier 的\nprofile 行上，因此没有宿主入口点的包就没有可挂载其浏览器半的行。"
+    },
+    {
+      "section": "Host 半",
+      "text": "**`inject: []` 是有意为之。** 在其中声明 `dockFlashPanel` 会让 cordis 在服务缺席时静默跳过\n`apply()`，于是「装坏了」看起来就和「没装」一模一样。因此 `apply` 改用\n`ctx.inject(['dockFlashPanel'], …)` 解析服务，并装上 **2000 ms 看门狗**，让它在失效时大声报错、\n而不是静默无操作：\n\n```\n[dock-flash] the core panel service (dockFlashPanel) never arrived — the dsh-flash core is not installed, or its client half did not load. The panel will not be mounted into the workbench. Install or reinstall it with `dsh plugin install dsh-flash`, then reload.\n```"
+    },
+    {
+      "section": "两行如何被组装",
+      "text": "`cordis.patch.yml` 插入**两**行：\n\n```yaml\n- insert:\n    - id: dock-flash\n      name: dsh-flash          # 核心\n    - id: dock-flash-adapter\n\n**为什么核心行在这里。** 被提升（hoisted）的包不是被组装的行。DSH 组装 profile 点名的行，加上\n被组装包自身 bundle patch 插入的行；仅仅因为某个依赖存在，并不会有任何东西去走它的\n`dsh.bundle.patch`。`dsh-flash` 是真正的 `dependencies` 条目，所以它会落到磁盘上 —— 但若没有\n第一行，一次「只装适配器」的安装会加载不了任何核心插件、发布不了 `dockFlashPanel`，适配器的\n看门狗只能空等到超时。"
+    },
+    {
+      "section": "两行如何被组装",
+      "text": "**为什么 id 保留 `dock-flash`。** 条目 id **就是**设置命名空间。因此设置命名空间、\n`dock-flash:*` 开关 id、`dock-flash:…` 的 localStorage 键以及 `/plugins/dock-flash/…` 宿主路由\n全都合理地保留 `dock-flash`。**这不是 bug —— 不要在任何地方「纠正」这些字符串。** 保留该 id 正是\n这次拆分无需迁移的原因。\n\n客户端模块 id 是 `dock-flash`，核心的是 `dsh-flash` —— 两个客户端模块不能共用同一个 require 键。"
+    },
+    {
+      "section": "环境要求",
+      "text": "| 依赖 | 版本 / 值 | 说明 |\n| --- | --- | --- |\n| `dock-base` | `>=0.1.2-0 <1.0.0-0 \\|\\| >=0.2.0-0 <1.0.0-0` | **peer，非可选。** 提供 `ctx.workbench` 服务 |\n| `@deepseek-ai/cordis` | `>=4.0.0-rc.1 <5.0.0-0 \\|\\| >=4.0.1-0 <5.0.0-0` | peer（DSH 自带） |\n| `dsh-flash` | `^1.0.0` | 普通 `dependency` —— 面板核心 |"
+    },
+    {
+      "section": "环境要求",
+      "text": "`dsh.client.inject` 为\n`[\"dsh-flash\", \"dock-base\", \"@deepseek-ai/dsh-client-locale\", \"@deepseek-ai/dsh-api-remotes\", \"@deepseek-ai/dsh-api-session-controller\"]`，\n`dsh.bundle.patch` 指向 `./cordis.patch.yml`。官方 locale 运行时只是一条加载顺序提示，**不是** peer 依赖：\nDSH 会把每一个 `@deepseek-ai/dsh*` peer 拿去和**它自己**的运行时版本比对，所以声明它反而可能让整个插件被禁用。\n适配器**不注册任何属于自己的 locale 命名空间** —— 所有文案都取自核心的 `panel.i18n`，而后者本身就是该服务的\n代理，所以无论哪种情况，语言都由 DSH 决定。"
+    },
+    {
+      "section": "疑难排查",
+      "text": "- **以链接方式接入的核心需要有它自己的 `pnpm install`。** 如果你对着本地的 `dsh-flash` 检出\n  开发（软链进 profile），那个检出必须自己装好依赖。否则核心的宿主半会以\n  `Cannot find package '@deepseek-ai/schemastery'` 导入失败，DSH 则报告\n  `dock-flash (dsh-flash): failed to import`。\n- **面板始终不出现，控制台里是看门狗那条消息。** 核心的客户端半没有加载。重装它：\n  `dsh plugin install dsh-flash`，然后刷新。\n- **升级后面板顺序、皮肤或触发位置被还原了。** profile 补丁的 `name:` 断言不匹配，`config:`\n  块被丢弃 —— 按 [从 `dock-flash` v2 升级](#从-dock-flash-v2-升级) 一节修好它。发生这种情况时\n  DSH 会打印 `patch: name mismatch for \"dock-flash\" …`。"
+    },
+    {
+      "section": "开发",
+      "text": "```sh\npnpm install\npnpm run build          # tsc → dist/index.js\npnpm run typecheck      # 仅类型检查\npnpm run check:docs     # 指令文件体积预算 + 链接解析\n\n开发规则与关键约束见 [AGENTS.md](./AGENTS.md)；各版本的改动内容见 [CHANGELOG.md](./CHANGELOG.md)。"
+    },
+    {
+      "section": "插件市场卡片截图（可选）",
+      "text": "如希望插件市场卡片显示截图，请在仓库根目录（`package.json` 旁边）添加 `screenshots.json`，并把图片放到 `screenshots/` 目录。此为可选项，**无需**向注册表再提 PR——market 会直接读取你仓库里的 `screenshots.json`。示例与启用步骤见 [docs/screenshots.md](./docs/screenshots.md)。"
+    },
+    {
+      "section": "许可证",
+      "text": "[Apache License 2.0](./LICENSE)"
+    }
+  ],
+  "skipped": []
+}

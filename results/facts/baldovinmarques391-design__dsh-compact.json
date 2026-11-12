@@ -1,0 +1,177 @@
+{
+  "repo": "baldovinmarques391-design/dsh-compact",
+  "commit": "35c6495d5b45cab3821f5410d478455a87fb0ada",
+  "extracted_at": "2026-11-11T17:41:46.860440+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 69656,
+    "lines_by_language": {
+      "JSON": 64,
+      "JavaScript": 1453,
+      "Markdown": 143,
+      "Other": 12,
+      "YAML": 27
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "lib/index.js",
+      "lib/policy.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/acceptance.test.js",
+      "test/index.test.js",
+      "test/policy.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-compact",
+    "version": "0.1.1",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.js",
+    "description": "Ratio-exact compaction trigger for DeepSeek Harness: gate automatic context compaction at a fraction of the routed model's window, with no fixed headroom deduction.",
+    "license": "MIT",
+    "icon": "./icon.svg",
+    "exports": {
+      ".": "./lib/index.js",
+      "./policy": "./lib/policy.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/*.json",
+      "README.md"
+    ],
+    "engines": {
+      "dsh": ">=0.2.0-rc.2 <0.3.0"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/schemastery": {
+        "optional": true
+      }
+    },
+    "scripts": {
+      "test": "node --test test/policy.test.js test/index.test.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "verifiedWith": "0.2.0-rc.2"
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "context"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/baldovinmarques391-design/dsh-compact.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-compact bundle: one host plugin that gates automatic context compaction.\n#\n# The row name must be the bare package name, exactly as in package.json. Every\n# key under `config` is a Config field of the plugin; the loader replaces a row's\n# whole config instead of merging it, so restate anything you keep when\n# overriding this row from a profile patch.\n#\n# The defaults below are the intended shipping behaviour:\n#   - trigger at 90% of the routed model's declared window (no fixed subtraction)\n#   - no extra output floor, so the ratio is the only rule\n#   - live, not a dry run\n- insert:\n    - id: dsh-compact\n      name: dsh-compact\n      config:\n        enabled: true\n        # Every route. Narrow it (e.g. deepseek-official/deepseek-flash) when only\n        # some models should be gated.\n        routes: '*'\n        # Window fraction that triggers automatic compaction. 0.9 = 90%.\n        triggerRatio: 0.9\n        # Optional output guard. 0 disables it, making triggerRatio the only rule.\n        # Raise it to the largest single response you must not truncate; the gate\n        # then also opens early when that much room is no longer left.\n        minOutputReserve: 0\n        # false = really suppress early checks. Set true to only log verdicts.\n        dryRun: false\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/policy.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:57"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/baldovinmarques391-design/dsh-compact.git",
+      "where": "package.json:50"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-17T10:30:52Z",
+    "created_at": "2026-10-17T09:50:18Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/policy.js",
+    "package.json",
+    "test/index.test.js",
+    "test/policy.test.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-compact",
+      "text": "**按比例精确触发的上下文压缩闸门**（DeepSeek Harness 插件）。\n\nDSH 原生在窗口用掉约 **67.85%** 时就开始压缩；本插件让它等到你设定的比例（默认 **90%**）。\n\n```\n触发点 = floor(窗口 × triggerRatio)      ← 没有固定余量扣减\n```"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "DSH 0.2 把压缩引擎挂在 **agent preset** 里，带出厂默认 `thresholdRatio: 0.8` /\n`headroomTokens: 65536`。preset 平面**任何 patch 层都够不到**，所以原生触发点是：\n\n```\nmin(W × 0.8, W − O − 65536)\n```\n\n在 1M 窗口 + 256K 输出预留下 = `min(800000, 678464)` = **678,464 = 67.85%**。\n你配置的比例从来不是生效的那一项。本插件绕过该公式，用 `floor(W × ratio)` 做闸门。\n\n实现方式：`agentPresets.serviceFor(agent,'compaction')` 取到 preset 作用域的活引擎，\n包住它的 `compactIfNeeded`；阈值以下返回 `null`（引擎不被调用），阈值以上原样交还。\n`agent/request-error` 的溢出恢复**永不拦截**。\n\n不改 DSH 配置文件、不改 preset、不写盘（除监视器）。**卸载即完全恢复原生行为。**"
+    },
+    {
+      "section": "配置",
+      "text": "全部走 profile 的 `cordis.patch.yml`（本插件是纯 host 插件，**没有 GUI 设置面板**）：\n\n```yaml\n- id: dsh-compact\n  config:\n    enabled: true\n    routes: '*'\n\n| 字段 | 默认 | 含义 |\n|---|---|---|\n| `enabled` | `true` | 总开关 |\n| `routes` | `'*'` | 生效路由：`provider` 或 `provider/model`，逗号/空格分隔 |\n| `triggerRatio` | `0.9` | 窗口用到此比例时压缩，范围 `[0.05, 0.98]` |\n| `minOutputReserve` | `0` | 输出保护底线（token）：剩余空间低于它则提前压缩；`0` = 关闭 |\n| `dryRun` | `false` | `true` = 只记录判定、**绝不压缩** |\n| `monitorPath` | 系统临时目录 | 判定监视器（JSONL）。**空则不写** |"
+    },
+    {
+      "section": "monitorPath 是必要的",
+      "text": "被抑制的检查**既不调用引擎、也不写会话事件**，所以在会话日志里完全不可见。\n监视器是唯一的观测通道，每行一条判定：\n\n```json\n{\"decision\":\"skip\",\"contextWindow\":1000000,\"reservedCompletionTokens\":256000,\n \"thresholdTokens\":900000,\"nativeThresholdTokens\":678464,\n \"measuredTokens\":14113,\"surfaceTokens\":11864,\"pendingTokens\":2249}\n```\n\n- `thresholdTokens` = 本插件阈值；`nativeThresholdTokens` = DSH 原生阈值\n- **`decision:\"skip\"` 且 `measuredTokens ≥ nativeThresholdTokens`** 即：插件拦下了一次原生本会执行的压缩"
+    },
+    {
+      "section": "安装",
+      "text": "**只需在插件页装上，不用改任何配置文件。** schema 默认值即目标配置：\n`enabled: true`、`triggerRatio: 0.9`、`routes: '*'`、`minOutputReserve: 0`、`dryRun: false`。\n\n命令行等价写法（CLI 会写 `dependencies` 与 `dsh.profile.bundles`）：\n\n```powershell\ndsh plugin --profile web add 'dsh-compact@file:D:/桌面/DSH与自动化/dsh-compact'\n```\n\n要改 `triggerRatio` 等值时才需要在 `profiles/<name>/cordis.patch.yml` 加一行\n（本插件是纯 host 插件，**没有 GUI 设置面板**）：\n\n```yaml\n- id: dsh-compact\n  config:\n    triggerRatio: 0.9\n```"
+    },
+    {
+      "section": "安装",
+      "text": "`monitorPath` 默认 `<DSH_HOME>/logs/dsh-compact-monitor.jsonl`，目录会自动创建。"
+    },
+    {
+      "section": "关于热插拔",
+      "text": "- **配置改动是热的**：`cordis.patch.yml` 由 `profileReload: live` + HMR 的配置监听生效，无需重启。\n- **启用/禁用是热的**：插件页的开关会启用/停用该行。\n- **改插件源码不是热的**——因为 base bundle 的 `hmr` 行默认 `root: []`（只监听配置，不监听模块）。\n  这对本机所有插件一视同仁。若要让源码也热重载，在 profile patch 里放开监听：\n\n```yaml\n  - id: hmr\n    disabled: false\n    config:\n      root: ['.', 'D:/桌面/DSH与自动化/dsh-compact']"
+    },
+    {
+      "section": "验证状态",
+      "text": "- **31 项测试全过**（策略 11 + host 接线 10 + 验收 10）\n- **对照实验已通过**（窗口 80000、输出预留 1000，只改插件比例）：\n\n| | A 组 ratio 0.05 | B 组 ratio 0.9 |\n|---|---|---|\n| 引擎原生阈值 | 13464 | 13464 |\n| 插件阈值 | 4000 | 72000 |\n| 实测 | 14063 | 14113 |\n| 决策 | delegate | **skip** |\n| 会话压缩事件 | **有**（start+summary+end） | **无** |\n\nB 组在实测已超过原生阈值的情况下被拦下，引擎零调用；A 组同样实测下引擎真的压了。\n\n**已知局限**：上述对照在 `W=80000` 下完成；真实 1M 部署走同一代码路径，但未在 1M 下观察到压缩。"
+    },
+    {
+      "section": "开发中修掉的三个缺陷（都曾让它静默空转）",
+      "text": "| # | 缺陷 | 后果 |\n|---|---|---|\n| 1 | `setSource` 整体替换配置 | settings 文档没有 `monitorPath` → 监视器静默失效 |\n| 2 | `routedTarget` 只读已记录 envelope | 首个请求前 `config:null` → 闸门永久早退 |\n| 3 | 用 `measure(session)` 当压力 | pre-step 时消息未入 surface → **恒为 0，永远放行** |\n\n第 3 个意味着插件在修复前**从未真正抑制过一次压缩**。三个缺陷各有回归测试锁住。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnode --test test/policy.test.js test/index.test.js test/acceptance.test.js\n```\n\n需要 `@deepseek-ai/schemastery` 可解析。本目录已有 junction 指向 DSH 依赖树；\n装进 profile 后由 DSH 自己的依赖树满足（`verifiedWith: 0.2.0-rc.2`）。"
+    },
+    {
+      "section": "边界",
+      "text": "- 只拦**自动压力检查**；溢出恢复与手动 `/compact` 不受影响\n- **不改剪枝**（`dsh-compaction-tool-result-pruner` 是另一个插件）；触发点推后，剪枝也随之推后\n- `routes` 为空字符串 = 停用闸门（不干预任何路由），不会回退到 `*`"
+    }
+  ],
+  "skipped": []
+}

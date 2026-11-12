@@ -1,0 +1,181 @@
+{
+  "repo": "Seryta/dsh-plugin-safety",
+  "commit": "459f0c32c721333e2e1312b13ea5645c03ff021f",
+  "extracted_at": "2026-11-11T14:34:27.135180+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 48281,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 676,
+      "Markdown": 119,
+      "Other": 27,
+      "Python": 374,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "index.js",
+      "package.json",
+      "scripts/check-profile-plugins.py",
+      "test/check-profile-plugins.test.mjs",
+      "test/client.test.mjs",
+      "test/host.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-safety",
+    "description": "DSH 插件健康告警：预检失败自动禁用后页面持久弹窗；出现不可用插件告警即自动创建 headless 修复会话，叉掉前刷新/重开页面告警都在",
+    "version": "0.1.0",
+    "license": "MIT",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "scripts/check-profile-plugins.py",
+      "test",
+      "cordis.patch.yml",
+      "dsh.plugin.json",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --test"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: dsh-plugin-safety\n      name: 'dsh-plugin-safety'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:24"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "scripts/check-profile-plugins.py:29"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "test/check-profile-plugins.test.mjs:66"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "test/check-profile-plugins.test.mjs:112"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "test/check-profile-plugins.test.mjs:138"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "test/check-profile-plugins.test.mjs:159"
+    },
+    {
+      "name": "PATH",
+      "kind": "env",
+      "where": "test/host.test.mjs:72"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "index.js:74"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 3,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-15T14:54:59Z",
+    "created_at": "2026-08-15T14:54:53Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "scripts/check-profile-plugins.py"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-safety — 插件健康告警",
+      "text": "DSH 插件故障防控的最后两环：\n\n1. **预检 + 自动禁用**：`scripts/check-profile-plugins.py` 在 dsh-web 启动前预检\n   profile 中每个未禁用的插件入口；import 失败的坏插件自动写入\n   `disabled: true`（bundle 则移除 bundle），并落盘告警。\n2. **持久告警 + 自动修复会话**：浏览器半部渲染红色告警卡片，× 掉前\n   刷新/重开页面都会重现；host 半部在返回告警前保证每个告警 action 都有\n   对应的 headless 修复会话。"
+    },
+    {
+      "section": "核心不变式",
+      "text": "> **只要出现“不可用插件已被禁用/需人工处理”的告警，就自动创建修复会话。**\n> 不区分告警来源：预检脚本检出、直接写 `notice.json` 的测试/手工场景，\n> 都遵守同一规则。\n\n具体机制：\n\n- host 半部 `GET /plugins/dsh-plugin-safety/notice` 返回告警前先检查\n  `fixActionIds` 是否覆盖全部 action；未覆盖就调用\n  `check-profile-plugins.py --ensure-fix` 补启动。\n- 同一批 action 只启动一次；同一份告警新增坏插件时，只为新增 action\n  补启动一次。\n- `Popen` 成功才写 `fixStartedAt` / `fixActionIds`；启动失败时前端如实\n  显示“修复会话自动创建失败”，不再假装已创建。\n- 文件锁防多个 GET/预检并发重复启动。"
+    },
+    {
+      "section": "组件",
+      "text": "| 文件 | 职责 |\n|---|---|\n| `index.js` | host 半部：告警读写端点 + 返回前 ensure-fix |\n| `client.js` | 浏览器半部：持久弹窗、× 关闭（POST 清除） |\n| `scripts/check-profile-plugins.py` | 预检、自动禁用、告警落盘、修复会话启动 |\n| `cordis.patch.yml` | bundle patch：把插件挂进 profile |\n| `dsh.plugin.json` | DSH 插件元数据 |\n\n零第三方依赖：host/脚本仅用 Node/Python 标准库；client 为原生 DOM。"
+    },
+    {
+      "section": "告警文件",
+      "text": "`$DSH_HOME/storages/plugin-safety/notice.json`（未设置 `DSH_HOME` 时为\n`~/.dsh/storages/plugin-safety/notice.json`）：\n\n```json\n{\n  \"at\": 1786799000000,\n  \"actions\": [\n    {\n\nPOST 同一端点即视为用户已叉掉告警，文件重置为\n`{\"at\": 0, \"actions\": []}`；下一条新告警会重新生成。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile web add github:Seryta/dsh-plugin-safety\n```\n\n安装后重启 dsh-web（host 半部需要进程重新 import；client.js 是静态服务，\n重启前刷新页面也能拿到新逻辑）。\n\n如果同时想要启动前预检（推荐），把随包脚本放到 `$DSH_HOME/scripts` 并\n挂到 systemd `ExecStartPre`：\n\n```sh\nmkdir -p ~/.dsh/scripts\ncp ~/.dsh/profiles/web/node_modules/dsh-plugin-safety/scripts/check-profile-plugins.py \\\n   ~/.dsh/scripts/check-profile-plugins.py\n```"
+    },
+    {
+      "section": "安装",
+      "text": "`ExecStartPre=-/home/<you>/.dsh/scripts/check-profile-plugins.py`\n（`-` 前缀表示预检失败不阻断启动；脚本对能自动禁用的失败返回 0，\n对无法自动禁用且需人工处理的失败返回 1）。"
+    },
+    {
+      "section": "验证",
+      "text": "```sh\nnpm test                       # host/脚本/客户端逻辑测试，全部使用假 dsh，不创建真实会话\nnode --check index.js\npython3 -m py_compile scripts/check-profile-plugins.py\n```\n\n本仓库的测试覆盖：\n\n- 预检发现坏插件 → 自动禁用、备份、落盘告警、启动一次修复会话；\n- 重复预检不重复启动；新增坏插件只补启动一次；\n- 直接写 `notice.json` → host GET 前补建修复会话，第二次 GET 不重复；\n- POST 清除告警；无告警返回 `notice: null`；\n- 客户端弹窗持久渲染、× 关闭、以及 `fixStartedAt` 有无时的如实文案。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- 浏览器只在页面加载时 poll 一次；页面开着期间新写入的告警会在下次刷新\n  时出现（与“刷新/重开仍在”的持久语义一致）。\n- 自动修复会话是 headless DSH 任务；它本身无法修复时会在会话内报告阻塞\n  原因，host 不会阻塞重试。\n- `$DSH_HOME` 会被 host 与预检脚本一致尊重；systemd 预检通常不设置该\n  变量，因此走默认 `~/.dsh`。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

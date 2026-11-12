@@ -1,0 +1,328 @@
+{
+  "repo": "zhaoxuejie/dsh-plugin-tool-guard",
+  "commit": "dbc8e139edb2d147b43ad454ac5421b7d03b364c",
+  "extracted_at": "2026-11-12T14:28:53.325159+00:00",
+  "tree": {
+    "files": 31,
+    "bytes": 399885,
+    "lines_by_language": {
+      "JSON": 441,
+      "JavaScript": 1074,
+      "Markdown": 1396,
+      "Other": 45,
+      "TypeScript": 2182,
+      "YAML": 76
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "CLAUDE.md",
+      "LICENSE",
+      "PRD.md",
+      "README.md",
+      "assets/demo1.png",
+      "assets/demo2.png",
+      "assets/demo3.png",
+      "cordis.patch.yml",
+      "docs/PRD.md",
+      "docs/QUICKSTART.md",
+      "docs/api.md",
+      "docs/rules.md",
+      "package-lock.json",
+      "package.json",
+      "src/approval.ts",
+      "src/audit.ts",
+      "src/client.js",
+      "src/guard-engine.ts",
+      "src/index.ts",
+      "src/path-utils.ts",
+      "src/redaction.ts",
+      "src/rules/dangerous-commands.ts",
+      "src/rules/path-whitelist.ts",
+      "src/rules/sensitive-files.ts",
+      "src/rules/write-protection.ts",
+      "src/types.ts",
+      "tests/run-tests.mjs",
+      "tests/smoke-cordis.mjs",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-tool-guard",
+    "version": "1.0.0",
+    "description": "DeepSeek Harness 工具调用安全守卫插件：规则引擎拦截 + 路径白名单 + 敏感文件黑名单 + 人工审批 + 审计日志 + 侧边面板",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/zhaoxuejie/dsh-plugin-tool-guard.git"
+    },
+    "homepage": "https://github.com/zhaoxuejie/dsh-plugin-tool-guard#readme",
+    "bugs": {
+      "url": "https://github.com/zhaoxuejie/dsh-plugin-tool-guard/issues"
+    },
+    "type": "module",
+    "main": "./lib/index.js",
+    "types": "./lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./client": "./src/client.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web"
+      }
+    },
+    "files": [
+      "cordis.patch.yml",
+      "lib",
+      "src",
+      "docs",
+      "tests",
+      "README.md",
+      "CHANGELOG.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "build": "tsc -p tsconfig.json",
+      "prepare": "npm run build",
+      "typecheck": "tsc -p tsconfig.json --noEmit",
+      "test": "node tests/run-tests.mjs",
+      "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+      "deepseek-harness",
+      "cordis",
+      "plugin",
+      "security",
+      "guard",
+      "approval",
+      "audit",
+      "firewall"
+    ],
+    "license": "MIT",
+    "engines": {
+      "node": ">=20"
+    },
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-tools": "^0.1.2-rc.1"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-tools": "^0.1.2-rc.1",
+      "@types/node": "^22.10.0",
+      "typescript": "^5.7.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-plugin-tool-guard — bundle patch（官方插件命名：cordis.patch.yml）\n#\n# DeepSeek Harness 插件以「bundle patch」形式自注册到宿主组合：\n#   package.json → dsh.bundle.patch → 本文件\n# 顶层为 loader patch 条目数组，- insert 把插件行插入组合；行 id / name 取包名\n# （与 dsh-daily-digest 等官方 marketplace 插件一致）。本文件即「参考配置」，\n# 与 src/index.ts 的 Config schema 默认值保持同步。\n#\n# 使用方式：\n#   1. marketplace / 本地安装：包被安装后宿主 loader 自动应用本 patch，无需手改。\n#   2. 手动合并：把 - insert: 整块复制进宿主 cordis.patch.yml（或 CLI --patch 引用本文件）。\n#\n- insert:\n    - id: dsh-plugin-tool-guard\n      name: dsh-plugin-tool-guard\n      config:\n        # 插件总开关（false 时插件加载但不做任何拦截）\n        enable: true\n        # 安全级别：loose（宽松）/ standard（标准）/ strict（严格）\n        #   loose    —— 仅拦截极危险命令（rm -rf /、mkfs、shutdown 等），文件操作全部放行\n        #   standard —— 危险命令黑名单 + 敏感文件禁止读取 + 覆盖/删除需审批 + 路径白名单（默认）\n        #   strict   —— 所有文件写入与所有 shell 命令均需审批 + 敏感文件禁止读取 + 路径白名单\n        securityLevel: standard\n        rules:\n          # 规则1：危险 shell 命令黑名单（正则匹配 command 参数，命中即拒绝）\n          dangerousCommands:\n            enabled: true\n            patterns: []          # 为空则使用内置危险命令列表（见 docs/rules.md）\n          # 规则2：文件路径白名单（file_path / path 参数指向的路径必须位于白名单目录内）\n          pathWhitelist:\n            enabled: true\n            paths: []             # 允许操作的目录列表；为空则仅当前会话工作目录（session.header.cwd）\n          # 规则3：敏感文件黑名单（glob 匹配，命中即拒绝读取）\n          sensitiveFiles:\n            enabled: true\n            patterns: []          # 为空则使用内置敏感文件列表（.env / .ssh / id_rsa / *.pem 等）\n          # 规则4：文件写入保护 —— 本部署默认「免人工审批」（日常开发免打扰）；需要审批把关时改回 true\n          writeProtection:\n            enabled: true\n            requireApprovalForOverwrite: false\n            requireApprovalForDelete: false\n        # 工具类别映射（规则引擎按类别识别工具入参中的命令 / 路径字段）\n        tools:\n          shell: ['bash', 'pwsh', 'shell', 'terminal']       # command 参数\n          read: ['read', 'read_image', 'file_read']           # file_path / path 参数\n          write: ['write', 'file_write']                      # file_path + content\n          edit: ['edit', 'file_edit']                         # file_path\n          delete: ['delete', 'file_delete', 'remove']         # 删除类工具\n        approval:\n          # 内置 ApprovalManager 回退路径的审批超时秒数（超时默认拒绝，见 defaultOnTimeout）。\n          # 说明：宿主提供原生 approval 服务（web GUI）时审批优先走原生通道，由宿主掌控时长；\n          # 仅在无 approval 服务（离线 / 旧宿主）时才使用本超时。\n          timeoutSeconds: 120\n          # 超时默认决策：allow / deny（默认 deny，宁可误杀不可漏放）\n          defaultOnTimeout: deny\n        pause:\n          # 手动暂停防护的自动恢复时间（分钟）；暂停期间所有工具直接放行但仍记录审计日志\n          autoResumeMinutes: 10\n        audit:\n          # 插件卸载时是否将审计日志写入本地 JSON 文件（保留）或清空\n          keepAfterUnload: false\n          # 单会话最大审计日志条数（超出后滚动覆盖最旧记录）\n          maxRecordsPerSession: 200\n          # 审计日志脱敏字段名列表（匹配不区分大小写，嵌套递归）\n          sensitiveFields:\n            - api_key\n            - apikey\n            - password\n            - token\n            - secret\n            - authorization\n            - private_key\n            - access_key\n            - accessKey\n            - cookie\n            - session_token\n"
+    }
+  ],
+  "entries": [
+    "src/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/zhaoxuejie/dsh-plugin-tool-guard.git",
+      "where": "package.json:7"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zhaoxuejie/dsh-plugin-tool-guard#readme",
+      "where": "package.json:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/zhaoxuejie/dsh-plugin-tool-guard/issues",
+      "where": "package.json:11"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "src/index.ts:789"
+    },
+    {
+      "host": "evil.sh",
+      "url": "http://evil.sh",
+      "where": "tests/run-tests.mjs:229"
+    },
+    {
+      "host": "evil.ps1",
+      "url": "http://evil.ps1",
+      "where": "tests/run-tests.mjs:231"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/schemastery": "^3.18.2"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2",
+      "@deepseek-ai/dsh-tools": "^0.1.2-rc.1",
+      "@types/node": "^22.10.0",
+      "typescript": "^5.7.0"
+    }
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 5,
+    "pushed_at": "2026-09-08T12:34:03Z",
+    "created_at": "2026-09-08T12:23:34Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-09-08T12:34:03Z",
+      "inactive_days": 65,
+      "commit_count": 5,
+      "checked_at": "2026-11-12T14:28:53.325159+00:00",
+      "signals": [
+        "list:pushed_at=2026-09-08T12:34:03Z",
+        "list:commits=5"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/approval.ts",
+    "src/audit.ts",
+    "src/client.js",
+    "src/guard-engine.ts",
+    "src/index.ts",
+    "src/path-utils.ts",
+    "src/redaction.ts",
+    "src/rules/dangerous-commands.ts",
+    "src/rules/path-whitelist.ts",
+    "src/rules/sensitive-files.ts",
+    "src/rules/write-protection.ts",
+    "src/types.ts",
+    "tests/run-tests.mjs"
+  ],
+  "readme": [
+    {
+      "section": "🛡️ dsh-plugin-tool-guard",
+      "text": "[](https://www.npmjs.com/package/dsh-plugin-tool-guard)\n[](https://github.com/zhaoxuejie/dsh-plugin-tool-guard/releases)\n[](LICENSE)\n[](https://nodejs.org)\n\n**DeepSeek Harness 工具调用安全守卫插件** —— 给 AI 的每一次工具调用装上防火墙：\n拦截危险命令 · 禁止读取敏感文件 · 限定可操作目录 · 高危操作人工审批 · 全量审计留痕。\n\n挂载即生效、卸载即失效，**零侵入** Agent 业务代码：不改一行业务逻辑，规则引擎在每次工具执行前独立决策。\n\n---"
+    },
+    {
+      "section": "用途",
+      "text": "| 能力 | 说明 |\n|---|---|\n| 🚫 危险命令黑名单 | `rm -rf /`、`mkfs`、`dd if=`、`shutdown`、fork 炸弹、`curl \\| bash` 等内置正则，命中**直接拒绝**（无审批环节） |\n| 🔒 敏感文件黑名单 | `.env`、`.ssh`、`id_rsa`、`*.pem`、`/etc/passwd` 等 glob 模式，禁止 AI 读取 |\n| 📁 路径白名单 | 只允许操作指定目录（默认=当前工作目录），`resolve + realpath` 防 `../../` 与符号链接绕过 |\n| ✍️ 写入保护 | 覆盖已有文件 / 删除文件按配置要求人工审批；创建新文件放行 |\n| 🖐 人工审批 | 原生 GUI 审批卡（允许 / 拒绝 / 允许本次会话）；超时默认拒绝（安全优先） |\n| 📜 审计日志 | 每次工具调用记录：时间 / 会话 / 轮次 / 工具 / **脱敏入参** / 决策 / 命中规则 / 原因 |\n| 🎚 三档安全级别 | `loose` 宽松 / `standard` 标准（默认）/ `strict` 严格（一切写入与 shell 需审批） |\n| 🎛 管理工具 | 直接让 AI 调 `guard_*` 工具，或 HTTP 端点，或面板操作，三者同一套运行时状态 |"
+    },
+    {
+      "section": "界面演示",
+      "text": "Web GUI 侧边栏「🛡 安全守卫」面板（`src/client.js`，纯 DOM 零依赖）：\n\n<img src=\"assets/demo1.png\" alt=\"面板：状态总览（级别/暂停/今日拦截/待审批）\" width=\"640\"/>\n\n<img src=\"assets/demo2.png\" alt=\"面板：拦截记录（实时审计视图）\" width=\"640\"/>\n\n<img src=\"assets/demo3.png\" alt=\"面板：规则开关（运行时即时生效）\" width=\"640\"/>\n\n> 宿主未加载客户端也不影响安全：审批走原生 approval 通道（GUI 弹卡），或回退内置审批 + 聊天流兜底。\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "本插件是 **DeepSeek Harness 原生插件**（Cordis 组合 + `dsh.bundle.patch` 自注册 + web 客户端面板），\n不是独立应用，须装进某个 **DSH profile** 后由 loader 组合生效。插件按 profile 隔离，目录位于\n`$DSH_HOME/profiles/<name>`（`$DSH_HOME` 默认 `~/.deepseek-harness`）；运行 GUI 一般用 `web` profile。"
+    },
+    {
+      "section": "方式 A：从 GitHub 下载源码安装",
+      "text": "```bash\ngit clone https://github.com/zhaoxuejie/dsh-plugin-tool-guard.git\ncd dsh-plugin-tool-guard\nnpm install          # prepare 脚本自动 build → 生成 lib/（编译产物不入库，须构建后加载）\n\n> 跟随上游更新：`git pull` 后重跑 `dsh plugin add`；或改用 `add link:./dsh-plugin-tool-guard`\n> 目录符号链接，源码即改即生效。npm 发布后也可一行直装（方式 B）。"
+    },
+    {
+      "section": "方式 B：npm 安装",
+      "text": "```bash\ndsh plugin --profile web add dsh-plugin-tool-guard\ndsh web\n```"
+    },
+    {
+      "section": "方式 C：手动 patch 挂载",
+      "text": "在 patch 文件加一行（按生效范围选文件：`$DSH_HOME/profiles/<name>/cordis.patch.yml`\n只对该 profile 生效；`$DSH_HOME/cordis.patch.yml` 对所有 profile 生效）：\n\n```yaml\n- import: /绝对/路径/dsh-plugin-tool-guard/cordis.patch.yml\n```\n\n> `patchReload: live` 的 profile 保存即热生效，`startup` 型需重启 DSH。"
+    },
+    {
+      "section": "验证与卸载",
+      "text": "- 验证：侧边栏出现「🛡 安全守卫」面板；对 AI 说「读取项目里的 `.env`」应被拒绝；`GET /tool-guard/status` 返回状态 JSON。\n- 卸载：`dsh plugin --profile web remove dsh-plugin-tool-guard`，或删除手动添加的 patch 行。\n\n---"
+    },
+    {
+      "section": "5 分钟快速体验",
+      "text": "装好后直接对 AI 说下面的话，观察守卫拦下 / 放行：\n\n| 你说的话 | 预期结果 |\n|---|---|\n| 「读取一下项目里的 `.env`」 | 🚫 拒绝：命中敏感文件黑名单 |\n| 「执行 `rm -rf D:\\`」 | 🚫 拒绝：命中危险命令黑名单 |\n| 「读一下 `C:\\Windows\\win.ini`」（工作区外） | 🚫 拒绝：路径不在白名单 |\n| 「切换到 strict 级别」→「写一个新文件 demo.txt」 | 🖐 弹审批卡，等你点允许 / 拒绝 |\n| 「查一下最近的拦截记录」 | 📜 返回上面所有操作的审计条目 |\n\n> 更细的图文教程见 [`docs/QUICKSTART.md`](docs/QUICKSTART.md)。"
+    },
+    {
+      "section": "安全级别",
+      "text": "| 级别 | 行为 | 适合 |\n|---|---|---|\n| `loose` 宽松 | 仅拦极危险命令（rm -rf /、mkfs、shutdown 等），文件操作全放行 | 完全信任 AI、零打扰 |\n| `standard` 标准（默认） | 危险命令 + 敏感文件 + 路径白名单；写入审批按配置 | 日常开发 |\n| `strict` 严格 | **所有**文件写入与 shell 命令均需人工审批；禁止暂停 | 跑不信任代码 / 重要机器 |\n\n切换：`guard_set_level(level)` 工具 / 面板下拉 / `POST /tool-guard/level` / 配置 `securityLevel`；\n运行时立即作用于所有会话，重启后恢复配置默认值。"
+    },
+    {
+      "section": "人工审批",
+      "text": "1. 命中 `approve`（strict 级别下最常见）→ DSH Web GUI 弹**原生审批卡**（宿主无 approval 服务时回退内置面板 + 聊天兜底）；\n2. 选择：**允许**（仅放行这一次）/ **允许本次会话**（同会话同类操作后续直接放行）/ **拒绝**（不执行，模型收到拒绝原因）；\n3. 超时（默认 120 秒）无人操作 → 按 `defaultOnTimeout` 处理（默认 **deny**，宁可误杀不放漏）。"
+    },
+    {
+      "section": "暂停防护",
+      "text": "`guard_pause(minutes?)`：暂停期间所有调用直接放行但**仍记录审计**；默认 10 分钟自动恢复；\n**严格级别禁止暂停**（需先降级）。"
+    },
+    {
+      "section": "审计日志",
+      "text": "每次调用都留痕（入参自动脱敏），按会话隔离、单会话上限 200 条滚动覆盖；\n查询：`guard_recent_blocks(limit)` / `guard_stats()` / 面板「拦截」页 / `GET /tool-guard/recent`；\n`audit.keepAfterUnload: true` 时卸载归档到 `~/.deepseek-harness/audit/tool-guard-<时间戳>.json`。"
+    },
+    {
+      "section": "管理工具速查",
+      "text": "| 操作 | 对 AI 说（工具） | HTTP |\n|---|---|---|\n| 查看状态 | `guard_status()` | `GET /tool-guard/status` |\n| 查看统计 | `guard_stats()` | `GET /tool-guard/stats` |\n| 最近拦截 | `guard_recent_blocks(limit)` | `GET /tool-guard/recent` |\n| 切换级别 | `guard_set_level(level)` | `POST /tool-guard/level` |\n| 暂停 / 恢复 | `guard_pause(min?)` / `guard_resume()` | `POST /tool-guard/pause` / `POST /tool-guard/resume` |\n| 白名单增删 | `guard_whitelist_add(path)` / `guard_whitelist_remove(path)` | `POST /tool-guard/whitelist/add` / `POST /tool-guard/whitelist/remove` |"
+    },
+    {
+      "section": "管理工具速查",
+      "text": "---"
+    },
+    {
+      "section": "配置",
+      "text": "以下为 `cordis.patch.yml` 参考配置（与 schema 默认值一致）；更完整的字段表见\n[`docs/api.md`](docs/api.md) §4，规则细节与级别矩阵见 [`docs/rules.md`](docs/rules.md)。\n\n```yaml\nsecurityLevel: standard          # loose / standard / strict\nrules:\n  dangerousCommands:\n    patterns: []                 # 危险命令正则；空 = 内置列表\n\n面板「规则」页的开关运行时即时生效（重启还原为配置值）；`guard_whitelist_add/remove`\n运行时增删白名单目录。\n\n---"
+    },
+    {
+      "section": "许可",
+      "text": "MIT — 见 [`LICENSE`](LICENSE)。"
+    },
+    {
+      "section": "相关文档",
+      "text": "- [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — 快速上手教程\n- [`docs/api.md`](docs/api.md) — 接口参考（事件 / 工具 / HTTP / 配置）\n- [`docs/rules.md`](docs/rules.md) — 内置规则与级别矩阵\n- [`docs/PRD.md`](docs/PRD.md) — 产品需求规格\n- `tests/run-tests.mjs` — 端到端测试（`npm test`，81 断言）"
+    }
+  ],
+  "skipped": []
+}

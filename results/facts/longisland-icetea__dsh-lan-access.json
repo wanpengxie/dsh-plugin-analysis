@@ -1,0 +1,223 @@
+{
+  "repo": "longisland-icetea/dsh-lan-access",
+  "commit": "f256974077acf7e7605f56285f00195109bc735e",
+  "extracted_at": "2026-11-12T00:14:42.974051+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 92514,
+    "lines_by_language": {
+      "JSON": 76,
+      "JavaScript": 1266,
+      "Markdown": 227,
+      "Other": 24,
+      "TypeScript": 69,
+      "YAML": 75
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "lib/client.js",
+      "lib/index.js",
+      "lib/types/index.d.ts",
+      "package.json",
+      "test/no-auth.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-lan-access",
+    "version": "0.6.0",
+    "author": "icetea <cxxiao@zzu.edu.cn>",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/longisland-icetea/dsh-lan-access.git"
+    },
+    "homepage": "https://github.com/longisland-icetea/dsh-lan-access#readme",
+    "bugs": {
+      "url": "https://github.com/longisland-icetea/dsh-lan-access/issues"
+    },
+    "description": "Open the DeepSeek Harness Web LAN access fences: serve on all interfaces, trust only the configured LAN authorities, and show a settings tab to choose them.",
+    "engines": {
+      "node": ">=20.18.1"
+    },
+    "scripts": {
+      "test": "node --test test/*.mjs"
+    },
+    "type": "module",
+    "main": "./lib/index.js",
+    "types": "./lib/types/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/types/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./client": {
+        "types": "./lib/types/client/index.d.ts",
+        "default": "./lib/client.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/index.js",
+      "lib/client.js",
+      "lib/types/**/*.d.ts",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-connection",
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-renderer",
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-api-remotes"
+        ],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.2"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      }
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "plugin",
+      "lan",
+      "lan-access",
+      "network",
+      "remote-access"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-lan-access bundle patch — static composition (0.6.0).\n#\n# THE ROWS ARE CONFIGURED, NOT REWRITTEN. This bundle declares three things\n# and performs no row updates at runtime:\n#\n#   1. `insert:` the single `lan-access` row — the plugin entry itself, and\n#      the ONLY row dshmarket's toggle ever writes `disabled: true` onto\n#      (market manages rows a package inserts, never top-level overrides).\n#      Disabling the package therefore never touches an official row.\n#\n#   2. A top-level `webserver` override whose `host` is a loader `!!js`\n#      expression: `0.0.0.0` only while the `lan-access` entry is enabled\n#      AND the settings-tab toggle (`settings.yaml` lan-access.enabled) is\n#      on; `127.0.0.1` (the official expression) otherwise. Market's\n#      disable lands as a plain `disabled: true` on the entry before\n#      activation, so the expression reads the final state with no race.\n#      The bind is decided ONCE per boot: toggling the plugin only\n#      starts/stops its fiber — the binding changes on the next restart,\n#      exactly what the settings tab tells the user.\n#\n#   3. A top-level `connection` override that, while enabled (entry not\n#      disabled AND the settings-tab toggle on), replaces the\n#      browser-trust fence with the configured `accessHosts` (kept only in\n#      the canonical form the fence's own `assertTrustedAuthority` accepts,\n#      so a hand-edited invalid entry can never fail the row) — a non-empty\n#      configuration IS the policy (strict fence, unchanged since 0.2.0);\n#      with nothing configured it falls back to the deployment-derived\n#      `webRuntime.trustedHosts`. It also applies the configured\n#      session-cookie lifetime. While disabled both expressions return the\n#      official ones, so --trusted-host deployments keep working.\n#\n# Overriding by id replaces the matched row's whole `config`, so each\n# override restates every key the official row owns (the official rows live\n# in @deepseek-ai/dsh-web-app/cordis.patch.yml); keys this file does not\n# restate (`name`, the webserver's `inject`) merge from the official row.\n# The `connection` override restates `inject` to add `settings` so the loader\n# only evaluates its expressions once the settings service exists (inject is\n# the loader's activation gate for expression dependencies).\n#\n# Both expressions fail closed: any evaluation error yields the official\n# defaults (loopback bind, the deployment fence) and never fails the boot.\n\n- insert:\n    - id: lan-access\n      name: 'dsh-lan-access'\n      inject: [settings, loader]\n\n# ── static bind + fence overrides (evaluated once per boot) ─────────────────\n\n- id: webserver\n  inject: [webStartup, settings]\n  config:\n    # Loopback while the lan-access entry is disabled (the market toggle\n    # state, composed before activation) or while the settings-tab toggle\n    # is off; all interfaces only when both say enabled.\n    host: !!js (() => { try { const lan = [...ctx.loader.entries()].find((e) => e.options.id === \"lan-access\"); if (lan?.disabled ?? true) return ctx.webStartup?.host ?? \"127.0.0.1\"; const raw = ctx.get(\"settings\").section(\"lan-access\"); if (!(raw !== null && typeof raw === \"object\" && raw.enabled === true)) return ctx.webStartup?.host ?? \"127.0.0.1\"; return \"0.0.0.0\"; } catch { return ctx.webStartup?.host ?? \"127.0.0.1\"; } })()\n    port: !!js ctx.webStartup.port ?? 3080\n    compression: gzip\n    compressionLevel: 1\n    compressionThresholdBytes: 1024\n\n- id: connection\n  inject: [webRuntime, settings]\n  config:\n    # While enabled (entry not disabled AND settings-tab toggle on): the\n    # configured accessHosts (canonical form only) ARE the policy — with a\n    # non-empty configuration nothing else passes the fence; the\n    # deployment-derived webRuntime.trustedHosts is only the fallback for\n    # an empty configuration. While disabled: the official expression\n    # untouched.\n    trustedHosts: !!js (() => { try { const lan = [...ctx.loader.entries()].find((e) => e.options.id === \"lan-access\"); if (lan?.disabled ?? true) return ctx.webRuntime.trustedHosts; const raw = ctx.get(\"settings\").section(\"lan-access\"); if (!(raw !== null && typeof raw === \"object\" && raw.enabled === true)) return ctx.webRuntime.trustedHosts; let list = []; if (Array.isArray(raw.accessHosts)) list = raw.accessHosts; const out = []; const seen = new Set(); for (const h of list) { if (typeof h !== \"string\" || seen.has(h.toLowerCase())) continue; try { const u = new URL(\"http://\" + h); let port = u.port; if (port === \"\") port = new URL(\"https://\" + h).port; let canon = u.hostname; if (port !== \"\") canon = canon + \":\" + port; if (canon !== h.toLowerCase()) continue; } catch { continue; } seen.add(h.toLowerCase()); out.push(h); } if (out.length > 0) return out; return ctx.webRuntime.trustedHosts; } catch { return ctx.webRuntime.trustedHosts; } })()\n    # The configured browser-session lifetime while enabled (entry not\n    # disabled AND settings-tab toggle on); the official default (30)\n    # while disabled or unconfigured.\n    cookieMaxAgeDays: !!js (() => { try { const lan = [...ctx.loader.entries()].find((e) => e.options.id === \"lan-access\"); if (lan?.disabled ?? true) return 30; const raw = ctx.get(\"settings\").section(\"lan-access\"); if (!(raw !== null && typeof raw === \"object\" && raw.enabled === true)) return 30; const days = raw.sessionDays; if (Number.isSafeInteger(days)) return Math.min(Math.max(days, 1), 3650); return 30; } catch { return 30; } })()\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/types/index.d.ts",
+    "lib/types/client/index.d.ts",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080",
+      "where": "lib/client.js:52"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080",
+      "where": "lib/client.js:100"
+    },
+    {
+      "host": "dsh.invalid",
+      "url": "http://dsh.invalid",
+      "where": "lib/index.js:105"
+    },
+    {
+      "host": "${entry",
+      "url": "http://${entry",
+      "where": "lib/index.js:227"
+    },
+    {
+      "host": "${entry",
+      "url": "https://${entry",
+      "where": "lib/index.js:228"
+    },
+    {
+      "host": "${host",
+      "url": "http://${host",
+      "where": "lib/index.js:332"
+    },
+    {
+      "host": "${primary",
+      "url": "http://${primary",
+      "where": "lib/index.js:442"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/longisland-icetea/dsh-lan-access.git",
+      "where": "package.json:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/longisland-icetea/dsh-lan-access#readme",
+      "where": "package.json:10"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/longisland-icetea/dsh-lan-access/issues",
+      "where": "package.json:12"
+    },
+    {
+      "host": "192.168.255.5",
+      "url": "http://192.168.255.5:3080",
+      "where": "test/no-auth.mjs:88"
+    },
+    {
+      "host": "192.168.255.5",
+      "url": "http://192.168.255.5:3080",
+      "where": "test/no-auth.mjs:90"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 8,
+    "pushed_at": "2026-09-09T12:57:07Z",
+    "created_at": "2026-09-06T17:09:02Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.js",
+    "lib/types/client/index.d.ts",
+    "lib/types/index.d.ts",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-lan-access",
+      "text": "> **Who this is for**: users who already run a virtual LAN (EasyTier / Tailscale / WireGuard / ZeroTier …), or who only want to reach the dsh Web UI from a trusted LAN (home or office network).\n>\n> **⚠️ Security**: enabling LAN access means *anyone who can reach that address can operate your Harness — remote code execution exposed to that network segment*. Only enable it on a network you control; never on public Wi-Fi, campus or shared lab networks. Never forward the token-bearing URL printed at startup.\n>\n> **🤖 About this repository**: every line of code, doc, and commit here was generated by an AI coding agent; the author has not reviewed it line by line. Read `cordis.patch.yml` and `lib/client.js` (they touch dsh internals) before you rely on it. Issues and PRs welcome."
+    },
+    {
+      "section": "dsh-lan-access",
+      "text": "Open the DeepSeek Harness Web GUI's LAN access fences so other machines on a\n(virtual) LAN can reach it directly via `LAN-IP:port`, with a settings tab to\nchoose which LAN IP is used.\n\nSee `README.zh.md` (Chinese) for the full guide; the English summary:"
+    },
+    {
+      "section": "dsh-lan-access",
+      "text": "- **What it changes**: binds the webserver to `0.0.0.0` when enabled (the host\n  schema only allows `127.0.0.1` / `0.0.0.0`), makes the `/api` browser-trust\n  fence accept **only** your configured authorities (falling back to dsh's\n  automatic LAN trust when you configure none), and prints the token-bearing\n  LAN URL at boot.\n- **Strict fence (0.2.0, breaking)**: dsh itself trusts every non-internal IPv4\n  while the server binds `0.0.0.0`; 0.1.x unioned that in, so a host you removed\n  stayed trusted. Since 0.2.0 a non-empty configuration *is* the policy.\n- **Remote (non-loopback) visits**: dsh runs its settings layer in memory mode\n  there, so nothing can be read or persisted. The plugin shadows the shipped\n  welcome notice and repairs the settings mirror; opt out of the latter with\n  `rescueSettings: false` in the `lan-access` section of `settings.yaml`.\n- **Session lifetime**: `sessionDays` (default 30, range 1–3650) sets how long a\n  device stays authenticated after one token visit. Cookies are per access\n  address and survive a `dsh web` restart (the signing secret is persisted);\n  they die on expiry, on deleting `.credentials.yaml`, or when the browser\n  clears them. Needs a "
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

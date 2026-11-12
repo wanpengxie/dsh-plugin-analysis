@@ -1,0 +1,143 @@
+{
+  "repo": "JexLau/dsh-plugin-session-bus",
+  "commit": "0e3c0eec0a69415d9e40dbc5745b86e26d0b0542",
+  "extracted_at": "2026-11-11T11:20:08.371007+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 82067,
+    "lines_by_language": {
+      "JSON": 38,
+      "JavaScript": 1649,
+      "Markdown": 228,
+      "Other": 32,
+      "YAML": 6
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/implementation.md",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-plugin-session-bus",
+    "version": "0.5.0",
+    "private": true,
+    "description": "Direct session-to-session messaging for DeepSeek Harness: every visible session is auto-discovered, agents may initiate collaboration without a human mention, unread messages are coalesced into one wake, and one direct message wakes an idle peer. No rooms and no group chat.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: session-bus\n      name: '@local/dsh-plugin-session-bus'\n      config:\n        rateLimitPerMinute: 30\n        promptSection: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:83"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "index.js:1466"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-25T23:45:11Z",
+    "created_at": "2026-10-25T23:29:34Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "它解决什么问题",
+      "text": "你同时开多个 DSH 会话做不同的事，经常需要它们互相知道对方的情况：\n\n- 这个会话要问另一个会话：“你那边 PlayerController 的字段布局定了吗？”\n- 一个会话做完了，要通知另一个会话可以接着干。\n- 两个会话要并行分工，需要把一部分上下文或任务交接过去。\n- 你不想切窗口、复制粘贴，也不想让消息中转经过你。\n\nSession Bus 让任意两个会话直接对话：A 发一条消息给 B，B 空闲会被唤醒处理；B 可以直接回 A。没有房间、没有群、没有广播，一次只发给一个会话。"
+    },
+    {
+      "section": "怎么用",
+      "text": "不需要安装、不需要配置，直接在当前会话说：\n\n```text\n看看现在有哪些会话可以直呼。\n```\n\n它会列出所有可直呼的会话（名字、描述、状态、所在目录）。\n\n然后让 agent 代发：\n\n```text\n问一下 @Decompiler：PlayerController 的字段布局定了吗？\n```\n\n```text\n把这条转给 @Auth：认证部分我已经改完，可以接着做联调。\n```\n\n对方会话会被唤醒并开始一轮，用同样的 `session_bus_send` 回复你。你不用切窗口。\n\n也可以让它主动协作，不必你点名：\n\n```text\n这件事你判断需要谁配合就直接找对端会话，不用问我。\n```\n\n改自己的称呼 / 停止接收：\n\n```text\n把登记名改成 Auth，描述写“负责认证重构”。\n不要再接收直接消息了。\n```"
+    },
+    {
+      "section": "工具",
+      "text": "| 工具 | 作用 | 参数 |\n|---|---|---|\n| `session_bus_peers` | 列出可直呼会话（自动发现所有可见普通会话） | 无 |\n| `session_bus_send` | 给一个会话发直接消息；空闲会被唤醒 | `to`（名字/@名/session id，只能一个）、`message`、`mode`（`queue` 默认 / `steer`） |\n| `session_bus_history` | 读本会话收发的直接消息 | `limit` 1–100 |\n| `session_bus_register` | 显式改名 / 写职责描述 | `name`、`description` |\n| `session_bus_unregister` | 停止接收直接消息 | 无 |"
+    },
+    {
+      "section": "行为",
+      "text": "- 自动发现：`peers` / `send` 会列出 Host 里所有可见普通会话，对端不需要提前登记；名字默认取会话标题。\n- 点对点：一次只发给一个会话；要通知两个就发两次，没有广播。\n- 投递与唤醒：\n  - 目标 Agent 活着：直接投递；空闲时 `followup` 唤醒它开始一轮。\n  - 目标 Agent 已释放的普通会话：先 `sessionController.resolveAgent()` 恢复，再投递。\n  - 队友/子会话在两次 turn 之间不可达（属于 Agent Teams 生命周期）。\n- 未读合流：多条发往同一会话的消息在约 100ms 内合并成一次唤醒，一次最多带 20 条；超出会提示用 `history` 补读。\n- 不重复唤醒：目标正在运行、或已经有一条消息在等它启动时，新消息只注入到下一步，不再额外开一轮。\n- 回执真实：`session_bus_send` 返回的 `delivered` 是实际投递结果；失败会报错，不写“已送达”。\n- 记录：本会话的收发记录落盘 `$DSH_HOME/session-bus/messages.jsonl`；`history` 只看得到本会话参与的消息。\n- 防刷屏：每会话每分钟 30 条、同消息 3 秒去重、每小时最多主动发起 12 个新对话（回复不计）。"
+    },
+    {
+      "section": "主动协作",
+      "text": "system prompt 明确授权 agent 在判断需要时自己发起会话对话，不需要人类先 `@`：\n\n- 触发：需要只有另一个会话才有的上下文或产出、把独立工作交给更合适的会话、通知里程碑或阻塞。\n- 做法：先 `peers` 找最相关且在线的一个会话，一条消息写清：你是谁、需要什么、期望输出、是否阻塞你、何时需要回复。\n- 不刷屏：不群发、不进展刷屏、不空回执、不重复追问；对方没回就等或问人类。\n- 预算：每小时 12 个新对话，超出会被工具拒绝；回复对方最近消息不计入。\n- 花钱、删数据、对外发布仍然先问人类。"
+    },
+    {
+      "section": "开发文档",
+      "text": "实现细节、投递状态机、验证记录与限制见 [docs/implementation.md](docs/implementation.md)。"
+    },
+    {
+      "section": "给面板 / 其他插件读取（只读）",
+      "text": "其他 Host 插件可以读同一份 peers 快照，不需要安装或触发发送：\n\n```js\nconst snapshot = await ctx.get('sessionBus')?.snapshot()\n// { generatedAt, peers: [{ sessionId, name, description, status, kind, cwd, lastSeen, registeredAt, source }] }\n```"
+    },
+    {
+      "section": "给面板 / 其他插件读取（只读）",
+      "text": "- `ctx.get('sessionBus')` 是 Host 服务；`snapshot()` 只读，不发送、不唤醒。\n- Web Client 同源请求走 `POST /session-bus/snapshot`（Connection RPC 信封，`method: \"snapshot\"`），需要浏览器会话认证；返回 `{ok:true, value:{generatedAt, peers}}`。\n- `source` 为 `registered`（显式/首次登记）或 `discovered`（自动发现）；`kind` 为 `root`/`child`，面板一般只展示 root。"
+    },
+    {
+      "section": "配置",
+      "text": "| 字段 | 默认 | 说明 |\n|---|---|---|\n| `enabled` | `true` | 关掉插件 |\n| `language` | `zh` | 唤醒消息和 system prompt 语言，可选 `zh`、`en` |\n| `autoJoin` | `true` | 首次工具调用自动登记本会话；`false` 时必须先 `session_bus_register` |\n| `autoDiscover` | `true` | 自动发现 Host 里所有可见普通会话；`false` 时只显示主动登记过的会话 |\n| `promptSection` | `true` | 是否注入 system prompt 使用说明 |\n| `historyPath` | `$DSH_HOME/session-bus/messages.jsonl` | 直接消息记录路径 |\n| `maxMessageChars` | `8000` | 单条消息上限 |\n| `maxInitiatedPerHour` | `12` | 每小时主动发起的新对话上限；回复不计；`0` 不限 |\n| `coalesceMs` | `100` | 同一目标的消息合并窗口（毫秒） |\n| `unreadCap` | `20` | 一次唤醒最多携带的未读消息数 |\n| `wakePendingTtlMs` | `60000` | 已安排唤醒但目标迟迟未启动时，多久后允许再次 followup |\n| `rateLimitPerMinute` | `30` | 每会话每分钟发送上限 |\n| `dedupeWindowMs` | `3000` | 相同消息去重窗口 |"
+    },
+    {
+      "section": "边界",
+      "text": "- 一次一个 peer。这是刻意的，和“直接对话”一致。\n- 只对可见的普通会话；队友/子会话不会出现在 peers 里，也不能在轮次之间被唤醒。\n- 给冷会话发消息会恢复它并跑一轮，有 token 成本。\n- 归档会话没有投递前预检：消息进 inbox，但归档的 pre-step 会被拒绝，不产生回复。\n- 名字是内存态：Harness 重启后清空，会话下次调用工具时按标题重新发现；消息记录保留。\n- 没有 UI 面板；可视化面板还在另一会话的设计阶段。"
+    }
+  ],
+  "skipped": []
+}

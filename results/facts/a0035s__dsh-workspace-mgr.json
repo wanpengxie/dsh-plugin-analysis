@@ -1,0 +1,230 @@
+{
+  "repo": "a0035s/dsh-workspace-mgr",
+  "commit": "4cdbdc091e9d125afee7ea7ddc7338ee8db4d663",
+  "extracted_at": "2026-11-11T16:53:29.517128+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 90674,
+    "lines_by_language": {
+      "JSON": 61,
+      "JavaScript": 2197,
+      "Markdown": 137,
+      "Other": 48,
+      "YAML": 14
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/gate-smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-workspace-mgr",
+    "version": "0.1.0",
+    "description": "工作區守衛：攔截落在 C 盤的新產物路徑、為每個會話提供 scratch 落點、掃描並標記 C 盤可疑產物目錄（只標記，不自動刪）。",
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "workspace",
+      "disk",
+      "cleanup",
+      "guard",
+      "c-drive"
+    ],
+    "author": "ADEN",
+    "license": "MIT",
+    "engines": {
+      "node": ">=20"
+    },
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-slots"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-workspace-mgr bundle patch：向 profile 層棧插入本插件。\n# 同一行同時掛載 host 半（index.js：閘門 + scratch + 索引 + 路由）\n# 與 browser 半（client.js：側欄入口 + 面板）。\n- insert:\n    - id: workspace-mgr\n      name: 'dsh-workspace-mgr'\n      config:\n        gate: true\n        protectDrives: ['C']\n        # scratchRoot: 'E:\\dsh\\scratch'   # 預設 $DSH_HOME/scratch\n        autoCleanScratch: false           # 依你要求：預設不自動收\n        scratchTtlHours: 168\n        scanDepth: 1\n        # scanRoots: ['C:\\']              # 預設掃 C 盤根目錄一層\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:103"
+    },
+    {
+      "name": "TEMP",
+      "kind": "env",
+      "where": "index.js:167"
+    },
+    {
+      "name": "TMP",
+      "kind": "env",
+      "where": "index.js:167"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:171"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "index.js:188"
+    },
+    {
+      "name": "TEMP",
+      "kind": "env",
+      "where": "index.js:1189"
+    },
+    {
+      "name": "TMP",
+      "kind": "env",
+      "where": "index.js:1189"
+    },
+    {
+      "name": "TEMP",
+      "kind": "env",
+      "where": "index.js:1190"
+    },
+    {
+      "name": "TMP",
+      "kind": "env",
+      "where": "index.js:1191"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-11-06T08:13:36Z",
+    "created_at": "2026-11-06T08:08:23Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-workspace-mgr · 工作區守衛",
+      "text": "[English](#english) · 繁體中文\n\nAI 在 shell 裡隨手 `mkdir` 出來的野生工作目錄，路徑不可預測、任務結束也沒有人記得清。\n本插件負責「不再發生」，而不是「事後打掃」。\n\n> 也因此它不是掃描清理工具：DSH 自己的緩存全部加起來不到 3 MB，真正吃空間的是那種\n> **路徑不可預測**的工作目錄，事後只能推斷。所以主力放在**工具層硬攔**，掃描只當兜底與帳本。"
+    },
+    {
+      "section": "四層",
+      "text": "| 層 | 做法 | 強度 |\n|---|---|---|\n| ① 閘門 | `tools/pre-execute` 攔住落在受保護磁碟的**新**路徑（不存在的才攔，讀既有檔案照常放行），deny 的 reason 直接給出本會話 scratch 路徑 | 硬 |\n| ② 收納 | 每個會話一個 `$DSH_HOME/scratch/<sessionId>/`，含 `.dsh-owner.json` 自證身分 | — |\n| ③ 提示 | `systemPrompt` 區段明說產物只能落 scratch，並**注入當前會話的真實路徑**（不是模板） | 軟 |\n| ④ 帳本 | 掃描 C 盤根目錄一層 + `%TEMP%\\dsh-*` + scratch 子目錄，建索引；**只標記，永不自動刪** | 補漏 |\n| ⑤ 事後觀測 | 每次 shell/write 執行後比對掃描根新增了什麼，記下「哪個會話、哪次工具呼叫、什麼時間」——連腳本內部偷偷建的目錄也抓得到 | 證據 |\n| ⑥ 臨時目錄重定向 | `apply()` 裡把 `process.env.TEMP/TMP` 指到 `$DSH_HOME\\cache\\tmp`（`os.tmpdir()` 每次呼叫都重讀，故立即生效） | 硬 |"
+    },
+    {
+      "section": "回收站（可還原 + 審計）",
+      "text": "`recycle` 把目錄 `rename` 到**同一顆磁碟**的 `X:\\_dsh-trash\\<時間戳>-<名稱>\\`：\n\n```\n_dsh-trash\\<id>\\\n├─ manifest.json   ← 原始路徑、大小、檔案數、時間、會話\n└─ payload\\        ← 原目錄本體\n```\n\n- 同盤 rename = 即時，不複製（743 MB 目錄回收 < 1 秒）\n- **回收不等於釋放空間**：資料還在原磁碟 `X:\\_dsh-trash` 底下，要真的省空間必須 `purge`\n- `restore` 搬回原位；原路徑被佔用時拒絕，不會覆蓋\n- `purge` 才真的 `rm -rf`，需要 `confirm: true`，UI 上是二次點擊\n- 每次 recycle / restore / purge 都寫進 `$DSH_HOME/workspace-mgr/audit.jsonl`"
+    },
+    {
+      "section": "回收前的硬性校驗",
+      "text": "磁碟根、`Windows` / `Program Files` / `ProgramData` / `Users` / `$Recycle.Bin`、\nsymlink / junction、`$DSH_HOME` 內部、scratch 根、臨時目錄 —— 一律拒絕。\n且**只回收索引中 `state === 'confirmed'` 的項目**，避免介面誤觸。"
+    },
+    {
+      "section": "判定規則",
+      "text": "- `write` / `edit`：目標在受保護磁碟且不在白名單 → 拒絕\n- `ops_bash` / `bash` / `pwsh` / `terminal_open`：命令中的受保護磁碟絕對路徑**不存在** → 拒絕（意圖新建）；**已存在** → 放行\n- 白名單：會話 cwd、`$DSH_HOME`、scratch 根、`%TEMP%`、`C:\\Windows`、`C:\\Program Files*`、`allowRoots`"
+    },
+    {
+      "section": "刻意不做",
+      "text": "- 不改寫工具參數、不搬檔案（`pre-execute` 只能 allow/deny/cancel/ask）\n- 不自動刪除任何東西（`autoCleanScratch` 預設 `false`）\n- 不碰工作區註冊表、不刪會話"
+    },
+    {
+      "section": "配置（profile 的 `cordis.patch.yml`）",
+      "text": "```yaml\n- id: workspace-mgr\n  name: 'dsh-workspace-mgr'\n  config:\n    gate: true"
+    },
+    {
+      "section": "HTTP",
+      "text": "- `GET  /api/workspace-mgr/status`\n- `POST /api/workspace-mgr/scan`\n- `POST /api/workspace-mgr/mark` `{ path, state }`，state = `pending|confirmed|dismissed`\n- `POST /api/workspace-mgr/dry-run` `{ paths? }` — 只回預覽\n- `GET  /api/workspace-mgr/trash` — 列出所有磁碟回收站項目\n- `POST /api/workspace-mgr/recycle` `{ paths, confirm:true }` — 移入同盤回收站\n- `POST /api/workspace-mgr/restore` `{ id }` — 還原\n- `POST /api/workspace-mgr/purge` `{ id, confirm:true }` — 永久刪除"
+    },
+    {
+      "section": "已知取捨",
+      "text": "shell 命令裡只要出現「不存在於受保護磁碟的絕對路徑」，就會被擋 —— 即使那只是\n`node -e \"...'C:\\\\x'...\"` 這種字串。無法從命令字串區分「要寫」還是「只是提到」，\n所以選了寧可誤擋。繞法：把腳本寫成檔案再執行，命令行裡就不會出現該路徑。"
+    },
+    {
+      "section": "索引",
+      "text": "`$DSH_HOME/workspace-mgr/index.json`，含 `firstSeen / lastScan / bytes / signature / state`。\n狀態機：`pending → confirmed`（你按確認）`→ dismissed`（排除）。索引壞了不影響任何檔案。\n\n審計：`$DSH_HOME/workspace-mgr/audit.jsonl`，每次 recycle / restore / purge 一行。"
+    },
+    {
+      "section": "安裝",
+      "text": "```bash"
+    },
+    {
+      "section": "1) 放進 profile",
+      "text": "cp -r dsh-workspace-mgr <profile>/node_modules/   # 或用 junction / symlink"
+    },
+    {
+      "section": "3) 重啟或 touch 一次 profile 的 cordis.patch.yml",
+      "text": "```\n\n或用 DSH 的 `plugin_manager install_bundle`（指向本目錄）。\n\n> ⚠️ 若 profile 裡已經有 git 依賴且 pnpm 11 要求 `allowBuilds`，`install_bundle` 可能在\n> 重解析整個依賴圖時失敗。此時改用上面的手動方式最快，不動任何既有依賴。"
+    },
+    {
+      "section": "English",
+      "text": "**dsh-workspace-mgr — a Workspace Guard for DeepSeek Harness.**\n\nAn agent's shell habit is to `mkdir` its own artifact folder wherever it likes: the path is\nunpredictable, and nobody remembers to clean it up when the task ends. This plugin makes that stop\nhappening, instead of sweeping afterwards."
+    },
+    {
+      "section": "English",
+      "text": "- **Gate** (`tools/pre-execute`): denies *new* paths on a protected drive; existing paths stay readable.\n  The denial message hands the agent its exact per-session scratch directory.\n- **Scratch**: `$DSH_HOME/scratch/<sessionId>/` with a `.dsh-owner.json` that proves ownership.\n- **Prompt**: a `systemPrompt` section states the rule and injects the **real** per-session path.\n- **Ledger**: scans one level of each drive root plus `%TEMP%\\dsh-*`; marks, never auto-deletes.\n- **Observation**: after every shell/write call it diffs the scan roots, so even directories created\n  *inside a script* are attributed to a session, a tool call, and a timestamp.\n- **Trash**: `recycle` renames into `<drive>:\\_dsh-trash\\<ts>-<name>\\` (same volume, instant),\n  restorable, audited, with a two-step confirm before permanent purge."
+    },
+    {
+      "section": "English",
+      "text": "Panel: sidebar entry + folder browser, read-only until you confirm. `%TEMP%` is redirected to\n`$DSH_HOME\\cache\\tmp` at load time.\n\nKnown trade-off: a shell command that merely *mentions* a non-existent absolute path on a protected\ndrive is denied. There is no reliable way to tell \"mentions\" from \"writes\" in a command string,\nso it errs on the safe side; write the script to a file and run it instead."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

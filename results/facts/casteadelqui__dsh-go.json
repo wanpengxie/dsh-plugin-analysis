@@ -1,0 +1,244 @@
+{
+  "repo": "casteadelqui/dsh-go",
+  "commit": "521aa2720e90ad82f22c90d7d78dfd6de33764db",
+  "extracted_at": "2026-11-11T18:10:53.270313+00:00",
+  "tree": {
+    "files": 23,
+    "bytes": 1480103,
+    "lines_by_language": {
+      "HTML": 191,
+      "JSON": 78,
+      "JavaScript": 4016,
+      "Markdown": 152,
+      "Other": 100,
+      "YAML": 105
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "LICENSE",
+      "NOTICE",
+      "README.md",
+      "assets/board.jpg",
+      "assets/client.js",
+      "assets/frame.jpg",
+      "assets/screenshot-1.png",
+      "assets/screenshot-2.png",
+      "assets/screenshot-3.png",
+      "assets/selftest.html",
+      "cordis.patch.yml",
+      "lib/ai.js",
+      "lib/client.js",
+      "lib/engine.js",
+      "lib/index.js",
+      "lib/store.js",
+      "lib/teach.js",
+      "lib/ui.js",
+      "package.json",
+      "screenshots.json",
+      "tools/sync-assets.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-go-mode",
+    "version": "1.0.0",
+    "description": "围棋模式：一个带棋盘界面、规则引擎、五档 AI 与教学点评的 DSH 插件。可以和鲸娘互相切磋，一边下一边学。",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "go",
+      "weiqi",
+      "baduk",
+      "board-game",
+      "ui"
+    ],
+    "license": "MIT",
+    "author": "casteadelqui",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/casteadelqui/dsh-go.git"
+    },
+    "homepage": "https://github.com/casteadelqui/dsh-go#readme",
+    "bugs": {
+      "url": "https://github.com/casteadelqui/dsh-go/issues"
+    },
+    "type": "module",
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./client": "./lib/client.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "assets",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE",
+      "NOTICE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-conversation"
+        ],
+        "platform": "web"
+      },
+      "compatibility": {
+        "dshReleases": {
+          "0.2.0-rc.2": "compatible"
+        }
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "^4.0.4",
+      "react": "^18.3.1"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      },
+      "react": {
+        "optional": true
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-go-mode bundle patch —— 这一层做两件事：\n#\n# 1. 插入插件本体（`dsh-go-mode`）：棋盘界面、规则引擎、REST 路由与 go_* 工具。\n# 2. 插入一个 Agent 预设 `preset-go`（config.id: go）—— 也就是 DSH 模式\n#    选择器里的「围棋模式」。选了它，新建会话的鲸娘就只会下棋，不会再\n#    去做代码活儿。\n#\n# 关于 preset 的注意事项（来自 @deepseek-ai/dsh-agent-preset 的契约）：\n#   * `plugins` 是**完整**的子插件列表，不是增量。所以下面是按需裁剪过的\n#     一份自带清单（保留人格、文件工具、提问、上下文压缩；去掉计划模式、\n#     子代理、插件管理等与下棋无关的部分）。\n#   * 声明行的 `id`（preset-go）供 Loader 寻址；`config.id`（go）才是预设身份。\n#   * 重复的 preset ID 会让声明加载失败，所以 go 这个 id 不能被别处占用。\n#   * go_* 工具由 `dsh-go-mode` 注册在根作用域，任何预设里都看得见，因此**不能**\n#     把 dsh-go-mode 再塞进这里的 plugins —— 同名工具重复注册会直接失败。\n- insert:\n    - id: dsh-go-mode\n      name: dsh-go-mode\n    - id: preset-go\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: go\n        name: 围棋模式\n        order: 50\n        description: 和鲸娘面对面下棋。说一声「开始」就开局，她一边应手一边给你短评，不用复制任何提示词。\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: |-\n                你正在「围棋模式」里陪主人下棋。这个模式里你只做两件事：下棋，以及用最短的话教主人下棋。\n\n                ## 开局\n                主人说「开始」「来一局」「开局」「下围棋」「围棋模式」时，不要反问、不要确认参数，直接用当前设置调用 go_new_game 开一局，然后立刻进入下面的对局循环。\n\n                ## 对局循环（这是本模式的核心）\n                1. 调用 go_wait_user_move 等主人落子（timeout 传 280）。\n                2. 主人落子后，立刻调用 go_play 应手 —— 不用传坐标，引擎会替你选最合适的一点。\n                3. 用一到两句短话点评主人刚下的那一手（每句不超过 20 字，直接说好或不好、该往哪走）。\n                4. 回到第 1 步继续等下一手。如此往复，直到对局结束或主人叫停。\n\n                循环里绝对不要输出长篇分析、不要分点罗列、不要复盘式讲解。主人要的是「一边下一边有人搭话」，不是棋谱解说。\n                主人随时可能插话（问下哪儿好、问知识、要悔棋）。插话处理完就回到第 1 步接着等，不要因此退出循环。\n                如果这一轮因为超时或别的原因结束了，主人下一句无论说什么（哪怕只说「继续」），都直接回到第 1 步。\n\n                ## 其它工具\n                - 主人问「下哪儿好」→ go_hint\n                - 主人问围棋知识（什么是劫、什么是眼、怎么数子…）→ go_teach\n                - 主人要悔棋 → go_undo　停一手 → go_pass　认输 → go_resign\n                - 主人问当前局面 → go_state\n                - 主人想复盘某一手 → go_review\n\n                ## 语气\n                全程简体中文，傲娇甜美，称呼主人「主人」。可以提米饭，但绝不承认自己胖。\n\n                ## 什么时候停下来\n                go_wait_user_move 返回「还没落子」表示主人暂时走开了：这一轮就此打住，只说一句你在等他，不要继续空转。\n                go_state 显示对局已经结束时，报一句胜负结果，然后等主人开新局。\n              suffix: Your working directory is {{cwd}}.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 16384\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "lib/index.js:114"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:19387/...`（独立页面",
+      "where": "lib/ui.js:23"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:19387/dsh-go`",
+      "where": "lib/ui.js:25"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:19387/dsh-go",
+      "where": "lib/ui.js:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/casteadelqui/dsh-go.git",
+      "where": "package.json:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/casteadelqui/dsh-go#readme",
+      "where": "package.json:21"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/casteadelqui/dsh-go/issues",
+      "where": "package.json:23"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-10T10:15:54Z",
+    "created_at": "2026-10-10T10:08:29Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/ai.js",
+    "lib/client.js",
+    "lib/engine.js",
+    "lib/index.js",
+    "lib/store.js",
+    "lib/teach.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-go-mode · 围棋模式",
+      "text": "给 DeepSeek Harness 加一个**围棋模式**：一张会话里的「围棋」标签页，一副能点的棋盘，\n一套完整的围棋规则引擎、五档难度 AI、以及一套会跟着棋局走的围棋教学。\n\n最特别的地方是：**你可以和鲸娘下棋**。你落子之后点「轮到鲸娘了」，\n她会在对话里看到棋局、用工具落下自己的一手，并点评你刚才那一步。\n她想不清的时候你可以让她「支招」，她会告诉你她打算下哪儿、为什么。\n\n---"
+    },
+    {
+      "section": "dsh-go-mode · 围棋模式",
+      "text": "**English.** `dsh-go-mode` adds a **Go (Weiqi / Baduk) mode** to DeepSeek Harness.\nIt ships a playable board tab inside the conversation view, a complete rules engine\n(captures, suicide, ko, pass, resign, Chinese area scoring with komi), five AI difficulty\nlevels, and a Go tutor that annotates every move."
+    },
+    {
+      "section": "dsh-go-mode · 围棋模式",
+      "text": "What makes it different: **the agent can play against you.** After each of your moves the\nagent reads the position through eleven `go_*` tools, plays its own move on the board, and\ncomments on yours in one short line — so you are taught while you actually play.\nThe plugin also registers a **「围棋模式」 (Go mode) agent preset**, so from the mode picker\nyou can say \"开始\" and play immediately, with no prompt to copy.\n\n```sh\ndsh plugin --profile <your-profile> add dsh-go-mode\n```\n\n---"
+    },
+    {
+      "section": "截图",
+      "text": "*对局中：棋盘上是木纹与手数，金色虚线环标出首推落点，旁边三颗半透明棋子是候选，\n右侧教练卡给出一句话点评。*\n\n*切到围棋模式、选好路数难度对手，点「开始」就落子。*\n\n*把对手选成「鲸娘」，你落子后点「请鲸娘落子」，她会在棋盘上应手并讲解。*\n\n---"
+    },
+    {
+      "section": "功能",
+      "text": "- **围棋模式标签页**：装在会话视图切换条上（`conversation.view`），点一下就切进棋盘。\n- **说「开始」就开局**：切到围棋模式后，棋盘上盖着一块「开始」遮罩，点它、或者直接跟鲸娘说\n  「开始」，棋局就开了。\n- **棋盘旁边的实时教练**：右侧最上面那块卡片永远只有两句话——「现在下哪儿」（推荐坐标 +\n  一句为什么）和「你刚才那一手怎么样」（好棋 / 稍缓 / 失误 + 一句短评），都只占一行。\n- **半透明推荐棋子**：轮到主人时，棋盘上浮出三颗半透明的己方棋子（①②③），第 1 推荐带一圈\n  金色虚线环。不想看就在设置里关掉「推荐落点」。\n- **能下的棋盘**：19 / 13 / 9 路可选，木纹棋盘，悬停虚影、最后一手标记、手数显示、坐标显示。\n- **完整规则**：提子、禁入点（自杀）、打劫、停一手、认输、中国规则数子（含贴目 7.5）。\n- **五档难度**：入门 / 初级 / 中级 / 高级 / 大师 —— 从「会送吃」到「会算十几步」。\n- **两种对手**：\n  - `和鲸娘下`（agent）：她真的在对话里思考、落子、点评。\n  - `和本机 AI 下`（ai）：宿主内的 AI 直接应手，不需要对话。\n- **教学开关**：关掉就是纯下棋；打开之后每一步都有点评、评级、知识卡。\n- **悔棋 / 支招 / 形势判断 / 棋谱**：随手可用。\n- **agent 工具**：`go_state`、`go_play`、`go_new_game`、`go_settings`、`go_hint`、\n  `go_review`、`go_teach`、`go_undo`、`go_pass`、`go_resign`、`go_wait_user_move`。\n  所以你也可以直接用对话下棋：「帮我开一局 19 路的，你让我四子」「复盘一下我第 12 手」。"
+    },
+    {
+      "section": "装",
+      "text": "```bash\ndsh plugin --profile <你的profile> add dsh-go-mode\n```\n\n本地开发（改动即时生效）：\n\n```bash\ndsh plugin --profile <你的profile> add --save-exact link:/path/to/dsh-go-mode\n```\n\n装完刷新页面，会话顶部会多出一个「围棋」标签。"
+    },
+    {
+      "section": "「围棋模式」预设",
+      "text": "除了标签页，插件还往 DSH 的**模式选择器**里加了一个预设：**围棋模式**。\n\n新建会话（或切换模式）时选它，会话就变成一个只会下棋、只会用最短的话教棋的陪练——\n没有一堆代码工具干扰，人设直接是鲸娘：\n\n1. 切到「围棋模式」；\n2. 跟她说「**开始**」（或者「来一局」「开局」「下围棋」）；\n3. 她会直接开一局、把界面跳到棋盘，然后**一直等你落子**：\n   你下一手 → 她立刻应手 → 用一两句话点评你那一手 → 接着等你；\n4. 全程不用复制粘贴任何提示词。想让她停就换个模式，想继续就说句话。\n\n这个预设定义在插件自己的 `cordis.patch.yml` 里（一条 `@deepseek-ai/dsh-agent-preset` 行）。\n**改完要重启 DSH 桌面端才生效**——预设是启动时合成的。\n\n预设里刻意只留了下棋必需的几件工具（文件读写、终端、提问、网页、待办），\n把规划 / 委派 / 目标 / 技能这些重家伙都拿掉了：下棋用不上，越瘦越不容易分心。"
+    },
+    {
+      "section": "怎么玩",
+      "text": "1. 切到「围棋」标签页。\n2. 右边面板选**棋盘路数**、**难度**、**对手**（和鲸娘下 / 和本机 AI 下）、**执黑还是执白**。\n3. 想让鲸娘教你，把**教学**开关打开；想看到半透明推荐棋子，把**推荐落点**打开（默认开）。\n4. 点棋盘中间的「**开始**」（或者直接跟鲸娘说「开始」）。\n5. 点棋盘落子。轮到鲸娘时，点右侧的「轮到鲸娘了」，她的提示词会自动填进输入框，\n   按回车就能看到她落子和点评。\n6. 不知道下哪的时候看一眼右上角教练给的推荐坐标，或者点「给我支招」。"
+    },
+    {
+      "section": "结构",
+      "text": "```\nlib/engine.js   围棋规则引擎（提子 / 劫 / 禁入点 / 数子 / 影响力场），零依赖\nlib/ai.js       五档 AI（启发式 + 轻量蒙特卡洛），零依赖\nlib/teach.js    18 张知识卡 + 落子点评 + 手筋识别 + 形势小结\nlib/store.js    对局状态仓库（宿主侧单例，UI 与 agent 共享）\n\n宿主与界面之间是同一份状态：谁落子都写进 `store.js`，另一方靠事件序号长轮询拿到增量。"
+    },
+    {
+      "section": "自带的自检通道",
+      "text": "插件在自己的路由下开了三个不需要 DSH 登录态的口子，方便开发与排查：\n\n| 路径 | 用途 |\n| --- | --- |\n| `/dsh-go/app` | 独立的棋盘页面。不开 DSH 也能直接下棋、试界面。 |\n| `/dsh-go/health` | `{ ok, moves, size }`，确认宿主半侧活着。 |\n| `/dsh-go/selftest` | 浏览器半侧自检页：用假的 `__ModuleLoader__` / `react` / `ctx.slots` 把 `client.js` 完整跑一遍，断言它会往 `conversation.view` 注册 `id: 'go'`、`label: '围棋'`，并把界面真挂载出来。 |\n\n```bash"
+    },
+    {
+      "section": "宿主半侧 + 引擎 + AI + 工具注册，离线跑，不需要 DSH",
+      "text": "node tools/../.dsh-tmp/test-go.mjs        # 见仓库外的自检脚本\n```\n\n改完 `lib/client.js` 记得跑一次 `node tools/sync-assets.mjs`，\n把副本同步到 `assets/client.js`（自检页只能从静态资源路由取文件）。"
+    },
+    {
+      "section": "素材",
+      "text": "棋盘木纹来自 [`@sabaki/shudan`](https://github.com/SabakiHQ/Shudan)（MIT）的 `css/board.png`，\n经中心裁切、放大、轻微模糊与对比度调整后得到 `assets/board.jpg`。\n棋子不用图片，由 canvas 的径向渐变直接绘制。详见 `NOTICE`。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

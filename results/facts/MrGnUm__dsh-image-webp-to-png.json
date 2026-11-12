@@ -1,0 +1,165 @@
+{
+  "repo": "MrGnUm/dsh-image-webp-to-png",
+  "commit": "e2991964767b388bac5464c8bdd1c97fdefc87a0",
+  "extracted_at": "2026-11-11T13:00:29.046046+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 16080,
+    "lines_by_language": {
+      "JSON": 36,
+      "JavaScript": 144,
+      "Markdown": 142,
+      "Other": 8,
+      "Shell": 105,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "install.sh",
+      "lib/index.mjs",
+      "package.json",
+      "uninstall.sh"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-image-webp-to-png",
+    "version": "0.1.0",
+    "description": "Re-encode WebP attachment request-images to PNG for LLM backends (e.g. llama.cpp) that cannot decode WebP. Fixes the '400: Failed to load image or audio file' error for alpha-channel images.",
+    "type": "module",
+    "main": "lib/index.mjs",
+    "exports": {
+      ".": {
+        "default": "./lib/index.mjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "bundle",
+      "image",
+      "webp",
+      "png",
+      "llama.cpp"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-image-webp-to-png bundle patch.\n#\n# Registers the WebP->PNG attachment wrapper. No configuration is required; the\n# bundle is fail-open. To disable it, add `enabled: false` to this entry's\n# `config` in the profile's cordis.patch.yml (by id `image-webp-to-png`), or\n# remove the bundle from `dsh.profile.bundles`.\n- insert:\n    - id: image-webp-to-png\n      name: 'dsh-image-webp-to-png'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.mjs",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-06T12:45:08Z",
+    "created_at": "2026-10-06T12:40:59Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.mjs",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-image-webp-to-png",
+      "text": "A DeepSeek Harness (DSH) **bundle** that fixes the `400: Failed to load image or\naudio file` error you get when sending **alpha-channel images** to a backend that\ncannot decode WebP — most notably **llama.cpp** (its vision decoder is `stb_image`,\nwhich has no WebP support)."
+    },
+    {
+      "section": "dsh-image-webp-to-png",
+      "text": "It is an installable plugin: it lives in your profile, is **re-applied on every DSH\nstart**, and **survives DSH updates** without touching the root-owned\n`/usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-attachment-local`\nfile.\n\n---"
+    },
+    {
+      "section": "Why images fail",
+      "text": "DSH normalizes every attached image in `dsh-attachment-local`. The codec choice is\nhard-coded (`encodingLadder`):\n\n```js\nconst mediaType = hasAlpha ? \"image/webp\" : \"image/jpeg\";\n```\n\nSo **any image with an alpha channel** is re-encoded to **WebP**. (A clean 8-bit\nsRGB image with no metadata that fits the size/limit budget passes through as-is;\nopaque images become JPEG.)"
+    },
+    {
+      "section": "Why images fail",
+      "text": "- Opaque → **JPEG** → llama.cpp decodes it fine.\n- Alpha → **WebP** → llama.cpp's `stb_image` cannot decode WebP → the request is\n  rejected with `400 {\"code\":400,\"message\":\"Failed to load image or audio file\"}`\n  and the server logs `E mtmd_helper_bitmap_init_from_buf: failed to decode webp buffer`.\n\nThere is **no configuration knob** in `dsh-attachment-local` to change this codec,\nand the server side (llama.cpp) is not going to add a WebP decoder, so the fix\nbelongs on the client."
+    },
+    {
+      "section": "How the bundle fixes it",
+      "text": "The adapter (e.g. `dsh-llm-pi-ai`, used by your `fedotov` provider) builds the\noutgoing request by calling the attachment seam:\n\n```js\nattachments.readImageRequest(ref, target, signal)  // -> { data, mediaType, width, height, ... }\n```\n\nThis bundle wraps that **one** seam method at DSH start (idempotently, guarded by a\n`Symbol`). Whenever the underlying store returns a **WebP** request-image, the\nwrapper transparently re-encodes those bytes to **PNG**:"
+    },
+    {
+      "section": "How the bundle fixes it",
+      "text": "- PNG **preserves the alpha channel** (JPEG would flatten it).\n- PNG is decodable by **every** backend (llama.cpp, OpenAI-compatible, …).\n- Dimensions are unchanged (pure format conversion, no resize).\n- The result is **cached** by `variantId`, so a given image is re-encoded once.\n\nEverything else passes through untouched (JPEG stays JPEG, PNG stays PNG)."
+    },
+    {
+      "section": "How the bundle fixes it",
+      "text": "The wrapper is **fail-open**: if `sharp` is missing, a decode fails, or the seam is\nnot ready at load time, the original WebP result is returned unchanged and DSH\nkeeps working exactly as before. This bundle can never block or fail a request."
+    },
+    {
+      "section": "Files",
+      "text": "```\ndsh-image-webp-to-png/\n├── package.json        # bundle manifest (dsh.bundle.patch)\n├── cordis.patch.yml    # self-declares the entry (id: image-webp-to-png)\n├── lib/index.mjs       # the bundle: wrap(attachments) + webpToPng()"
+    },
+    {
+      "section": "Install",
+      "text": "Requirements: `pnpm` on PATH, and a DSH profile (default `~/.dsh/profiles/web`).\n\n```bash\ncd dsh-image-webp-to-png\n./install.sh                      # -> ~/.dsh/profiles/web"
+    },
+    {
+      "section": "or a different profile:",
+      "text": "DSH_PROFILE_DIR=/path/to/profile ./install.sh\n```\n\n`install.sh` (idempotent, backs up `package.json` first):\n\n1. Adds `dsh-image-webp-to-png` as a `link:` dependency pointing at this directory.\n2. Adds it to the profile's `dsh.profile.bundles` array.\n3. Runs `pnpm install` in the profile to create the symlink + update the lockfile.\n\nThe fix takes effect on the **next DSH web session** (immediately if the profile\nhas `patchReload: \"live\"`)."
+    },
+    {
+      "section": "Install from GitHub",
+      "text": "Repo: [`MrGnUm/dsh-image-webp-to-png`](https://github.com/MrGnUm/dsh-image-webp-to-png)\n(private). From any machine with `pnpm`, `git`, and access to the repo — HTTPS\nclone works with the `gh` credential helper (no token prompt):\n\n```bash\ngit clone https://github.com/MrGnUm/dsh-image-webp-to-png.git\ncd dsh-image-webp-to-png\n./install.sh            # -> ~/.dsh/profiles/web\n```"
+    },
+    {
+      "section": "Install from GitHub",
+      "text": "Then restart the DSH web session (or it hot-reloads if the profile has\n`patchReload: \"live\"`). Remove later with `./uninstall.sh`."
+    },
+    {
+      "section": "Verify",
+      "text": "Send an **alpha-channel image** (a PNG with transparency) to your `fedotov` model\nand ask it to describe it. Before the bundle: `400 … Failed to load image or\naudio file`. After: the model describes the image.\n\nYou can also watch the DSH logs for the one-time line:\n`dsh-image-webp-to-png: wrapped attachments.readImageRequest (WebP -> PNG)`."
+    },
+    {
+      "section": "Revert",
+      "text": "```bash\n./uninstall.sh                                  # clean removal"
+    },
+    {
+      "section": "or, using the backup install.sh made:",
+      "text": "./uninstall.sh ~/.dsh/profiles/web/package.json.bak-<timestamp>\n```"
+    },
+    {
+      "section": "For the admin (server side, optional)",
+      "text": "The client-side fix above is sufficient. If you would rather fix it at the source,\nthe root cause is the hard-coded `hasAlpha ? \"image/webp\" : \"image/jpeg\"` in\n`dsh-attachment-local/lib/index.js` (`encodingLadder`, and the matching\n`pipeline.webp(...)` branch in `encode()`). Upstream has no option to emit PNG for\nalpha images; a small patch adding a PNG branch (and bumping the\n`request-image-v6` transform version so stale WebP cache entries are regenerated)\nwould remove the need for this bundle."
+    },
+    {
+      "section": "Compatibility notes",
+      "text": "- Works with any DSH profile that mounts the local attachment store\n  (`LocalAttachmentStore`). If a future DSH changes the seam method name\n  (`readImageRequest`) or its return shape, the wrapper degrades to a no-op\n  (fail-open) and the original behaviour resumes.\n- `sharp` is resolved from the DSH installation\n  (`/usr/lib/node_modules/@deepseek-ai/dsh/node_modules/sharp`); this bundle has\n  no runtime dependencies of its own."
+    }
+  ],
+  "skipped": []
+}

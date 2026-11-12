@@ -1,0 +1,179 @@
+{
+  "repo": "bigfatdsh/dsh-cookie-guard",
+  "commit": "80513468c584d5b3d4019ce4176f9dc7484baaf1",
+  "extracted_at": "2026-11-11T17:52:33.288076+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 45447,
+    "lines_by_language": {
+      "JSON": 52,
+      "JavaScript": 1013,
+      "Markdown": 154,
+      "Other": 46,
+      "YAML": 10
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/cookie-guard.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-cookie-guard",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "清理 DSH 登录 Cookie 的累积增长，修复请求头超过 16KB 后 Web UI 永久打不开的问题。",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cookie",
+      "auth",
+      "web"
+    ],
+    "license": "MIT",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/bigfatdsh/dsh-cookie-guard.git"
+    },
+    "homepage": "https://github.com/bigfatdsh/dsh-cookie-guard"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: cookie-guard\n      name: dsh-cookie-guard\n      config:\n        # 过大的请求头仍要能进入处理器，否则浏览器来不及收到清理指令。\n        maxHeaderBytes: 262144\n        # 除当前实例外，最多保留多少条其它实例的登录 Cookie（支持多开）。\n        keepOtherCookies: 3\n        # 认证 Cookie 的预算；超过预算时从最旧的开始清理。\n        cookieBudgetBytes: 4096\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/bigfatdsh/dsh-cookie-guard.git",
+      "where": "package.json:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/bigfatdsh/dsh-cookie-guard",
+      "where": "package.json:39"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "https://127.0.0.1",
+      "where": "test/cookie-guard.test.js:120"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-31T02:45:06Z",
+    "created_at": "2026-10-31T02:44:32Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-cookie-guard",
+      "text": "仓库：<https://github.com/bigfatdsh/dsh-cookie-guard> · MIT\n\n修复 DSH 登录 Cookie 只增不清、最终把请求头撑爆导致 Web UI 永久打不开的宿主机插件。"
+    },
+    {
+      "section": "问题",
+      "text": "DSH 的浏览器认证 Cookie 名是：\n\n```text\ndsh-auth-<sha256(host:port) 的 base64url>\n```\n\n桌面端每次启动通常换一个新端口，于是每次启动都会在浏览器里多写一条名字不同的\n`dsh-auth-*` Cookie；旧 Cookie 有 30 天有效期，DSH 从不删除它们。浏览器会把\n同一 host 下的所有 Cookie 都塞进 `Cookie` 请求头，累计到 Node 默认的 16 KiB\n`maxHeaderSize` 后，服务器在进入任何业务代码之前就直接返回 `431 Request Header\nFields Too Large`。此时清理逻辑也没有机会执行，所以表现为“永久打不开”。\n\n本机实测（修复前）：\n\n```text\nGET /  Cookie: big=<20 KB>  ->  431 Request Header Fields Too Large\n```"
+    },
+    {
+      "section": "修复效果",
+      "text": "插件安装到当前 desktop profile 后，在同一台正在运行的 GUI 上实测：\n\n| 场景 | 修复前 | 修复后 |\n| --- | --- | --- |\n| 20 KB 无效 Cookie | 431 | 401（正常进入认证） |\n| 20,746 B Cookie，90 条旧登录 Cookie | 431 | 200，返回 87 条删除指令 |\n| 34,426 B Cookie，150 条旧登录 Cookie | 431 | 200，返回 147 条删除指令 |\n| 当前实例的有效 Cookie | 200 | 200，且不会被删除 |\n\n34 KB 那次响应里，当前 Cookie 没有被误删，另外 147 条旧 Cookie 均带\n`Max-Age=0` 的删除头。请求头从 34 KB 降到约 1 KB。"
+    },
+    {
+      "section": "从 GitHub 安装",
+      "text": "```bash\ndsh plugin add https://github.com/bigfatdsh/dsh-cookie-guard\n```"
+    },
+    {
+      "section": "已安装",
+      "text": "当前 `desktop` profile 已通过插件管理器安装：\n\n- 依赖：`dsh-cookie-guard: link:.../adapted/dsh-cookie-guard`\n- bundle：`dsh.profile.bundles` 中的 `dsh-cookie-guard`\n- 插件 id：`cookie-guard`\n\n插件是 `link:` 软链，修改本目录源码后重启 DSH 即生效。\n\n其他 profile（例如 `web`）需要手动安装：\n\n```bash\ncd ~/.dsh/profiles/web\npnpm add link:/Users/yangletian/Documents/deepseek-harness/default-workspace/adapted/dsh-cookie-guard\n```\n\n然后把 `\"dsh-cookie-guard\"` 加进该 profile `package.json` 的\n`dsh.profile.bundles` 数组，重启 DSH。"
+    },
+    {
+      "section": "配置",
+      "text": "在 bundle 的 `cordis.patch.yml`（或 profile patch）里覆盖：\n\n```yaml\n- insert:\n    - id: cookie-guard\n      name: dsh-cookie-guard\n      config:\n\n| 键 | 默认 | 说明 |\n| --- | --- | --- |\n| `maxHeaderBytes` | `262144` | 监听器的 `maxHeaderSize`。必须大于 16 KiB，旧请求才进得来。范围 16 KiB–1 MiB。 |\n| `keepOtherCookies` | `3` | 除当前实例外，最多保留几条其它端口/实例的有效 Cookie。用于 DSH 多开。范围 0–8。 |\n| `cookieBudgetBytes` | `4096` | 认证 Cookie 的预算；超过时从最旧的开始删。范围 256 B–16 KiB。 |"
+    },
+    {
+      "section": "配置",
+      "text": "只跑一个实例、想更激进，可设 `keepOtherCookies: 0`，这样除当前 Cookie 外全部删除。\n代价是同时开着的另一个 DSH 窗口下次请求会掉登录，需要重新打开它的 token URL。"
+    },
+    {
+      "section": "原理",
+      "text": "插件在 `webServer` 的请求监听器最前面插入一个处理器（`prependListener`）：\n\n1. 把 `server.maxHeaderSize` 提高到 256 KiB。已经 34 KB 的请求也能进入 JS 处理器，\n   而不是被 Node 在 16 KiB 处直接 431。\n2. 用与 DSH 完全相同的算法算出当前 authority 的 Cookie 名，把其它\n   `dsh-auth-*` 从 `req.headers.cookie` 里剥掉；DSH 的认证代码只会看到当前 Cookie。\n3. 对判定为过期、签名无效、或超出“当前 + 3 条最近”预算的 Cookie，在响应里追加\n   `Set-Cookie: <name>=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict`。\n4. 响应头的注入兼容 `writeHead`、`setHeader`、隐式 `end()` 三种写法，不会覆盖\n   DSH 自己刚签发的 Cookie。"
+    },
+    {
+      "section": "原理",
+      "text": "保留最近 3 条其它 Cookie 是为了多开：A 实例清理时不会立刻把 B 实例的登录态删掉。\n最旧的会在下一次启动时被裁掉，所以总量稳定在“当前 + 3”，不会再无限增长。"
+    },
+    {
+      "section": "验证",
+      "text": "单元测试（22 项，覆盖 34 KB 请求、100 条旧 Cookie、过期/篡改/预算/多实例/303 签发/401）：\n\n```bash\ncd adapted/dsh-cookie-guard\nnode --test\n```\n\n对运行中的 GUI 做一次无副作用的头部探测：\n\n```bash\npython3 - <<'PY'\nimport urllib.request, urllib.error\nreq = urllib.request.Request(\n    \"http://127.0.0.1:51302/\",\n\n修复后应输出 `401 Unauthorized`；修复前是 `431 Request Header Fields Too Large`。"
+    },
+    {
+      "section": "边界",
+      "text": "- 删除依赖浏览器执行标准 `Set-Cookie` 过期语义。所有主流浏览器都支持；即使某个\n  浏览器不执行删除，256 KiB 的头部上限也会让 UI 继续可用，旧 Cookie 最迟 30 天过期。\n- 如果历史 Cookie 已经超过 256 KiB，浏览器自身通常也发不出这么大的请求头。先把\n  `maxHeaderBytes` 调到 `1048576` 再重启；仍不行时在浏览器 DevTools 里清一次\n  `127.0.0.1` 的站点 Cookie 即可恢复，之后插件会接管。\n- 插件不修改 DSH 源码，不依赖第三方包；DSH 升级后只要\n  `dsh-client-connection` 的 Cookie 命名算法不变就继续有效。如果上游改成稳定\n  Cookie 名，本插件会自动变成“只做头部上限与旧 Cookie 清理”的保险层，不会冲突。"
+    },
+    {
+      "section": "回滚",
+      "text": "```bash"
+    },
+    {
+      "section": "用插件管理器移除 bundle，或手动：",
+      "text": "cd ~/.dsh/profiles/desktop"
+    },
+    {
+      "section": "从 package.json 删除 dsh-cookie-guard 依赖和 bundles 条目",
+      "text": "pnpm install"
+    },
+    {
+      "section": "重启 DSH",
+      "text": "```\n\n移除后 16 KiB 的 Node 默认上限会恢复，旧问题也会回来。"
+    }
+  ],
+  "skipped": []
+}

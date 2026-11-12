@@ -1,0 +1,231 @@
+{
+  "repo": "mpetruc/dsh-vcc",
+  "commit": "7c3c3b98096eed7fd492c467d22802f9dbc14621",
+  "extracted_at": "2026-11-12T01:37:30.289779+00:00",
+  "tree": {
+    "files": 35,
+    "bytes": 174100,
+    "lines_by_language": {
+      "JSON": 46,
+      "JavaScript": 3285,
+      "Markdown": 102,
+      "Other": 66,
+      "YAML": 623
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "NOTICE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/commands.js",
+      "lib/drill-down-dsh.js",
+      "lib/dsh-adapter.js",
+      "lib/engine-util.js",
+      "lib/recall-tool.js",
+      "lib/session-source.js",
+      "package.json",
+      "src/core/brief.js",
+      "src/core/build-sections.js",
+      "src/core/content.js",
+      "src/core/filter-noise.js",
+      "src/core/format-recall.js",
+      "src/core/format.js",
+      "src/core/normalize.js",
+      "src/core/rank.js",
+      "src/core/recall-scope.js",
+      "src/core/render-entries.js",
+      "src/core/sanitize.js",
+      "src/core/search-entries.js",
+      "src/core/skill-collapse.js",
+      "src/core/summarize.js",
+      "src/core/tool-args.js",
+      "src/extract/commits.js",
+      "src/extract/files.js",
+      "src/extract/goals.js",
+      "src/extract/preferences.js",
+      "src/sections.js",
+      "src/types.js",
+      "tools/fix-imports.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-vcc",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "main": "./index.js",
+    "description": "Deterministic, no-LLM conversation compaction (VCC) with lossless (#N) recall for DeepSeek Harness; adapted from pi-vcc (MIT).",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json",
+      "./lib/*": "./lib/*",
+      "./src/*": "./src/*"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "NOTICE"
+    ],
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "compaction",
+      "recall",
+      "vcc",
+      "deterministic",
+      "no-llm"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-compaction": "*",
+      "@deepseek-ai/dsh-compaction-basic": "*",
+      "@deepseek-ai/dsh-tools": "*",
+      "@deepseek-ai/dsh-commands": "*",
+      "@deepseek-ai/schemastery": "*",
+      "@deepseek-ai/cordis": "*"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-vcc overrides of the shipped agent presets (standard, ptc, minimal,\n# cordis). The loader patch dialect keys rows by id in a flat map and the\n# preset trees repeat the same inner ids (compaction, compaction-basic, ...),\n# so only the last occurrence could be reached — hence one wholesale override\n# per preset row. Each entry restates the shipped declaration with the engine\n# swap (compaction-basic disabled, dsh-vcc enabled) inside the preset's\n# `compaction` group, so /vcc, /vcc-recall and the vcc_recall tool are\n# available in EVERY mode; the GUI labels the cordis preset \"Creator mode\".\n\n- id: preset-standard\n  name: '@deepseek-ai/dsh-agent-preset'\n  config:\n    id: standard\n    order: 1\n    plugins:\n      # Same persona as `standard`: tool descriptions and the skill catalog carry\n      # the operating detail, and the skills own the preset-authoring rules.\n      - id: persona\n        name: '@deepseek-ai/dsh-persona'\n        config:\n          suffix: Your working directory is {{cwd}}.\n          prefix: >-\n            You are a coding agent powered by the {{model}} model.\n      - id: agent-instructions\n        name: '@deepseek-ai/dsh-agent-instructions'\n        config:\n          maxBytes: 65536\n      - id: tool-bash\n        name: '@deepseek-ai/dsh-tool-bash'\n        disabled: !!js process.platform === 'win32'\n      - id: tool-pwsh\n        name: '@deepseek-ai/dsh-tool-pwsh'\n        disabled: !!js process.platform !== 'win32'\n      - id: tool-fs\n        name: '@deepseek-ai/dsh-tool-fs'\n      - id: tool-fs-search\n        name: '@deepseek-ai/dsh-tool-fs-search'\n        config:\n          sampleOverCapGlobResults: false\n      - id: tool-jobs\n        name: '@deepseek-ai/dsh-tool-jobs'\n      - id: command-goal\n        name: '@deepseek-ai/dsh-command-goal'\n      - id: tool-goal\n        name: '@deepseek-ai/dsh-tool-goal'\n      - id: planning\n        name: cordis:group\n        group: true\n        isolate:\n          planMode: true\n        config:\n          - id: plan-mode\n            name: '@deepseek-ai/dsh-plan-mode'\n            config:\n              section: |\n                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n      - id: compaction\n        name: cordis:group\n        group: true\n        isolate:\n          compaction: true\n          toolResultPruner: true\n        config:\n          # dsh-vcc replaces the stock LLM summarizer in this preset: a\n          # deterministic, no-LLM compaction engine that derives messages\n          # from session events and emits a VCC-style summary whose (#N)\n          # indices point back at session event sequences, enabling\n          # lossless recall through the `vcc_recall` tool.\n          - id: compaction-basic\n            name: '@deepseek-ai/dsh-compaction-basic'\n            disabled: true\n          - id: dsh-vcc\n            name: '@local/dsh-vcc'\n            config:\n              auto: true\n              thresholdRatio: 0.7\n              retainTokens: 16000\n              maxTokens: 12000\n              summarizationProvider: dsh-vcc\n              summarizationModel: deterministic\n              vcc: {}\n          - id: command-compact\n            name: '@deepseek-ai/dsh-command-compact'\n          - id: tool-result-pruner\n            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n            config:\n              thresholdChars: 8192\n              headChars: 4096\n              tailChars: 1024\n      - id: delegation\n        name: cordis:group\n        group: true\n        isolate:\n          workflowEngine: true\n        config:\n          - id: tool-subagent-control\n            name: '@deepseek-ai/dsh-tool-subagent-control'\n          - id: tool-subagent-list-agents\n            name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n          - id: tool-subagent\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: spawn\n              toolName: subagent\n              modelSelectionSettings: true\n              backgroundMode: continuable\n          - id: tool-subagent-fork\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: fork\n              toolName: subagent_fork\n              backgroundMode: continuable\n          - id: tool-subagent-codex\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: codex\n              toolName: subagent_codex\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: tool-subagent-claude-code\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: claude-code\n              toolName: subagent_claude_code\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: workflow-ptc\n            name: '@deepseek-ai/dsh-workflow-ptc'\n            config:\n              provider: spawn\n          - id: tool-workflow\n            name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ralph\n            name: '@deepseek-ai/dsh-tool-ralph'\n            disabled: true\n            config:\n              subagentProvider: spawn\n              maxRounds: 64\n      - id: tool-ask-user\n        name: '@deepseek-ai/dsh-tool-ask-user'\n      - id: tool-todo\n        name: '@deepseek-ai/dsh-tool-todo'\n        config:\n          allowParallelInProgress: true\n      - id: tool-web\n        name: '@deepseek-ai/dsh-tool-web'\n        config:\n          fetch: true\n          searchTimeoutMs: 60000\n      - id: tool-cordis\n        name: '@deepseek-ai/dsh-tool-cordis'\n      - id: skill-filesystem\n        name: '@deepseek-ai/dsh-skill-filesystem'\n        config:\n          customSkillDirs:\n            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')\n      - id: tool-skill\n        name: '@deepseek-ai/dsh-tool-skill'\n      - id: present\n        name: '@deepseek-ai/dsh-tool-present'\n      - id: tool-plugin-manager\n        name: '@deepseek-ai/dsh-plugin-manager/tools'\n        disabled: !!js \"!ctx.get('profileContext')\"\n\n\n- id: preset-ptc\n  name: '@deepseek-ai/dsh-agent-preset'\n  config:\n    id: ptc\n    order: 2\n    plugins:\n      # Same persona as `standard`: tool descriptions and the skill catalog carry\n      # the operating detail, and the skills own the preset-authoring rules.\n      - id: persona\n        name: '@deepseek-ai/dsh-persona'\n        config:\n          suffix: Your working directory is {{cwd}}.\n          prefix: >-\n            You are a coding agent powered by the {{model}} model.\n      - id: agent-instructions\n        name: '@deepseek-ai/dsh-agent-instructions'\n        config:\n          maxBytes: 65536\n      - id: tool-bash\n        name: '@deepseek-ai/dsh-tool-bash'\n        disabled: !!js process.platform === 'win32'\n      - id: tool-pwsh\n        name: '@deepseek-ai/dsh-tool-pwsh'\n        disabled: !!js process.platform !== 'win32'\n      - id: tool-fs\n        name: '@deepseek-ai/dsh-tool-fs'\n      - id: tool-fs-search\n        name: '@deepseek-ai/dsh-tool-fs-search'\n        config:\n          sampleOverCapGlobResults: false\n      - id: tool-jobs\n        name: '@deepseek-ai/dsh-tool-jobs'\n      - id: command-goal\n        name: '@deepseek-ai/dsh-command-goal'\n      - id: tool-goal\n        name: '@deepseek-ai/dsh-tool-goal'\n      - id: planning\n        name: cordis:group\n        group: true\n        isolate:\n          planMode: true\n        config:\n          - id: plan-mode\n            name: '@deepseek-ai/dsh-plan-mode'\n            config:\n              section: |\n                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n      - id: compaction\n        name: cordis:group\n        group: true\n        isolate:\n          compaction: true\n          toolResultPruner: true\n        config:\n          # dsh-vcc replaces the stock LLM summarizer in this preset: a\n          # deterministic, no-LLM compaction engine that derives messages\n          # from session events and emits a VCC-style summary whose (#N)\n          # indices point back at session event sequences, enabling\n          # lossless recall through the `vcc_recall` tool.\n          - id: compaction-basic\n            name: '@deepseek-ai/dsh-compaction-basic'\n            disabled: true\n          - id: dsh-vcc\n            name: '@local/dsh-vcc'\n            config:\n              auto: true\n              thresholdRatio: 0.7\n              retainTokens: 16000\n              maxTokens: 12000\n              summarizationProvider: dsh-vcc\n              summarizationModel: deterministic\n              vcc: {}\n          - id: command-compact\n            name: '@deepseek-ai/dsh-command-compact'\n          - id: tool-result-pruner\n            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n            config:\n              thresholdChars: 8192\n              headChars: 4096\n              tailChars: 1024\n      - id: delegation\n        name: cordis:group\n        group: true\n        isolate:\n          workflowEngine: true\n        config:\n          - id: tool-subagent-control\n            name: '@deepseek-ai/dsh-tool-subagent-control'\n          - id: tool-subagent-list-agents\n            name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n          - id: tool-subagent\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: spawn\n              toolName: subagent\n              modelSelectionSettings: true\n              backgroundMode: continuable\n          - id: tool-subagent-fork\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: fork\n              toolName: subagent_fork\n              backgroundMode: continuable\n          - id: tool-subagent-codex\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: codex\n              toolName: subagent_codex\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: tool-subagent-claude-code\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: claude-code\n              toolName: subagent_claude_code\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: workflow-ptc\n            name: '@deepseek-ai/dsh-workflow-ptc'\n            config:\n              provider: spawn\n          - id: tool-workflow\n            name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ralph\n            name: '@deepseek-ai/dsh-tool-ralph'\n            disabled: true\n            config:\n              subagentProvider: spawn\n              maxRounds: 64\n      - id: tool-ask-user\n        name: '@deepseek-ai/dsh-tool-ask-user'\n      - id: tool-todo\n        name: '@deepseek-ai/dsh-tool-todo'\n        config:\n          allowParallelInProgress: true\n      - id: tool-web\n        name: '@deepseek-ai/dsh-tool-web'\n        config:\n          fetch: true\n          searchTimeoutMs: 60000\n      - id: tool-cordis\n        name: '@deepseek-ai/dsh-tool-cordis'\n      - id: skill-filesystem\n        name: '@deepseek-ai/dsh-skill-filesystem'\n        config:\n          customSkillDirs:\n            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')\n      - id: tool-skill\n        name: '@deepseek-ai/dsh-tool-skill'\n      - id: present\n        name: '@deepseek-ai/dsh-tool-present'\n      - id: tool-plugin-manager\n        name: '@deepseek-ai/dsh-plugin-manager/tools'\n        disabled: !!js \"!ctx.get('profileContext')\"\n\n\n- id: preset-minimal\n  name: '@deepseek-ai/dsh-agent-preset'\n  config:\n    id: minimal\n    order: 3\n    plugins:\n      - id: persona\n        name: '@deepseek-ai/dsh-persona'\n        config:\n          prefix: You are a helpful software engineer assistant.\n          complete: true\n          includeRuntimeContext: false\n      - id: persistent-shell\n        name: cordis:group\n        group: true\n        isolate:\n          terminals: true\n        config:\n          - id: pty\n            name: '@deepseek-ai/dsh-terminal'\n          - id: terminal-bash\n            name: '@deepseek-ai/dsh-terminal-bash'\n            disabled: !!js process.platform === 'win32'\n            config:\n              timeoutMs: 300000\n          - id: persistent-bash\n            name: '@deepseek-ai/dsh-tool-bash-persistent'\n            disabled: !!js process.platform === 'win32'\n            config:\n              timeoutMs: 300000\n              description: >-\n                Run commands in a bash shell\n\n                * When invoking this tool, the contents of the \"command\"\n                parameter does NOT need to be XML-escaped.\n\n                * Network access depends on the task environment. Prefer\n                configured mirrors/proxies when they are available.\n\n                * State is persistent across command calls and discussions with\n                the user.\n\n                * To inspect a particular line range of a file, e.g. lines\n                10-25, try 'sed -n 10,25p /path/to/the/file'.\n\n                * Please avoid commands that may produce a very large amount of\n                output.\n\n                * Please run long lived commands in the background, e.g. 'sleep\n                10 &' or start a server in the background.\n          - id: terminal-pwsh\n            name: '@deepseek-ai/dsh-terminal-bash'\n            disabled: !!js process.platform !== 'win32'\n            config:\n              shellDialect: pwsh\n              timeoutMs: 300000\n          - id: persistent-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh-persistent'\n            disabled: !!js process.platform !== 'win32'\n            config:\n              timeoutMs: 300000\n              description: >-\n                Run commands in a PowerShell shell\n\n                * When invoking this tool, the contents of the \"command\"\n                parameter does NOT need to be XML-escaped.\n\n                * You don't have access to the internet via this tool.\n\n                * State is persistent across command calls and discussions with\n                the user.\n\n                * Use native Windows paths (C:\\...) and $env:NAME variables;\n                this is PowerShell, not bash.\n\n                * Please avoid commands that may produce a very large amount of\n                output.\n\n                * Please run long lived commands in the background, e.g.\n                'Start-Job' or start a server with Start-Process.\n      # Minimum preset shipped no compaction group; dsh-vcc adds one so the\n      # deterministic engine, /compact and /vcc work in Minimal mode too.\n      - id: compaction\n        name: cordis:group\n        group: true\n        isolate:\n          compaction: true\n          toolResultPruner: true\n        config:\n          - id: compaction-basic\n            name: '@deepseek-ai/dsh-compaction-basic'\n            disabled: true\n          - id: dsh-vcc\n            name: '@local/dsh-vcc'\n            config:\n              auto: true\n              thresholdRatio: 0.7\n              retainTokens: 16000\n              maxTokens: 12000\n              summarizationProvider: dsh-vcc\n              summarizationModel: deterministic\n              vcc: {}\n          - id: command-compact\n            name: '@deepseek-ai/dsh-command-compact'\n          - id: tool-result-pruner\n            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n            config:\n              thresholdChars: 8192\n              headChars: 4096\n              tailChars: 1024\n\n- id: preset-cordis\n  name: '@deepseek-ai/dsh-agent-preset'\n  config:\n    id: cordis\n    order: 4\n    plugins:\n      # Same persona as `standard`: tool descriptions and the skill catalog carry\n      # the operating detail, and the skills own the preset-authoring rules.\n      - id: persona\n        name: '@deepseek-ai/dsh-persona'\n        config:\n          suffix: Your working directory is {{cwd}}.\n          prefix: >-\n            You are a coding agent powered by the {{model}} model.\n      - id: agent-instructions\n        name: '@deepseek-ai/dsh-agent-instructions'\n        config:\n          maxBytes: 65536\n      - id: tool-bash\n        name: '@deepseek-ai/dsh-tool-bash'\n        disabled: !!js process.platform === 'win32'\n      - id: tool-pwsh\n        name: '@deepseek-ai/dsh-tool-pwsh'\n        disabled: !!js process.platform !== 'win32'\n      - id: tool-fs\n        name: '@deepseek-ai/dsh-tool-fs'\n      - id: tool-fs-search\n        name: '@deepseek-ai/dsh-tool-fs-search'\n        config:\n          sampleOverCapGlobResults: false\n      - id: tool-jobs\n        name: '@deepseek-ai/dsh-tool-jobs'\n      - id: command-goal\n        name: '@deepseek-ai/dsh-command-goal'\n      - id: tool-goal\n        name: '@deepseek-ai/dsh-tool-goal'\n      - id: planning\n        name: cordis:group\n        group: true\n        isolate:\n          planMode: true\n        config:\n          - id: plan-mode\n            name: '@deepseek-ai/dsh-plan-mode'\n            config:\n              section: |\n                You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n      - id: compaction\n        name: cordis:group\n        group: true\n        isolate:\n          compaction: true\n          toolResultPruner: true\n        config:\n          # dsh-vcc replaces the stock LLM summarizer in this preset: a\n          # deterministic, no-LLM compaction engine that derives messages\n          # from session events and emits a VCC-style summary whose (#N)\n          # indices point back at session event sequences, enabling\n          # lossless recall through the `vcc_recall` tool.\n          - id: compaction-basic\n            name: '@deepseek-ai/dsh-compaction-basic'\n            disabled: true\n          - id: dsh-vcc\n            name: '@local/dsh-vcc'\n            config:\n              auto: true\n              thresholdRatio: 0.7\n              retainTokens: 16000\n              maxTokens: 12000\n              summarizationProvider: dsh-vcc\n              summarizationModel: deterministic\n              vcc: {}\n          - id: command-compact\n            name: '@deepseek-ai/dsh-command-compact'\n          - id: tool-result-pruner\n            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n            config:\n              thresholdChars: 8192\n              headChars: 4096\n              tailChars: 1024\n      - id: delegation\n        name: cordis:group\n        group: true\n        isolate:\n          workflowEngine: true\n        config:\n          - id: tool-subagent-control\n            name: '@deepseek-ai/dsh-tool-subagent-control'\n          - id: tool-subagent-list-agents\n            name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n          - id: tool-subagent\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: spawn\n              toolName: subagent\n              modelSelectionSettings: true\n              backgroundMode: continuable\n          - id: tool-subagent-fork\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: fork\n              toolName: subagent_fork\n              backgroundMode: continuable\n          - id: tool-subagent-codex\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: codex\n              toolName: subagent_codex\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: tool-subagent-claude-code\n            name: '@deepseek-ai/dsh-tool-subagent'\n            disabled: true\n            config:\n              provider: claude-code\n              toolName: subagent_claude_code\n              backgroundMode: one-shot\n              maxDepth: provider-managed\n          - id: workflow-ptc\n            name: '@deepseek-ai/dsh-workflow-ptc'\n            config:\n              provider: spawn\n          - id: tool-workflow\n            name: '@deepseek-ai/dsh-tool-workflow'\n          - id: tool-ralph\n            name: '@deepseek-ai/dsh-tool-ralph'\n            disabled: true\n            config:\n              subagentProvider: spawn\n              maxRounds: 64\n      - id: tool-ask-user\n        name: '@deepseek-ai/dsh-tool-ask-user'\n      - id: tool-todo\n        name: '@deepseek-ai/dsh-tool-todo'\n        config:\n          allowParallelInProgress: true\n      - id: tool-web\n        name: '@deepseek-ai/dsh-tool-web'\n        config:\n          fetch: true\n          searchTimeoutMs: 60000\n      - id: tool-cordis\n        name: '@deepseek-ai/dsh-tool-cordis'\n      - id: skill-filesystem\n        name: '@deepseek-ai/dsh-skill-filesystem'\n        config:\n          customSkillDirs:\n            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')\n      - id: tool-skill\n        name: '@deepseek-ai/dsh-tool-skill'\n      - id: present\n        name: '@deepseek-ai/dsh-tool-present'\n      - id: tool-plugin-manager\n        name: '@deepseek-ai/dsh-plugin-manager/tools'\n        disabled: !!js \"!ctx.get('profileContext')\"\n\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/k0valik/pi-blackhole",
+      "where": "src/core/content.js:54"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/k0valik/pi-blackhole",
+      "where": "src/core/content.js:87"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/k0valik/pi-blackhole",
+      "where": "src/core/format-recall.js:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/k0valik/pi-blackhole",
+      "where": "src/core/format-recall.js:29"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/k0valik/pi-blackhole",
+      "where": "src/core/recall-scope.js:9"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/k0valik/pi-blackhole",
+      "where": "src/core/search-entries.js:264"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/k0valik/pi-blackhole",
+      "where": "src/core/search-entries.js:293"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-28T02:27:52Z",
+    "created_at": "2026-09-26T03:38:50Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/commands.js",
+    "lib/drill-down-dsh.js",
+    "lib/dsh-adapter.js",
+    "lib/engine-util.js",
+    "lib/recall-tool.js",
+    "lib/session-source.js",
+    "package.json",
+    "src/core/brief.js",
+    "src/core/build-sections.js",
+    "src/core/content.js",
+    "src/core/filter-noise.js",
+    "src/core/format-recall.js",
+    "src/core/format.js",
+    "src/core/normalize.js",
+    "src/core/rank.js",
+    "src/core/recall-scope.js",
+    "src/core/render-entries.js",
+    "src/core/sanitize.js",
+    "src/core/search-entries.js",
+    "src/core/skill-collapse.js",
+    "src/core/summarize.js",
+    "src/core/tool-args.js",
+    "src/extract/commits.js",
+    "src/extract/files.js",
+    "src/extract/goals.js",
+    "src/extract/preferences.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-vcc",
+      "text": "Deterministic, **no-LLM** conversation compaction for DeepSeek Harness, with\nlossless recall — adapted from [pi-vcc](https://github.com/…/pi-vcc)'s\nview-oriented compiler approach.\n\nWhen a session grows past its window, instead of paying an LLM to compress the\nhistory, dsh-vcc *compiles* the conversation into a structured, stable\nsummary:"
+    },
+    {
+      "section": "dsh-vcc",
+      "text": "- **[Session Goal]** / **[Files And Changes]** / **[Commits]** /\n  **[Outstanding Context]** / **[User Preferences]** header sections, merged\n  across compactions (dedup, cross-compaction file merge, volatile sections\n  rebuilt fresh);\n- a ranked brief transcript (`---` separated) whose messages keep lossless\n  `(#N)` references into the session log.\n\n`(#N)` is the event **seq** — the same index `vcc_recall` searches — so\nanything compaction drops stays one deterministic call away:"
+    },
+    {
+      "section": "dsh-vcc",
+      "text": "```\nvcc_recall(query: \"redis cache decision\")     → ranked, paged hits (#N)\nvcc_recall(expand: [42])                       → full untruncated content\nvcc_recall(query: \"#42:auth.ts\")               → drill into a file from an entry\nvcc_recall(query: \"#42:auth.ts:full\")          → all lines of that file content\n\nAlso ships `/vcc` (preview the summary the next compaction would write, with no\nmutation) and `/vcc-recall` (the tool as a human command)."
+    },
+    {
+      "section": "Layout",
+      "text": "| Path | Role |\n| --- | --- |\n| `index.js` | `DshVccCompactionEngine` (default export) — extends the basic backend, overrides its `summarize` hook with the deterministic pipeline; registers the recall tool and commands. |\n| `lib/dsh-adapter.js` | DSH message → pi message shape (tool-call id→name correlation, reasoning policy). |\n| `lib/session-source.js` | Session events → message streams (`lineage` = live surface, `all` = full log). |\n| `lib/engine-util.js` | seq alignment for `(#N)` refs; previous-summary extraction. |\n| `lib/drill-down-dsh.js` | `#N:path` drill-down, re-rooted on session events. |\n| `lib/recall-tool.js` | `vcc_recall` tool + shared recall algorithm. |\n| `lib/commands.js` | `/vcc` and `/vcc-recall` human commands. |\n| `src/` | The pi-vcc core pipeline compiled to ESM (MIT, see NOTICE): normalize, filter-noise, sections, rank, build-sections, summarize, search-entries, render-entries, format-recall, recall-scope, extract/\\*. |\n| `cordis.patch.yml` | Enables the engine inside the preset's `compaction` group and disables the preset's stock LLM backend. |\n| `node_modules/@deepseek-ai/*` | Symlink farm to the harness checkout packages the bundle imports at module-eval"
+    },
+    {
+      "section": "How it works",
+      "text": "- The bundle mounts one service row (`dsh-vcc`) into the **cordis agent\n  preset's** `compaction` group and disables the preset's stock\n  `compaction-basic` row in the same group. Preset sessions then resolve\n  `ctx.compaction` to `DshVccCompactionEngine` — a subclass of the basic\n  backend that keeps all of its machinery (threshold/overflow auto triggers,\n  region selection, `(maxTokens)` shrink gate, retry backoff, durable session\n  mutation, `compaction/summary` events) and replaces only the `summarize`\n  hook with `compileRanked` from the ported pi-vcc core.\n- Alignment: `buildSummarizationInput` hands the engine the exact messages it\n  plans to shadow; messages are the durable surface objects, so an identity\n  map (`Map<Message, seq>` built from `session.surface.nodes`) recovers each\n  message's event seq, fail-closed. The summary's `(#N)` refs and\n  `vcc_recall`'s indices are the same seqs — self-consistent by construction.\n- The compiled result is returned as `{ summary, rawOutput, provider:\n  'dsh-vcc', model: 'deterministic' }` with no `llmStreamCall` — the non-LLM\n  branch of the backend's `SummaryResult`. An empty compile throws, so the\n  backend treats it like a summari"
+    },
+    {
+      "section": "Install & verify",
+      "text": "```text\nplugin_manager  →  install_bundle  →  target: /home/user1/dsh-compaction/dsh-vcc\n```"
+    },
+    {
+      "section": "Install & verify",
+      "text": "- `install_bundle` records `@local/dsh-vcc: link:<this dir>` in the profile's\n  `package.json` and applies `cordis.patch.yml`; **no restart is needed on\n  first install**.\n- Confirm: `cordis_inspect_query` (Host Config / Tool / Service), then run\n  `/vcc` in a cordis-preset session to see the live deterministic preview, and\n  `/compact` to compact. `vcc_recall` then answers questions about the\n  shadowed history.\n- Replacing an already-installed version of the same package still needs a\n  profile restart to load the new module generation."
+    },
+    {
+      "section": "Known scope (v1)",
+      "text": "- Activates for the **cordis** preset only (the patch targets the\n  last-occurring rows in the composed profile). `standard` / `ptc` / `minimal`\n  presets keep their stock compaction backend.\n- Deterministic by design: no LLM calls, no network, no nondeterminism —\n  identical input always produces identical output.\n- Only the current session is searchable; earlier sessions are not."
+    },
+    {
+      "section": "Attribution",
+      "text": "dsh-vcc is a port of **pi-vcc** (MIT) — itself derived from **pi-blackhole**\n(by k0valik, MIT) and **invisible-continue** (by monotykamary, MIT). The\ncompiled core under `src/` is the pi-vcc pipeline (normalize, filter-noise,\nbuild-sections, rank, summarize, extract/*, search/render/format-recall,\nrecall-scope) with only its load-messages/JSONL layer replaced by\n`lib/session-source.js` and its drill-down re-rooted on session events. See\n`NOTICE` for the full license texts."
+    }
+  ],
+  "skipped": []
+}

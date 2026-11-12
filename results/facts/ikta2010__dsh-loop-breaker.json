@@ -1,0 +1,123 @@
+{
+  "repo": "ikta2010/dsh-loop-breaker",
+  "commit": "f4629c1aeae7d5be51f4b324560e7ab702e68e7b",
+  "extracted_at": "2026-11-11T21:43:01.956165+00:00",
+  "tree": {
+    "files": 6,
+    "bytes": 17921,
+    "lines_by_language": {
+      "JSON": 27,
+      "JavaScript": 272,
+      "Markdown": 57,
+      "Other": 21,
+      "Shell": 29,
+      "YAML": 12
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "install.sh",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-loop-breaker",
+    "version": "0.1.0",
+    "description": "硬止损：同一工具+同一参数反复调用时中断本轮（补上 repeat-tool-reminder 只提醒不中断的缺口）",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0",
+      "@deepseek-ai/dsh-llm": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0",
+      "@deepseek-ai/schemastery": ">=0.0.1-rc.1 <0.1.0 || >=0.1.0-rc.1 <0.2.0-0"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/ikta2010/dsh-loop-breaker.git"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-loop-breaker 自带激活补丁（作为 bundle 层被应用）。\n# `insert:`（不带 id）会把条目**追加**到 profile 插件树顶层。\n- insert:\n    - id: loop-breaker\n      name: 'dsh-loop-breaker'\n      config:\n        # 同一调用连续重复 4 次就硬止损（AGENTS.md 里已要求\"最多连续 2 次\"，\n        # repeat-tool-reminder 在 2/3/5 提醒；这里给到 4 次即强制中断）。\n        consecutiveLimit: 4\n        # 同一调用在单轮流计 7 次即中断（防\"穿插其他调用\"的慢速循环；\n        # 2026-09 从 12 降到 7：长项目里白烧时间的大头是这种慢速循环）。\n        totalLimit: 7\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_LOOP_BREAKER_LOG_DIR",
+      "kind": "env",
+      "where": "lib/index.js:43"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/ikta2010/dsh-loop-breaker.git",
+      "where": "package.json:24"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-09-18T22:14:58Z",
+    "created_at": "2026-09-18T15:44:32Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-loop-breaker",
+      "text": "硬止损插件：**同一工具 + 同一参数反复调用时，直接中断本轮**。"
+    },
+    {
+      "section": "为什么需要",
+      "text": "2026-09-13 从真实会话日志实测：\n\n- 单个 turn 最多跑出 **337 步**\n- 同一条命令被重复调用 **120 次** / **85 次**\n- dsh 自带的 `repeat-tool-reminder` **只提醒、不中断**\n- `dsh-agent-loop` 只暴露 `maxParallelToolCalls`，**没有步数上限**\n\n结果就是\"跑四小时 / 最后只能 /stop\"。"
+    },
+    {
+      "section": "实现",
+      "text": "用两个上游扩展点：\n\n| 钩子 | 作用 |\n|---|---|\n| `tools/post-execute`（waterfall） | 计数；超限时返回 `{kind:'block', feedback, additionalContexts}` 否决该次结果并注入可见说明 |\n| `agent/pre-step`（waterfall） | 返回 `{kind:'reject'}` 让下一步不进入 → **本轮结束** |\n\n判定键是「工具名 + 参数规范化后的 JSON」，所以正常干活（每次不同命令）不会误伤。"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml\n- id: loop-breaker\n  name: 'dsh-loop-breaker'\n  config:\n    consecutiveLimit: 4      # 连续重复多少次硬止损"
+    },
+    {
+      "section": "安装",
+      "text": "```bash\nbash /nas/dsh/工具/dsh-loop-breaker/install.sh\n```\n\n装完**需要重启一次 dsh web** 才会加载（会短暂断开网页，会话不丢）：\n\n```bash\ndsh-restart\n```"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\ndsh plugin --profile web remove dsh-loop-breaker\nrm -rf ~/.dsh/profiles/web/node_modules/dsh-loop-breaker\n```"
+    }
+  ],
+  "skipped": []
+}

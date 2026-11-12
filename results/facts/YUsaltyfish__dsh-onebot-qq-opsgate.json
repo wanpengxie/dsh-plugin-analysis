@@ -1,0 +1,140 @@
+{
+  "repo": "YUsaltyfish/dsh-onebot-qq-opsgate",
+  "commit": "8d6c042a21c473ffd1e4407c1b8387f502165463",
+  "extracted_at": "2026-11-11T16:15:45.764574+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 36671,
+    "lines_by_language": {
+      "JSON": 42,
+      "JavaScript": 666,
+      "Markdown": 62,
+      "Other": 34,
+      "YAML": 108
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      ".npmignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/gate.js",
+      "package.json",
+      "scripts/sync-preset.mjs",
+      "test/gate.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-onebot-qq-opsgate",
+    "version": "0.1.3",
+    "description": "Tool-scope gate for the dsh-onebot-qq preset: auto-detect all global tools and hide everything except mcp__qq__* from QQ sessions, without affecting any other DSH preset",
+    "type": "module",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "engines": {
+      "node": ">=22",
+      "dsh": ">=0.2.1-rc.2 <0.3.0"
+    },
+    "scripts": {
+      "test": "node --test",
+      "check:syntax": "node --check index.js && node --check lib/gate.js",
+      "sync:preset": "node scripts/sync-preset.mjs"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "deepseek-harness",
+      "dsh",
+      "dsh-plugin",
+      "qq",
+      "onebot",
+      "tools",
+      "restrict"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-onebot-qq-opsgate bundle patch\n#\n# 作用：只覆盖 dsh-onebot-qq 的 `preset-qq-chat` 这一行，在它的 plugins 列表末尾追加本插件。\n#   · 本插件在 agent scope 内调用 ctx.tools.restrict({ deny }) → 把全局插件注册的工具（ops_*、\n#     agent-team、MCP 资源等）从 QQ 会话的工具目录里摘掉；\n#   · 再用 ctx.tools.guard() 在执行前拦住 scoped 注册的工具（restrict 管不到这一层）；\n#   · 只影响 qq-chat 会话，不碰网页/工作线/其他 preset；\n#   · 必须在 profile bundles 里排在 dsh-onebot-qq 之后（后层覆盖前层）。\n#\n# ⚠️ 本文件的 preset 内容由 scripts/sync-preset.mjs 从 dsh-onebot-qq 的 cordis.patch.yml 生成；\n#    dsh-onebot-qq 升级后重新生成，别手改下面这段。\n\n- id: preset-qq-chat\n  name: '@deepseek-ai/dsh-agent-preset'\n  config:\n    id: qq-chat\n    name: QQ 聊天\n    description: 纯聊天 + 联网；裁掉 shell / 文件 / 任务 / 技能 / 插件管理类工具（QQ 机器人安装即用）。\n    order: 50\n    plugins:\n      - id: persona\n        name: '@deepseek-ai/dsh-persona'\n        config:\n          prefix: |-\n            You are a QQ chat assistant. Reply naturally and briefly in the language of the incoming message.\n            QQ 线每轮必须调用 mcp__qq__* 工具才能让对方收到内容；只写正文等于没有回话。\n      - id: agent-instructions\n        name: '@deepseek-ai/dsh-agent-instructions'\n        config:\n          maxBytes: 65536\n      - id: time-context\n        name: '@deepseek-ai/dsh-time-context'\n\n      # ── shell：两平台都裁掉（纯聊天不需要）──\n      - id: tool-bash\n        name: '@deepseek-ai/dsh-tool-bash'\n        disabled: true\n      - id: tool-pwsh\n        name: '@deepseek-ai/dsh-tool-pwsh'\n        disabled: true\n\n      # ── 文件 / 搜索 / 任务 / 技能 / 交互卡片 / 插件管理：全裁 ──\n      - id: tool-fs\n        name: '@deepseek-ai/dsh-tool-fs'\n        disabled: true\n      - id: tool-fs-search\n        name: '@deepseek-ai/dsh-tool-fs-search'\n        disabled: true\n      - id: tool-jobs\n        name: '@deepseek-ai/dsh-tool-jobs'\n        disabled: true\n      - id: tool-schedule\n        name: '@deepseek-ai/dsh-tool-schedule'\n        disabled: true\n      - id: skill-filesystem\n        name: '@deepseek-ai/dsh-skill-filesystem'\n        disabled: true\n      - id: tool-skill\n        name: '@deepseek-ai/dsh-tool-skill'\n        disabled: true\n      - id: tool-ask-user\n        name: '@deepseek-ai/dsh-tool-ask-user'\n        disabled: true\n      - id: tool-todo\n        name: '@deepseek-ai/dsh-tool-todo'\n        disabled: true\n      - id: present\n        name: '@deepseek-ai/dsh-tool-present'\n        disabled: true\n      - id: tool-plugin-manager\n        name: '@deepseek-ai/dsh-plugin-manager/tools'\n        disabled: true\n      - id: tool-plugin-market\n        name: '@deepseek-ai/dsh-plugin-market/tools'\n        disabled: true\n\n      # ── 联网：搜索 / 抓取（QQ 线查资料靠它）──\n      - id: tool-web\n        name: '@deepseek-ai/dsh-tool-web'\n        config:\n          fetch: true\n          searchTimeoutMs: 60000\n\n      # ── 上下文压缩：QQ 会话长，阈值调低、保留量调小 ──\n      - id: compaction\n        name: cordis:group\n        group: true\n        isolate:\n          compaction: true\n          toolResultPruner: true\n        config:\n          - id: compaction-basic\n            name: '@deepseek-ai/dsh-compaction-basic'\n            config:\n              thresholdRatio: 0.1\n              retainTokens: 20000\n          - id: command-compact\n            name: '@deepseek-ai/dsh-command-compact'\n          - id: tool-result-pruner\n            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n            config:\n              thresholdChars: 8192\n              headChars: 4096\n              tailChars: 1024\n\n      # ── 本包：工具作用域门（preset 内加载；restrict 摘全局工具 + guard 拦执行）──\n      - id: dsh-onebot-qq-opsgate\n        name: 'dsh-onebot-qq-opsgate'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-10-25T04:30:28Z",
+    "created_at": "2026-10-20T15:45:01Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/gate.js",
+    "package.json",
+    "scripts/sync-preset.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-onebot-qq-opsgate",
+      "text": "> `dsh-onebot-qq` 的配套**工具守卫**插件：把 QQ 会话里不该出现的全局工具（`ops_*`、agent-team、MCP 资源等）挡掉。\n> 纯 JS、无外部依赖，Linux / Windows / macOS 通用。\n\n不装也能正常聊天，只是 QQ 线会看到更多本不该有的主机工具（也费 token）。"
+    },
+    {
+      "section": "安装",
+      "text": "前提：已经装好 `dsh-onebot-qq`。\n\n```bash"
+    },
+    {
+      "section": "GitHub",
+      "text": "dsh plugin --profile web add github:YUsaltyfish/dsh-onebot-qq-opsgate"
+    },
+    {
+      "section": "本地目录（改代码立刻生效）",
+      "text": "dsh plugin --profile web add link:/abs/path/dsh-onebot-qq-opsgate\n```\n\n**顺序很重要**：本插件必须在 profile bundles 里排在 `dsh-onebot-qq` **之后**（后层覆盖前层，手工调过顺序的记得检查）。\n\n重启 DSH 后，QQ 线**新建会话**生效。"
+    },
+    {
+      "section": "验证",
+      "text": "开一个 QQ 新会话，让它尝试 `ops_bash` / `spawn_teammate` 之类的工具：\n\n- **全局工具**（`ops_glob` / `ops_write_file` 等）：会直接从这个会话的工具目录里消失；\n- **agent scope 注册的工具**（`ops_bash` / agent-team 等）：目录里仍可能看得见，但真正调用会返回\n  `QQ 线不提供 ops_bash（dsh-onebot-qq-opsgate 工具门）`。"
+    },
+    {
+      "section": "说明",
+      "text": "- 只影响 `qq-chat` preset 的 QQ 会话，不碰网页 / 工作线 / 其他 preset；\n- **两层防线**：\n  1. `tools.restrict()` 把 profile/bundle 层全局注册的工具从 QQ 会话目录摘掉；\n  2. `tools.guard()` 在**执行前**拒绝 scoped 注册的工具（`restrict` 管不到这一层）。\n- **自动模式（默认）**：探测 DSH 当前所有全局工具，只放行 `mcp__qq__*`（及 `web_search` / `web_fetch`，如果它们是全局的），其余全挡 —— 不需要维护名单，新装的全局插件也会被挡住；\n- 启动后每 500ms 复查一次，持续几秒补挡晚注册的工具，之后停止；\n- `dsh-onebot-qq` 升级 preset 后，跑一次 `npm run sync:preset` 同步本插件里的 preset 副本；\n- 卸载即恢复原状。"
+    },
+    {
+      "section": "配置（一般不用改）",
+      "text": "默认 auto 模式即可。要调整放行规则，在 profile 的 `cordis.patch.yml` 里覆盖 `preset-qq-chat`（整段替换）时给本插件加 config：\n\n```yaml\n- id: dsh-onebot-qq-opsgate\n  name: 'dsh-onebot-qq-opsgate'\n  config:\n    allowedPrefixes: ['mcp__qq__', 'my_tool_']   # 按前缀放行\n\n仍兼容旧配置：显式写 `deny: [...]` 或 `allow: [...]` 会退回固定名单模式。"
+    },
+    {
+      "section": "License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

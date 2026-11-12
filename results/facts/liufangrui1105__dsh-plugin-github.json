@@ -1,0 +1,504 @@
+{
+  "repo": "liufangrui1105/dsh-plugin-github",
+  "commit": "caeb3656fe400b98a5af1c11aea7a2ddeb910823",
+  "extracted_at": "2026-11-11T23:53:56.951049+00:00",
+  "tree": {
+    "files": 27,
+    "bytes": 306797,
+    "lines_by_language": {
+      "JSON": 54,
+      "JavaScript": 5954,
+      "Markdown": 657,
+      "Other": 44,
+      "YAML": 136
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/ISSUE_TEMPLATE/bug_report.md",
+      ".github/workflows/test.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "SECURITY.md",
+      "cordis.patch.yml",
+      "package.json",
+      "scripts/validate-manifest.mjs",
+      "scripts/verify-registration.mjs",
+      "src/api.js",
+      "src/auth.js",
+      "src/git.js",
+      "src/index.js",
+      "src/prompt.js",
+      "src/repos.js",
+      "src/store.js",
+      "src/tools.js",
+      "test/account.test.mjs",
+      "test/git-http-server.mjs",
+      "test/git.test.mjs",
+      "test/harness.mjs",
+      "test/output-contract.test.mjs",
+      "test/plugin.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-plugin-github",
+    "version": "0.1.0",
+    "description": "DeepSeek Harness plugin: bind a GitHub account, then let the agent clone, read, edit, commit and push repositories.",
+    "type": "module",
+    "main": "src/index.js",
+    "exports": {
+      ".": "./src/index.js",
+      "./tools": "./src/tools.js",
+      "./store": "./src/store.js",
+      "./prompt": "./src/prompt.js",
+      "./git": "./src/git.js",
+      "./package.json": "./package.json"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "CHANGELOG.md",
+      "SECURITY.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node test/git.test.mjs && node test/plugin.test.mjs && node test/account.test.mjs && node test/output-contract.test.mjs && node scripts/verify-registration.mjs",
+      "test:git": "node test/git.test.mjs",
+      "test:plugin": "node test/plugin.test.mjs",
+      "test:account": "node test/account.test.mjs",
+      "test:output": "node test/output-contract.test.mjs",
+      "verify": "node scripts/verify-registration.mjs && node scripts/validate-manifest.mjs",
+      "verify:registration": "node scripts/verify-registration.mjs",
+      "verify:manifest": "node scripts/validate-manifest.mjs"
+    },
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/liufangrui1105/dsh-plugin-github.git"
+    },
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "github",
+      "git"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch: inserts one plugin row into a profile's config layer.\n# `id` is the stable identity of this row, so a user can override its `config`\n# from their own cordis.patch.yml by matching that id.\n- insert:\n    - id: github-repo\n      name: 'dsh-plugin-github'\n      config:\n        # ── Permission boundary (most conservative by default: read and edit\n        #    locally, but never write to a remote) ──────────────────────────\n        # Allow remote writes such as pushing and creating repositories. While\n        # this is off, gh_push and gh_commit{push:true} are refused outright.\n        allowPush: false\n        # Allow `--force-with-lease` pushes (still bounded by allowPush).\n        allowForcePush: false\n        # Allow POST/PATCH/PUT/DELETE on gh_api; read-only calls are unaffected.\n        allowApiWrite: false\n\n        # ── Repository allowlist ──────────────────────────────────────────\n        # An empty array means no restriction by repository name (remote writes\n        # are still gated by allowPush / allowApiWrite).\n        # Accepted forms: owner/repo, owner/*, */repo, *.\n        # Only strict owner/repo is accepted; a full URL is rejected, because a\n        # URL's host and extra path segments cannot be checked reliably — that\n        # was once enough to make the allowlist authorize a different repository.\n        allowRepos: []\n\n        # Whether read-only gh_api calls are also bounded by allowRepos.\n        # Default false: once allowRepos is set, even reads are limited to\n        # allowlisted repositories. Set true to permit reads outside it\n        # (for example searching public repositories).\n        allowApiReadOutsideAllowlist: false\n\n        # Allow remotes other than github.com (self-hosted Git, an internal\n        # GitLab, …). Default false. The allowlist constrains owner/repo but not\n        # the host, so allowing any host means `http://attacker/your/repo.git`\n        # passes the allowlist and the PAT is sent to the attacker.\n        # Turn this on only when you really do talk to a self-hosted service.\n        allowNonGithubRemotes: false\n\n        # ── Account binding ───────────────────────────────────────────────\n        # Whether to prompt for account binding when an operation needs\n        # credentials but none is bound yet (one pasted PAT).\n        # With this off nothing is asked; the operation proceeds and the remote\n        # decides the outcome.\n        allowAutoBind: true\n        # Whether the prompt may collect a pasted token. With this off the\n        # prompt only points at the environment variable / credential file.\n        promptForToken: true\n        # Path of the account file. Used only when the host has not mounted the\n        # DSH credential service (ctx.credentials); when omitted it lives at\n        # $DSH_HOME/github-accounts.json.\n        # accountStorePath: '/path/to/github-accounts.json'\n\n        # ── Credentials ───────────────────────────────────────────────────\n        # Token reference name (a POSIX environment variable name). Its value is\n        # read from the DSH credential service first, i.e. the `refs:` section of\n        # $DSH_HOME/.credentials.yaml, or written with gh_config action=set.\n        tokenRef: GITHUB_TOKEN\n        # Environment variable to fall back to when the credential service has\n        # no value.\n        tokenEnv: GITHUB_TOKEN\n        # Also fall back to .env.local / .env inside the workspace.\n        dotenv: true\n\n        # ── Behaviour ─────────────────────────────────────────────────────\n        # Root directory for local clones. Omitted means the host process's\n        # working directory.\n        # workspaceRoot: '/path/to/clones'\n        # The git executable to run. Omitted means `git` on PATH; set this when\n        # git lives somewhere unusual (a bundled runtime, a portable install).\n        # gitExecutable: 'git'\n        # Timeout for a single git command, in milliseconds.\n        commandTimeoutMs: 120000\n        # Maximum characters of a diff returned to the model.\n        maxDiffChars: 20000\n        # Maximum characters of a file read returned to the model.\n        maxReadChars: 40000\n        # Commit author (omitted means the git global configuration; set both when\n        # the machine has no global identity, or commits fail with\n        # \"Author identity unknown\").\n        # gitAuthorName: 'Your Name'\n        # gitAuthorEmail: 'you@example.com'\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "src/tools.js",
+    "src/store.js",
+    "src/prompt.js",
+    "src/git.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/index.js:122"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "src/index.js:124"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "src/index.js:124"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "src/tools.js:847"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/account.test.mjs:289"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/account.test.mjs:290"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/account.test.mjs:303"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/account.test.mjs:304"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:438"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:440"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:445"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:458"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:459"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:680"
+    },
+    {
+      "name": "GH_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:680"
+    },
+    {
+      "name": "GITHUB_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:682"
+    },
+    {
+      "name": "GH_TOKEN",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:683"
+    },
+    {
+      "name": "GIT_CONFIG_GLOBAL",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:916"
+    },
+    {
+      "name": "GIT_CONFIG_NOSYSTEM",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:917"
+    },
+    {
+      "name": "GIT_CONFIG_GLOBAL",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:918"
+    },
+    {
+      "name": "GIT_CONFIG_NOSYSTEM",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:919"
+    },
+    {
+      "name": "GIT_CONFIG_GLOBAL",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:928"
+    },
+    {
+      "name": "GIT_CONFIG_GLOBAL",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:929"
+    },
+    {
+      "name": "GIT_CONFIG_NOSYSTEM",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:930"
+    },
+    {
+      "name": "GIT_CONFIG_NOSYSTEM",
+      "kind": "env",
+      "where": "test/plugin.test.mjs:931"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "attacker",
+      "url": "http://attacker/your/repo.git`",
+      "where": "cordis.patch.yml:35"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/liufangrui1105/dsh-plugin-github.git",
+      "where": "package.json:39"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com",
+      "where": "src/api.js:8"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${rest.replace(/\\.git$/",
+      "where": "src/git.js:325"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/${value.replace(/^\\/+|\\/+$/g",
+      "where": "src/git.js:328"
+    },
+    {
+      "host": "…",
+      "url": "http://…",
+      "where": "src/git.js:367"
+    },
+    {
+      "host": "attacker",
+      "url": "http://attacker/allowed/repo.git`",
+      "where": "src/repos.js:174"
+    },
+    {
+      "host": "api.github.com",
+      "url": "https://api.github.com",
+      "where": "src/tools.js:168"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "test/git-http-server.mjs:76"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/git-http-server.mjs:133"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo",
+      "where": "test/git.test.mjs:65"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo",
+      "where": "test/git.test.mjs:66"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo",
+      "where": "test/git.test.mjs:67"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/repo/",
+      "where": "test/git.test.mjs:68"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a/b.git",
+      "where": "test/git.test.mjs:71"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/owner/my-repo.git",
+      "where": "test/git.test.mjs:76"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "https://127.0.0.1:1/nope.git",
+      "where": "test/git.test.mjs:198"
+    },
+    {
+      "host": "evil.example.com",
+      "url": "https://evil.example.com/user",
+      "where": "test/plugin.test.mjs:422"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/me/anything.git",
+      "where": "test/plugin.test.mjs:475"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/someorg/newthing",
+      "where": "test/plugin.test.mjs:645"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/a/b",
+      "where": "test/plugin.test.mjs:665"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/a/b.git",
+      "where": "test/plugin.test.mjs:665"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/127.0.0.1/origin.git",
+      "where": "test/plugin.test.mjs:766"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9/evil/origin.git",
+      "where": "test/plugin.test.mjs:769"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 6,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-10-15T18:20:31Z",
+    "created_at": "2026-10-14T18:23:24Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "scripts/validate-manifest.mjs",
+    "scripts/verify-registration.mjs",
+    "src/api.js",
+    "src/auth.js",
+    "src/git.js",
+    "src/index.js",
+    "src/prompt.js",
+    "src/repos.js",
+    "src/store.js",
+    "src/tools.js",
+    "test/account.test.mjs",
+    "test/git-http-server.mjs",
+    "test/git.test.mjs",
+    "test/harness.mjs",
+    "test/output-contract.test.mjs",
+    "test/plugin.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-plugin-github",
+      "text": "English | [中文](README.zh.md)\n\nConnect GitHub repositories to [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): let the agent clone your repositories, read and edit files, commit, and push back to the remote — within the permissions you grant. The first time credentials are needed it asks you to bind a GitHub account, and every later call uses that account by default."
+    },
+    {
+      "section": "dsh-plugin-github",
+      "text": "- **Plain ESM JavaScript, no build step, zero runtime dependencies** — it imports no `@deepseek-ai/*` package, so it cannot fail to load because a package did not resolve\n- **Account binding** — a first-run prompt collects a PAT once and remembers it; multiple accounts can be bound and switched\n- **Read-only-safe by default** — `allowPush` and `allowApiWrite` default to `false`; writing to a remote must be enabled explicitly\n- **Credentials never land in the repository, the command line, or the model's context** (see [Security model](#6-security-model))"
+    },
+    {
+      "section": "1. Tools",
+      "text": "| Tool | What it does |\n|---|---|\n| `gh_account` | `bind` (prompts for a token when none is passed), `list`, `use` (switch the default account), `remove`, `status` |\n| `gh_repo` | `clone` (or fetch an existing clone), `status`, `diff`, `log`, `branches`, `create` (create a remote repository) |\n| `gh_file` | `get` (line-numbered window), `list`, `put` (whole-file write/create), `edit` (exact replacement — `oldText` must be unique or `count` must be given) |\n| `gh_commit` | Stage and commit; `push: true` commits and pushes in one step |\n| `gh_push` | Push to `origin` (gated by `allowPush`; `force` uses `--force-with-lease` only and needs `allowForcePush`) |\n| `gh_pull` | Pull from the remote (defaults to `--ff-only`, so a divergence fails loudly instead of creating a merge; `rebase: true` switches to rebase) |\n| `gh_config` | `status` (credential source and account, **never the token**), `set`, `unset` — operates on a bare token in the DSH credential service |\n| `gh_api` | Call the GitHub REST API directly (issues, PRs, Actions, search, …). `GET`/`HEAD` are read-only; writes need `allowApiWrite: true` |"
+    },
+    {
+      "section": "1. Tools",
+      "text": "Typical flow:\n\n```\ngh_account(action=bind)            # first run: bind an account (or let the first call that needs credentials prompt)\n  → gh_repo(action=clone, repo=\"owner/repo\")\n  → gh_file(action=get/edit/put)\n  → gh_commit(message=\"…\")"
+    },
+    {
+      "section": "2. Install",
+      "text": "Node.js ≥ 20 is required (the runtime bundled with DSH is fine).\n\n```sh\ndsh plugin --profile <your profile> add github:liufangrui1105/dsh-plugin-github\n```\n\nFor the desktop profile:\n\n```sh\ndsh plugin --profile desktop add github:liufangrui1105/dsh-plugin-github\n```\n\nA local directory or a packed tarball works too:\n\n```sh\ndsh plugin --profile desktop add ./dsh-plugin-github\ndsh plugin --profile desktop add ./dsh-plugin-github-0.1.0.tgz   # output of pnpm pack\n```"
+    },
+    {
+      "section": "2. Install",
+      "text": "Then **fully quit and restart DeepSeek Harness**, and ask it to list the `gh_*` tools it can use.\n\n> This plugin is plain JavaScript: `src/` *is* the runnable artifact, so it needs\n> **no `prepare` build script and no `allowBuilds` approval**. The package deliberately defines no\n> `prepare` / `build` / `install` script — their mere presence makes npm rebuild the dependency on every install."
+    },
+    {
+      "section": "2. Install",
+      "text": "> **Upgrading**: a GitHub install resolves the default branch. After changing the code, run\n> `add github:liufangrui1105/dsh-plugin-github` again so pnpm re-resolves it, then **restart DSH**.\n> Hot reload only reloads modules already loaded; it does not re-fetch dependencies. This is easy to\n> mistake for \"my change had no effect\".\n\nUninstall:\n\n```sh\ndsh plugin --profile desktop remove dsh-plugin-github\n```"
+    },
+    {
+      "section": "3. Binding a GitHub account",
+      "text": "**Option A — let it ask (recommended)**\n\nThe first time an operation needs credentials (push, pull, create repository), the plugin opens an input box asking for a Personal Access Token. It validates the token against `/user` first, stores it only on success, and makes it the default account; every later call uses it without asking again.\n\nYou can also trigger it explicitly:"
+    },
+    {
+      "section": "3. Binding a GitHub account",
+      "text": "```\ngh_account(action=\"bind\")                      # open the input box\ngh_account(action=\"bind\", token=\"ghp_xxxx\")    # pass the token directly\n```\n\n**Option B — without going through the conversation**\n\nIf you would rather the token never appear in the session transcript, provide it out of band: set `GITHUB_TOKEN` before starting DSH, or write it into `$DSH_HOME/.credentials.yaml`:\n\n```yaml\nversion: 1\nrefs:\n  GITHUB_TOKEN: ghp_xxxxxxxxxxxxxxxx\n```"
+    },
+    {
+      "section": "3. Binding a GitHub account",
+      "text": "Resolution order (first hit wins): **bound account → environment variable → `refs:` in `.credentials.yaml` → workspace `.env`**. A bound account always wins, so \"I bound X\" is never silently overridden by a `GITHUB_TOKEN` that happens to exist in the environment."
+    },
+    {
+      "section": "3. Binding a GitHub account",
+      "text": "Minimum PAT scope: **`repo`** for read/write repository content (for a fine-grained token, Contents: Read and write); Contents: Read is enough for read-only use. Use `gh_account(action=\"status\")` or `gh_config(action=\"status\")` to check the effective account and remaining rate limit.\n\n**Multiple accounts**: each `bind` accumulates, and the most recent binding becomes the default. Switch with `gh_account(action=\"use\", login=\"…\")` and delete with `action=\"remove\"`."
+    },
+    {
+      "section": "4. Configuration",
+      "text": "Configuration lives under the plugin row's `config:` in the profile's `cordis.patch.yml` (that file replaces the whole `config` value; it does not deep-merge)."
+    },
+    {
+      "section": "4. Configuration",
+      "text": "| Field | Default | Meaning |\n|---|---|---|\n| `workspaceRoot` | host process working directory | Root for local clones. **Every `gh_*` path is confined to this directory** |\n| `gitExecutable` | `git` | The git executable to run. Set it when git lives somewhere unusual — a bundled runtime, a portable install — instead of editing `PATH` |\n| `allowRepos` | `[]` | Repository allowlist: `owner/repo`, `owner/*`, `*/repo`, `*`. Empty means no restriction by repository name. **Only strict `owner/repo` is accepted; full URLs are rejected** |\n| `allowPush` | `false` | Allow pushing and creating remote repositories. **While off, `gh_push` and `gh_commit{push:true}` are refused outright** |\n| `allowForcePush` | `false` | Allow `--force-with-lease` (still requires `allowPush`) |\n| `allowApiWrite` | `false` | Allow `POST/PATCH/PUT/DELETE` on `gh_api`, and `gh_repo action=create` |\n| `allowApiReadOutsideAllowlist` | `false` | Set `true` to let read-only `gh_api` reach repositories outside the allowlist (e.g. searching public repositories) |\n| `allowNonGithubRemotes` | `false` | Allow remotes other than `github.com` (self-hosted Git). **Off by default**: the allowlist constrains `owner/repo` but n"
+    },
+    {
+      "section": "4. Configuration",
+      "text": "Enabling writes:\n\n```yaml\n- id: github-repo\n  config:\n    allowPush: true\n    allowApiWrite: true"
+    },
+    {
+      "section": "5. Authorization model",
+      "text": "An allowlist and a credential must be judged against **the object actually acted on**, never against a string derived from the arguments. This is the area an independent audit attacked, and every item below is a fix for it:"
+    },
+    {
+      "section": "5. Authorization model",
+      "text": "- **Local directories are named `owner__repo`**, so same-named repositories under different owners cannot collide into one directory.\n- **The real remote in the directory is verified before acting**; if it is not the requested repository the operation is refused, so a change can never be pushed to the wrong remote.\n- **Every `pushurl` is validated before pushing**, not just the fetch URL — checking only the fetch URL lets `remote.origin.pushurl` redirect a PAT-bearing push to another host.\n- **Only `github.com` is an allowed remote host by default.** The allowlist constrains `owner/repo` but not the host; without that check, `http://attacker/your/repo.git` passes the allowlist and the PAT goes to the attacker.\n- **`gh_api` authorizes against the normalized `endpoint` path**, so path traversal such as `..` is caught; while an allowlist is active, repository-scoped endpoints whose repository cannot be determined (`/search/code`, `/user/repos`, …) are refused.\n- **`gh_file` refuses to write inside `.git/`** (`config` can redirect pushes; `hooks/` is arbitrary code execution). Reading is still allowed.\n- **`allowRepos` accepts only strict `owner/repo`**; full URLs are rejected."
+    },
+    {
+      "section": "6. Security model",
+      "text": "- **Paths**: every read and write path is resolved to an absolute path, checked to be inside `workspaceRoot`, and the deepest existing ancestor is checked with `realpath` to prevent symlink escape.\n- **How the token travels**: only through the child process environment variable `GIT_CONFIG_VALUE_0=http.extraHeader` (Basic auth, `x-access-token:<PAT>`). It **never appears on the command line** (invisible to process listings), is **never written to `.git/config`**, and is **never echoed in a tool result**. Arguments are passed to git as an array with no shell, so there is no command-injection surface.\n- **Token exposure window**: only `clone`, `fetch`, `push` and `pull` receive the token; `status`, `diff`, `log`, `branches`, `add` and `commit` never do.\n- **Account storage**: prefers a DSH credential record (the token in the `key` field, account metadata in `env`); when the host does not mount that service it falls back to `$DSH_HOME/github-accounts.json`, written with mode 0600 on POSIX.\n- **Remote writes**: the explicit `allowPush` / `allowApiWrite` switches plus the `allowRepos` allowlist, both judged against the object actually acted on."
+    },
+    {
+      "section": "Known exposure",
+      "text": "- **`gh_commit { push: true }` and `gh_push` place the token in the git child process environment**, so a `pre-push` hook shipped by the repository can read it. **Enable pushing only for repositories you trust.**\n- **A token pasted into the prompt appears in the session transcript.** To avoid that, supply it via the environment or `.credentials.yaml` (Option B in [Binding a GitHub account](#3-binding-a-github-account)).\n- **`url.*.insteadOf` in host-level `git config` can still redirect a remote.** That is the trust boundary of the host machine's configuration.\n- The plugin runs as you and can read the files you can read. The list above is a product-level boundary, not an operating-system sandbox."
+    },
+    {
+      "section": "Networking: clone and push need a wider sandbox",
+      "text": "The default `workspace-write` sandbox blocks git's network transport (observed as `schannel: AcquireCredentialsHandle failed: SEC_E_NO_CREDENTIALS`, plus MSYS `sh.exe` being unable to create a signal pipe). Therefore:"
+    },
+    {
+      "section": "Networking: clone and push need a wider sandbox",
+      "text": "| Operation | `workspace-write` sandbox | `danger-full-access` |\n|---|---|---|\n| `gh_account` / `gh_config` (Node `fetch`, not git) | ✅ | ✅ |\n| `gh_api` (`fetch`) | ✅ | ✅ |\n| `gh_repo status/diff/log/branches`, `gh_file`, `gh_commit` (purely local) | ✅ | ✅ |\n| `gh_repo clone` / `gh_pull` / `gh_push` (git over HTTPS) | ❌ | ✅ |\n\nTo let the agent actually clone and push, set the session to `danger-full-access`, or approve a one-off escalation for those operations."
+    },
+    {
+      "section": "Other",
+      "text": "| Symptom | Cause / fix |\n|---|---|\n| No `gh_*` tools visible at all | The plugin is not installed, or DSH was not restarted. Install it, then fully quit and start DSH again |\n| \"no GitHub account has been bound\" | Run `gh_account(action=\"bind\")`, or set the `GITHUB_TOKEN` environment variable |\n| A call fails with `value is not lossless JSON` | The plugin is an older version (its output carried `undefined` keys). Upgrade to a version that includes `output-contract.test.mjs` |\n| `gh_push` reports `allowPush` | Enable `allowPush: true` in the config and restart |\n| 401 / authentication failure | Check credentials with `gh_account(action=\"status\")`; a private repository requires a token |\n| 403 with `rate_remaining: 0` | The unauthenticated limit (60/hour) is exhausted; binding a token raises it to 5000/hour |\n| `edit` reports \"oldText appears N times\" | Widen `oldText` until it is unique, or pass `count` explicitly |\n| `pull` fails on a divergence | Use `rebase: true`, or commit local changes first |"
+    },
+    {
+      "section": "8. Development",
+      "text": "```sh\nnode test/git.test.mjs               # git execution layer: 11 cases\nnode test/plugin.test.mjs            # plugin end to end: 28 cases (real git + a local smart-HTTP remote)\nnode test/account.test.mjs           # account binding and first-run prompt: 12 cases\nnode test/output-contract.test.mjs   # host output contract (lossless JSON): 5 cases"
+    },
+    {
+      "section": "8. Development",
+      "text": "`npm test` runs the four suites; `npm run verify` runs the two validators. CI runs all of it on\nUbuntu and Windows across Node 20 and 22 — Windows included on purpose, because `src/git.js`\ncarries platform-specific handling.\n\nThe tests need no internet: the remote is a local smart-HTTP server bridged onto `git http-backend` (`test/git-http-server.mjs`), and clone / fetch / push run for real."
+    },
+    {
+      "section": "8. Development",
+      "text": "> Do not use `node --test`: under this sandbox its runner starts child processes with piped stdio and returns EPERM.\n> For the same reason `src/git.js` redirects a child's stdout/stderr to temporary files instead of using pipes —\n> that is what lets this plugin work inside the DSH sandbox at all."
+    },
+    {
+      "section": "9. Layout",
+      "text": "```\ndsh-plugin-github/\n├── package.json              # declares dsh.bundle.patch\n├── cordis.patch.yml          # inserts the plugin row into a profile's config layer (with all defaults)\n├── README.md / README.zh.md  # this file, and its Chinese counterpart"
+    },
+    {
+      "section": "10. License",
+      "text": "[MIT](LICENSE)"
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,150 @@
+{
+  "repo": "shenhuanageshei/dsh-git-status",
+  "commit": "289bbe3a134e8dcd4222f331809ab2830efecd20",
+  "extracted_at": "2026-11-12T04:27:23.590984+00:00",
+  "tree": {
+    "files": 12,
+    "bytes": 170348,
+    "lines_by_language": {
+      "JSON": 29,
+      "JavaScript": 1543,
+      "Markdown": 235,
+      "Other": 25,
+      "YAML": 4
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/design.md",
+      "docs/preview/preview-badge.png",
+      "docs/preview/preview-full.png",
+      "docs/preview/preview-line.png",
+      "docs/preview/preview-menu.png",
+      "lib/client.js",
+      "lib/index.mjs",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-git-status",
+    "description": "会话 git 状态展示 + 分支切换——会话头徽标（交互）与输入区环境行（ambient），官方 slot 挂载",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "lib/index.mjs",
+    "exports": {
+      ".": {
+        "default": "./lib/index.mjs"
+      },
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-ui-slots"
+        ],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "cordis": "^4.0.0-rc.7",
+      "react": "^18.2.0"
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-git-status bundle：向组合挂 Node half（状态/分支/切换路由）\n- insert:\n    - id: git-status\n      name: 'dsh-git-status'\n"
+    }
+  ],
+  "entries": [
+    "lib/index.mjs",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "dsh.internal",
+      "url": "http://dsh.internal",
+      "where": "lib/index.mjs:458"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-08-31T18:08:04Z",
+    "created_at": "2026-08-31T17:53:21Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/client.js",
+    "lib/index.mjs",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "Introduction",
+      "text": "<h1 align=\"center\">dsh-git-status</h1>\n\n<p align=\"center\">会话视图实时 git 状态 + 分支切换——会话头徽标（交互）与输入区环境行（ambient），官方 slot 挂载、零官方改动。</p>\n\nDSH 插件：在会话视图中实时展示当前会话工作目录的 git 状态（分支、ahead/behind、脏区计数、worktree、HEAD），并支持手动切换/新建分支。官方 bundle 插件，安装：\n\n```\ndsh plugin --profile web add github:shenhuanageshei/dsh-git-status#v0.1.0\n```"
+    },
+    {
+      "section": "界面",
+      "text": "| 位置 | 槽位 | 功能 |\n|---|---|---|\n| 会话头徽标 `⎇ main ▾` | `conversation.session.header.actions` | 点击弹分支菜单：搜索 / 切换（远程 DWIM 建跟踪分支）/ 新建；agent 运行中切换需二次确认；git 错误原文回显；工作区有未提交变更时琥珀圆点提示 |\n| 输入卡下方环境行 | `conversation.composer.dock` | 与官方统计行同槽的 ambient 读出行：`⎇ main ↑2↓1 · +3 ~2 ?1 · ⧉ wt:feature-x · 0a1b2c3 10m前`；分段配色（⎇ 品牌蓝、分支名 primary、脏区琥珀、worktree 紫、HEAD 弱灰）与 13px/段距 14px 的呼吸感，区别于全灰统计行；悬停显示 cwd / 主仓 / HEAD / upstream / worktree 列表 |\n\n非 git 会话两处自动隐藏；detached HEAD 显示 `⎇ @短sha`；linked worktree 显示 `⧉` 标记。"
+    },
+    {
+      "section": "界面",
+      "text": "分支菜单（徽标点击）："
+    },
+    {
+      "section": "安全模型（写操作）",
+      "text": "- 只用 `git switch`（绝无 `--force`）：脏区有丢失风险时 git 自身拒绝，错误原文回显\n- ref 白名单（只接受已枚举分支）+ spawn 参数数组无 shell + `check-ref-format` 校验新建名\n- per-cwd 互斥锁串行切换；成功即失效缓存\n- 读命令带 `--no-optional-locks`，不与 agent 的 git 操作抢索引锁"
+    },
+    {
+      "section": "架构",
+      "text": "- **Node half**（`lib/index.mjs`）：3 条路由——`GET /status`（TTL 1.5s 轮询缓存）、`GET /branches`（TTL 5s）、`POST /switch`；会话 → cwd 经 `ctx.sessions.get(id).header.cwd`\n- **client half**（`lib/client.js`）：`ctx.slots.inject` 挂两个官方槽；2s 轮询起步、慢仓自适应退避至 8s、页面隐藏暂停\n- **零构建**：client 手写 CJS（与 task-status 编译产物同构的 `__ModuleLoader__` 包装），无 tsdown/esbuild 依赖，改完即生效；将来接工具链时迁回 `src/ + tsdown`"
+    },
+    {
+      "section": "验证记录（2026-08-31）",
+      "text": "- 宿主进程单测：状态/计数/worktree 检测/分支清单/切换拒绝冲突分支/新建非法名拒绝/成功切换——全绿\n- HTTP 实测（fixture 会话）：status/branches 数据正确；switch 正反 7 路径（create/switch/worktree 冲突/坏名/未知分支/坏 mode/未知会话）全部符合预期\n- client bundle：boot 接线 ✓、`/plugins/dsh-git-status/client.js` 200 ✓"
+    },
+    {
+      "section": "开发",
+      "text": "```"
+    },
+    {
+      "section": "注入（运行时生效，免重启）",
+      "text": "dev_inject_plugin <本仓库克隆目录>"
+    },
+    {
+      "section": "Node half 热重载（client half 需刷新页面）",
+      "text": "dev_reload_package dsh-git-status"
+    },
+    {
+      "section": "卸载",
+      "text": "dev_uninject_plugin dsh-git-status\n```\n\n设计文档：`docs/design.md`。"
+    },
+    {
+      "section": "插件管理",
+      "text": "已装插件用 plugin-registry 的**薄控制台**管理（浏览器面板）：管理 profile\n插件安装态（bundle 层栈 + insert 行 + 启停），无需手改配置。安装：\n`dsh plugin --profile web add <plugin-registry>/packages/plugin/console`"
+    }
+  ],
+  "skipped": []
+}

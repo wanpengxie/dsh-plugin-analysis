@@ -1,0 +1,219 @@
+{
+  "repo": "lidaqi001/dsh-codex-delegate",
+  "commit": "db276ecf5620fc38afdd30da9031efedc0d88872",
+  "extracted_at": "2026-11-11T23:36:02.374606+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 22404,
+    "lines_by_language": {
+      "JSON": 68,
+      "JavaScript": 55,
+      "Markdown": 128,
+      "Other": 32,
+      "YAML": 170
+    },
+    "outline": [
+      ".github/workflows/publish.yml",
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "awesome-entry.yml",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-codex-delegate",
+    "version": "1.0.2",
+    "type": "module",
+    "description": "Codex 委托模式：一个把全部处理都交给 codex 子代理的 Agent 预设 bundle。",
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-bundle",
+      "deepseek-harness",
+      "agent-preset",
+      "codex"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/lidaqi001/dsh-codex-delegate.git"
+    },
+    "exports": {
+      ".": "./index.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE",
+      "locale/*.json",
+      "icon.svg"
+    ],
+    "icon": "./icon.svg",
+    "publishConfig": {
+      "registry": "https://registry.npmjs.org",
+      "access": "public"
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-agent-preset": "^0.2.2-rc.1",
+      "@deepseek-ai/dsh-command-compact": "^0.2.2-rc.1",
+      "@deepseek-ai/dsh-compaction-basic": "^0.2.2-rc.1",
+      "@deepseek-ai/dsh-persona": "^0.2.2-rc.1",
+      "@deepseek-ai/dsh-subagent": "^0.2.2-rc.1",
+      "@deepseek-ai/dsh-subagent-codex": "^0.2.2-rc.1",
+      "@deepseek-ai/dsh-tool-ask-user": "^0.2.2-rc.1",
+      "@deepseek-ai/dsh-tool-subagent": "^0.2.2-rc.1",
+      "@deepseek-ai/dsh-tool-todo": "^0.2.2-rc.1"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "homepage": "https://github.com/lidaqi001/dsh-codex-delegate#readme",
+    "bugs": {
+      "url": "https://github.com/lidaqi001/dsh-codex-delegate/issues"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Codex 委托模式\n#\n# 声明一个 Agent 预设 `codex`：主代理只做理解、澄清、拆分、委派与汇报，所有\n# 实际处理都交给 codex 子代理（`subagent_codex`）执行。\n#\n# 本 bundle 在 Host 层注册一个专用 provider：providerName `codex-delegate`、\n# permissionMode `approve-for-me`。原因：provider 的 permissionMode 决定 codex\n# 拿到的沙箱——实测默认的 `never` 只会给只读沙箱（工作区内也写不了文件），\n# `approve-for-me` 才会给 `sandbox: workspace-write`，并在需要时走 codex 的自动\n# 审批（无人工介入），这是\"把活交给 codex\"能真正改文件的前提。\n#\n# 子代理工具用 `@deepseek-ai/dsh-tool-subagent` 在 preset 内注册，工具名沿用\n# `subagent_codex`（同作用域同名遮蔽 profile 里的全局工具，因此其它会话的全局\n# `subagent_codex` 不受影响），provider 指向上面的专用 provider。\n#\n# 约束强度说明：这里的隔离是\"提示词级\"的——本 preset 只挂载委派、澄清、进度和\n# 压缩四类插件，没有 bash / 文件 / 搜索工具；但 profile 里 Host 级注册的全局工具\n# （MCP、Agent Teams 等）仍可能对本模式的 Agent 可见。要工具级硬隔离需要额外的\n# gate 插件，当前版本未包含（见 README「可调项」）。\n- insert:\n    # Host 层：本模式专用的 codex provider（名称全局唯一，不动全局 `codex`）。\n    - id: subagent-codex-delegate\n      name: '@deepseek-ai/dsh-subagent-codex'\n      config:\n        providerName: codex-delegate\n        permissionMode: approve-for-me\n\n    - id: preset-codex\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: codex\n        name: Codex 委托\n        description: 会话只做调度：所有处理都交给 codex 子代理执行，主代理只负责拆分、委派与汇总。\n        order: 6\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              # complete: true 让这段文字成为该会话唯一的系统提示词，避免其它\n              # 提示词段落把主代理引向\"自己动手\"。\n              complete: true\n              prefix: |-\n                你是「Codex 委托」模式的调度器。主代理只负责理解、澄清、拆分、委派和汇报；凡需要检索、分析、写作、改文件、运行命令或验证的工作，都交给 codex 子代理。只能使用 subagent_codex、ask_user_question、todo_write 三个工具。\n\n                已有结果足以回答的追问，可直接依据结果回答；不得把新调查、分析或验证伪装成追问。其余实质请求必须委派，不凭猜测补全事实。\n\n                派单前，若关键歧义会改变结果且不能安全地写成明确假设，先用 ask_user_question 澄清。子代理看不到本会话历史、不能追加消息或恢复，也不能中途向你提问；把所有必要决策和背景预先写进任务。\n\n                每个任务描述都要自包含：明确 cwd（默认继承会话工作目录，需要别的目录时写明）；完整写入用户要求及必要的既有结果；说明目标、范围、禁改范围、约束和假设；写明验收标准、需要执行的验证及输出格式。要求子代理遇到无法判断或无法完成之处时报告原因、已完成部分和待决事项，不要猜测。一次派单只做一件事；互不依赖的任务可同轮并行派出。\n\n                subagent_codex 调用只返回任务 id，结果稍后以完成通知到达。调用后不得轮询、空转、重复派同一任务或提前声称结果；没有其他可做事项时结束本轮，等待通知。\n\n                收到通知后核对结果与验收标准。区分成功、部分完成、失败和阻塞；需要后续工作时创建聚焦的新任务，并附上前次结果与未完成项，不要盲目重派。仅在有多个并行或分阶段任务时用 todo_write 跟踪：每项对应一个派单，随派出、完成或阻塞更新，不能用它代替委派或等待通知。\n\n                本模式下其它工具会被系统直接拒绝——即使工具列表里能看到它们，也不要用。\n\n                最终用用户使用的语言简要汇报：已完成事项、实际结果、遗留问题及需用户决定之处。文件路径用相对路径。只有子代理明确报告过的改动和验证才能陈述；不得伪造结果、文件变更或测试执行情况。\n\n          # 本模式的委派工具：provider 指向专用 provider；工具名与全局同名，\n          # 在同一作用域内遮蔽全局 `subagent_codex`。\n          - id: tool-codex-delegate\n            name: '@deepseek-ai/dsh-tool-subagent'\n            config:\n              provider: codex-delegate\n              toolName: subagent_codex\n              maxDepth: provider-managed\n\n          # 工具级硬限制：preset 层注册一个 guard，除下列工具外的任何调用都被拒绝。\n          # 用 guard 而非 tools.restrict：restrict 会连 preset 自己挂的工具一起过滤掉。\n          - id: codex-only-guard\n            name: 'dsh-codex-delegate'\n            config:\n              allowed:\n                - subagent_codex\n                - ask_user_question\n                - todo_write\n\n          # 主代理唯一保留的\"自己\"工具：向用户澄清需求。\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n\n          # 多步委派的进度跟踪（只写会话日志，不做实际处理）。\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n\n          # 长会话压缩：委派结果会持续累积，避免上下文溢出。\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "icon.svg",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/publish.yml:29"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-codex-delegate",
+      "where": "awesome-entry.yml:4"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-codex-delegate.git",
+      "where": "package.json:16"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "package.json:33"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-codex-delegate#readme",
+      "where": "package.json:52"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/lidaqi001/dsh-codex-delegate/issues",
+      "where": "package.json:54"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 8,
+    "pushed_at": "2026-11-06T08:26:30Z",
+    "created_at": "2026-11-06T06:06:14Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-codex-delegate",
+      "text": "**Codex 委托模式** —— 一个把「所有处理都交给 codex 子代理」的 DeepSeek Harness Agent 预设（bundle）。\n\n装上它之后，新建会话时在「Agent 预设」里选 **Codex 委托**：主代理不再自己读写文件、跑命令、\n搜网页，而是理解需求、拆任务、把每个任务派给 `subagent_codex`（Codex 子代理）执行，最后汇总\n结果。实质工作全部在 codex 里做。\n\n- npm：`dsh-codex-delegate`\n- DSH Agent 预设 id：`codex`\n- 纯 YAML 配置 + 一个很小的 Host 插件（`index.js`，约 1 KB），无需编译"
+    },
+    {
+      "section": "模式怎么工作",
+      "text": "| 组成 | 作用 |\n|---|---|\n| `persona`（`complete: true`） | 该会话唯一的系统提示词：只做调度，不直接动手；委派必须自包含（子代理看不到会话、一次性、不接受追问）；异步等待不轮询；多阶段先派第一步；结果先核对验收再汇报 |\n| `subagent_codex`（scoped，遮蔽全局同名工具） | 唯一的\"干活\"工具，`maxDepth: provider-managed`；指向 bundle 自带的专用 provider `codex-delegate`（`permissionMode: approve-for-me`），同名遮蔽全局工具，其它会话配置不受影响 |\n| `ask_user_question` | 需求有歧义时向用户确认 |\n| `todo_write` | 多步委派的进度跟踪（只写会话日志） |\n| `codex-only-guard` | **工具级硬限制**：preset 层注册执行期 guard，除上面三个工具外，任何工具调用都被拒绝 |\n| `compaction` | 长会话里委派结果会持续累积，自动压缩 |"
+    },
+    {
+      "section": "模式怎么工作",
+      "text": "预设里只挂载了委派/澄清/进度/压缩四类工具，没有 bash / 文件 / 搜索工具。profile 里 Host 级注册的全局工具（MCP、Agent Teams 等）**仍会出现在工具列表里**，但 `codex-only-guard` 会在执行时直接拒绝它们，返回\"本模式下不可用，请改为委派\"。\n\n为什么用 guard 而不是 `ctx.tools.restrict`（可见性遮罩）：`restrict` 会把 preset 层注册的工具也一起过滤，连 `ask_user_question`、`todo_write` 都会被隐藏；guard 只按工具名拒绝调用，不会误伤，也不会影响其它预设/其它会话。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh"
+    },
+    {
+      "section": "在 DSH 会话里直接说：",
+      "text": "帮我安装 dsh-codex-delegate@1.0.2\n```\n\n代理会调用 `plugin_manager` 的 `install_bundle`，target 写 `dsh-codex-delegate`（装 latest）\n或带版本号都行。\n\n装完验证：\n\n1. `plugin_manager` `list_plugins`：出现 `preset-codex`，`enabled: true`、`fiberPhase: active`；\n2. `cordis_inspect_query` → `Config.listConfigs`（name = `@deepseek-ai/dsh-agent-preset`）能看到 `include:preset-codex`；\n3. 新建会话 →「Agent 预设」选 **Codex 委托** → 给一个需要动手的任务，确认它只派发、不自己执行。"
+    },
+    {
+      "section": "前置条件",
+      "text": "1. DeepSeek Harness `^0.2.2-rc.1`（见 `peerDependencies`）。\n2. profile 里已安装 codex 子代理 bundle `@deepseek-ai/dsh-subagent-codex`。本 bundle 在 Host 层\n   插入自己的 provider 行（`providerName: codex-delegate`），该插件包必须能被解析，否则 provider\n   与委派工具都不会注册。\n3. codex CLI 已安装且已登录（`codex login status` 显示已登录，或已配置等效的认证方式；凭据与 `~/.codex/config.toml` 配置是两回事）。子代理用哪个模型/provider、是否免审批，\n   由目标机器自己的 codex 原生配置决定。\n4. 本 bundle 通过 `link:` 或 registry 安装均可；若是 `link:`，目录不要移动或删除。"
+    },
+    {
+      "section": "本地开发",
+      "text": "```sh"
+    },
+    {
+      "section": "在 DSH 里：帮我安装 /abs/path/to/dsh-codex-delegate",
+      "text": "npm pack           # 打 tarball（install_bundle 也直接吃 .tgz）\n```\n\n改 `cordis.patch.yml` 后重新 `install_bundle` 即可（profile 配了 `patchReload: live`，新会话生效）。"
+    },
+    {
+      "section": "发布",
+      "text": "```sh\nnpm version patch          # 或手动改 version\ngit push && git push --tags"
+    },
+    {
+      "section": "也可以本地直接发布：",
+      "text": "npm publish                # publishConfig 已指向 registry.npmjs.org、access public\n```\n\n上架 awesome-dsh-plugin：条目草稿在仓库根目录 `awesome-entry.yml`；正式 PR 需把它提交到对方仓库的 `data/plugins/lidaqi001__dsh-codex-delegate.yml`（一个 PR 只加这一个文件）。"
+    },
+    {
+      "section": "兼容性",
+      "text": "- `peerDependencies` 把用到的 9 个 DSH 包钉在 `^0.2.2-rc.1`。DSH 大版本升级后先核对\n  patch 里的包名/字段，再放宽范围并重新发布。\n- codex 大版本变更可能影响 `permissionMode` 映射，升级后跑一次连通性验证（派一个 `echo` 任务）。"
+    },
+    {
+      "section": "可调项",
+      "text": "- **硬限制的允许列表**：`codex-only-guard` 的 `allowed` 可改（默认 `subagent_codex`、`ask_user_question`、`todo_write`）；\n  想去掉澄清/进度工具就同时删掉对应插件行。若想让主代理连\"看到\"都要更干净，只能在没有 preset 层\n  工具的前提下改用 `ctx.tools.restrict`，但会一并隐藏 preset 自己的工具，需要实测后再上。\n- **codex 权限与沙箱**：`permissionMode` 写在 provider 行（`subagent-codex-delegate`），不是工具行：\n  - `approve-for-me`（当前默认）：`approvalPolicy: on-request` + 自动审批 + `sandbox: workspace-write`\n    → **工作区可写**，无人值守也能跑；需要越界的操作走 codex 自动审批。\n  - `never`：`approvalPolicy: never`，沙箱不显式指定，实测拿到的是**只读沙箱**——工作区内也写不了文件\n    （`operation not permitted`），只有读/检索/联网可用。\n  - `dangerously-bypass-approvals-and-sandbox`：无审批、全盘可写，慎用。\n  另外 codex 原生配置（`~/.codex/config.toml`）仍会叠加，例如 `network_access`、模型选择等。\n- **只保留委派**：去掉 `tool-todo`、`tool-ask-user`，同时删掉 persona 里对应的规则。"
+    },
+    {
+      "section": "卸载",
+      "text": "`plugin_manager` `remove_bundle`，target `dsh-codex-delegate`；或设置 → 插件里停用/移除。"
+    },
+    {
+      "section": "1.0.2",
+      "text": "- 新增 `codex-only-guard`（preset 层执行期 guard）：除 `subagent_codex`、`ask_user_question`、`todo_write`\n  外的工具调用一律被拒绝，把\"只能把活交给 codex\"从提示词约束升级为**运行时强制**。\n- persona 增加一句：其它工具即使可见也会被系统拒绝，不要尝试。\n- 包结构从\"纯声明式\"变为带一个 Host 插件（`index.js`），`exports` 增加 `.`。"
+    },
+    {
+      "section": "1.0.1",
+      "text": "- **新增专用 provider `codex-delegate`（`permissionMode: approve-for-me`）**：修复默认 `never` 下\n  codex 沙箱为只读、工作区内也无法写文件的问题（实测）；委派工具改为指向该 provider。\n- persona 重写：明确\"子代理不能中途提问，决策要提前写进任务\"、完成通知到达前不得声称结果、\n  区分成功/部分完成/失败/阻塞、后续任务必须附上前次结果、汇报只能陈述子代理明确报告过的改动与验证。\n- 移除 `includeRuntimeContext: false`（`complete: true` 已限定提示词范围，这一项只是重复抑制）。\n- `peerDependencies` 补上 `@deepseek-ai/dsh-subagent`（`dsh-tool-subagent` 依赖的服务包）。\n- CI 加固：action 固定 commit SHA、`--provenance`、tag 与版本一致性校验、只在 404 时发布、并发组。\n- README 修正：不再声称\"主代理没有工具\"、认证说明改为 `codex login status`、awesome 投稿路径修正。"
+    },
+    {
+      "section": "1.0.0",
+      "text": "- 首个版本：`preset-codex`（persona + scoped `subagent_codex` + `ask_user_question` + `todo_write` + compaction）。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

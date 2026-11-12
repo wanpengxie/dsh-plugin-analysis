@@ -1,0 +1,181 @@
+{
+  "repo": "Ev3rGan/dsh-session-finder",
+  "commit": "71a5947b6573226c04c09aeea6467ce8e8e25742",
+  "extracted_at": "2026-11-12T12:06:37.218751+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 19077,
+    "lines_by_language": {
+      "JSON": 28,
+      "JavaScript": 349,
+      "Markdown": 94,
+      "Other": 25,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-session-finder",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Session content search panel for the DSH sidebar (substring match, CJK friendly)",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-sidebar"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: session-finder\n      name: '@local/dsh-session-finder'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:20"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost",
+      "where": "index.js:133"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-11-04T11:46:37Z",
+    "created_at": "2026-11-04T11:45:24Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-11-04T11:46:37Z",
+      "inactive_days": 8,
+      "commit_count": 2,
+      "checked_at": "2026-11-12T12:06:37.218751+00:00",
+      "signals": [
+        "list:pushed_at=2026-11-04T11:46:37Z",
+        "list:commits=2"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-session-finder",
+      "text": "给 DeepSeek Harness（DSH）侧边栏加一个「会话正文搜索」面板：支持任意中文子串检索，弥补自带搜索对中文只能整词匹配的短板。\n\n> 非官方插件，依赖 DSH 的内部扩展点，升级 DSH 后可能需要适配。"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "DSH 自带的会话全文搜索基于 SQLite FTS5，建表时使用 `unicode61` 分词器：\n\n```sql\nCREATE VIRTUAL TABLE persisted_docs USING fts5(\n  text, session_id UNINDEXED, seq UNINDEXED, type UNINDEXED, ...\n  tokenize = 'unicode61'\n)\n\n`unicode61` 按空格和标点切词，一整段连续中文会被当作一个词。于是正文里写着「禁止洋文」时：\n\n- 搜「洋文」→ 0 条（`MATCH` 只认完整 token）\n- 搜「禁止洋文」→ 能命中\n\n对中文用户来说，这基本等于搜不到正文。本项目绕过 `MATCH`，直接对索引里的正文做子串比对。"
+    },
+    {
+      "section": "原理",
+      "text": "```text\n面板输入 ──fetch──▶ dsh-app://app/session-finder/search\n                    │ Electron 协议层转发（带 cookie）\n                    ▼\n              Host 路由 handler\n\n- **Host 半**（`index.js`）：注册只读路由 `GET /session-finder/search?q=...`，对 `persisted_docs` 用 `instr(lower(text), lower(?))` 做子串查询，联查 `persisted_sessions` 拿工作区，读取投影缓存拿会话标题。\n- **Client 半**（`client.js`）：通过 `ctx.slots.inject` 向 `sidebar.panellist` 注册侧边栏入口，向 `main` 注册同 id 的主面板。\n- 索引库由 `@deepseek-ai/dsh-session-query-sqlite` 维护，本插件只读，不写入、不改动会话日志。"
+    },
+    {
+      "section": "安装",
+      "text": "前提：DSH 桌面版，且已在 profile 里启用会话全文索引（`session-query-sqlite` 的 `openAt` 为 `first-search` 或 `startup`，索引文件位于 `~/.dsh/cache/session-search.db`）。\n\n1. 把本仓库放到本地，例如 `D:/2026dsh/plugins/dsh-session-finder`。\n\n2. 在 DSH profile（`~/.dsh/profiles/desktop/package.json`）里加链接依赖：\n\n```json\n   \"dependencies\": {\n     \"@local/dsh-session-finder\": \"link:D:/2026dsh/plugins/dsh-session-finder\"\n   }\n   ```\n\n3. 在同一文件的 `dsh.profile.bundles` 里加一行：\n\n```json\n   \"@local/dsh-session-finder\"\n   ```\n\n4. 安装并重启 DSH："
+    },
+    {
+      "section": "安装",
+      "text": "```bash\n   pnpm install --dir ~/.dsh/profiles/desktop\n   ```\n\n然后完全退出 DSH 再打开（bundle 列表只在启动时读取）。"
+    },
+    {
+      "section": "使用",
+      "text": "重启后侧边栏会出现带放大镜的「会话搜索」入口。点开，输入任意中文子串即可，边输入边出结果，命中位置高亮。\n\n结果按事件时间倒序，展示会话标题、事件类型、时间和工作区路径。"
+    },
+    {
+      "section": "配置",
+      "text": "| 项 | 位置 | 说明 |\n|---|---|---|\n| 查询长度上限 | `index.js` 的 `MAX_QUERY` | 默认 200，超出直接拒绝 |\n| 单页条数 | `index.js` 的 `MAX_LIMIT` / `client.js` 的 `PAGE_LIMIT` | 默认 50，最大 200 |\n| 摘录窗口 | `index.js` 的 `CONTEXT_CHARS` | 默认命中前后各 60 字符 |"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 依赖 DSH 的内部 slot 名（`sidebar.panellist`、`main`）和桌面端协议转发，属于非稳定接口。\n- 只能搜索已进入索引的会话；索引未建立或尚未收录的会话搜不到。\n- 子串匹配没有 FTS 的相关度排序，结果是事件时间倒序。\n- 索引路径按 `$DSH_HOME` 或 `~/.dsh` 推断，自定义 home 时需要确认。"
+    },
+    {
+      "section": "License",
+      "text": "MIT\n\n[](https://github.com/deepseek-ai/deepseek-harness)"
+    }
+  ],
+  "skipped": []
+}

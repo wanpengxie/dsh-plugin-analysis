@@ -1,0 +1,216 @@
+{
+  "repo": "nicecx/dsh-reset-handoff",
+  "commit": "c5c34f626fe1f9972e7a3948a238b3be5828352c",
+  "extracted_at": "2026-11-12T01:59:32.594134+00:00",
+  "tree": {
+    "files": 16,
+    "bytes": 101177,
+    "lines_by_language": {
+      "JSON": 44,
+      "JavaScript": 541,
+      "Markdown": 396,
+      "Other": 24,
+      "Python": 768,
+      "YAML": 7
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "docs/PROTOCOL.md",
+      "hermes/__pycache__/reset_agent.cpython-313.pyc",
+      "hermes/reset_agent.py",
+      "package.json",
+      "scripts/review_submit.py",
+      "scripts/test_review_submit.py",
+      "src/index.js",
+      "src/protocol.js",
+      "test/index.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-reset-handoff",
+    "version": "0.1.0",
+    "description": "Standard handoff protocol so DSH never restarts itself: a host plugin that files a JSON reset request for an external ops agent (e.g. Hermes) to execute preflight-snapshot → restart → health-check → recover, then delivers the result back to the requesting session.",
+    "type": "module",
+    "main": "src/index.js",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "exports": {
+      ".": "./src/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/nicecx/dsh-reset-handoff.git"
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "dsh-plugin",
+      "reset",
+      "restart",
+      "handoff",
+      "ops"
+    ],
+    "scripts": {
+      "test": "node --test test/index.test.js",
+      "check": "node --test test/index.test.js"
+    },
+    "files": [
+      "src",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "docs",
+      "CHANGELOG.md",
+      "LICENSE"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-reset-handoff bundle patch: 挂载重置托管插件（宿主级，跨会话共享）。\n# 工具: reset_handoff / reset_status。\n# 设计原则：DSH 自身绝不执行重启——只写 JSON 请求文件交给外部运维 agent\n# （如 Hermes Agent）执行\"预检快照 → 重启 → 健康检查 → 恢复业务\"。\n- insert:\n    - id: dsh-reset-handoff\n      name: 'dsh-reset-handoff'\n"
+    }
+  ],
+  "entries": [
+    "src/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_RESET_HANDOFF_DIR",
+      "kind": "env",
+      "where": "hermes/reset_agent.py:33"
+    },
+    {
+      "name": "REVIEW_HANDOFF_DIR",
+      "kind": "env",
+      "where": "scripts/review_submit.py:24"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:{DSH_PORT",
+      "where": "hermes/reset_agent.py:241"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:{DSH_PORT",
+      "where": "hermes/reset_agent.py:263"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:{AUTH_PROXY_PORT",
+      "where": "hermes/reset_agent.py:298"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/nicecx/dsh-reset-handoff.git",
+      "where": "package.json:20"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 19,
+    "pushed_at": "2026-08-31T03:34:59Z",
+    "created_at": "2026-08-30T06:15:46Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "src/index.js",
+    "src/protocol.js",
+    "test/index.test.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-reset-handoff",
+      "text": "> **DSH never restarts itself.** A host plugin that hands reset requests to an external ops agent over a versioned JSON protocol — preflight-snapshot → restart → health-check → recover — then delivers the result back to the requesting session after reboot."
+    },
+    {
+      "section": "Why",
+      "text": "A long-lived DeepSeek Harness (DSH) instance needs to restart for many reasons: reload plugins/config, apply settings, recover from a wedged state. But the **agent inside DSH should not restart DSH itself**:\n\n- restarting kills the very process that issued it, so the agent has no chance to see the outcome;\n- the agent cannot see what business is running (other live sessions, the relay channels, pending jobs);\n- if the reboot fails, nobody is left to diagnose and recover."
+    },
+    {
+      "section": "Why",
+      "text": "The safe pattern is a **handoff**: DSH writes a *request*, a separate, independent ops agent (here: Hermes Agent) reads it, runs the restart with preflight/health/recovery, and writes a *result* that DSH reads back after it comes up."
+    },
+    {
+      "section": "How it works",
+      "text": "```\n[DSH]  agent calls reset_handoff(reason)\n         │  writes request.json (JSON protocol)\n         │  (optional) triggers the external executor\n         ▼"
+    },
+    {
+      "section": "Pre-restart maturity gate",
+      "text": "The reference executor refuses to restart unless it is safe to do so. It checks:\n\n1. **No pending approvals/questions** — relay `pending.json` has an empty `pending` list (a restart would otherwise drop the approval stack).\n2. **Enough free disk** — at least `MIN_FREE_DISK_MB` (default 500 MB).\n3. **Cooldown** — at least `RESTART_COOLDOWN_SEC` (default 60 s) since the previous restart, to break crash loops."
+    },
+    {
+      "section": "Pre-restart maturity gate",
+      "text": "If any condition fails, the executor writes `result.json` with `status: \"failed\"`, `restart: { ok: false, gated: true }`, and a `gate` array listing each failed condition with its detail — **and does not restart**. The requesting agent (or user) sees the exact reason and decides when it is safe to retry."
+    },
+    {
+      "section": "Tools",
+      "text": "| Tool | Purpose |\n| --- | --- |\n| `reset_handoff(reason, scope?)` | Submit a reset request to the external ops agent. Never restarts DSH in-process. |\n| `reset_status()` | Query the latest request and its result (read-only). |\n\nBoth tools are registered host-wide, so **every session's agent** can call them when a reset is needed."
+    },
+    {
+      "section": "Protocol (v1)",
+      "text": "The plugin and the executor are **decoupled** — they only share two JSON files under `~/.dsh/reset-handoff/` (override with `DSH_RESET_HANDOFF_DIR`):\n\n**`request.json`** (written by DSH):\n\n```json\n{\n  \"schema\": \"dsh-reset-handoff/request\",\n  \"version\": 1,\n  \"id\": \"<uuid>\",\n\n**`result.json`** (written by the executor):\n\n```json\n{\n  \"schema\": \"dsh-reset-handoff/result\",\n  \"version\": 1,\n  \"requestId\": \"<uuid>\","
+    },
+    {
+      "section": "Protocol (v1)",
+      "text": "**Executor recovery contract** (the part that makes \"recover DSH itself\" real): if the health check fails after restart, the executor **must** attempt recovery, not just report failure:"
+    },
+    {
+      "section": "Protocol (v1)",
+      "text": "1. **Diagnose** — read the dsh web error log tail and extract key errors (loader failures, missing deps like undici, `EADDRINUSE` multi-instance, OOM).\n2. **Retry** — restart up to `MAX_RESTART_ATTEMPTS` (default 3) times with a cooldown between attempts.\n3. **Observe** — after each restart, wait an initialization window (default 120 s) before judging success.\n4. **Report** — write the outcome in `recoveryAction` (`attempts` + `diag`), so the requesting agent and the human see *why* it failed and how many tries were made."
+    },
+    {
+      "section": "Protocol (v1)",
+      "text": "Any executor that reads/writes these two files can drive the reset — Hermes, a custom script, a cloud function. The protocol is the contract."
+    },
+    {
+      "section": "Install",
+      "text": "```sh\ndsh plugin --profile <profile> add github:<owner>/dsh-reset-handoff\n```\n\nOptional executor trigger: configure `triggerCommand` so `reset_handoff` also wakes the external agent (default: none — the executor may poll `request.json` instead). See `cordis.patch.yml` for the config shape."
+    },
+    {
+      "section": "Executor (Hermes example)",
+      "text": "A reference executor is included under `hermes/reset_agent.py` (pure Python, no deps). It is meant to live inside a Hermes profile (`reset-agent`) and be triggered by `hermes cron run <job>`:\n\n```sh\npython3 reset_agent.py            # run the five-step flow\npython3 reset_agent.py --dry-run  # print the flow, don't restart\n```"
+    },
+    {
+      "section": "Requirements",
+      "text": "- DeepSeek Harness with the web profile (host plugin).\n- The external executor must be able to restart the dsh web service (macOS `launchctl kickstart -k com.dsh.web`, or equivalent for your OS/init)."
+    },
+    {
+      "section": "Ops guardrails (read this before restarting anything)",
+      "text": "Learned the hard way from a real 7-hour restart loop (2026-08-30). These rules are mandatory for any agent that manages a DSH host:"
+    },
+    {
+      "section": "Ops guardrails (read this before restarting anything)",
+      "text": "1. **Never create suicide/unconditional restart jobs.** No `launchctl submit` jobs containing `kickstart -k`, no `kill -9` on the DSH port, no unconditional restart logic. Restart only via the `reset_handoff` tool (which goes through the executor's gate) or DSH's own mechanism.\n2. **Verify plugin dependencies before restart.** The DSH loader resolves from `~/.dsh/profiles/web/node_modules` — a missing transitive dep (e.g. undici) makes the whole plugin tree fail to load. Confirm deps exist and the tree loads cleanly before restarting.\n3. **Health-check first, observe after.** Before any restart: `curl` the port, check for single instance (`lsof -i :3080`). After restart: wait a 2-minute observation window and confirm the PID is stable before proceeding.\n4. **Make plugins degrade gracefully.** Missing config / bad fields should fall back to defaults with a friendly error, so calling agents never feel the need to edit plugin source or kill services to work around bugs."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

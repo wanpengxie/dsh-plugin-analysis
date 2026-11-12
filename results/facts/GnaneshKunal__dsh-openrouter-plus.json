@@ -1,0 +1,1138 @@
+{
+  "repo": "GnaneshKunal/dsh-openrouter-plus",
+  "commit": "af25b8314dfb4cba75ed5658c356e458dc3820ac",
+  "extracted_at": "2026-11-11T10:23:10.072311+00:00",
+  "tree": {
+    "files": 47,
+    "bytes": 2243986,
+    "lines_by_language": {
+      "JSON": 93,
+      "JavaScript": 24306,
+      "Markdown": 2716,
+      "Other": 54,
+      "YAML": 242
+    },
+    "outline": [
+      ".github/scripts/release-notes.mjs",
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+      ".gitignore",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "docs/ARCHITECTURE.md",
+      "docs/DESIGN.md",
+      "docs/PRECISION.md",
+      "docs/SPEED.md",
+      "docs/USAGE.md",
+      "docs/images/composer-chip.jpg",
+      "docs/images/models-route.jpg",
+      "docs/images/settings-overview.jpg",
+      "docs/images/settings-presets.jpg",
+      "docs/images/sync-live-models.jpg",
+      "icon.svg",
+      "index.js",
+      "lib/auto-repair.js",
+      "lib/config-bridge.js",
+      "lib/endpoints.js",
+      "lib/metrics.js",
+      "lib/models-sync.js",
+      "lib/providers.js",
+      "lib/proxy.js",
+      "lib/quantization.js",
+      "lib/reasoning.js",
+      "lib/usage-store.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "screenshots.json",
+      "test/auto-repair.test.mjs",
+      "test/client.test.mjs",
+      "test/config-bridge.test.mjs",
+      "test/control-web.test.mjs",
+      "test/host.test.mjs",
+      "test/metrics.test.mjs",
+      "test/models-sync.test.mjs",
+      "test/providers.test.mjs",
+      "test/proxy.test.mjs",
+      "test/quantization.test.mjs",
+      "test/reasoning.test.mjs",
+      "test/usage-store.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-openrouter-plus",
+    "version": "0.7.1",
+    "type": "module",
+    "description": "OpenRouter routing presets for DeepSeek Harness — a loopback relay that applies a preset (service_tier, provider.sort or the :floor model variant) and an optional precision floor (provider.quantizations) to each Session at request time, a live status API, and an OpenRouter Plus settings page that points one provider row at the relay and stores a default preset.",
+    "keywords": [
+      "deepseek",
+      "harness",
+      "dsh",
+      "dsh-plugin",
+      "openrouter",
+      "service-tier",
+      "provider-sorting",
+      "quantization",
+      "precision",
+      "flex",
+      "llm",
+      "provider-pinning",
+      "endpoints"
+    ],
+    "license": "MIT",
+    "author": "Gnanesh Kunal",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/GnaneshKunal/dsh-openrouter-plus.git"
+    },
+    "homepage": "https://github.com/GnaneshKunal/dsh-openrouter-plus#readme",
+    "bugs": {
+      "url": "https://github.com/GnaneshKunal/dsh-openrouter-plus/issues"
+    },
+    "publishConfig": {
+      "access": "public"
+    },
+    "engines": {
+      "dsh": ">=0.2.1-rc.1",
+      "node": ">=22.6"
+    },
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "lib",
+      "cordis.patch.yml",
+      "locale/*.json",
+      "icon.svg",
+      "README.md",
+      "CHANGELOG.md",
+      "docs"
+    ],
+    "scripts": {
+      "test": "node --test",
+      "check": "node --check index.js && node --check client.js && node --check lib/proxy.js && node --check lib/metrics.js && node --check lib/config-bridge.js && node --check lib/reasoning.js && node --check lib/models-sync.js && node --check lib/quan..."
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-settings"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-openrouter-plus bundle patch.\n#\n# Inserts one Host row: the loopback service-tier relay plus its control API.\n# The relay owns its own loopback listener, because pi-ai dials it from this\n# process and it forwards the caller's key. The control API the settings page\n# reads is NOT on that listener: it is mounted on the DSH web server\n# (`ctx.webServer`, prefix `/__openrouter-plus`), so the page calls its own\n# origin — which is what makes it work behind Tailscale. That mount runs through\n# `ctx.connection.requestRejection`, i.e. the GUI's own auth fence, and is\n# absent in a composition with no web server; the relay then keeps the same\n# endpoints for `curl`.\n#\n# Everything here is hot-reloadable (`patchReload: live` in the profile):\n# changing `port`, `upstream` or `routes` restarts the listener in place.\n- insert:\n    - id: openrouter-plus\n      name: 'dsh-openrouter-plus'\n      config:\n        # Master switch. false keeps the plugin installed but binds nothing.\n        enabled: true\n\n        # Loopback only. Do not bind a routable interface: the relay forwards the\n        # caller's Authorization header and holds no key of its own.\n        host: 127.0.0.1\n        port: 8791\n        # When the preferred port is taken, fall forward to the next free one\n        # (8792, 8793, ...). The Models card probes the same range.\n        portFallback: true\n\n        # The OpenAI-compatible API the relay forwards to, without a trailing slash.\n        upstream: https://openrouter.ai/api/v1\n\n        # Mount path -> pinned service_tier. A `null` tier is a pure passthrough\n        # (no service_tier key is written). Values must be one of the tiers the\n        # endpoint serves; the relay does not second-guess provider vocabularies.\n        routes:\n          /flex/v1: flex\n          /priority/v1: priority\n          /fast/v1: fast\n          /ultrafast/v1: ultrafast\n          /scale/v1: scale\n          /auto/v1: auto\n          /default/v1: default\n          /v1: null\n\n        # Reasoning levels written onto every model of a route this plugin creates.\n        #\n        # A relay route is a provider key the installed catalog has never seen, so\n        # pi-ai cannot inherit a model's reasoning capability for it: without this\n        # field the composer shows no effort selector (\"This model provides no\n        # reasoning effort levels\"). Models that already declare their own map —\n        # in the source route, or as another variant of the same id such as\n        # `vendor/model:flex` — are never overwritten; this map is the fallback\n        # for the rest.\n        #\n        # false disables filling entirely. Omit the key to fill only from evidence\n        # already present in the profile.\n        reasoningEfforts:\n          off: null\n          low: low\n          medium: medium\n          high: high\n          max: max\n\n        # Re-apply that fill whenever the profile changes. The Models page's model\n        # picker rebuilds a picked model row from its catalog — id, name, context\n        # window, max tokens — so re-selecting a model there silently drops the\n        # `reasoningEfforts` above and the effort selector disappears. With this on,\n        # the capability is restored a moment after the edit lands. The pass is\n        # idempotent: with nothing missing it writes nothing, so it cannot fight a\n        # deliberate `reasoningEfforts: false` or a hand-written map.\n        autoRepairReasoning: true\n\n        # 0 disables the upstream timeout, which is what long SSE completions need.\n        upstreamTimeoutMs: 0\n        generationLookup: true\n        controlDiagnostics: false\n\n        # Extra endpoints served from /t/<id>/<tier>/v1 mounts, so one listener can\n        # front more than OpenRouter (a gateway, a self-hosted server, anything\n        # OpenAI- or Anthropic-compatible). This table is written by the\n        # \"Route through OpenRouter Plus\" switch on a provider row, and it is the\n        # only bookkeeping the switch keeps: the endpoint a provider is taken off\n        # of is recorded here, never inside the provider entry itself (pi-ai\n        # schema-validates that object). `tier: null` is a pure passthrough.\n        # Shown empty on purpose — a hand-written entry looks exactly like this:\n        #\n        # targets:\n        #   acme-gw-9f3a:\n        #     upstream: https://api.acme.dev/v1\n        #     tier: flex\n        targets: {}\n\n        # The spend card in the sidebar footer, next to Settings. It shows what\n        # OpenRouter actually charged (read from each response's `usage.cost`), not an\n        # estimate, so it stays honest when a request is served by a flex, priority or\n        # floor endpoint. false hides the card only — the settings page keeps showing\n        # the same numbers, and the relay keeps recording them either way.\n        usageWidget:\n          enabled: true\n\n        # Which facts an endpoint row states in the composer's provider menu, and how\n        # many percentiles of a speed it prints. Every fact is on by default and a fact\n        # the listing did not report is dropped rather than shown as a dash, so turning\n        # these on costs nothing — latency and throughput appear only once the relay has\n        # seen a request for that model, because speed needs an authenticated read of\n        # the listing. `percentiles: p50` prints the median alone; `p50p90` adds the\n        # tail; `sort` decides the order the list reads in (display only, never a\n        # request). Written by \"Provider list display\" on the settings page; the relay\n        # never reads it.\n        providerFacts:\n          precision: true\n          price: true\n          uptime: true\n          throughput: true\n          latency: true\n          percentiles: p50\n          # The order the same list reads in: `default` is the Host's own (cheapest\n          # first, then output). Every other id names one fact — throughput, latency,\n          # uptime, input, output, cacheRead — and the fact owns its direction.\n          sort: default\n\n        # The precision floor every Session inherits until it picks its own in the\n        # composer chip. `any` sends nothing at all, so this default is byte-identical\n        # to a profile that predates the feature. The other three name a pool\n        # constraint: no-four-bit, eight-bit-up or full-width — see docs/PRECISION.md.\n        # The relay only attaches the filter after confirming that at least one\n        # endpoint of that model survives it, because an empty pool is a hard failure\n        # upstream, not a silent fallback.\n        precisionFloor: any\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "icon.svg",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "GITHUB_REF_NAME",
+      "kind": "env",
+      "where": ".github/scripts/release-notes.mjs:8"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/control-web.test.mjs:21"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/host.test.mjs:26"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/release.yml:24"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "cordis.patch.yml:31"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "cordis.patch.yml:90"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1",
+      "where": "index.js:6"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "index.js:53"
+    },
+    {
+      "host": "gateway.example",
+      "url": "https://gateway.example/v1",
+      "where": "index.js:1996"
+    },
+    {
+      "host": "relay.invalid",
+      "url": "http://relay.invalid",
+      "where": "index.js:2201"
+    },
+    {
+      "host": "relay.invalid",
+      "url": "http://relay.invalid",
+      "where": "index.js:2313"
+    },
+    {
+      "host": "relay.invalid",
+      "url": "http://relay.invalid",
+      "where": "index.js:2357"
+    },
+    {
+      "host": "relay.invalid",
+      "url": "http://relay.invalid",
+      "where": "index.js:2430"
+    },
+    {
+      "host": "relay.invalid",
+      "url": "http://relay.invalid",
+      "where": "index.js:2565"
+    },
+    {
+      "host": "control.invalid",
+      "url": "http://control.invalid",
+      "where": "index.js:2816"
+    },
+    {
+      "host": "${name",
+      "url": "http://${name",
+      "where": "index.js:2992"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791/",
+      "where": "lib/config-bridge.js:5"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791`",
+      "where": "lib/config-bridge.js:157"
+    },
+    {
+      "host": "${literal",
+      "url": "http://${literal",
+      "where": "lib/config-bridge.js:295"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791`",
+      "where": "lib/config-bridge.js:830"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "lib/endpoints.js:193"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "lib/providers.js:465"
+    },
+    {
+      "host": "gw",
+      "url": "https://gw/api/v1`",
+      "where": "lib/proxy.js:178"
+    },
+    {
+      "host": "gw",
+      "url": "https://gw/api/v1/chat/completions`",
+      "where": "lib/proxy.js:179"
+    },
+    {
+      "host": "relay.invalid",
+      "url": "http://relay.invalid",
+      "where": "lib/proxy.js:694"
+    },
+    {
+      "host": "${name",
+      "url": "http://${name",
+      "where": "lib/proxy.js:1714"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/GnaneshKunal/dsh-openrouter-plus.git",
+      "where": "package.json:25"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/GnaneshKunal/dsh-openrouter-plus#readme",
+      "where": "package.json:27"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/GnaneshKunal/dsh-openrouter-plus/issues",
+      "where": "package.json:29"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791",
+      "where": "test/client.test.mjs:1474"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791",
+      "where": "test/client.test.mjs:1477"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791",
+      "where": "test/client.test.mjs:1482"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791",
+      "where": "test/client.test.mjs:1492"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791",
+      "where": "test/config-bridge.test.mjs:18"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/config-bridge.test.mjs:28"
+    },
+    {
+      "host": "harness.example",
+      "url": "https://harness.example",
+      "where": "test/config-bridge.test.mjs:29"
+    },
+    {
+      "host": "bundle.example",
+      "url": "https://bundle.example/v1",
+      "where": "test/config-bridge.test.mjs:177"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/config-bridge.test.mjs:188"
+    },
+    {
+      "host": "bundle.example",
+      "url": "https://bundle.example/v1",
+      "where": "test/config-bridge.test.mjs:369"
+    },
+    {
+      "host": "bundle.example",
+      "url": "https://bundle.example/v1",
+      "where": "test/config-bridge.test.mjs:378"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/config-bridge.test.mjs:408"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:87910/flex/v1",
+      "where": "test/config-bridge.test.mjs:459"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/config-bridge.test.mjs:613"
+    },
+    {
+      "host": "bundle.dev",
+      "url": "https://bundle.dev/v1",
+      "where": "test/config-bridge.test.mjs:784"
+    },
+    {
+      "host": "bundle.dev",
+      "url": "https://bundle.dev/v1",
+      "where": "test/config-bridge.test.mjs:796"
+    },
+    {
+      "host": "dsh.invalid",
+      "url": "http://dsh.invalid",
+      "where": "test/control-web.test.mjs:138"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/control-web.test.mjs:150"
+    },
+    {
+      "host": "evil.example",
+      "url": "https://evil.example",
+      "where": "test/control-web.test.mjs:264"
+    },
+    {
+      "host": "gnaneshs-macbook-pro.tailc03322.ts.net",
+      "url": "https://gnaneshs-macbook-pro.tailc03322.ts.net",
+      "where": "test/control-web.test.mjs:287"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8791`",
+      "where": "test/host.test.mjs:117"
+    },
+    {
+      "host": "api.plain.dev",
+      "url": "https://api.plain.dev/v1",
+      "where": "test/host.test.mjs:132"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/host.test.mjs:186"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/api/",
+      "where": "test/host.test.mjs:190"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/api",
+      "where": "test/host.test.mjs:192"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:277"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/host.test.mjs:290"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080",
+      "where": "test/host.test.mjs:303"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080",
+      "where": "test/host.test.mjs:305"
+    },
+    {
+      "host": "evil.example",
+      "url": "https://evil.example",
+      "where": "test/host.test.mjs:307"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080",
+      "where": "test/host.test.mjs:314"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/host.test.mjs:348"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:423"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:472"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:535"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:561"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1/",
+      "where": "test/host.test.mjs:597"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9000/v1",
+      "where": "test/host.test.mjs:598"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/v1",
+      "where": "test/host.test.mjs:599"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/v1",
+      "where": "test/host.test.mjs:600"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/v1",
+      "where": "test/host.test.mjs:603"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:607"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:620"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:627"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:639"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:644"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:649"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:654"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:665"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:709"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:712"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:721"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:724"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:737"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:751"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:755"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:767"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:782"
+    },
+    {
+      "host": "other.example",
+      "url": "https://other.example/v1",
+      "where": "test/host.test.mjs:787"
+    },
+    {
+      "host": "api.acme.dev",
+      "url": "https://api.acme.dev/v1",
+      "where": "test/host.test.mjs:805"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:809"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:896"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:916"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:961"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1005"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1021"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1104"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1257"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1260"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1371"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1372"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1471"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1473"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1633"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1634"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1753"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1754"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1843"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1844"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1913"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/host.test.mjs:1917"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${otherPort",
+      "where": "test/host.test.mjs:1918"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${port",
+      "where": "test/host.test.mjs:1950"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/providers.test.mjs:307"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1/",
+      "where": "test/providers.test.mjs:328"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1/models/deepseek/deepseek-v3.2/endpoints",
+      "where": "test/providers.test.mjs:334"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/v1",
+      "where": "test/providers.test.mjs:339"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${address.port",
+      "where": "test/proxy.test.mjs:48"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${upstreamPort",
+      "where": "test/proxy.test.mjs:161"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:1",
+      "where": "test/proxy.test.mjs:187"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:${deadPort",
+      "where": "test/proxy.test.mjs:239"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:9",
+      "where": "test/proxy.test.mjs:523"
+    },
+    {
+      "host": "localhost",
+      "url": "http://localhost:${self.port",
+      "where": "test/proxy.test.mjs:526"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://user:pass@127.0.0.1:1/v1",
+      "where": "test/proxy.test.mjs:640"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1/",
+      "where": "test/quantization.test.mjs:247"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1/models/deepseek/deepseek-v3.2/endpoints",
+      "where": "test/quantization.test.mjs:251"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/quantization.test.mjs:261"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1/models/openai/gpt-4o:free/endpoints",
+      "where": "test/quantization.test.mjs:262"
+    },
+    {
+      "host": "openrouter.ai",
+      "url": "https://openrouter.ai/api/v1",
+      "where": "test/quantization.test.mjs:266"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 12,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 42,
+    "pushed_at": "2026-11-03T13:07:32Z",
+    "created_at": "2026-10-26T11:50:30Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "index.js",
+    "lib/auto-repair.js",
+    "lib/config-bridge.js",
+    "lib/endpoints.js",
+    "lib/metrics.js",
+    "lib/models-sync.js",
+    "lib/providers.js",
+    "lib/proxy.js",
+    "lib/quantization.js",
+    "lib/reasoning.js",
+    "lib/usage-store.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-openrouter-plus",
+      "text": "[](https://www.npmjs.com/package/dsh-openrouter-plus)\n[](LICENSE)\n\n**Service-tier routing *and* a live model list for OpenRouter — as a DeepSeek Harness plugin, with\nno patched packages.**\n\nDSH's OpenRouter support has two gaps, and neither one is reachable from a provider profile."
+    },
+    {
+      "section": "dsh-openrouter-plus",
+      "text": "**Routing.** OpenRouter lets you steer where a request is served from: `flex` endpoints bill half\nprice on a slower pool, `priority` endpoints bill a multiplier for lower latency, and the throughput\nor price comparators reorder the pool in between. `@deepseek-ai/dsh-llm-pi-ai` exposes `baseURL` and\n`headers` on a provider profile, but no request-body fields\n([discussion #9787](https://github.com/deepseek-ai/deepseek-harness/discussions/9787))."
+    },
+    {
+      "section": "dsh-openrouter-plus",
+      "text": "**Model discovery.** *Fetch available models* is answered from the catalog baked into\n`@earendil-works/pi-ai`, and for a catalog-backed route (`openrouter`) it answers **before** it reads\nthat route's `baseURL`. The snapshot only refreshes when pi-ai is published again, so every model\nOpenRouter has added since then is invisible — on the build this plugin was written against, that was\n**65 of OpenRouter's 463 live models**, including `openai/gpt-6.1-terra`,\n`moonshotai/kimi-k3.1-pro` and `x-ai/grok-4.20-multi-agent`. Pointing the row at another endpoint\ndoes not help: the provider *name* is what short-circuits, not the URL."
+    },
+    {
+      "section": "dsh-openrouter-plus",
+      "text": "This plugin closes both gaps from the outside, and it never patches a shipped package. A **loopback\nrelay** applies the routing preset to each request. **Sync live models** reads the endpoint a route\npoints at and lists it, so you can tick the models you want and add just those. Both ride on schema\nfields the profile already has, so both survive `bun install -g` upgrades and never touch\n`~/.bun/install/global`."
+    },
+    {
+      "section": "dsh-openrouter-plus",
+      "text": "The preset is chosen **per session, at request time**. One provider row keeps serving every preset, so\nswitching never mints a provider, a route or a model list.\n\n```\n  composer chip: this session runs on «priority»\n      │\n      ▼\n  dsh-llm-pi-ai ──►  dsh-openrouter-plus relay  ──►  https://openrouter.ai/api/v1"
+    },
+    {
+      "section": "What you get",
+      "text": "- **Sync live models.** A provider row routed through OpenRouter Plus also gets a **Sync live\n  models…** button. It reads the endpoint that row points at and shows what it publishes *right\n  now* — including models added after the pi-ai catalog in your install was generated — with a\n  filter box and a checkbox per model. Tick what you want and only those are added; models the\n  route already declares are marked `added` and cannot be added twice. Nothing is rewritten:\n  hand-written names, context windows and effort maps are left exactly as they are. A row that is\n  not routed shows the switch alone: the button belongs to the opt-in, not to every `llm-pi-ai` card.\n- **One provider row, any preset.** A routed provider keeps its key, protocol and models and gains\n  one thing: a composable **preset** that the relay applies to each request. No per-preset provider\n  copies, no sibling route per preset, no model list duplicated nine times.\n- **Pin one endpoint, not just a tier.** A fourth thing the chip can set: a specific upstream\n  endpoint (`relace/fp4`, `deepinfra/fp8/priority`) read from the model's live listing. A pin is a\n  *hard* pin — `provider.only` plus `allow_fallbacks: false"
+    },
+    {
+      "section": "Spend: what it actually cost",
+      "text": "The relay reports the **billed amount**, not a token count multiplied by a price list. Each response\ncarries `usage.cost` (plus `cost_details` for BYOK's upstream charge and server tools), and the relay\ncopies it out of a bounded head/tail while forwarding the bytes untouched."
+    },
+    {
+      "section": "Spend: what it actually cost",
+      "text": "When the response does not describe itself, the relay asks OpenRouter. A Responses-API body\nnames no provider anywhere — not in the body, not in a header — so for those routes the relay\nreconciles the request against `GET /api/v1/generation?id=<genId>`, using the caller's own\n`Authorization` for that call and storing nothing. The record is eventually consistent — it 404s for\nroughly the first five seconds — so the lookup retries a few times over about eight seconds, after\nthe response has already reached the caller. That single lookup fills the Provider\ncolumn and any field the stream left unreported (a cut-short stream, or a final event too large\nfor the tail buffer). It only ever fills *missing* fields — a number the stream reported is what\nthe caller saw, so it wins. Turn it off with `generationLookup: false`."
+    },
+    {
+      "section": "Spend: what it actually cost",
+      "text": "Both wire shapes are read, because a route can be configured with either: Chat Completions puts the\nbill at the top level of the final chunk (`prompt_tokens` / `completion_tokens`), while the Responses\nAPI wraps every event as `{ type, response: { … } }` and spells the same numbers\n`input_tokens` / `output_tokens`. Two facts only ever arrive as **response headers** — `X-Provider-Name`\nand `X-Generation-Id`, which OpenRouter lists in `access-control-expose-headers` — because a Responses\nbody names no provider at all; the relay reads the body first and falls back to the headers, which is\nwhat fills the Provider column and the generation id. That amount already\nreflects *which endpoint served the request* — flex at half price, priority/ultrafast at a premium,\na `:floor` variant, or a fallback that answered with another model — which is exactly the\ninformation a price table cannot reconstruct afterwards."
+    },
+    {
+      "section": "Spend: what it actually cost",
+      "text": "Cost is bucketed by **local calendar day** and kept for **14 days**, so a Host restart does not reset\ntoday's number; token counters and the last-50-requests ring are process-local and do start over. A\n`null` means the provider reported nothing (failed call, aborted stream) and is never shown as `$0`;\na `0` is a genuinely free call. BYOK keeps two separate bills: `costUsd` is OpenRouter's charge,\n`upstreamCostUsd` is your provider's own."
+    },
+    {
+      "section": "Spend: what it actually cost",
+      "text": "Read [`docs/USAGE.md`](docs/USAGE.md) for the field-by-field contract, the window and persistence\nrules, and what a reload keeps."
+    },
+    {
+      "section": "Screenshots",
+      "text": "The switch lives on the provider you already use, in Settings → Models. Ticking it moves that\nrow's traffic onto the relay and changes nothing else:\n\nThe settings page — relay state, one pinned base URL per preset, the counters, and what each\npreset actually sends:\n\nThe composer chip, which switches the preset for one Session without touching any provider row:"
+    },
+    {
+      "section": "Screenshots",
+      "text": "A routed provider row also carries **Sync live models…**: it lists what that row's endpoint publishes\nright now, ticked where the route already has the model, so you can add a model or untick one\nwithout touching anything else. Hand-written entries are never rewritten."
+    },
+    {
+      "section": "Install",
+      "text": "`--profile` is not optional — `dsh plugin` manages the plugins of one named profile, so pass the\none you actually boot (`web` for `dsh web`, `default` for a bare `dsh`). Without it the CLI stops\nwith `required option '--profile <name>' not specified`.\n\n```bash\ndsh plugin --profile web add dsh-openrouter-plus                              # from npm\ndsh plugin --profile web add github:GnaneshKunal/dsh-openrouter-plus#v0.1.0   # or a pinned tag\n```\n\nFrom a clone, which is what development uses:"
+    },
+    {
+      "section": "Install",
+      "text": "```bash\ngit clone https://github.com/GnaneshKunal/dsh-openrouter-plus\ndsh plugin --profile web add ./dsh-openrouter-plus     # or, from a session:"
+    },
+    {
+      "section": "plugin_manager { action: install_bundle, target: \"./dsh-openrouter-plus\" }",
+      "text": "```\n\nThe manifest declares `engines.dsh`, so the plugin manager refuses a harness older than the build\nit was tested against instead of mounting something that cannot work.\n\nThe plugin adds one entry to Settings navigation: **OpenRouter Plus**, directly after *Models*. If\nthe relay is up, the page shows the origin (`http://127.0.0.1:8791`) and its mounts."
+    },
+    {
+      "section": "plugin_manager { action: install_bundle, target: \"./dsh-openrouter-plus\" }",
+      "text": "It also fills the body of its own card under **Plugins → Installed**, the plugin manager in the main\nsidebar (not *Settings → Built-in plugins*, which only lists component status). Both seats render the\nsame page, so there is one place to learn the relay state and one place to change it — pick whichever\nyou were already in. The Plugins card additionally carries the installed version, the rows the bundle\ndeclares, the npm source and the uninstall button."
+    },
+    {
+      "section": "Releasing",
+      "text": "`.github/workflows/ci.yml` runs `npm run check`, `npm test` and `npm pack --dry-run` on every push\nand pull request. `.github/workflows/release.yml` turns a tag into a release:\n\n```bash\n$EDITOR package.json CHANGELOG.md      # version 0.2.0, and a \"## [0.2.0] — 2026-11-02\" section\ngit commit -am \"chore: 0.2.0\" && git push\ngit tag v0.2.0 && git push origin v0.2.0\n```"
+    },
+    {
+      "section": "Releasing",
+      "text": "The job refuses a tag that disagrees with `package.json`, runs the suite, publishes to npm, and\nopens the GitHub Release with the matching `CHANGELOG.md` section as its notes. It fails rather\nthan skipping when npm already has that version: a release is a new version, never a re-upload.\n\nnpm needs the package to exist before it can trust a publisher, so `0.1.0` went up by hand, once,\nfrom a logged-in machine:"
+    },
+    {
+      "section": "Releasing",
+      "text": "```bash\nnpm login\nnpm publish --access public\nnpm trust github dsh-openrouter-plus --file release.yml \\\n  --repo GnaneshKunal/dsh-openrouter-plus --env release --allow-publish\n\nEvery version after it is a tag, and nothing else. The tag does everything: the workflow run's OIDC identity is accepted, npm attaches a\nprovenance attestation linking the tarball to the commit and run that built it, and no\n`NPM_TOKEN` exists in the repository. `npm trust list dsh-openrouter-plus` shows the grant."
+    },
+    {
+      "section": "Releasing",
+      "text": "Publishing to npm is optional for users: `dsh plugin --profile web add github:…` installs the same code from a\ntag, which is how most of the community ships."
+    },
+    {
+      "section": "Two clicks: tick the provider, pick the preset",
+      "text": "1. **Settings → Models** → tick **Route through OpenRouter Plus** on the provider you already use\n   (for example `openrouter-custom`). That provider's traffic now flows through the relay; its\n   `api`, `apiKeyEnv`, headers and models are untouched.\n2. Open the composer of any Session and pick a preset in the chip next to the model selector. Every\n   request that Session sends now applies that preset."
+    },
+    {
+      "section": "Two clicks: tick the provider, pick the preset",
+      "text": "Nothing else to create, and nothing to clean up: the provider row is the only row that ever existed,\nand the preset is a per-Session choice rather than a provider.\n\nThe settings page manages the profile-level **Service tier for new sessions** — with a short table\nof what each preset sends — and lists the routes that currently point at this relay (with **Remove**\nfor the ones you no longer want)."
+    },
+    {
+      "section": "From a provider row (the switch)",
+      "text": "In **Settings → Models**, every `llm-pi-ai` provider row carries a compact strip added by this\nplugin: a **Route through OpenRouter Plus** checkbox.\n\nTicking it does three things, all through the control API:"
+    },
+    {
+      "section": "From a provider row (the switch)",
+      "text": "1. records the endpoint that row currently points at (that is your real base URL) as a *target* in\n   this plugin's own config;\n2. gives that target a mount — `http://127.0.0.1:8791/t/<targetId>/v1` — which *mounts* the\n   endpoint without pinning a service tier: the presets come from the Sessions that call it;\n3. repoints **only** that provider row's `baseURL` at the mount. `api`, `apiKeyEnv`, headers and\n   models are not touched, and no plugin bookkeeping is written into the provider entry (it is\n   schema-validated, so it stays clean)."
+    },
+    {
+      "section": "From a provider row (the switch)",
+      "text": "**The first attach reloads the plugin.** Recording a new target is a write to this plugin's own\nconfig, so the Loader re-applies the Host row and the listener rebinds — which can cut the HTTP\nresponse to that very request. It is not a failure: the strip re-probes `/health`, re-reads\n`/targets` and shows the truth, and every write here is idempotent, so a retry lands cleanly. Later\nattaches (a detach, a re-attach of a known endpoint) reuse the target row and do not reload anything.\n**A preset switch never writes anything**, so it never reloads anything either."
+    },
+    {
+      "section": "From a provider row (the switch)",
+      "text": "What happens to a request: the relay strips the mount prefix, appends the rest of the path to your\nrecorded endpoint, resolves the preset the Session carrying that request chose, and applies it to the\nJSON body. `No pin` sends neither a tier nor a comparator — and a `service_tier` the client put there\nitself is removed, so a Session that pinned nothing stays unpinned rather than inheriting whatever a\nUI happened to send."
+    },
+    {
+      "section": "From a provider row (the switch)",
+      "text": "Untick it (**Detach**) and the row's `baseURL` goes back to the endpoint recorded for that target;\nthe mount stays until you remove the target. Everything is idempotent: the same endpoint always maps\nto the same target id, so ticking the box twice cannot fork the table or repoint anything twice."
+    },
+    {
+      "section": "From a provider row (the switch)",
+      "text": "> **Why the switch is on the row and not inside the add-provider form.** The obvious place for this\n> checkbox is the \"Custom model API\" form itself. A plugin cannot put it there: the\n> `settings.models.provider-card` extension slot hands an extension `{provider, configured,\n> keyConfigured}` and no setter, the draft Base URL lives in a private `useState` inside the editor,\n> and that card dispatches no extension at all before the provider is saved. The saved row is the\n> earliest surface a plugin can reach — same page, one save later. The same class of limitation is\n> why a re-picked model loses hand-declared fields (tracked upstream as\n> [discussion #11097](https://github.com/deepseek-ai/deepseek-harness/discussions/11097))."
+    },
+    {
+      "section": "By hand",
+      "text": "Point any OpenAI-compatible provider route's `baseURL` at a mount:\n\n```yaml\n- id: llm-pi-ai\n  config:\n    providers:\n      my-flex-route:\n\nOr route a provider to its own endpoint through a target mount — no provider config needed beyond\nthe base URL:\n\n```yaml\n- id: llm-pi-ai\n  config:\n    providers:\n      acme-gateway:"
+    },
+    {
+      "section": "By hand",
+      "text": "`/t/<targetId>/v1` is the shape the switch writes: it mounts the endpoint and pins nothing, so each\nSession's chip decides. `/t/<targetId>/<tier>/v1` is the older pinned shape and still works — useful\nwhen a row must sit on one tier regardless of who calls it. The target's endpoint is declared once,\nin the plugin's config (see `targets` below), so one listener can front any number of OpenAI- or\nAnthropic-style endpoints."
+    },
+    {
+      "section": "Reasoning effort on a relay route",
+      "text": "A relay route is a provider key the installed catalog has never seen, so\n`@deepseek-ai/dsh-llm-pi-ai` cannot inherit a model's reasoning capability for it. Without an\nexplicit `reasoningEfforts` the model materializes as `reasoning: false` and the composer shows\n**\"This model provides no reasoning effort levels.\"** — no effort selector, no error, nothing in the\nlog. The relay itself is not involved; it never touches reasoning fields."
+    },
+    {
+      "section": "Reasoning effort on a relay route",
+      "text": "The plugin fills that gap when it creates a route, from the best evidence available:\n\n1. a capability the model already declares (in the source route), kept byte-identical;\n2. a declaration for another variant of the same id — `google/gemini-4-argon:flex` teaches the\n   plugin about `google/gemini-4-argon`;\n3. the configured `reasoningEfforts` map, as a fallback for everything else."
+    },
+    {
+      "section": "Reasoning effort on a relay route",
+      "text": "Set `reasoningEfforts: false` to switch filling off, or omit it to fill only from evidence 1–2.\nA model that declares `reasoningEfforts: false` is itself opted out: the fill leaves it alone."
+    },
+    {
+      "section": "Reasoning effort on a relay route",
+      "text": "**The fill also re-applies itself.** Re-picking a model in Settings → Models rebuilds that row from\nthe catalog — `id`, `name`, context window, max tokens — and drops `reasoningEfforts` along with\nevery other hand-declared field. That is the shape of this bug: the effort selector works, you touch\nthe model list afterwards, and it is gone. The cause is upstream rather than here (`adopt()` in\n`@deepseek-ai/dsh-client-ui-settings-models` copies a fixed field list), so the plugin watches the\nprofile instead: a debounced pass runs on every config settle and restores the capability a moment\nafter the edit lands. Set `autoRepairReasoning: false` to keep the plugin out of your config\nentirely, and use **Add reasoning to N models** in the settings page (or\n`POST /__openrouter-plus/routes/repair`) when you want the fill on demand."
+    },
+    {
+      "section": "Reasoning effort on a relay route",
+      "text": "Either way it only ever touches routes whose `baseURL` points at the relay, never overwrites a\ndeclared map, never resurrects an explicit `false`, and writes nothing when there is nothing to do."
+    },
+    {
+      "section": "Presets",
+      "text": "A service tier is not one field. OpenRouter exposes three levers — `service_tier` (which pools may\nserve, and in what order), `provider.sort` (the comparator over that pool) and two slug suffixes\n(`:nitro`, `:floor`) that mix the two — and each preset is a combination the API actually defines:"
+    },
+    {
+      "section": "Presets",
+      "text": "| Preset | Sends | What it does |\n| --- | --- | --- |\n| **No pin** | nothing | OpenRouter's own routing. |\n| **Standard** | `service_tier: \"default\"` | The standard tier only; priority endpoints are excluded. |\n| **Fastest · any price** | `provider.sort: \"throughput\"` | The whole eligible pool sorted by throughput. On an open-weight model this *is* nitro — its priority endpoints already compete in default routing. On a closed-weight one it stops short, because those endpoints are opt-in. |\n| **Fastest · standard price** | `sort: \"throughput\"` + `service_tier: \"default\"` | The same race over the standard pool only, so the priority premium is unreachable. |\n| **Cheapest** | `provider.sort: \"price\"` | Lowest price over the standard pool — usually a quantized version of the model. It never admits a flex endpoint, so it cannot reach a flex rate. |\n| **Flex** | `service_tier: \"flex\"` | Flex endpoints only, at flex rates. Not necessarily the cheapest, and a flex capacity error surfaces instead of falling back to standard. |\n| **Priority** | `service_tier: \"priority\"` | Priority endpoints serve first, then standard. OpenAI calls this Fast mode. The premium is charged only when a priority e"
+    },
+    {
+      "section": "Presets",
+      "text": "Two rows sit between \"no tier\" and \"priority\" for a reason: `provider.sort` and `service_tier`\ndecide different things. Sorting by throughput reorders whatever pool the tier admitted; pinning\n`service_tier: \"default\"` is what keeps the premium out of it. Neither one alone can say\n\"fastest, and never at a premium\"."
+    },
+    {
+      "section": "What a sort costs you: Auto Exacto",
+      "text": "OpenRouter's [Auto Exacto](https://openrouter.ai/docs/guides/routing/auto-exacto) runs by default on\nevery request that carries tools — which, for an agent, is every request. It reorders the providers\nof the chosen model using measured tool-calling success rate, throughput and benchmark scores, per\nendpoint.\n\n**Any explicit `provider.sort` disables it, and so does the `:floor` slug.** That splits this\nplugin's ladder in two:"
+    },
+    {
+      "section": "What a sort costs you: Auto Exacto",
+      "text": "| Auto Exacto still runs | Auto Exacto is bypassed |\n| --- | --- |\n| No pin, Standard, Flex, Priority, Ultra | Fastest (both), Cheapest, Floor |\n\nSo the two cheapest presets buy a compressed endpoint *and* switch off the platform's quality\nordering. That is a legitimate trade; it should just not be a silent one — which is why the precision\nfloor exists, and why the settings page says it next to the picker."
+    },
+    {
+      "section": "From the composer (the Tier · Precision · Provider chip)",
+      "text": "Once a provider row is routed, a compact chip appears in the composer next to the model selector,\nshowing the preset the next request will apply — and, once you have chosen one, a precision floor:\n`Cheapest · ≥8-bit`. Picking another one there does **not** rewrite any config and does **not** mint a\nprovider: the Host records the choice for this Session in memory, and the relay applies it to the\nrequest body on the way out."
+    },
+    {
+      "section": "From the composer (the Tier · Precision · Provider chip)",
+      "text": "The chip opens the same menu the composer's own model picker uses for **Model** and **Effort**: one\nrow per facet, each showing its current value and opening its own list when pressed."
+    },
+    {
+      "section": "From the composer (the Tier · Precision · Provider chip)",
+      "text": "- **Tier** — the presets: `Fastest · any price`, `Cheapest`, `Flex`, `Priority`, … The first entry,\n  **Profile default (…)**, stops choosing for this Session and shows which preset it will inherit.\n- **Precision** — `Any`, `No four-bit`, `Eight-bit up`, `Full width`, each naming the wire levels it\n  admits. `Any` is the default and sends nothing, so until you pick one the badge reads exactly\n  `Cheapest`, the way it always did.\n- **Provider** — `Auto`, or one endpoint from the model's listing: `Relace · fp4`. Each row carries\n  what the endpoint costs, how often it answers and — once this model has been routed at least once —\n  how fast it answers (`134 tok/s · 498 ms`), because speed needs an authenticated read of the same\n  listing. Which of those facts a row states is a setting rather than a guess; see\n  [Choosing what a row says](#choosing-what-a-row-says). An endpoint whose uptime is reported as zero\n  is drawn quiet rather than hidden, because pinning a struggling endpoint by hand is a legitimate\n  thing to want."
+    },
+    {
+      "section": "From the composer (the Tier · Precision · Provider chip)",
+      "text": "A pin owns the other two. Pick `deepinfra/fp8/priority` and **Tier** changes to `Priority` and\n**Precision** to `fp8` — both `disabled`, neither reachable from the keyboard — because that\nendpoint already is the priority lane at that precision. Offering a lever that contradicted it would\nonly produce a request the router has to reject. Clearing the pin (**Auto**) hands the Session back\nto whatever Tier and Precision it had before."
+    },
+    {
+      "section": "From the composer (the Tier · Precision · Provider chip)",
+      "text": "The menu carries labels only; the long explanation of what each entry sends lives on the settings page\nand in [docs/PRECISION.md](docs/PRECISION.md), where it is read once. Escape (or Shift+Tab) backs out\nof a list to the rows, and again closes the popover. Picking anything returns you to the rows and\nleaves the menu open, so all three can be set in one visit without reopening it."
+    },
+    {
+      "section": "From the composer (the Tier · Precision · Provider chip)",
+      "text": "That is why it is per session: two conversations can be on `Flex` and `Priority` at the same time,\nneither of them rewrites the other's provider row, and the reasoning effort you selected survives\nthe switch because the selection itself never changes."
+    },
+    {
+      "section": "From the composer (the Tier · Precision · Provider chip)",
+      "text": "The choice lives in the Host's memory — it is runtime state, like the effort level — so it survives\nthe whole Session but not a Host restart (a default-preset write reloads the plugin, which drops\nthose choices too). Want a preset that outlives every restart? Either set the profile **Service tier\nfor new sessions** or point a provider at a pinned mount by hand (`/flex/v1`)."
+    },
+    {
+      "section": "From the composer (the Tier · Precision · Provider chip)",
+      "text": "The chip only appears when the Session's current provider is routed through a mount\n(`/t/<targetId>/…`). Elsewhere the Models-page switch is the control: it is the one that moves the\nprovider itself."
+    },
+    {
+      "section": "Providers: pinning one endpoint",
+      "text": "A tier answers *which pool*. A precision answers *which quality*. Neither answers *which company* —\nand for a model served by many endpoints (42 for DeepSeek V4.1 Flash 1017 at the time of writing)\nthat is often the question that matters: `relace/fp4` bills $0.035/$0.50 per million,\n`particle-ai` $0.05/$0.50, and `fireworks/us` $0.45/$1.80 for the same weights.\n\nThe model page's **Providers** tab is that list, and the API behind it is public:"
+    },
+    {
+      "section": "Providers: pinning one endpoint",
+      "text": "```\nGET https://openrouter.ai/api/v1/models/<author>/<slug>/endpoints\n```\n\nEach entry carries the `tag` a request names in `provider.only` — the pin's identity — beside\n`provider_name`, `quantization`, `service_tier`, `pricing` and the uptime windows.\n`latency_last_30m` and `throughput_last_30m` are the exception: the same GET answers them `null`\nunless it carries an API key, so speed is the one part of the list that is gated."
+    },
+    {
+      "section": "Providers: pinning one endpoint",
+      "text": "**Why the menu has speed at all, then.** The relay already forwards your `Authorization` header on\nevery request and stores no key. When a request names a model, it spends that key on *one* listing\nread for that model — the same key, the same rule as the generation lookup described above — and\nkeeps the rows, never the key. So the first time a model is actually used, its price, uptime,\nlatency and throughput all land in the menu cache; the numbers are OpenRouter's own rolling\n30-minute percentiles (time to first token in milliseconds, output tokens per second), and they are\nrefreshed whenever a request for that model passes through. A model you have never routed has no\nspeed numbers yet, and the row simply omits them rather than printing a zero."
+    },
+    {
+      "section": "Providers: pinning one endpoint",
+      "text": "The read is refused when the request went to some *other* upstream (a `/t/<id>/…` mount pointed at a\ndifferent API): that key belongs to that provider, and handing it to OpenRouter would leak a\ncredential to a host it was never meant for.\n\n**What a pin sends.** One `provider` object, and nothing else:\n\n```json\n{ \"model\": \"deepseek/deepseek-v4.1-flash-1017\",\n  \"provider\": { \"only\": [\"relace/fp4\"], \"allow_fallbacks\": false } }\n```"
+    },
+    {
+      "section": "Providers: pinning one endpoint",
+      "text": "`only` is what makes the slug a decision rather than a preference, and `allow_fallbacks: false` is\nwhat stops the router from quietly serving a different company when Relace is unavailable. Together\nthey are the pair OpenRouter documents as *use this endpoint directly*."
+    },
+    {
+      "section": "Providers: pinning one endpoint",
+      "text": "**What it removes.** A pin *subsumes* the other levers instead of combining with them, so the relay\ndeletes whatever would contradict it: `service_tier` (the endpoint is already in a pool),\n`provider.quantizations` (a floor of `fp8` beside a pinned `fp4` endpoint would exclude the endpoint\nthat was asked for), `provider.ignore`, and a `:floor`/`:nitro` model variant (both route *across* a\npool). `sort` and `order` are left exactly as the caller wrote them: over a one-element allowlist\nthey are inert, and the relay does not police fields it did not write."
+    },
+    {
+      "section": "Providers: pinning one endpoint",
+      "text": "**A pin that cannot be honoured is withheld, never sent.** `only` is an allowlist, so a slug the\nmodel no longer lists would exclude every endpoint and fail the request outright. The Host checks the\ncached listing first and attaches the pin only when that endpoint is still there; otherwise the\nrequest goes out on the Session's own preset and `x-oorp-pin: bypass` says so. The menu says it too:\na pinned endpoint missing from a fresh listing reads as stale."
+    },
+    {
+      "section": "Providers: pinning one endpoint",
+      "text": "**Reading the list costs one GET per model per window.** Opening the Provider facet reads it, and\nthat one read also seeds the precision floor's admission cache — so the first request after a pin is\nalready pinned, and turning on a floor does not cost an unfiltered turn. An *authenticated* read is\nkept for thirty minutes rather than ten, because that is the window its speed numbers describe, and\nit is never replaced by a keyless one while it is fresh. A failed read answers with an empty list\nrather than an error: the facet then says \"no providers\", which is something an operator can act on."
+    },
+    {
+      "section": "Choosing what a row says",
+      "text": "Five facts do not fit one menu row, so Settings → OpenRouter Plus → **Provider list display**\ncarries a checkbox per fact — precision, price, uptime, throughput, latency — plus a choice between\nthe median alone and the median beside p90. All five are on by default, and saving writes\n`providerFacts` onto the plugin row (one Apply, one relay reload). A fact the listing does not\nreport is still dropped rather than shown as a dash, which is why turning speed on changes nothing\nuntil a model has actually been used."
+    },
+    {
+      "section": "Ordering and searching the list",
+      "text": "The same section carries **Sort endpoints by**: cheapest first (the Host's own order), throughput,\nlatency, uptime, input price, output price, or cache-read price. Each id names a fact and the fact\nowns its direction — throughput and uptime read best-high, the prices and latency best-low — so\nthere is no second \"ascending\" control to get wrong. The order applies *inside* each group, so the\nStandard / Flex / Not used headings stay where they are, and a row that does not report the fact\nsorts last in both directions: on a listing read without a key nothing reports speed, so a speed\nsort reads exactly as the Host's order instead of inventing one out of nulls."
+    },
+    {
+      "section": "Ordering and searching the list",
+      "text": "This is a **display** order, not `provider.sort`: it changes the menu, never the request. Routing\nby speed is the **Fastest** preset, which writes `provider.sort: \"throughput\"` on the wire."
+    },
+    {
+      "section": "Ordering and searching the list",
+      "text": "The endpoint pane also has a search box above its first row. It matches a display name or a tag\n(where a region or a quantization is spelled, and what a pin actually writes), and it hides rows\nrather than groups: a group whose rows all filtered out takes its heading with it, the \"Auto\n(OpenRouter routing)\" row always stays so an accidental pin is always clearable, and Escape empties\nthe box before it leaves the pane. The box is view state — it dies with the menu."
+    },
+    {
+      "section": "Ordering and searching the list",
+      "text": "The two speed facts do not read alike in the paired form: a latency p90 is *worse* than its p50,\nwhile a throughput p90 sits *below* its p50 — a throughput percentile is a speed that N% of\nrequests reached or exceeded, so its p90 is the slow tail. That is why the pair is labelled\n`p50 930 · p90 3769 ms` instead of printed as a range."
+    },
+    {
+      "section": "Control API",
+      "text": "Served on the **DSH web server's own origin**, under `/__openrouter-plus`, outside the relay's\nproxy path space. That is deliberate: the settings page, the Models-row switch and the composer chip\nall talk to it, and a page must be able to reach the API it was served from. Mounting it next to the\nGUI means no second port, no CORS, and no difference between a desktop tab and a phone on the\ntailnet — anywhere the GUI loads, the control API answers."
+    },
+    {
+      "section": "Control API",
+      "text": "The relay listener keeps the same endpoints on loopback. It is the `curl`/script path and the\nfallback for a composition with no web GUI; the browser half never uses it."
+    },
+    {
+      "section": "Control API",
+      "text": "| Endpoint | Purpose |\n| --- | --- |\n| `GET /__openrouter-plus/health` | liveness |\n| `GET /__openrouter-plus/status` | address, `bound`/`port`, upstream, mounts, `usageWidget`, and `metrics` (cost in USD, day buckets, model/tier rollups, recent requests) |\n| `GET /__openrouter-plus/targets` | source routes, routes on this relay, the `targets` table, and the preset table (`{ default, presets }`) |\n| `GET /__openrouter-plus/tier?session=<id>` | what that Session would apply now: `preset`, `wire`, `chosen`, `default`, `presets` |\n| `POST /__openrouter-plus/tier` | `{ session, preset }` — choose this Session's preset; `preset: null` hands it back to the profile default. **Memory only, never a config write** |\n| `GET /__openrouter-plus/providers?model=<id>` | that model's endpoints — `providers` rows (`tag`, `name`, `tier`, `precision`, prices, uptime, `latency`, `throughput`, `available`) plus `groups` in display order, and `cached`. `latency`/`throughput` are `{ p50, p90 }` or `null` (a keyless read reports none) |\n| `GET /__openrouter-plus/provider?session=<id>&model=<id>` | the endpoint that Session pinned (`{ tag, name, tier, precision }`, or `null`), and whether the model still l"
+    },
+    {
+      "section": "Control API",
+      "text": "`attach`/`detach` are what the Models-page switch calls; both are idempotent and report\n`changed: false` when the row is already in the requested state. A rejected request answers `400`\nwith `{ error: { message } }` — for example a body that is not an http(s) URL, or one that points\nback at the relay. `POST /tier` answers `400` for an unknown preset (`turbo`) or a missing\n`session`, and accepts `preset: null` (or no `preset` at all) to clear. The tier-era body shape is still\nread: `tier: \"fast\"` maps onto the `priority` preset, and any other legacy name maps onto the preset\nthat sends the same field."
+    },
+    {
+      "section": "Control API",
+      "text": "Everything in `/tier` is deliberately write-free: a config write would re-apply this plugin row and\nrestart the listener, which is not something a mid-conversation click should risk. Only\n`/tier/default` writes, because it is a preference rather than one Session's state."
+    },
+    {
+      "section": "Control API",
+      "text": "On the web origin the API is behind the GUI's own fence (`ctx.connection.requestRejection`): the\nHost/Origin trust check plus the `dsh-auth-*` session cookie, so a page served from another origin\ncannot read the telemetry or drive a write. A request with a loopback `Host` and no `Origin` is a\nlocal process — `curl`, a script — and is allowed through as before, which is also why the command\nbelow works without a cookie. `POST` additionally requires `x-oorp-client: web`, and the loopback\ncopy of the API reflects CORS only for loopback GUI origins."
+    },
+    {
+      "section": "Control API",
+      "text": "```bash"
+    },
+    {
+      "section": "Control API on the GUI origin (same answer, no extra port):",
+      "text": "curl -s http://127.0.0.1:3080/__openrouter-plus/status | jq .metrics.byTier"
+    },
+    {
+      "section": "The relay's loopback copy still answers too:",
+      "text": "curl -s http://127.0.0.1:8791/__openrouter-plus/status | jq .metrics.byTier\n```"
+    },
+    {
+      "section": "Configuration",
+      "text": "`cordis.patch.yml` ships the defaults; override them in your profile's patch layer:"
+    },
+    {
+      "section": "Configuration",
+      "text": "| Key | Default | Meaning |\n| --- | --- | --- |\n| `enabled` | `true` | `false` keeps the plugin installed but binds nothing |\n| `host` | `127.0.0.1` | bind address — loopback only, deliberately |\n| `port` | `8791` | preferred port |\n| `portFallback` | `true` | fall forward to the next free port (the page probes 8791–8794) |\n| `upstream` | `https://openrouter.ai/api/v1` | where requests are forwarded, no trailing slash |\n| `routes` | tier mounts | mount path → tier, for pinned URLs (`/flex/v1`); `null` tier is a pure passthrough. Accepted names are `default`, `flex`, `priority`, `ultrafast`, and the aliases `auto`/`scale` (both mean *no pin*) and `fast` (= `priority`). The per-session design needs only `/v1` |\n| `upstreamTimeoutMs` | `0` | `0` disables the upstream timeout (long SSE completions) |\n| `controlDiagnostics` | `false` | record control-API call timings and log each call that takes ≥1 s or fails. Off by default: the ring is 20 entries in memory and no disk either way, but this plugin also runs where RAM and metered I/O matter. On, `/status` gains `control: { slowMs, recent }` |\n| `generationLookup` | `true` | reconcile a response that did not name its provider or its bill "
+    },
+    {
+      "section": "Security model",
+      "text": "- **Loopback only.** The relay forwards the caller's `Authorization` verbatim and stores no key.\n  Do not bind a routable interface.\n- **The key is spent, never kept.** Two reads use the caller's own `Authorization` and nothing is\n  written after them: the generation lookup (when a response omits its provider or its bill) and one\n  endpoint-listing read per model per cache window, which is what puts latency and throughput in the\n  provider menu. The **listing** read is refused when the request went to another upstream, so a key\n  belonging to one provider is not presented to another. The generation lookup is older and always\n  asks this plugin's configured `upstream`, whichever mount the request arrived on: a key belonging\n  to a third-party gateway is presented to OpenRouter only if that gateway answered with a\n  generation id (`gen-…` or `X-Generation-Id`).\n- **The control API rides the GUI's origin and fence.** It is mounted on the DSH web server, so it\n  is reachable exactly where the GUI is and nowhere else, and every browser request passes the same\n  Host/Origin check and session cookie the GUI's own API uses. Only a loopback request with no\n  `Origin` — a local process — is "
+    },
+    {
+      "section": "Troubleshooting",
+      "text": "| Symptom | Cause and fix |\n| --- | --- |\n| Card says *OpenRouter Plus is not answering* | Usually a busy Host, not a broken one: `/status` is served by the same process that streams completions. The page needs three failed polls in a row before it says so. Turning on `controlDiagnostics` adds `control.recent` to `/status` — the last slow or failed control calls with their duration. The Host log has a `[openrouter-plus] control API call was slow` line for each. If `control.recent` is empty and the page still refuses, the exact match is that the Host row is not loaded or the GUI's fence refused the request. |\n| The relay is down but the page still answers | That is the split working: the control API reports `bound: false` plus the bind error from `/status`, instead of looking like a dead plugin. Check the port range or `enabled: false`; set a fixed `port`. |\n| Settings → OpenRouter Plus works on the desktop but not on another machine or a phone | Should not happen any more: the page calls its own origin. If it does, the Host is too old to mount the API on the web server — update it, or reach the loopback copy on the relay port. |\n| A model errors after disabling the plugin | That mo"
+    },
+    {
+      "section": "Uninstall",
+      "text": "Remove the route(s) in Settings → Models, then:\n\n```bash\ndsh plugin --profile web remove dsh-openrouter-plus\n```"
+    },
+    {
+      "section": "Development",
+      "text": "```bash\nnode --check index.js && node --check client.js\nnode --test            # 157 tests, no network, no profile writes\n```\n\nSee [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module contract, and\n`docs/DESIGN.md` for the design rationale against the upstream discussion.\n\nMIT.\n\n[](https://github.com/deepseek-ai/deepseek-harness)"
+    }
+  ],
+  "skipped": []
+}

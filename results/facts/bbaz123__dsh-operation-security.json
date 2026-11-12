@@ -1,0 +1,190 @@
+{
+  "repo": "bbaz123/dsh-operation-security",
+  "commit": "0077801a330d41110932f3f893e349e50fc47362",
+  "extracted_at": "2026-11-11T17:46:39.711518+00:00",
+  "tree": {
+    "files": 29,
+    "bytes": 120499,
+    "lines_by_language": {
+      "JSON": 60,
+      "JavaScript": 2677,
+      "Markdown": 173,
+      "Other": 16,
+      "YAML": 69
+    },
+    "outline": [
+      ".gitignore",
+      "AGENTS.md",
+      "README.md",
+      "cordis.patch.yml",
+      "docs/PATCH-NOTES.md",
+      "icon.svg",
+      "lib/config.js",
+      "lib/gate/ack.js",
+      "lib/gate/audit.js",
+      "lib/gate/decision.js",
+      "lib/gate/manager.js",
+      "lib/gate/spec.js",
+      "lib/index.js",
+      "lib/paths.js",
+      "lib/scan-roots.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "scripts/ack.mjs",
+      "scripts/state.mjs",
+      "test/ack.test.mjs",
+      "test/audit.test.mjs",
+      "test/config.test.mjs",
+      "test/decision.test.mjs",
+      "test/gate-deps.test.mjs",
+      "test/manager.test.mjs",
+      "test/scan-roots.test.mjs",
+      "test/spec.test.mjs",
+      "test/wiring.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-operation-security",
+    "version": "0.1.0",
+    "private": true,
+    "description": "操作安全层（桌面版移植）：按工具调用实际准备做什么分类并执行 DPIP 与数据外发策略，同时在 pluginManager 服务边界拦截未经审查的插件安装。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json",
+      "./icon": "./icon.svg"
+    },
+    "icon": "./icon.svg",
+    "files": [
+      "lib/",
+      "vendor/",
+      "scripts/",
+      "test/",
+      "locale/*.json",
+      "icon.svg",
+      "cordis.patch.yml",
+      "README.md",
+      "AGENTS.md"
+    ],
+    "meta": {
+      "title": "操作安全层",
+      "description": "按工具调用实际要做什么分类并执行 DSH 插件安装协议与数据外发策略；并在 pluginManager 服务边界拦截未经审查的插件安装。"
+    },
+    "license": "MIT",
+    "author": "a1941",
+    "engines": {
+      "node": ">=22.19.0"
+    },
+    "scripts": {
+      "test": "node --test \"test/*.test.mjs\"",
+      "check": "node --check lib/index.js && node --check lib/config.js && node --check lib/paths.js && node --check lib/scan-roots.js && node --check lib/gate/spec.js && node --check lib/gate/decision.js && node --check lib/gate/ack.js && node --check ..."
+    },
+    "dsh": {
+      "manifestVersion": 1,
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-operation-security bundle patch.\n#\n# Mounts ONE host-plane row that ports the npm-global operation-security layer\n# to the Desktop profile. Two contributions live in this row:\n#\n#   1. the vendored `@deepseek-ai/dsh-operation-security` build: a\n#      `tools/pre-execute` listener plus a monotonic `ctx.tools.guard()` that\n#      classify and enforce READ / DOWNLOAD / EXECUTE / PLUGIN_* / EXPORT /\n#      PUBLISH, and scan outbound payloads for credentials;\n#   2. the DPIP gate on `pluginManager` — the desktop replacement for the CLI's\n#      patched `dsh plugin` command, because Desktop's profile is owned by the\n#      Electron application and every lifecycle change arrives through that\n#      service's Gateway methods instead of the tool pipeline.\n#\n# The row declares `inject` from the module itself (`tools`), so no `inject`\n# field is needed here, and no `isolate` realm: the gate must see the same\n# `pluginManager` instance the Gateway and the agent tool see.\n#\n# Install:   plugin_manager install_bundle  (target = this package directory)\n# Uninstall: remove the bundle; the row, its listeners, its guard and the own\n#            properties it installed on pluginManager all go with it. State\n#            under `$DSH_HOME/operation-security/` stays because it is the same\n#            document the CLI gate reads and writes.\n- insert:\n    - id: operation-security-desktop\n      # Node-resolvable package name — must stay in sync with package.json `name`.\n      name: 'dsh-operation-security'\n      config:\n        # ── master switch ───────────────────────────────────────────────────\n        # false disables BOTH halves and leaves the profile exactly as it was.\n        enabled: true\n\n        # ── where decisions are recorded ────────────────────────────────────\n        # '' -> $DSH_HOME/operation-security (audit.jsonl, plugin-state.json,\n        #       dpip-ack.json, recovery/). Shared with the npm-global CLI gate on\n        #       purpose: one history, not two.\n        auditDir: ''\n\n        # ── policy knobs mirrored from the upstream plugin schema ────────────\n        requireApprovalForExecute: true\n        requireApprovalForOutput: true\n        scanRoots: []\n        scanMaxFiles: 4000\n        scanMaxFileBytes: 1048576\n        # The upstream default: plugin lifecycle + the two ways local data\n        # leaves the machine. Add EXECUTE or DOWNLOAD here to widen it.\n        enforcedOperations:\n          - PLUGIN_INSTALL\n          - PLUGIN_UPDATE\n          - PLUGIN_ENABLE\n          - PLUGIN_UNINSTALL\n          - EXPORT\n          - PUBLISH\n\n        # ── DPIP gate on pluginManager (the CLI patch's replacement) ─────────\n        gate:\n          # true: an install/update with no completed protocol run is refused\n          # unless the operator acknowledged it (the CLI's DSH_DPIP_ACK=1, as a\n          # record because a Gateway call has no environment).\n          # false: keep the tool-layer enforcement only; lifecycle writes are\n          # not gated.\n          enabled: true\n          # How long an acknowledgement stays usable. 0 means it never expires.\n          # A successful install consumes its acknowledgement.\n          ackTtlHours: 24\n          # Capture package.json / pnpm-lock.yaml / pnpm-workspace.yaml /\n          # cordis.patch.yml into $DSH_HOME/operation-security/recovery/<id>/\n          # before the install runs, and record the boundary in the audit line.\n          captureRecoveryBoundary: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json",
+    "icon.svg"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/a/b.git",
+      "where": "test/spec.test.mjs:58"
+    },
+    {
+      "host": "example.test",
+      "url": "https://example.test/pkg.tgz",
+      "where": "test/spec.test.mjs:60"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 9,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-22T14:08:11Z",
+    "created_at": "2026-10-22T14:08:02Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "icon.svg",
+    "lib/config.js",
+    "lib/gate/ack.js",
+    "lib/gate/audit.js",
+    "lib/gate/decision.js",
+    "lib/gate/manager.js",
+    "lib/gate/spec.js",
+    "lib/index.js",
+    "lib/paths.js",
+    "lib/scan-roots.js",
+    "package.json",
+    "scripts/ack.mjs",
+    "scripts/state.mjs",
+    "vendor/opsec/index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-operation-security",
+      "text": "桌面版（Desktop / `app.asar` 0.2.1-rc.2）的操作安全层移植。npm-global CLI 安装树里有两样桌面版看不到的东西，这个插件把它们带过来，并补上桌面版唯一可行的插件生命周期门禁位置。"
+    },
+    {
+      "section": "它做的三件事",
+      "text": "| 能力 | 来源 | 在桌面版怎么工作 |\n|---|---|---|\n| 工具调用分级与策略执行 | `@deepseek-ai/dsh-operation-security@0.2.0-rc.2` 的构建产物（`vendor/opsec/`，逐字移植） | 注册 `tools/pre-execute` + 单调 `ctx.tools.guard()`：READ / DOWNLOAD / EXECUTE / PLUGIN_* / EXPORT / PUBLISH；EXPORT/PUBLISH 额外做凭据扫描；拒绝不可被后续监听器翻回允许 |\n| 插件生命周期 DPIP 门禁 | CLI 里被插入 `lib/plugin-*.js` 的 `gatePluginInvocation` | 包装 `pluginManager.installBundle`（以及启用路径的硬停检查）。CLI 的 `dsh plugin` 在桌面版无法接管：desktop profile 由 Electron 独占，且 GUI / Agent / 自安装页的写入都走 `pluginManager` 的 Gateway 方法，**不经过工具流水线** |\n| 审计 / 状态 / 恢复边界 | 同上包 | 写入 `$DSH_HOME/operation-security/`，与 CLI 门禁**同一份** `audit.jsonl` 与 `plugin-state.json` |"
+    },
+    {
+      "section": "门禁语义（与 CLI 一致）",
+      "text": "```\n装/升级（installBundle）\n  ├─ 该插件记录为 BLOCKED / QUARANTINED / ROLLBACK_REQUIRED → 拒绝（确认也不能放行）\n  ├─ 记录为 ACTIVE                                          → 放行（coverage = active）\n  ├─ 有有效确认（ack 文件，或 DSH_DPIP_ACK=1）               → 放行（consumed = 一次）\n\n拒绝会抛出一个 `code = 'DSH_DPIP_REFUSED'` 的错误，消息里带三样东西：缺什么（协议五步）、怎么确认（脚本绝对路径与命令）、硬停无法用确认绕过。"
+    },
+    {
+      "section": "给未经审查的第三方插件开一次确认",
+      "text": "```bash\nnode \"<工作区>/dsh-operation-security/scripts/ack.mjs\" @scope/name --note \"看过 changelog，无 postinstall\"\n```\n\n- 确认写入 `$DSH_HOME/operation-security/dpip-ack.json`，默认 24 小时有效；名称会按门禁的规则归一化（`pkg@1.2.3` 与 `pkg` 是同一个键）；\n- `--ttl 0` 表示「不设记录级上限」，**实际仍受 `gate.ackTtlHours` 这个上限约束**；只有把上限配成 0 才真的不过期；\n- 一次成功安装后自动作废；\n- 只有操作员（你）能写：Agent 和插件自己都不会调用这个脚本。\n\n协议状态可以直接改（脚本**不做**协议迁移合法性校验，它是操作员入口而不是验证器）："
+    },
+    {
+      "section": "给未经审查的第三方插件开一次确认",
+      "text": "```bash\nnode scripts/state.mjs list\nnode scripts/state.mjs set @scope/name ACTIVE        # 视为协议已完成\nnode scripts/state.mjs set @scope/name BLOCKED       # 硬停，确认也无效\nnode scripts/state.mjs remove @scope/name"
+    },
+    {
+      "section": "配置",
+      "text": "行配置在 `cordis.patch.yml` 里，全部字段见该文件注释。两个总开关：\n\n- `enabled: false` → 两层都关闭，profile 回到装插件之前的状态；\n- `gate.enabled: false` → 只保留工具层策略，不拦插件生命周期写入。\n\n其余是上游 schema 的同名字段（`requireApprovalForExecute` / `requireApprovalForOutput` / `scanRoots` / `scanMaxFiles` / `scanMaxFileBytes` / `enforcedOperations`）。\n\n**外发扫描根**：EXPORT/PUBLISH 的扫描根按「调用声明的 `workdir`（向上找 `.git`）→ 会话的沙箱工作区 → `scanRoots`」顺序解析。桌面宿主的进程 cwd 是 profile 目录，所以默认会跟随**会话工作区**；一旦显式配置了 `scanRoots`，就以你的配置为准。"
+    },
+    {
+      "section": "目录",
+      "text": "```\nlib/index.js          插件入口：装工具层，再装服务门禁\nlib/config.js         无 schemastery 的字段校验与默认值\nlib/paths.js          $DSH_HOME / profile 目录解析（只用 node 内建）\nlib/scan-roots.js     按调用解析外发扫描根（会话工作区）"
+    },
+    {
+      "section": "验收",
+      "text": "```bash\ncd dsh-operation-security\nnode --test \"test/*.test.mjs\"\nnode --check lib/index.js && node --check vendor/opsec/index.js\n```\n\n安装后一次真实验收：在一个没有协议记录的包上调用插件安装，应得到 `DSH_DPIP_REFUSED`，并新增一条 `finalStatus: BLOCKED` 的审计行。"
+    },
+    {
+      "section": "已知边界",
+      "text": "1. **只管运行中的宿主。** 桌面版 CLI（`runtime/cli/bin/dsh.cmd`）对非 desktop profile 的 `dsh plugin` 仍然没有门禁——那需要改 `app.asar` 里的 CLI 代码，升级即失效，本插件不做。\n2. **桌面 profile 不能被 CLI 管理**，所以先有插件、后有门禁：本插件的安装这次是门禁生效前的最后一次无约束安装。\n3. **enable 路径按 best effort 解析包名**（`listPlugins()` 查不到时跳过额外检查），与 CLI 一致——CLI 完全不检查启用。\n4. **`plugin_manager` 工具本身没有加进 detector**：它的写入已经由服务门禁覆盖，再加一层会在门禁拒绝之前先弹一次审批。\n5. 恢复边界只覆盖 profile 的 `package.json` / `pnpm-lock.yaml` / `pnpm-workspace.yaml` / `cordis.patch.yml`，不含进程、服务与插件写到 profile 之外的文件（审计记录里写明了这条 `limits`）。\n6. **状态键是「按 spec 归一化出来的名字」**：仓库名与本地目录能还原成包名，但 git / tarball URL 只能用 URL 本身作键。也就是说，一个已记录 `BLOCKED` 的包若改从 tarball 地址安装，不会复用按包名记的硬停，需要执行者显式确认（确认后仍会留下审计）。这是 CLI 门禁「按原始参数取值」的继承限制。\n7. **安装失败时审计沿用上游语义**：`finalStatus: FAILED`，但 `securityResult` 仍是 `PASS`（上游用它表示「没有安全门禁失败」）。判断成败看 `finalStatus`。\n8. **每次放行安装都会在 `recovery/` 留一份 profile 四文件副本**，没有自动清理；需要时手工删旧目录。\n9. **相对 `auditDir` 按宿主进程 cwd 解析**（当前是 profile 目录），建议只写绝对路径或留空。\n10. **外发扫描口径较严**：工作区里只要有文件名命中凭据规则（例如任何 `.npmrc`），EXPORT/PUBLISH 都会判 CRITICAL。要缩小范围，给调用传 `workdir`，或在行配置里显式设 `scanRoots`。"
+    }
+  ],
+  "skipped": []
+}

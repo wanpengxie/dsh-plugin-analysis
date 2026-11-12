@@ -1,0 +1,230 @@
+{
+  "repo": "maxlee/dsh-pen-dev",
+  "commit": "95906e2e966f64cf972f845dad0da679f6d26edd",
+  "extracted_at": "2026-11-12T00:59:13.667774+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 40522,
+    "lines_by_language": {
+      "JSON": 142,
+      "JavaScript": 146,
+      "Markdown": 540,
+      "Other": 24,
+      "YAML": 74
+    },
+    "outline": [
+      ".gitignore",
+      ".nojekyll",
+      "LICENSE",
+      "PUBLISHING.md",
+      "PUBLISHING.zh.md",
+      "README.md",
+      "README.zh.md",
+      "assets/pen-dev.md",
+      "cordis.patch.yml",
+      "lib/quota-guard.js",
+      "lib/skill.js",
+      "market/index.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-pen-dev",
+    "version": "0.1.2",
+    "description": "Unofficial pen.dev MCP integration for DeepSeek Harness: design on the pen.dev canvas from a DSH session.",
+    "type": "module",
+    "main": "lib/skill.js",
+    "exports": {
+      ".": "./lib/skill.js",
+      "./skill": "./lib/skill.js",
+      "./quota-guard": "./lib/quota-guard.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "assets",
+      "market",
+      "cordis.patch.yml",
+      "README.md",
+      "README.zh.md",
+      "PUBLISHING.md",
+      "PUBLISHING.zh.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "mcp",
+      "pen.dev",
+      "canvas",
+      "design"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/maxlee/dsh-pen-dev.git"
+    },
+    "homepage": "https://github.com/maxlee/dsh-pen-dev#readme",
+    "bugs": {
+      "url": "https://github.com/maxlee/dsh-pen-dev/issues"
+    },
+    "dsh": {
+      "manifestVersion": 1,
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-pen-dev — unofficial pen.dev MCP integration for DeepSeek Harness.\n#\n# pen-dev-mcp    mounts @deepseek-ai/dsh-mcp-client against the pen.dev desktop app.\n#                The official config is exactly `mcp-server-<platform>-<arch>\n#                --app desktop`; this row adds `--agent` attribution and locates the\n#                binary by probing the filesystem at activation time.\n# pen-dev-skill  registers the `pen-dev` skill (canvas workflow + pointers to\n#                pen.dev's own `read_skill` docs).\n# pen-dev-quota  rewrites pen.dev's \"usage limit reached\" failures into a short\n#                bilingual notice with the upgrade link, instead of the upstream\n#                STOP instruction.\n#\n# Remove any hand-written `mcp-client` row for pen.dev before enabling this\n# bundle: two mcp-client instances cannot share one `serverName`.\n\n- insert:\n    - id: pen-dev-mcp\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: !!js \"process.env.PEN_MCP_SERVER_NAME || 'pen'\"\n        transport: stdio\n        command: !!js >-\n          (function () {\n            var win = process.platform === 'win32';\n            var exe = win ? '.exe' : '';\n            var file = 'mcp-server-' + process.platform + '-' + (process.arch === 'arm64' ? 'arm64' : 'x64') + exe;\n            var env = process.env;\n            if (env.PEN_MCP_BIN) return env.PEN_MCP_BIN;\n            var inner = process.platform === 'darwin'\n              ? ['Contents', 'Resources', 'app.asar.unpacked', 'out', file]\n              : ['resources', 'app.asar.unpacked', 'out', file];\n            var fallback = process.platform === 'darwin'\n              ? '/Applications/Pen.app'\n              : win\n                ? (env.LOCALAPPDATA ? env.LOCALAPPDATA + '/Programs/Pen' : 'C:/Program Files/Pen')\n                : '/opt/Pen';\n            var get = process.getBuiltinModule;\n            if (!get) return [fallback].concat(inner).join('/');\n            var fs = get('node:fs');\n            var path = get('node:path');\n            var os = get('node:os');\n            var apps = env.PEN_APP_PATH ? [env.PEN_APP_PATH] : [];\n            var roots = win\n              ? [env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'Programs') : '', env.ProgramFiles || '']\n              : ['/Applications', path.join(os.homedir(), 'Applications'), '/opt'];\n            roots.filter(Boolean).forEach(function (root) {\n              try {\n                fs.readdirSync(root).forEach(function (name) {\n                  if (/^Pen/i.test(name)) apps.push(path.join(root, name));\n                });\n              } catch (e) {}\n            });\n            for (var i = 0; i < apps.length; i++) {\n              var candidate = path.join.apply(null, [apps[i]].concat(inner));\n              if (fs.existsSync(candidate)) return candidate;\n            }\n            return path.join.apply(null, [fallback].concat(inner));\n          })()\n        args: !!js >-\n          (function () {\n            var env = process.env;\n            var args = ['--app', 'desktop', '--agent', env.PEN_MCP_AGENT || 'deepseekHarness'];\n            if (env.PEN_MCP_CONVERSATION_ID) args.push('--conversation_id', env.PEN_MCP_CONVERSATION_ID);\n            if (env.PEN_MCP_ENABLE_SPAWN_AGENTS === '1' || env.PEN_MCP_ENABLE_SPAWN_AGENTS === 'true') args.push('--enable_spawn_agents');\n            return args;\n          })()\n        toolCallTimeoutMs: 120000\n        env: {}\n\n    - id: pen-dev-skill\n      name: dsh-pen-dev/skill\n\n    - id: pen-dev-quota-guard\n      name: dsh-pen-dev/quota-guard\n"
+    }
+  ],
+  "entries": [
+    "lib/skill.js",
+    "lib/quota-guard.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "PEN_MCP_SERVER_NAME",
+      "kind": "env",
+      "where": "cordis.patch.yml:20"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "pen.dev",
+      "url": "https://pen.dev/upgrade",
+      "where": "lib/quota-guard.js:19"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maxlee/dsh-pen-dev",
+      "where": "market/index.json:47"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maxlee/dsh-pen-dev",
+      "where": "market/index.json:49"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maxlee/dsh-pen-dev.git",
+      "where": "package.json:37"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maxlee/dsh-pen-dev#readme",
+      "where": "package.json:39"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/maxlee/dsh-pen-dev/issues",
+      "where": "package.json:41"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 7,
+    "pushed_at": "2026-10-25T08:25:39Z",
+    "created_at": "2026-10-23T12:10:31Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/quota-guard.js",
+    "lib/skill.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-pen-dev",
+      "text": "**Unofficial** [pen.dev](https://pen.dev) integration for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).\n\nIt connects the pen.dev desktop app's MCP server to a DSH session, so the model can design on the\nlive pen.dev canvas, inspect frames and components, reproduce web pages as editable layers, and use\npen.dev's own style archetypes. It also adds a small `pen-dev` skill that teaches the canvas\nworkflow and points at pen.dev's authoritative `read_skill` documentation."
+    },
+    {
+      "section": "dsh-pen-dev",
+      "text": "Not affiliated with or endorsed by pen.dev. `pen.dev` and its desktop app are their authors'\nproperty; this package ships no pen.dev binaries — it locates the MCP server inside an installed app."
+    },
+    {
+      "section": "What you get",
+      "text": "| Tool | Use |\n| --- | --- |\n| `mcp__pen__get_app_state` | Active document, selection, top-level frames, components, browser state |\n| `mcp__pen__read_skill` | pen.dev's own canvas API docs (`execute`, schema, guides) |\n| `mcp__pen__execute` | Run canvas operations against the open `.pen` document |\n| `mcp__pen__get_style` | Load visual style archetypes (fonts, colors, imagery) |\n| `mcp__pen__browser` | Open a real site in the app's browser, reproduce it as editable layers |"
+    },
+    {
+      "section": "What you get",
+      "text": "Plus the bundled `pen-dev` skill."
+    },
+    {
+      "section": "Requirements",
+      "text": "- **DeepSeek Harness** with the `@deepseek-ai/dsh-mcp-client` plugin available. Developed and tested\n  against DSH `0.2.1-rc.2`.\n- **pen.dev desktop app** installed. Developed and tested with Pen 1.2.19 on macOS (arm64).\n  The app ships its MCP server at\n  `Pen.app/Contents/Resources/app.asar.unpacked/out/mcp-server-<platform>-<arch>`."
+    },
+    {
+      "section": "From the DSH app (recommended)",
+      "text": "Sidebar **Plugins → Add plugin → Install third-party plugin**, then enter the package name:\n\n```\ndsh-pen-dev\n```\n\nAccept a local path or Git URL there too."
+    },
+    {
+      "section": "From the CLI",
+      "text": "```bash\ndsh plugin --profile <profile> add dsh-pen-dev\n```\n\nThe bundle is enabled when it is installed. With HMR on, the tools appear without a restart;\notherwise restart the app."
+    },
+    {
+      "section": "From a plugin market",
+      "text": "If a market index lists this plugin, open **Plugins → Explore → Add index source**, paste the index\nURL, then install from the results. [`market/index.json`](market/index.json) is a ready format-1\nentry; [`PUBLISHING.md`](PUBLISHING.md) explains hosting one and why this DSH build has no official\nsubmission channel yet."
+    },
+    {
+      "section": "Manual equivalent",
+      "text": "If you prefer the explicit YAML (for example while the package is not on npm yet, using a local\npath), install the package into the profile and let its bundle patch apply. The two rows it adds\nare:\n\n```yaml\n- insert:\n    - id: pen-dev\n      name: dsh-pen-dev\n    - id: pen-dev-skill\n\n**If you previously hand-wired pen.dev**, delete your manual `mcp-client` row first. Two\nmcp-client instances cannot share one `serverName`; the second one fails with\n`serverName \"pen\" is already in use`."
+    },
+    {
+      "section": "How this relates to the official pen.dev MCP config",
+      "text": "pen.dev documents the desktop integration as:\n\n```json\n{\"name\":\"pencil\",\"transport\":\"stdio\",\"command\":\"…/mcp-server-<platform>-<arch>\",\"args\":[\"--app\",\"desktop\"],\"env\":{}}\n```\n\nThis bundle mounts exactly that server: same binary, same `--app desktop`, same five tools\n(`browser`, `execute`, `get_app_state`, `get_style`, `read_skill`). On top of the minimal config it:"
+    },
+    {
+      "section": "How this relates to the official pen.dev MCP config",
+      "text": "- locates the binary by probing `/Applications`, `~/Applications`, `/opt`, and (on Windows)\n  `%LOCALAPPDATA%\\Programs`, so a non-standard install works without editing config files\n- passes `--agent deepseekHarness` so the pen.dev app can tell this connection apart from Claude Code\n  or Codex; override it with `PEN_MCP_AGENT`\n- forwards `PEN_MCP_CONVERSATION_ID` as `--conversation_id`\n- raises the per-call timeout to 120 s, because `execute` and `browser` can exceed the 60 s default"
+    },
+    {
+      "section": "How this relates to the official pen.dev MCP config",
+      "text": "`--enable_spawn_agents` is off by default: it would let pen.dev start its own agents outside DeepSeek\nHarness. Set `PEN_MCP_ENABLE_SPAWN_AGENTS=1` to enable it deliberately.\n\nThe `@pencil.dev/cli` npm package ships a *different* MCP server build — nine `filePath`-based tools\nfor its headless `.pen` editor. It is not a drop-in replacement for this integration: against the\ndesktop app that server's IPC methods are not implemented (`No handler found for method\n'get-editor-state'`)."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Variable | Default | Meaning |\n| --- | --- | --- |\n| `PEN_MCP_BIN` | — | Absolute path to the pen.dev MCP server binary. Use it for a non-standard install or another platform. |\n| `PEN_APP_PATH` | auto-detected | Absolute path to the pen.dev app bundle, when detection misses it. |\n| `PEN_MCP_AGENT` | `deepseekHarness` | `--agent` value the pen.dev app sees for this connection. |\n| `PEN_MCP_CONVERSATION_ID` | — | Forwarded as `--conversation_id`. |\n| `PEN_MCP_ENABLE_SPAWN_AGENTS` | off | `1` or `true` passes `--enable_spawn_agents` (adds a `spawn_agents` tool). |\n| `PEN_MCP_SERVER_NAME` | `pen` | MCP namespace, i.e. the `mcp__<name>__*` prefix. |"
+    },
+    {
+      "section": "Configuration",
+      "text": "The binary path is computed when the profile activates. The patch probes the usual install roots with\n`node:fs`, so `PEN_APP_PATH` is only needed when the app lives somewhere unusual. If nothing is\nfound, mcp-client reports the spawn failure, adds no tools, and the rest of the harness keeps\nworking."
+    },
+    {
+      "section": "Notes and caveats",
+      "text": "- `.pen` files are encrypted. Only the MCP tools can read or write them — never open them with\n  filesystem tools.\n- The tools edit the document the user is looking at. Treat `execute` as a visible, destructive\n  action.\n- One editor per canvas at a time: if another agent (for example Claude Code) is also connected to\n  Pen, avoid having both write simultaneously.\n- `PEN_MCP_BIN` requires the enclosing app (or a launcher that sets the variable) to pass it\n  through. On macOS, GUI apps do not inherit your shell environment; `PEN_APP_PATH` exists mainly\n  for launchers that do.\n- Windows/Linux: the path probe understands the usual Electron layouts, but only macOS is tested;\n  `PEN_MCP_BIN` always wins when set."
+    },
+    {
+      "section": "Plan limits",
+      "text": "pen.dev meters MCP usage as **active days**: each distinct calendar day (in your timezone) on which\nany pen tool is called counts once toward the plan's allowance for the current billing period. Free\nplans cap this at a few days per month; the Pro plan removes the cap (\"Design with agents every\nday\"). The CLI is metered by the same system."
+    },
+    {
+      "section": "Plan limits",
+      "text": "While the allowance is exhausted, every pen tool fails — including reads. The bundled\n`pen-dev-quota-guard` rewrites the upstream \"STOP … do not work around this\" text into a short\nbilingual notice with the upgrade link, so the model stops instead of retrying. There is no local\ncounter to reset: the check happens on pen.dev's servers, per organization."
+    },
+    {
+      "section": "Uninstall",
+      "text": "Remove the bundle from the profile (Plugins UI, or `dsh plugin --profile <profile> remove dsh-pen-dev`).\nIf you had a manual `mcp-pen` row before, restore it."
+    },
+    {
+      "section": "License",
+      "text": "MIT. Unofficial community package; see the disclaimer above."
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,632 @@
+{
+  "repo": "Me-Maped/dsh-ask",
+  "commit": "54d7de5cf5496ed0e25d3c510665ed1c3697119d",
+  "extracted_at": "2026-11-11T12:39:26.293807+00:00",
+  "tree": {
+    "files": 28,
+    "bytes": 904334,
+    "lines_by_language": {
+      "JSON": 99,
+      "JavaScript": 854,
+      "Markdown": 476,
+      "Other": 282,
+      "TypeScript": 1163,
+      "YAML": 729
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.en.md",
+      "README.md",
+      "TERMINAL_REPLY.md",
+      "cordis.patch.yml",
+      "doc/fish_01.png",
+      "doc/fish_02.png",
+      "package.json",
+      "pnpm-lock.yaml",
+      "scripts/copy-shell-templates.mjs",
+      "scripts/test-runtime.mjs",
+      "src/ask-default.ts",
+      "src/bin/dsh-ask.ts",
+      "src/i18n.ts",
+      "src/index.ts",
+      "src/progress.ts",
+      "src/startup.ts",
+      "src/templates/bash.bash",
+      "src/templates/fish.fish",
+      "src/templates/powershell.ps1",
+      "src/templates/zsh.zsh",
+      "src/terminal-reply.ts",
+      "test/dsh-ask-cli.test.mjs",
+      "test/fixtures/runtime-provider.mjs",
+      "test/progress.test.mjs",
+      "test/terminal-reply.test.mjs",
+      "tsconfig.json"
+    ]
+  },
+  "manifest": {
+    "name": "@dsh-local/dsh-ask",
+    "version": "0.2.2",
+    "description": "Lightweight terminal-scoped streaming ask mode for DeepSeek Harness",
+    "license": "MIT",
+    "private": true,
+    "type": "module",
+    "main": "./lib/index.js",
+    "types": "./lib/index.d.ts",
+    "bin": {
+      "dsh-ask": "./lib/bin/dsh-ask.js"
+    },
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./startup": {
+        "types": "./lib/startup.d.ts",
+        "default": "./lib/startup.js"
+      },
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "TERMINAL_REPLY.md",
+      "README.md",
+      "README.en.md",
+      "doc",
+      "docs",
+      "LICENSE"
+    ],
+    "scripts": {
+      "clean": "rimraf lib tsconfig.tsbuildinfo",
+      "typecheck": "tsc -p tsconfig.json --noEmit",
+      "build": "pnpm run clean && tsc -p tsconfig.json && node scripts/copy-shell-templates.mjs && node -e \"import { chmodSync } from 'node:fs'; chmodSync('lib/bin/dsh-ask.js', 0o755)\"",
+      "test": "pnpm run build && node --test test/dsh-ask-cli.test.mjs test/progress.test.mjs test/terminal-reply.test.mjs",
+      "prepack": "pnpm run build"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "~4.0.5",
+      "@deepseek-ai/cordis-plugin-loader": "~1.0.6",
+      "@deepseek-ai/dsh-agent": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-agent-default-model": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-cmdline": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-session": "0.2.1-rc.5",
+      "@deepseek-ai/schemastery": "~3.18.5"
+    },
+    "dependencies": {
+      "commander": "^15.0.0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "4.0.5",
+      "@deepseek-ai/cordis-plugin-loader": "1.0.6",
+      "@deepseek-ai/dsh-agent": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-agent-default-model": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-cmdline": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-session": "0.2.1-rc.5",
+      "@deepseek-ai/schemastery": "3.18.5",
+      "@types/node": "^22.20.0",
+      "rimraf": "^6.1.2",
+      "typescript": "^6.0.3"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The dsh-ask bundle patch: a lightweight one-shot \"ask\" mode directly over\n# dsh-base. It mounts no Host, HTTP server, Web runtime, or browser plugin.\n# Like the headless bundle, the runner creates an Agent through the core\n# registry and prints its durable result — but the session identity is a\n# deterministic hash of (cwd, terminal session), so consecutive asks in the\n# same terminal and directory resume the same conversation (\"临时会话\"),\n# while a restarted terminal or a different directory starts fresh.\n\n- id: system-prompt\n  config:\n    personaPrefix: >-\n      You are a coding agent powered by the {{model}} model.\n\n# The shared module-reload HMR row stays off; the launcher's watch-only\n# fallback still keeps the user patch layers live until the run exits.\n- id: hmr\n  disabled: true\n\n- id: tools\n  config:\n    # Keep the same temporary process-wide Code Mode opt-in as the Web surface.\n    mode: !!js process.env.DSH_TOOLS_MODE\n\n- insert:\n    - id: ask-startup\n      name: '@dsh-local/dsh-ask/startup'\n\n    # Reads task, session, and per-invocation model controls from askStartup.\n    - id: ask-runner\n      name: '@dsh-local/dsh-ask'\n      inject: [askStartup]\n      config:\n        task: !!js ctx.askStartup.task\n        fresh: !!js ctx.askStartup.fresh\n        explicitSession: !!js ctx.askStartup.session\n        model: !!js ctx.askStartup.model\n        effort: !!js ctx.askStartup.effort\n        lang: !!js ctx.askStartup.lang\n        listProviders: !!js ctx.askStartup.listProviders\n        provider: !!js ctx.askStartup.provider\n        configureOnly: !!js ctx.askStartup.configureOnly\n        saveLanguage: !!js ctx.askStartup.saveLanguage\n        # Override with DSH_ASK_STYLE or a later ask-runner profile patch.\n        outputStyle: !!js process.env.DSH_ASK_STYLE ?? 'auto'\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_TOOLS_MODE",
+      "kind": "env",
+      "where": "cordis.patch.yml:22"
+    },
+    {
+      "name": "DSH_ASK_STYLE",
+      "kind": "env",
+      "where": "cordis.patch.yml:44"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "src/ask-default.ts:22"
+    },
+    {
+      "name": "XDG_CONFIG_HOME",
+      "kind": "env",
+      "where": "src/bin/dsh-ask.ts:96"
+    },
+    {
+      "name": "DSH_ASK_SESSION",
+      "kind": "env",
+      "where": "src/index.ts:180"
+    },
+    {
+      "name": "DSH_ASK_STYLE",
+      "kind": "env",
+      "where": "src/index.ts:227"
+    },
+    {
+      "name": "NO_COLOR",
+      "kind": "env",
+      "where": "src/progress.ts:160"
+    },
+    {
+      "name": "DSH_ASK_TEST_RUNTIME",
+      "kind": "env",
+      "where": "test/fixtures/runtime-provider.mjs:6"
+    },
+    {
+      "name": "DSH_ASK_TEST_REQUESTS",
+      "kind": "env",
+      "where": "test/fixtures/runtime-provider.mjs:28"
+    },
+    {
+      "name": "NO_COLOR",
+      "kind": "env",
+      "where": "test/progress.test.mjs:178"
+    },
+    {
+      "name": "NO_COLOR",
+      "kind": "env",
+      "where": "test/progress.test.mjs:179"
+    },
+    {
+      "name": "NO_COLOR",
+      "kind": "env",
+      "where": "test/progress.test.mjs:189"
+    },
+    {
+      "name": "NO_COLOR",
+      "kind": "env",
+      "where": "test/progress.test.mjs:190"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:203"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:212"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:295"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:296"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:317"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:325"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:365"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:366"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:372"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:378"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:431"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/progress.test.mjs:432"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": "scripts/test-runtime.mjs:27"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "commander": "^15.0.0"
+    },
+    "devDependencies": {
+      "@deepseek-ai/cordis": "4.0.5",
+      "@deepseek-ai/cordis-plugin-loader": "1.0.6",
+      "@deepseek-ai/dsh-agent": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-agent-default-model": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-cmdline": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
+      "@deepseek-ai/dsh-session": "0.2.1-rc.5",
+      "@deepseek-ai/schemastery": "3.18.5",
+      "@types/node": "^22.20.0",
+      "rimraf": "^6.1.2",
+      "typescript": "^6.0.3"
+    }
+  },
+  "quality_raw": {
+    "test_files": 4,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 13,
+    "pushed_at": "2026-11-04T02:36:45Z",
+    "created_at": "2026-08-17T11:19:53Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "scripts/copy-shell-templates.mjs",
+    "src/index.ts",
+    "test/dsh-ask-cli.test.mjs",
+    "test/progress.test.mjs",
+    "test/terminal-reply.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-ask",
+      "text": "中文 | [English](README.en.md)\n\n`dsh-ask` 是一个轻量的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle：在当前目录提交一个问题，将可见回答流式输出到终端，然后退出；它不会启动 TUI。"
+    },
+    {
+      "section": "运行时兼容性",
+      "text": "插件 `0.2.2` 面向 **dsh `0.2.1-rc.5`**，5 个 dsh 核心包的 peer 与开发依赖均固定到该版本；更早的 dsh（含 `0.2.1-rc.2` 与 `0.1.x`）不再声明支持。配套开发依赖仍为 Cordis `4.0.5`、plugin-loader `1.0.6` 和 Schemastery `3.18.5`，与 dsh `0.2.1-rc.5` 自带的版本一致。由于兼容范围发生变化，插件版本由 `0.2.1` 提升为 `0.2.2`，让依赖窗口的改动在版本号上可见。\n\n实时回答与思考提示使用 `agent/assistant-stream`，持久会话仍通过 `session/event` 和 `sessions.flush()` 处理。升级其他 dsh 版本前，应重新核对接口并运行回归，而不是直接放宽兼容范围或启用版本豁免。"
+    },
+    {
+      "section": "行为",
+      "text": "```sh\ndsh --profile ask \"这个函数做什么？\"\n```\n\n默认会话由**绝对当前目录 + 当前父 shell**决定。同一终端、同一目录连续提问会恢复该终端的持久会话。即使目录相同，打开新终端也会得到一个新的默认会话。需要浏览或恢复旧会话时，请使用 Web 的会话界面。`--new` 为本次提问创建独立的持久会话；`--session <id>` 可指定一个持久会话。`--provider <id>`、`--model <id>` 和 `--effort <id>` 会修改 **dsh-ask 专用**的默认配置；之后的 ask 都使用这个选择，不会修改 DSH 的全局默认值。"
+    },
+    {
+      "section": "行为",
+      "text": "每个 turn 结束前，runner 都会执行 `sessions.flush()`。因此 DSH 的 canonical event log 会在进程退出前落盘。使用默认 JSONL 后端时，文件位于 `$DSH_HOME/sessions/<编码后的 cwd>/<session-id>/session.v4.jsonl.zstd`（通常是 `~/.dsh/sessions/...`）。记录包含用户消息、完整 assistant 消息、工具调用/结果及 turn 边界；dsh-ask 不会再维护一份可能与 DSH 不一致的历史副本。"
+    },
+    {
+      "section": "终端输出",
+      "text": "等待时，dsh-ask 在 stderr 显示 spinner 和真实生命周期状态，例如“正在准备持久会话”“正在思考”“正在调用工具”。模型发出的 `reasoning-delta` 会被归并为简短、持久的“思考”行，因此复杂问题在最终回答开始前也能显示有意义的进度；内容会合并空白并限制单行长度，不会按 token 逐个刷屏。\n\n完成的 `tool/call` 会输出单独的“执行”行。它会显示工具名和最终参数中最有用的部分：shell 工具显示命令，文件工具显示路径，搜索工具显示模式和路径；不会把工具结果全文输出到终端。交互式终端中，思考行使用终端原生的灰色、淡化/斜体 SGR 样式，执行行使用醒目的粗体青色；不会新增或调整字体。stderr 被重定向时，两类内容都是不带 ANSI 样式的普通行（TTY 中设置 `NO_COLOR` 也会关闭颜色）。"
+    },
+    {
+      "section": "终端输出",
+      "text": "可见 assistant `text-delta` 仍原样流式写入 stdout，首个可见 chunk 到达时会清除临时 spinner。如果可见文本开始后，后续步骤又继续思考或调用工具，其持久行会放在独立的 TTY 行中，不会被丢弃或写进未结束的回答行。活动信息始终走 stderr，因此 `dsh ... > answer.txt` 仍只会写入回答。如果某个 provider 不提供可见 chunk，则在 turn 结束后回退为一次性输出完整 assistant 消息。"
+    },
+    {
+      "section": "回复规范",
+      "text": "工程根目录的 [TERMINAL_REPLY.md](TERMINAL_REPLY.md) 是开发者可直接编辑的终端回复规范，内容直接发送给模型，无需 skill 元数据。默认要求结论在前、短段落或单层列表、命令独占行，避免标题、加粗、表格和代码围栏；复杂问题按需展开。用户明确要求完整代码、JSON、Markdown 或详细报告时，保留所需格式。例如，命令回答可以是：\n\n```text\n查看当前目录的修改：\ngit status --short\n```\n\n每次实际提问开始时，runner 从插件包根目录读取一次规范，在当前 ask Agent 的独立系统提示词段中加载，位于 persona suffix 之后；新建和恢复会话均适用。用户消息保留原文，规范不拼入用户历史，也不影响其他 Agent、Web 或 TUI。文件中的 `{{...}}` 按字面传递。帮助、配置和 provider 查询不读取此文件。"
+    },
+    {
+      "section": "回复规范",
+      "text": "规范随包发布，文件位置不依赖提问的工作目录。修改源码中的文件后，需重新安装插件（例如 `dsh plugin --profile ask add ./`）；直接修改已安装插件包中的文件，下一次 ask 生效。空白文件停用额外规范；文件丢失或无法读取时，stderr 报告路径并以非零状态退出。\n\n这是一份模型展示约定，不保证模型逐条遵守。stdout 仍原样流式输出，不清洗 Markdown、不裁剪回答；`outputStyle` 只控制 stderr 的进度显示。\n\n人工验收可分别提问普通问答、命令用法、多步骤任务、完整代码和纯 JSON，检查简短程度、复制体验及明确格式要求是否被保留。"
+    },
+    {
+      "section": "模型与推理强度",
+      "text": "```sh"
+    },
+    {
+      "section": "查看所有已注册 provider，以及每个模型可用的 effort。",
+      "text": "dsh --profile ask --provider"
+    },
+    {
+      "section": "使用等号，避免可选参数吞掉后面的提问文本。",
+      "text": "dsh --profile ask --provider=deepseek"
+    },
+    {
+      "section": "保存 provider 和模型后立刻提问。",
+      "text": "dsh --profile ask --provider=deepseek --model=deepseek-chat \"快速解释这段代码\""
+    },
+    {
+      "section": "只保存 ask 默认模型并显示当前激活配置，不会发起聊天。",
+      "text": "dsh --profile ask --model=deepseek-chat"
+    },
+    {
+      "section": "只保存 ask 默认的 reasoning effort。",
+      "text": "dsh --profile ask --effort=high\n```\n\n默认配置保存在 `$DSH_HOME/ask/config.json`（未设置 `DSH_HOME` 时为 `~/.dsh/ask/config.json`），且仅影响 `dsh-ask`。每次 ask 都先读取此文件，再按其中保存的 provider 和 model 发起请求；未保存 provider 时回退到 DSH 全局默认 provider。它不会修改 Web、TUI 或其他 profile 的模型设置。写入采用原子替换，因此无效的 provider、模型或不支持的 effort 不会覆盖原有可用配置。未提供提问文本时，`--provider=<id>`、`--model=<id>`、`--effort=<id>`（或它们的组合）只保存配置，不会发起聊天，并会输出当前激活的 provider、model 和 effort。"
+    },
+    {
+      "section": "只保存 ask 默认的 reasoning effort。",
+      "text": "`--provider` 不带值时列出所有已注册 provider。输出包含模型 id 以及模型支持的原始 effort id、名称和默认项。列表命令不会发起聊天，也不会写默认配置。`--provider=<id>` 会把该 provider 存为 ask 默认值：未同时传 `--model` 时会丢弃旧模型（以及旧 effort），改用该 provider 已公布的第一个模型，避免把另一个 provider 的模型 id 发给当前适配器。\n\n`--effort` 是 provider/model 暴露的原始 id，不是固定的 `low`/`high` 枚举。DSH 会在保存前按当前 provider 和最终 model 校验组合。仅传 `--model` 时，会清除已保存的 effort，让新模型使用 provider 默认值，避免把仅适用于旧模型的 id 带入新模型；在同一命令中同时传 `--model` 和 `--effort` 则会同时保存两项。"
+    },
+    {
+      "section": "语言",
+      "text": "`dsh-ask` 只支持中文（`zh`）和英文（`en`），默认使用 `zh`。语言会保存在 ask 专用默认配置中，优先级为命令行 `--lang`、保存的默认值、`zh`。\n\n```sh"
+    },
+    {
+      "section": "保存英文输出为 ask 默认语言；不发起聊天。",
+      "text": "dsh --profile ask --lang=en"
+    },
+    {
+      "section": "仅本次帮助按英文显示，不写入配置。",
+      "text": "dsh --profile ask --lang=en --help"
+    },
+    {
+      "section": "保存英文并立即用它提问。",
+      "text": "dsh --profile ask --lang en \"Explain this code\"\n```\n\n语言影响 `--help`、配置成功信息、provider/model/effort 查询、spinner、思考与工具活动行，以及 ask 自己的参数提示。模型回答和 provider/DSH 返回的原始错误不会被翻译。"
+    },
+    {
+      "section": "样式预设",
+      "text": "`outputStyle` 默认是 `auto`。单台机器可设置 `DSH_ASK_STYLE`；如需让一个 profile 持久使用某个预设，请在该 profile 后续的 `cordis.patch.yml` 覆盖 `ask-runner`：\n\n```yaml\n- id: ask-runner\n  config:\n    outputStyle: plain\n```\n\n| 预设 | 行为 |\n| --- | --- |\n| `auto` | 默认 TTY spinner；思考为灰色淡化/斜体，执行为粗体青色。 |\n| `plain` | 仅输出普通行：不使用颜色、SGR、光标清除或 spinner 动画。适合旧终端、远程控制台和严格日志环境。 |\n| `subtle` | 只使用标准的淡化/粗体强调，不使用颜色或斜体。 |\n| `contrast` | 保留低调的思考样式，并用亮黄色突出执行操作。 |"
+    },
+    {
+      "section": "样式预设",
+      "text": "如需只调整某类活动行，可在 `$DSH_HOME/ask/config.json` 中用 `activityStyle` 覆盖 preset 的部分字段。它只接受受限的命名 token，由代码映射为 SGR；不接受数字码或原始 escape sequence。例如把思考行从默认的 `dim + italic + gray` 调亮为 `italic + gray`：\n\n```json\n{\n  \"outputStyle\": \"auto\",\n  \"activityStyle\": {\n    \"thinking\": [\"italic\", \"gray\"]\n\n可覆盖字段仅有 `status`、`thinking`、`operation`；可用 token 为 `bold`、`dim`、`italic`、`gray`、`cyan`、`yellow`、`brightYellow`。`NO_COLOR` 和 `plain` 仍会关闭 ANSI 样式。\n\n`NO_COLOR` 仍可关闭带样式预设中的 SGR 颜色/字体样式；如果终端连控制序列都不兼容，请使用 `plain`。"
+    },
+    {
+      "section": "命令",
+      "text": "```sh"
+    },
+    {
+      "section": "继续当前终端在此目录中的会话。",
+      "text": "dsh --profile ask \"继续实现\""
+    },
+    {
+      "section": "仅为本次提问创建一个独立的持久会话。",
+      "text": "dsh --profile ask --new \"调查一个无关问题\""
+    },
+    {
+      "section": "恢复或创建一个指定 id 的持久会话。",
+      "text": "dsh --profile ask --session refactor-auth \"继续重构\""
+    },
+    {
+      "section": "保存默认模型和推理强度，并以它们提问。",
+      "text": "dsh --profile ask -m deepseek-reasoner -e high \"审查这个设计\"\n```\n\n`DSH_ASK_SESSION` 是可选环境变量，供包装脚本需要稳定、隔离的默认会话 id 时使用。"
+    },
+    {
+      "section": "Shell 集成",
+      "text": "安装 bundle 时不会自动修改任何 shell 配置。每种 shell 都使用独立 init 命令，因此 Bash、Zsh、PowerShell 及其他 shell 都可以沿用同一模式。\n\n每种集成都是 `src/templates/` 下的普通模板文件。执行 `pnpm run build` 时，这些文件会复制到 `lib/templates/`；已安装的二进制会在运行时读取包内模板，而不再将 shell 语法内嵌在 JavaScript 中。"
+    },
+    {
+      "section": "Fish",
+      "text": "把 bundle 加入 `ask` profile 后，执行：\n\n```sh\ndsh plugin --profile ask exec dsh-ask init fish\nsource ~/.config/fish/conf.d/zz-dsh-ask.fish\n```\n\n新开启的 Fish 会自动加载生成的 `conf.d/zz-dsh-ask.fish`。它会截获未知的交互式命令，将其合并为问题，并执行：\n\n```fish\ncommand dsh --profile $DSH_ASK_PROFILE -- $text\n```\n\n下图展示未知 Fish 命令被转为提问后的回答，以及后续问题复用同一终端会话的过程。\n\n`DSH_ASK_PROFILE` 默认是 `ask`；在启动 Fish 前设置它可使用其他 profile。生成的 wrapper 会保留原来的 `fish_command_not_found`，只在找不到 `dsh` 时回退。初始化程序不会覆盖一个不是它生成的同名文件。"
+    },
+    {
+      "section": "Bash",
+      "text": "安装 Bash 片段后，在当前交互式 shell 中 source 它：\n\n```bash\ndsh plugin --profile ask exec dsh-ask init bash\nsource \"${XDG_CONFIG_HOME:-$HOME/.config}/dsh-ask/bash-command-not-found.bash\"\n```\n\n安装器不会修改 `~/.bashrc`。如需让以后开启的 shell 自动加载，请在 `~/.bashrc` 中、**发行版 command-not-found 初始化之后**手动加入同一条 `source` 命令。模板会保留已有的 `command_not_found_handle` 作为回退，拒绝包含换行符的输入，并且只对启动的子 `dsh` 进程设置 `DSH_SHELL=1`。"
+    },
+    {
+      "section": "Zsh",
+      "text": "安装并 source Zsh 片段；请确保它位于框架或插件初始化之后：\n\n```zsh\ndsh plugin --profile ask exec dsh-ask init zsh\nsource \"${XDG_CONFIG_HOME:-$HOME/.config}/dsh-ask/zsh-command-not-found.zsh\"\n```\n\n安装器不会修改 `~/.zshrc`。如需持久启用，请在 `~/.zshrc` 中、Oh My Zsh、Prezto 或其他定义 `command_not_found_handler` 的插件之后加入同一条命令。模板会保留原 handler 作为回退，并对符合条件的未知交互式命令执行 `dsh --profile ${DSH_ASK_PROFILE:-ask}`。"
+    },
+    {
+      "section": "PowerShell（实验性）",
+      "text": "在支持的交互式宿主中安装并 dot-source PowerShell 片段：\n\n```powershell\ndsh plugin --profile ask exec dsh-ask init powershell\n. \"$HOME/.config/dsh-ask/powershell-command-not-found.ps1\"\n```\n\n如果设置了 `XDG_CONFIG_HOME`，或当前平台的 home 目录约定不同，请使用安装命令打印的准确路径。安装器不会修改 `$PROFILE`；如果需要持久启用，请自行将同一条 dot-source 命令加入 `$PROFILE`。\n\n此集成依赖 `$ExecutionContext.InvokeCommand.CommandNotFoundAction`，会将已有 delegate 作为回退保留，并刻意标为实验性。Windows PowerShell、PowerShell 7、不同终端宿主和远程 runspace 的命令查找与交互行为均可能不同；持久启用前请在实际使用的每一种宿主中验证。"
+    },
+    {
+      "section": "自定义或新增 Shell",
+      "text": "开发 bundle 时，如需自定义集成，编辑 `src/templates/` 下对应的文件（例如 `fish.fish`、`bash.bash`、`zsh.zsh` 或 `powershell.ps1`）后执行 `pnpm run build`，再测试或打包。新增其他 shell 时，在该目录添加模板，并在 `src/bin/dsh-ask.ts` 的 `SHELL_INTEGRATIONS` 中添加对应条目。条目负责声明模板文件、生成文件标记、安装路径和激活命令；共用安装器会统一处理模板读取、覆盖保护和写入。"
+    },
+    {
+      "section": "TypeScript 开发",
+      "text": "维护中的源代码位于 `src/`，`lib/` 是构建生成的 ESM JavaScript、类型声明和 source map，不能手工修改。修改 link 到 profile 的包或打包发布前，请先构建：\n\n```sh\npnpm install\npnpm run typecheck\npnpm run build\n```\n\nCordis 和 DSH 包保持为 peer dependencies，因此 profile 会为 bundle 提供同一组服务实例。关于源码/构建产物布局及验证命令，请见 [TypeScript 维护说明](docs/typescript-comparison.md)。\n\n真实运行时回归使用临时 `DSH_HOME`，安装打包产物后通过本地确定性 provider 验证会话恢复、输出、配置和错误退出，不发送付费模型请求："
+    },
+    {
+      "section": "TypeScript 开发",
+      "text": "```sh\npnpm pack --pack-destination artifacts\nnode scripts/test-runtime.mjs /path/to/dsh/package.json artifacts/dsh-local-dsh-ask-0.2.2.tgz\n```\n\n将第一个路径替换为本机 dsh 的 `package.json`（例如 `/usr/lib/node_modules/@deepseek-ai/dsh/package.json`）。测试安装可能需要访问 npm；测试目录结束后自动清理。"
+    },
+    {
+      "section": "开发与发布",
+      "text": "当前 checkout 使用本地占位包名 `@dsh-local/dsh-ask`，并保持 `private: true`，避免误发布到并不属于你的 npm scope。公开发布前，请把 `name` 改成你拥有的 scope，并把 `private` 改为 `false`。DSH 运行时包是 peer dependencies，因此 bundle 与 profile 共享 Cordis 和 DSH 服务实例，不会加载重复实例。\n\n公开 bundle 的安装方式与其他 DSH bundle 一致，例如：\n\n```sh\ndsh plugin --profile ask add <你的包名或 git spec>\ndsh plugin --profile ask exec dsh-ask init fish\n```"
+    },
+    {
+      "section": "dsh-ask",
+      "text": "[中文](README.md) | English\n\n`dsh-ask` is a small [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) bundle for terminal questions: it runs one turn in the current directory, streams the visible answer, and exits. It does not start the TUI."
+    },
+    {
+      "section": "Runtime compatibility",
+      "text": "Plugin `0.2.2` targets **dsh `0.2.1-rc.5`**. Its five dsh core peer and development dependencies are pinned to that version; earlier dsh releases, including `0.2.1-rc.2` and `0.1.x`, are no longer declared supported. Development dependencies still match Cordis `4.0.5`, plugin-loader `1.0.6`, and Schemastery `3.18.5`, the versions dsh `0.2.1-rc.5` itself ships. Because the compatibility window changed, the plugin version moves from `0.2.1` to `0.2.2` so the new dependency pin is visible in the version number."
+    },
+    {
+      "section": "Runtime compatibility",
+      "text": "Live answers and reasoning use `agent/assistant-stream`; durable session handling still uses `session/event` and `sessions.flush()`. Recheck interfaces and rerun regression tests before supporting another dsh version, rather than merely widening ranges or granting a version exemption."
+    },
+    {
+      "section": "Behavior",
+      "text": "The default conversation is scoped to the absolute current directory and the current parent shell. Consecutive asks from one terminal and directory resume its durable session. A new terminal receives a new default session, even in the same directory. Use the Web session surface to browse or recover earlier sessions. `--new` creates a separate persisted session for one run; `--session <id>` selects a specific persisted session. `--provider <id>`, `--model <id>`, and `--effort <id>` update **dsh-ask-only** defaults for later asks; they do not change DSH’s global default."
+    },
+    {
+      "section": "Behavior",
+      "text": "At the end of every turn the runner calls `sessions.flush()`. DSH therefore persists the canonical event log before the process exits. With DSH's default JSONL backend, the log is stored under `$DSH_HOME/sessions/<encoded-cwd>/<session-id>/session.v4.jsonl.zstd` (normally `~/.dsh/sessions/...`). The log contains user messages, assembled assistant messages, tool calls/results, and turn boundaries; dsh-ask does not create a competing history file."
+    },
+    {
+      "section": "Terminal output",
+      "text": "While a terminal is waiting, dsh-ask renders a spinner on stderr with lifecycle labels such as **preparing session**, **thinking**, and **calling a tool**. Model `reasoning-delta` chunks are coalesced into compact, persistent **thinking** rows, so longer requests show meaningful progress before the final answer begins. Each row is whitespace-normalized and bounded rather than printed token by token."
+    },
+    {
+      "section": "Terminal output",
+      "text": "A completed `tool/call` creates a separate **operation** row. It shows the tool plus the useful part of its final arguments: shell tools show the command, file tools show the path, and search tools show the pattern and path. Tool results are not dumped to the terminal. In an interactive terminal, thinking rows use the terminal's native dim/italic gray SGR style; operation rows use bold cyan. No font is bundled or resized. When stderr is redirected, both forms are plain line-oriented text without ANSI styling (and `NO_COLOR` disables color in a TTY)."
+    },
+    {
+      "section": "Terminal output",
+      "text": "Visible assistant `text-delta` content continues to stream unchanged to stdout; the first such chunk removes the transient spinner. If a later step reasons or calls a tool after visible text has started, its permanent row is placed on a separate TTY line rather than being dropped or written into the answer line. Activity stays on stderr, so `dsh ... > answer.txt` still writes only the answer. If a provider supplies no visible chunks, dsh-ask falls back to printing the completed assistant message after the turn ends."
+    },
+    {
+      "section": "Reply policy",
+      "text": "[TERMINAL_REPLY.md](TERMINAL_REPLY.md) in the project root is the editable terminal reply policy. Its contents go directly to the model, without skill metadata. The defaults ask for the conclusion first, short paragraphs or single-level lists, and commands on their own lines, avoiding headings, bold, tables, and code fences. Complex questions can expand as needed. Explicit requests for complete code, JSON, Markdown, or detailed reports retain the required format. For example:"
+    },
+    {
+      "section": "Reply policy",
+      "text": "Before each actual ask, the runner reads the policy once from the plugin package root and registers an independent system-prompt section after the persona suffix, scoped to the current ask Agent. This applies to both new and resumed sessions. User messages stay unchanged; the policy is not prepended to user history or applied to other Agents, Web, or TUI. `{{...}}` stays literal. Help, configuration, and provider inspection do not read the file."
+    },
+    {
+      "section": "Reply policy",
+      "text": "The file ships with the package and is resolved independently of the question's working directory. After editing the source file, reinstall the plugin (for example, `dsh plugin --profile ask add ./`). Editing the file inside the installed plugin package takes effect on the next ask. A blank file disables the extra policy. A missing or unreadable file reports its path on stderr and exits with a nonzero status."
+    },
+    {
+      "section": "Reply policy",
+      "text": "This policy guides model presentation; adherence is not guaranteed. stdout still streams unchanged, with no Markdown filtering or answer truncation. `outputStyle` only controls progress on stderr.\n\nFor manual acceptance, try a simple question, a command explanation, a multistep task, complete code, and JSON-only output. Check brevity, copyability, and preservation of explicit format requirements."
+    },
+    {
+      "section": "Model and reasoning effort",
+      "text": "```sh"
+    },
+    {
+      "section": "List every registered provider, model, and selectable effort.",
+      "text": "dsh --profile ask --provider"
+    },
+    {
+      "section": "Use equals so the optional value cannot consume question text.",
+      "text": "dsh --profile ask --provider=deepseek"
+    },
+    {
+      "section": "Save a provider and model, then ask immediately.",
+      "text": "dsh --profile ask --provider=deepseek --model=deepseek-chat \"explain this code quickly\""
+    },
+    {
+      "section": "Save ask's default model and print the active configuration without starting a chat.",
+      "text": "dsh --profile ask --model=deepseek-chat"
+    },
+    {
+      "section": "Save ask's default reasoning effort without starting a chat.",
+      "text": "The default lives in `$DSH_HOME/ask/config.json` (or `~/.dsh/ask/config.json` when `DSH_HOME` is unset) and affects only `dsh-ask`. Every ask reads it, then sends requests through the saved provider and model; if no provider is saved, it falls back to the configured DSH default provider. It never changes Web, TUI, or other profile model settings. Writes use atomic replacement, so an invalid provider, model, or unsupported effort cannot replace a working configuration. With no question text, `--provider=<id>`, `--model=<id>`, `--effort=<id>`, or any combination only save settings, start no chat, and print the active provider, model, and effort."
+    },
+    {
+      "section": "Save ask's default reasoning effort without starting a chat.",
+      "text": "Without a value, `--provider` lists every registered provider. The output includes each model id plus its raw supported effort ids, display names, and default marker. It does not start a chat or write the defaults file. `--provider=<id>` saves that provider as the ask default. Without `--model` in the same command, the previous model (and effort) is dropped and the first advertised model of the new provider is used, so a model id from another provider cannot be sent to the newly selected adapter."
+    },
+    {
+      "section": "Save ask's default reasoning effort without starting a chat.",
+      "text": "`--effort` is the raw id exposed by the provider/model, not a fixed `low`/`high` enum. DSH validates it against the current provider and final model before saving. `--model` on its own clears the saved effort so the new model uses its provider default, avoiding a model-specific id leaking from the old model. Passing both `--model` and `--effort` saves both values."
+    },
+    {
+      "section": "Language",
+      "text": "`dsh-ask` supports only Chinese (`zh`) and English (`en`), defaulting to `zh`. The language is saved in the ask-only defaults. Precedence is explicit `--lang`, the saved default, then `zh`.\n\n```sh"
+    },
+    {
+      "section": "Save English as the ask default; no chat is started.",
+      "text": "dsh --profile ask --lang=en"
+    },
+    {
+      "section": "Render this help in English only; do not write defaults.",
+      "text": "dsh --profile ask --lang=en --help"
+    },
+    {
+      "section": "Save English and ask immediately.",
+      "text": "dsh --profile ask --lang en \"Explain this code\"\n```\n\nLanguage controls `--help`, configuration success output, provider/model/effort inspection, spinners, thinking rows, tool activity, and ask-owned argument prompts. Model answers and raw provider/DSH error details are not translated."
+    },
+    {
+      "section": "Style presets",
+      "text": "`outputStyle` defaults to `auto`. Set `DSH_ASK_STYLE` for one machine, or override the `ask-runner` row in a later profile `cordis.patch.yml` for a persistent profile setting:\n\n```yaml\n- id: ask-runner\n  config:\n    outputStyle: plain\n```"
+    },
+    {
+      "section": "Style presets",
+      "text": "| Preset | Behavior |\n| --- | --- |\n| `auto` | Default TTY spinner, dim/italic gray thinking, and bold cyan operations. |\n| `plain` | Line-oriented output only: no color, SGR, cursor clearing, or spinner animation. Recommended for older terminals, remote consoles, and strict logs. |\n| `subtle` | Uses only standard dim/bold emphasis, without color or italics. |\n| `contrast` | Keeps muted thinking and uses bright yellow operations for high visibility. |"
+    },
+    {
+      "section": "Style presets",
+      "text": "`NO_COLOR` still disables SGR color/style in the styled presets; use `plain` when terminal control sequences themselves are incompatible."
+    },
+    {
+      "section": "Commands",
+      "text": "```sh"
+    },
+    {
+      "section": "Continue this terminal's conversation in the current directory.",
+      "text": "dsh --profile ask \"continue the implementation\""
+    },
+    {
+      "section": "Start a separate persisted thread for this one invocation.",
+      "text": "dsh --profile ask --new \"investigate an unrelated issue\""
+    },
+    {
+      "section": "Resume or create a named persisted session.",
+      "text": "dsh --profile ask --session refactor-auth \"continue the refactor\""
+    },
+    {
+      "section": "Save the default model and reasoning effort, then ask with them.",
+      "text": "dsh --profile ask -m deepseek-reasoner -e high \"review this design\"\n```\n\n`DSH_ASK_SESSION` is an optional environment override for wrappers that need a stable, isolated default session id."
+    },
+    {
+      "section": "Shell integrations",
+      "text": "The bundle does **not** edit shell configuration when it is installed. Shell integrations are explicit, separate init commands so Bash, Zsh, PowerShell, and other shells can follow the same pattern.\n\nEach integration is a plain template under `src/templates/`. `pnpm run build` copies those files to `lib/templates/`, allowing the installed binary to read its package-provided template at runtime instead of embedding shell syntax in JavaScript."
+    },
+    {
+      "section": "Fish",
+      "text": "After adding the bundle to the `ask` profile, install Fish support with:\n\n```sh\ndsh plugin --profile ask exec dsh-ask init fish\nsource ~/.config/fish/conf.d/zz-dsh-ask.fish\n```\n\nNew Fish shells load the generated `conf.d/zz-dsh-ask.fish` file automatically. It intercepts unknown interactive commands, joins them into a question, and runs:\n\n```fish\ncommand dsh --profile $DSH_ASK_PROFILE -- $text\n```"
+    },
+    {
+      "section": "Fish",
+      "text": "The screenshots below show an unknown Fish command being answered, followed by a question that resumes the same terminal-scoped conversation.\n\n`DSH_ASK_PROFILE` defaults to `ask`; set it before starting Fish to use another profile name. The generated wrapper preserves a pre-existing `fish_command_not_found` handler as a fallback when `dsh` is unavailable. The installer refuses to overwrite a same-named file that it did not generate."
+    },
+    {
+      "section": "Bash",
+      "text": "Install the Bash snippet, then source it in the current interactive shell:\n\n```bash\ndsh plugin --profile ask exec dsh-ask init bash\nsource \"${XDG_CONFIG_HOME:-$HOME/.config}/dsh-ask/bash-command-not-found.bash\"\n```"
+    },
+    {
+      "section": "Bash",
+      "text": "The installer never edits `~/.bashrc`. To load it in future shells, add that same `source` line to `~/.bashrc` **after** any distribution-provided `command-not-found` setup. The template preserves an existing `command_not_found_handle` as a fallback, rejects newline-containing input, and sets `DSH_SHELL=1` only for the child `dsh` invocation."
+    },
+    {
+      "section": "Zsh",
+      "text": "Install and source the Zsh snippet after your framework or plugins have initialized:\n\n```zsh\ndsh plugin --profile ask exec dsh-ask init zsh\nsource \"${XDG_CONFIG_HOME:-$HOME/.config}/dsh-ask/zsh-command-not-found.zsh\"\n```"
+    },
+    {
+      "section": "Zsh",
+      "text": "The installer never edits `~/.zshrc`. To make it persistent, add the same line to `~/.zshrc` after Oh My Zsh, Prezto, or another plugin that defines `command_not_found_handler`. The template keeps the previous handler as a fallback and invokes `dsh --profile ${DSH_ASK_PROFILE:-ask}` for eligible unknown interactive commands."
+    },
+    {
+      "section": "PowerShell (experimental)",
+      "text": "Install and dot-source the PowerShell snippet in a supported interactive host:\n\n```powershell\ndsh plugin --profile ask exec dsh-ask init powershell\n. \"$HOME/.config/dsh-ask/powershell-command-not-found.ps1\"\n```\n\nUse the exact installation path printed by the command when `XDG_CONFIG_HOME` is set or on a platform with a different home directory convention. The installer never edits `$PROFILE`; add the same dot-source command to `$PROFILE` manually if you choose to persist it."
+    },
+    {
+      "section": "PowerShell (experimental)",
+      "text": "This integration uses `$ExecutionContext.InvokeCommand.CommandNotFoundAction`, preserves the existing delegate as a fallback, and is intentionally marked experimental. PowerShell command lookup and interactivity differ across Windows PowerShell, PowerShell 7, terminal hosts, and remote runspaces; test it in every host you use before persisting it."
+    },
+    {
+      "section": "Customizing or adding a shell",
+      "text": "To customize an integration while developing the bundle, edit its file under `src/templates/` (for example, `fish.fish`, `bash.bash`, `zsh.zsh`, or `powershell.ps1`) and run `pnpm run build` before testing or packing. To add another shell, add its template and a matching entry to `SHELL_INTEGRATIONS` in `src/bin/dsh-ask.ts`. The entry defines the template file, generated-file marker, installation path, and activation command; the shared installer handles reading, overwrite protection, and writing the file."
+    },
+    {
+      "section": "TypeScript development",
+      "text": "The maintained source is TypeScript under `src/`; `lib/` contains generated ESM JavaScript, declarations, and source maps. Do not edit `lib/` by hand. Build before using a changed linked package or packing it for distribution:\n\n```sh\npnpm install\npnpm run typecheck\npnpm run build\n```"
+    },
+    {
+      "section": "TypeScript development",
+      "text": "The package keeps Cordis and DSH packages as peer dependencies so a profile supplies the same service instances used by the bundle. The [TypeScript maintenance notes](docs/typescript-comparison.md) document the source/artifact layout and supported validation commands.\n\nThe runtime smoke test uses a temporary `DSH_HOME`, installs the packed artifact, and exercises persistence, resume, output, configuration, and error exits with a deterministic local provider. It makes no paid model requests:"
+    },
+    {
+      "section": "TypeScript development",
+      "text": "```sh\npnpm pack --pack-destination artifacts\nnode scripts/test-runtime.mjs /path/to/dsh/package.json artifacts/dsh-local-dsh-ask-0.2.2.tgz\n```\n\nReplace the first path with the installed dsh `package.json` (for example, `/usr/lib/node_modules/@deepseek-ai/dsh/package.json`). Installation may need npm access. The temporary test home is removed afterward."
+    },
+    {
+      "section": "Development and publication",
+      "text": "The checked-out package is locally named `@dsh-local/dsh-ask` and marked `private` to avoid accidentally publishing under a scope that is not owned. Before publishing it, set `name` to a scope you control and set `private` to `false`. Runtime DSH packages are peer dependencies so the bundle shares the profile's Cordis and DSH service instances rather than loading duplicates."
+    },
+    {
+      "section": "Development and publication",
+      "text": "The local profile used for development links this checkout. A published bundle can be added in the same way as other DSH bundles, for example:\n\n```sh\ndsh plugin --profile ask add <your-package-spec>\ndsh plugin --profile ask exec dsh-ask init fish\n```"
+    }
+  ],
+  "skipped": []
+}

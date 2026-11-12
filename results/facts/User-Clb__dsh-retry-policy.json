@@ -1,0 +1,163 @@
+{
+  "repo": "User-Clb/dsh-retry-policy",
+  "commit": "94ec8266479c68b7069d3a5299e97252d5b630f4",
+  "extracted_at": "2026-11-11T15:32:36.813748+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 13056,
+    "lines_by_language": {
+      "JSON": 53,
+      "JavaScript": 136,
+      "Markdown": 122,
+      "Other": 25,
+      "YAML": 19
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/retry-policy.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-retry-policy",
+    "version": "0.2.0",
+    "description": "DSH 模型请求重试策略统一覆盖插件：在 apply 阶段包装 ctx.llm.prepareCall，把所有 provider 通道的 retryPolicy 换成同一套参数（默认 20 次 / 10s 固定退避 / 0 抖动），不修改 DSH 客户端文件。",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "retry",
+      "backoff",
+      "llm",
+      "provider"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/User-Clb/dsh-retry-policy.git"
+    },
+    "author": "User-Clb",
+    "license": "MIT",
+    "private": true,
+    "type": "module",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "test": "node --test",
+      "check": "node --check index.js"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": "*"
+    },
+    "peerDependenciesMeta": {
+      "@deepseek-ai/cordis": {
+        "optional": true
+      }
+    },
+    "engines": {
+      "node": ">=20"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-retry-policy — 统一覆盖所有 provider 路由的模型请求重试策略。\n# 不改 DSH 客户端文件：在 apply 阶段包装 ctx.llm.prepareCall，把\n# preparedCall.retryPolicy 替换为本插件常量（20 次 / 10s 固定退避 / 0 抖动），\n# 覆盖所有 adapter（workbuddy / qodercn / our-free-model / pi-ai 等）。\n- insert:\n    - id: dsh-retry-policy\n      name: dsh-retry-policy\n      inject: [llm]\n      config:\n        maxRetries: 20\n        initialDelayMs: 10000\n        maxDelayMs: 10000\n        jitterRatio: 0\n        retryableCodes:\n          - EMPTY_RESPONSE\n          - RATE_LIMIT\n          - SERVER\n          - TIMEOUT\n          - TRANSPORT\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/User-Clb/dsh-retry-policy.git",
+      "where": "package.json:16"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-31T14:02:20Z",
+    "created_at": "2026-10-31T13:56:19Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-retry-policy",
+      "text": "DSH（DeepSeek Harness）模型请求重试策略统一覆盖插件。\n\n不修改 DSH 客户端任何文件，在插件 `apply` 阶段包装 `ctx.llm.prepareCall`，把每一次模型调用\n携带的 `retryPolicy` 换成本插件配置的那一套 —— 于是**所有 provider 通道**（官方 deepseek、\nworkbuddy、our-free-model、pi-ai、qodercn……）共用同一份重试规则。"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "DSH 的重试策略不是全局配置，而是**由各 adapter 插件自己返回、固化在注册表里**的：\n\n```\nadapter.providerRetryPolicy(provider)   // 插件内部写死\n  -> registration.retryPolicy           // dsh-llm 注册时求值\n  -> preparedCall.retryPolicy           // llm.prepareCall 时取出\n  -> dsh-llm-retry                      // 监听 agent/request-error 决定重试与退避\n\nprofile 的 `cordis.patch.yml` 只能改插件的 `config`，**改不动插件内部写死的返回值**\n（官方 deepseek adapter 默认甚至给 `maxRetries: 0`，也就是失败直接不重试）。"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "本插件走旁路：在 `llm` 服务的 `prepareCall` 外面再套一层，拿到返回对象后替换 `retryPolicy`。\n原对象是 `Object.freeze` 的，所以浅拷贝出一个新对象返回；用 `llm.__retryPolicyPatched`\n保证同一进程只包装一次。"
+    },
+    {
+      "section": "安装",
+      "text": "```jsonc\n// ~/.dsh/profiles/<profile>/package.json\n{\n  \"dependencies\": {\n    \"dsh-retry-policy\": \"github:User-Clb/dsh-retry-policy\"\n\n然后在 profile 目录执行 `pnpm install`（或 DSH 插件面板里安装），重启 DSH 生效。\n\n> 顺序无关：补丁作用在 `llm` 服务实例上，与 adapter 插件的加载先后没有耦合。"
+    },
+    {
+      "section": "配置",
+      "text": "改本包 `cordis.patch.yml` 里的 `config` 块即可，不需要动代码：\n\n```yaml\n- insert:\n    - id: dsh-retry-policy\n      name: dsh-retry-policy\n      inject: [llm]"
+    },
+    {
+      "section": "配置",
+      "text": "| 参数 | 默认 | 取值范围（越界自动夹取） | 说明 |\n| --- | --- | --- | --- |\n| `maxRetries` | `20` | `0..100` | 达到上限后把错误交给上层（配合 dsh-model-rotation 就是\"扛不过就轮换\"） |\n| `initialDelayMs` | `10000` | `1..600000` | 退避基数，`delay = min(initial × 2^n, max) × jitter` |\n| `maxDelayMs` | `10000` | `1..600000` | 退避上限 |\n| `jitterRatio` | `0` | `0..1` | `0` = 每次整间隔；越大越分散，避免多通道同步重试 |\n| `retryableCodes` | 上面 5 项 | 非空字符串数组 | 全非法值时回落到默认列表 |\n\n默认配置的净效果：**失败后固定每 10 秒一跳、最多 20 跳（约 200 秒）**。"
+    },
+    {
+      "section": "一个需要知道的取舍",
+      "text": "`dsh-llm-retry` 里有一条规则：如果服务端返回了 `Retry-After` 且**大于 `maxDelayMs`**，\n`normal` 模式会直接放弃重试（不打算等那么久）。所以在当前默认值（`maxDelayMs = 10000`）下，\n遇到\"429 请等 60 秒\"这类响应，本插件会选择不再等、把错误抛给上层。\n\n想让插件尊重服务端的等待时长，把 `maxDelayMs` 调大即可，例如 `60000` 或 `120000`。"
+    },
+    {
+      "section": "API",
+      "text": "```js\nimport { apply, resolveConfig, name, inject } from 'dsh-retry-policy';\n\nresolveConfig(raw) // 纯函数：夹取与规整配置，返回 frozen 对象（可单独测试）\napply(ctx, config) // 安装补丁；llm.prepareCall 不可用时只打 warn、不抛错\n\n`apply(ctx)` 不带 `config` 时全部走 `DEFAULT_CONFIG`，与 `cordis.patch.yml` 里的值一致。"
+    },
+    {
+      "section": "文件",
+      "text": "```\nindex.js          97 行，全部逻辑\ncordis.patch.yml  bundle 组合层 + 默认 config\n```"
+    },
+    {
+      "section": "验证",
+      "text": "启动 DSH 后在日志里搜这一行，确认补丁生效并打印了实际参数：\n\n```\n[dsh-retry-policy] 已覆盖模型重试策略: maxRetries=20 initialDelayMs=10000 maxDelayMs=10000 jitterRatio=0 retryableCodes=[EMPTY_RESPONSE,RATE_LIMIT,SERVER,TIMEOUT,TRANSPORT]\n```\n\n```\nnode --check index.js\n```"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

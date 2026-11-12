@@ -1,0 +1,128 @@
+{
+  "repo": "baldovinmarques391-design/dsh-file-path-repair",
+  "commit": "8bb180f1961f7739bf7e96571fbccdcdc3df49bb",
+  "extracted_at": "2026-11-11T17:42:30.704065+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 15194,
+    "lines_by_language": {
+      "JSON": 47,
+      "JavaScript": 257,
+      "Markdown": 39,
+      "Other": 13,
+      "YAML": 3
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/repair.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-file-path-repair",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Restores path separators that Markdown escapes consumed before serving /api/file, so local images preview in every session and every model.",
+    "icon": "./icon.svg",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/*.json",
+      "README.md",
+      "test/*.mjs"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "markdown"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/baldovinmarques391-design/dsh-file-path-repair.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "- insert:\n    - id: file-path-repair\n      name: dsh-file-path-repair\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/baldovinmarques391-design/dsh-file-path-repair.git",
+      "where": "package.json:33"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:3080/api/file?path=${encodeURIComponent(path",
+      "where": "test/repair.test.mjs:31"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-17T10:30:34Z",
+    "created_at": "2026-10-17T09:49:45Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-file-path-repair — 图片路径修复",
+      "text": "本地图片（聊天里的 Markdown 图片、会话文档预览）在取文件前，把被 Markdown 转义吃掉的分隔符还原回去。**不靠提示词，不挑模型，不挑会话**。"
+    },
+    {
+      "section": "问题",
+      "text": "本地图片走 `/api/file?path=…`，path 是 Markdown 解析器给出的目标。在链接目标里，反斜杠后跟 ASCII 标点会被当作 CommonMark 转义：\n\n```\n写出来的：  \n解析得到：  C:\\work_out\\shot.png        ← \\_ 的 \\ 被吃掉\n请求结果：  404 → 「图片无法预览 · alt」\n```\n\n这个还原在**解析器里**发生，早于客户端任何路径钩子（`pathImages` / `fileImages`），所以页面侧插件拿不到原始路径；而「让模型改成正斜杠」只对新生成的文字有效，别的智能体、历史消息都不管用。"
+    },
+    {
+      "section": "做法",
+      "text": "包住 `/api/file` 的处理函数：\n\n1. 原样交给原处理器；不是 404 就直接返回，正常路径零影响。\n2. 是 404 时，按「Markdown 转义只会发生在 ASCII 标点前」生成候选路径（把 `\\` 插回标点前，1~3 处组合，最小改动优先）。\n3. 每个候选都用 **HEAD 走原处理器**探测，也就是说仍然由组合出来的文件系统提供方（含沙箱策略）决定能不能读。\n4. 只有**恰好一个**候选存在时才用它重新取文件；两个都像，就保持原来的 404，不猜。\n5. 预算：单次最多 160 次探测、400ms。"
+    },
+    {
+      "section": "边界",
+      "text": "- 只在**已经失败**的请求上工作；目录依旧拒绝，不存在的文件依旧 404。\n- 依赖 Connection 服务里的 `fetchRoutes` 表与 `registerFetchRoute`；上游如果改名，本插件会静默失效（不影响任何请求），不会把路径改成错的。\n- 卸载时还原：路由的包装标记与 `registerFetchRoute` 都会被恢复。"
+    },
+    {
+      "section": "测试",
+      "text": "```bash\nnode test/repair.test.mjs\n```\n\n用真实文件系统 + 一个与官方行为一致的假处理器，覆盖：正常路径、被吃掉分隔符的路径、HEAD、两个候选的歧义、无可修复、指向目录。"
+    }
+  ],
+  "skipped": []
+}

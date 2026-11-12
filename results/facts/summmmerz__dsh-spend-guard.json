@@ -1,0 +1,133 @@
+{
+  "repo": "summmmerz/dsh-spend-guard",
+  "commit": "59bfca929f4177fe6918edc89c35f26b8ba54a01",
+  "extracted_at": "2026-11-12T05:22:54.048432+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 31026,
+    "lines_by_language": {
+      "JSON": 29,
+      "JavaScript": 526,
+      "Markdown": 113,
+      "Other": 53,
+      "YAML": 23
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "lib/toast.ps1",
+      "package.json",
+      "test/window.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-spend-guard",
+    "version": "0.1.1",
+    "private": true,
+    "description": "Rolling-window spend fuse for DeepSeek Harness: warns at 1 CNY and cancels the running turn at 2 CNY spent within the last 10 minutes.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "scripts": {
+      "test": "node test/window.test.mjs"
+    },
+    "engines": {
+      "node": ">=20"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-spend-guard bundle patch: inserts the host-side spend fuse row.\n#\n# Applied after the base and web-app bundle layers. The profile's own\n# cordis.patch.yml (and the home-level one) is applied afterwards and may\n# disable the row or override its config, e.g.:\n#\n#   - id: dsh-spend-guard\n#     disabled: true\n#\n#   - id: dsh-spend-guard\n#     config:\n#       windowMs: 600000     # rolling window (ms), default 10 minutes\n#       warnYuan: 1          # notify threshold within the window (CNY)\n#       stopYuan: 2          # cancel the running turn above this (CNY)\n#       pollMs: 10000        # ledger poll interval (ms)\n#\n# Amounts are compared in CNY. The cost source is dsh-cost-meter's ledger,\n# whose costs are stored in its pricingCurrency (USD by default) and scaled\n# by its own config.exchangeRate, so the fuse stays consistent with the\n# numbers dsh-cost-meter shows you.\n- insert:\n    - id: dsh-spend-guard\n      name: dsh-spend-guard\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/index.js:85"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-05T21:47:30Z",
+    "created_at": "2026-10-05T20:40:27Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json",
+    "test/window.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-spend-guard",
+      "text": "DeepSeek Harness 的**滚动窗口花费熔断**（宿主侧插件）。\n\n> 最近 **10 分钟**内的花费达到 **¥1** → 弹 Windows 通知提醒；\n> 达到 **¥2** → **结束当前这一轮**（等同你按 GUI 的「停止」按钮）。"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "- dsh 核心**没有**任何花费/步数上限开关。\n- `dsh-cost-meter` 的「预算」是**展示型**的：只有 今日/本月/累计/自定义区间 四种周期，\n  行为仅限于 ≥80% 预警、≥100% 超支时变色，**不会暂停任务**。\n- 插件市场里也没有「滚动分钟窗口 + 金额 + 停当前轮」的组合\n  （`dsh-budget` 是 会话/日/月 + USD 且 peer 范围写死 `<0.2.0`；\n  `dsh-balance-tracker` 单位是元、动作是取消当前回合，但窗口是**自然日**，\n  且依赖 dsh 0.2.0 已移除的 0.1.x 客户端包）。"
+    },
+    {
+      "section": "它怎么算钱",
+      "text": "不自己定价，而是**轮询差分** `dsh-cost-meter` 的账本\n（`<DSH_HOME>/storages/cost-meter/ledger.json`）：\n\n1. 每 `pollMs`（默认 10s）读一次账本；\n2. 对**当天聚合值** `days[<日期>].cost` 求相对上次轮询的增量；\n3. 增量按采样时刻塞进环形窗口，窗口内求和即为「最近 N 分钟花了多少」；\n4. 金额口径跟随账本：`pricingCurrency`（默认 USD）× 账本自己的 `config.exchangeRate`\n   （默认 7.2）= 人民币元，与 dsh-cost-meter 界面上的数字同源。"
+    },
+    {
+      "section": "⚠️ 为什么不用 per-session 明细（踩过的坑）",
+      "text": "账本里 `days[日期].sessions[]` 是「每个会话当天的累计值」，**且在重负载日会截断**。\n实测 2026-10-04 那次事故当天：该数组只保留 **200 条、仅覆盖当天 42% 的花费**\n（33.95 / 81.17 元），缺口 47.2 元全是**子代理**消耗 —— 那天正是一次 `workflow`\n工具扇出 383 个子代理烧掉的。\n\n所以按条目差分会**漏掉本插件最该拦住的那类事故**。当天聚合值在任何负载下都是完整\n口径（含子代理），因此只信它。`test/window.test.mjs` 里有两条回归测试锁住这个行为\n（`sessions` 为空、以及条目被替换/截断时，窗口仍必须计数）。\n\n**代价**：检测延迟最多约 `pollMs` + cost-meter 的落盘间隔（默认各 10s）。\n对一个 10 分钟窗口的熔断来说不影响使用。\n\n**降级**：账本读不到（未装 cost-meter、格式变动、权限问题）时**不熔断**，只每 5 分钟\n打一条警告日志 —— 算不出钱的守卫不应该把 harness 弄死。"
+    },
+    {
+      "section": "它怎么停",
+      "text": "```js\nagent.cancel({ kind: 'user' }, { keepInbox: true })\n```\n\n与 GUI「停止」按钮**完全同一条路径**（见 `dsh-api-session-controller` 的 stop 实现）：\n只结束当前回合，不销毁会话，**已排队的输入保留**。\n\n默认会结束**所有正在运行的 agent**（含子代理）—— 熔断的目的是立刻止血，子代理同样\n在烧钱（2026-10-04 那次 47 元几乎全在子代理上）。用 `cancelScope: root` 可只结束主会话。"
+    },
+    {
+      "section": "配置",
+      "text": "默认值可通过 profile 的 `cordis.patch.yml` 覆盖：\n\n```yaml\n- id: dsh-spend-guard\n  config:\n    windowMs: 600000        # 滚动窗口(ms)，默认 10 分钟\n    warnYuan: 1             # 窗口内达到该金额(元) → 提醒\n\n禁用整行：\n\n```yaml\n- id: dsh-spend-guard\n  disabled: true\n```"
+    },
+    {
+      "section": "日志",
+      "text": "```\n[dsh-spend-guard] 已启用: 滚动 10 分钟, 提醒 ¥1.00 / 熔断 ¥2.00, 账本 <path>\n[dsh-spend-guard] 提醒: 最近 10 分钟已花 ¥1.44(停止阈值 ¥2.00)。\n[dsh-spend-guard] 熔断: 最近 10 分钟已花 ¥2.16(阈值 ¥2.00)，已结束当前回合。(被结束的 agent 数: 1)\n```\n\n用 `提醒:` / `熔断:` 两个标记即可 grep。"
+    },
+    {
+      "section": "测试",
+      "text": "```sh\nnode test/window.test.mjs\n```\n\n用合成账本驱动真实的 `apply()`，覆盖：首次轮询只建基线、按当天聚合增量而非累计、\n1 元提醒 / 2 元熔断、**`sessions[]` 为空或被截断时仍必须计数（回归）**、\n跨日新日期不误熔断、聚合值回退不作负增量、`cancelScope` 语义、\n以及熔断必须走 `cancel({kind:'user'}, {keepInbox:true})`。"
+    },
+    {
+      "section": "已知边界",
+      "text": "- 依赖 `dsh-cost-meter` 在跑并持续落盘；它没启用时本插件静默不生效（只记日志）。\n- 窗口精度受轮询间隔限制（默认 ~10-20s）。\n- 只统计 dsh 自己计到的花费；在别处（其他终端/网页）产生的消费不在窗口内。\n- 熔断会结束**所有**在跑的回合（默认，含子代理）；如果你同时跑多个无关会话且不希望\n  被连带中断，设 `cancelScope: root`。"
+    }
+  ],
+  "skipped": []
+}

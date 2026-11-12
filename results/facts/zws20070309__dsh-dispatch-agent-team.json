@@ -1,0 +1,528 @@
+{
+  "repo": "zws20070309/dsh-dispatch-agent-team",
+  "commit": "2f7a6ec9e3e3496c4be5dd0ffa548fbf9dfe970b",
+  "extracted_at": "2026-11-12T15:06:07.775541+00:00",
+  "tree": {
+    "files": 45,
+    "bytes": 2457898,
+    "lines_by_language": {
+      "JSON": 72,
+      "JavaScript": 35615,
+      "Markdown": 2251,
+      "Other": 92,
+      "YAML": 368
+    },
+    "outline": [
+      ".gitattributes",
+      ".gitignore",
+      "INCIDENT-2026-10-09-managed-block.md",
+      "INTERFACES.md",
+      "LICENSE",
+      "README.md",
+      "VERIFY-ALL-IN-ONE.md",
+      "VERIFY-OPS-TEAM.md",
+      "VERIFY-ROUND3.md",
+      "VERIFY-ROUND4.md",
+      "cordis.patch.yml",
+      "icon.svg",
+      "lib/cache.js",
+      "lib/client.js",
+      "lib/graph.js",
+      "lib/index.js",
+      "lib/ops-adapter.js",
+      "lib/playbook.js",
+      "lib/preset.js",
+      "lib/resume.js",
+      "lib/roster.js",
+      "lib/runtime.js",
+      "lib/self-heal.js",
+      "lib/text-clip.js",
+      "lib/tools.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "presets/dispatch-mode.patch.yml",
+      "tools/asar-probe.cjs",
+      "tools/cache-prefix-audit.cjs",
+      "tools/client-smoke-test.cjs",
+      "tools/drift-check.cjs",
+      "tools/emergency-disable.cjs",
+      "tools/history-audit.cjs",
+      "tools/install.cjs",
+      "tools/integration-test.cjs",
+      "tools/lib-atomic-write.cjs",
+      "tools/lib-dsh-home.cjs",
+      "tools/ops-enable.cjs",
+      "tools/ops-mount-check.mjs",
+      "tools/repair.cjs",
+      "tools/selftest.cjs",
+      "tools/session-probe.cjs",
+      "tools/sync-to-dsh.cjs"
+    ]
+  },
+  "manifest": {
+    "name": "@zws/dsh-dispatch-agent-team",
+    "version": "1.0.0",
+    "description": "调度模式智能体团队：基于官方 Agent Teams 改良的团队插件——12 个角色编制、队员共用同一份系统提示词（只靠 Lead 的派活提示词区分角色，缓存命中率高）、队员自动摘掉 goal/子代理工具、每个队员可配模型与思考强度、还可各自选 agent 预设（PTC / 标准 / 极简灰度，可一键统一也可逐个指定；默认跟随 Lead）与「批量调用」档（默认开：原生工具照常直调，另加 run_code 在程序里批量调用），插件页支持一键统一全部角色、/team 开启、成员面板可进入工作区看团队拓扑画布（真实承接关系与运行数据）；并原生链接 dsh-ops 插件（Rust 文件检索 / 后台任务 / PTC 批量操作）——检测到 ops 就把它的能力交给每个队员，没装则零影响。",
+    "type": "module",
+    "main": "lib/index.js",
+    "icon": "./icon.svg",
+    "exports": {
+      ".": "./lib/index.js",
+      "./preset": "./lib/preset.js",
+      "./client": "./lib/client.js",
+      "./roster": "./lib/roster.js",
+      "./playbook": "./lib/playbook.js",
+      "./locale/*.json": "./locale/*.json",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "tools",
+      "presets",
+      "locale",
+      "cordis.patch.yml",
+      "icon.svg",
+      "README.md",
+      "INTERFACES.md",
+      "INCIDENT-2026-10-09-managed-block.md"
+    ],
+    "peerDependencies": {
+      "@deepseek-ai/dsh-tools": ">=0.2.0-rc.1 <0.3.0",
+      "@deepseek-ai/dsh-client-locale": ">=0.2.0-rc.1 <0.3.0",
+      "@deepseek-ai/dsh-client-ui-plugin-manager": ">=0.2.0-rc.1 <0.3.0"
+    },
+    "engines": {
+      "node": ">=18"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": [
+          "./cordis.patch.yml",
+          "./presets/dispatch-mode.patch.yml"
+        ]
+      },
+      "client": {
+        "platform": "web",
+        "inject": [
+          "@deepseek-ai/dsh-client-locale",
+          "@deepseek-ai/dsh-client-ui-plugin-manager"
+        ]
+      }
+    },
+    "keywords": [
+      "dsh",
+      "deepseek-harness",
+      "agent-teams",
+      "plugin",
+      "preset",
+      "调度模式"
+    ],
+    "license": "MIT"
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# 调度模式智能体团队 —— bundle patch（host 平面）\n#\n# 本文件属于**我们自己的包**，官方升级 DSH 不会覆盖它（官方只改 app.asar 与 profile 的\n# cordis.yml；profile 的 cordis.patch.yml 只在崩溃恢复时被改名）。\n#\n# ── 与官方 @deepseek-ai/dsh-experimental-agent-team-profile 的关系 ──────────────\n# 官方 bundle 的三行（它自己的 patch 用 `- insert:` **新建**这三行）：\n#   * `agent-team`（域服务 ctx.agentTeams：durable roster / 邮箱 / 任务 DAG / CAS）\n#   * `tool-agent-team`（九个官方工具 + `team:policy` 策略段）\n#   * `ui-agent-team`（Web 端成员列表 / 任务看板）\n#\n# 我们**保留域服务行不动**：那 1871 行是持久化与授权的唯一实现，重造它才是\n# 「官方一升级就坏」的最大风险（复用现有 > 创造接口）。\n#\n# 注意：为什么这里**不**写 `- id: tool-agent-team / ui-agent-team, disabled: true`（2026-09-28 实测教训）\n# patch 层按 `dsh.profile.bundles` 顺序应用，而官方是用 `insert` **新建**那三行的：\n# 我们的层若排在官方层**之前**，那两条 disable 就落在「还不存在的行」上 → **静默失效**。\n# 实测（2026-09-28）：官方九工具在所有 preset 里都可见，`agent-team` 的 maxMembers 被官方默认值 8\n# 顶掉（本插件的 roster 是**累计**上限，8 次 spawn 之后团队就派不出人了）。\n# 而 DSH 插件页启用 bundle 时是 **append 到 bundles 末尾**（dsh-plugin-manager 的 selectBundle），\n# 所以「谁在后面」取决于用户的启用顺序 —— 依赖顺序的做法天生不可靠。\n#\n# 现在分成两处，各自只承担自己能做到的事：\n#   * 官方**工具面/策略段**的抑制 → 调度模式的 **preset 子树**\n#     （lib/preset.js 的 suppressOfficialTeam：只在本模式里摘掉九个官方工具 + 遮蔽 team:policy 段）。\n#     这样别的 preset 继续用官方团队，本模式只有我们的团队。\n#   * 域服务**容量**（maxMembers 等）→ **profile 自己的 cordis.patch.yml**（在所有 bundle 层之后应用）。\n#     本文件下面仍然写一份同样的值：就地可用（当我们的层恰好排在官方之后时直接生效），\n#     而 tools/repair.cjs 与 tools/drift-check.cjs 会确保 profile 层那份存在且与本文件一致。\n#\n# 注意：官方 bundle 自己的 patch 还 disable 了 host 平面的 tool-subagent-control /\n# tool-subagent-list-agents / tool-subagent / tool-subagent-fork 四行。我们保持官方 bundle 启用，\n# 所以那四个 disable 继续生效——**不要**在本文件里再动它们，否则会和 preset 作用域的 subagent 行\n# 产生同名工具冲突。\n- id: agent-team\n  config:\n    maxMembers: 48\n    maxTasks: 512\n    maxPendingMessagesPerMember: 64\n    maxMessageBytes: 65536\n    disposalTimeoutMs: 5000\n\n- insert:\n    # 官方 Agent Teams 的 Web 端成员列表 / 任务看板，由我们自己的行重新挂载。\n    # 行 id 与官方不同，所以不会与官方行冲突；客户端半由 dsh-client-modules\n    # 按「specifier 是裸包名」的 loader 行发现，因此这里必须写完整包名。\n    - id: dispatch-agent-team-panel\n      name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'\n\n    # 调度模式智能体团队：host 半（配置读写 + HTTP 路由 + 团队工具安装 + 队员模型/强度覆盖）。\n    # 该行的 specifier 必须是本包的**裸包名**，否则 lib/client.js 不会被挂载。\n    - id: dispatch-agent-team\n      name: '@zws/dsh-dispatch-agent-team'\n      config:\n        configFile: dispatch-agent-team.json\n        maxMembers: 8\n\n"
+    },
+    {
+      "path": "presets/dispatch-mode.patch.yml",
+      "text": "# 调度模式（dispatch-mode）agent preset 声明。\n#\n# 本文件与 cordis.patch.yml 同属我们的 bundle patch 数组的第二项，由\n# dsh-web-app 的 presets/*.patch.yml 同款机制加载（preset 由 bundle 声明，\n# 所以官方升级不会动它）。\n#\n# ── 插件行来源 ────────────────────────────────────────────────────────────────\n# 除最后一条 `dispatch-preset` 外，本 preset 的行是**「极简灰度模式」的全量行**\n# （profile 的 cordis.patch.yml 里 preset-minimal-grayscale 的 plugins 列表）\n# 的原样复制——官方不支持 preset 之间的继承，复制是官方唯一支持的组合方式。\n# `tools/drift-check.cjs` 会逐行比对两者，防止官方或用户改了极简灰度后本 preset 悄悄落后。\n#\n# ── 与极简灰度的三处差异 ──────────────────────────────────────────────────────\n# 1) 新增一行 `dispatch-preset`（紧跟 persona）：调度模式的提示词 + 控制面（`/team` 命令与\n#    enable_agent_team / disable_agent_team 两个开关工具）。控制面注册在**本 preset 的作用域**里，\n#    所以只有选了「调度模式」的会话能看到它们（别的 preset 看不到 /team，也开不了本插件的团队）。\n#    九个团队工具**不在这里**——它们由 host 半在「团队已开启」时按 agent 作用域安装，\n#    所以「默认不开团队」是真的。**没有 `/team-off`**：关闭团队走 disable_agent_team 工具。\n# 2) persona 文本与 includeRuntimeContext 与极简灰度完全一致（保持不降智的极简身份）；\n#    调度模式的全部方法论文本由 dispatch-preset 自己注册的 prompt 段承载。\n# 3) `tool-subagent` 行**不写** `modelSelectionSettings: true`（极简灰度写了）。\n#    为什么关掉官方那套子代理模型选择（2026-10-05）：\n#      * 官方能力是「**临时**给某一次 subagent 调用挑一个别的模型」——正是这个模式刻意\n#        不依赖的东西：临时换模型要么让本次调用贵得没道理，要么贵模型被用在查文件这种活上；\n#      * 本模式有**自己**的模型选择器（本插件配置页，12 个角色各一份 provider/model/强度），\n#        两套并存时模型会看到两条互相竞争的指令（官方 subagent 工具描述在这三个参数可见时\n#        会多出一整段 \"Child LLM selection is optional…\"，而调度模式的纪律是角色决定模型）；\n#      * 关掉**不会**削弱本模式：团队的 spawn_teammate 自带 provider/model/reasoning_effort\n#        参数与自己的路由预检（lib/tools.js），走的是宿主 agent/request 覆盖，与本 flag 无关；\n#        探查型子代理仍然可用，只是跟随 Lead 的模型（团队里「换模型」这件事统一由角色配置管）。\n#    影响面（对着装机 0.2.0-rc.2 逐条核过）：`list_subagent_models` 工具与 subagent schema 的\n#    provider/model/reasoning_effort 三个参数不再注册（dsh-tool-subagent/lib/index.js:387-389、\n#    :412-425）；`tool:subagent` 提示词段**不受影响**（它只由 backgroundMode 决定，:576-580）。\n#    `tool-subagent-fork` 行本来就没写这个 flag，行为不变。\n#    注意：与官方 model-selection-settings 服务的关系：本机该服务是默认值（enabled=false、\n#    allowedModels=[]，profiles/desktop/cordis.yml:493-494 没有 config 块）。不用去关它——\n#    它自己那行不写这个 flag 就没人读它；反过来，如果只把开关打开而不选模型，\n#    新会话会在 model-selection-settings.js:59 抛错（\"requires at least one allowed model\"）。\n#\n# ── 队员的能力面由插件在运行期收窄，不改本文件 ────────────────────────────────\n# 队员的 preset 硬编码继承父 agent 的实时 preset（官方 dsh-subagent child-agent.js:113/158，\n# 没有 per-child preset 参数），所以「队员少几个工具」只能靠官方 `ctx.tools.restrict({deny})`\n# 在 agent/created 时按作用域收窄：官方 `applyChildComposition` 给子代理装 toolFilter 用的就是\n# 同一个 API（dsh-subagent/lib/index.js:522）。名单见 lib/roster.js 的 TEAMMATE_TOOL_DENY。\n- insert:\n    - id: preset-dispatch-mode\n      name: '@deepseek-ai/dsh-agent-preset'\n      config:\n        id: dispatch-mode\n        name: 调度模式\n        description: 先把需求分轮问清楚再落地。内置智能体团队：12 类队员角色，可一键统一全队的模型与思考强度、也可分别为每人单独配；队员共用同一份系统提示词（角色差异只走 Lead 的派活提示词，缓存命中率高），并自动摘掉目标/子代理工具。开启团队用 /team。\n        order: 0\n        plugins:\n          # ── identity ─────────────────────────────────────────────────────────────\n          # 与极简灰度一致：极简 persona 文本 + 抑制动态 runtime context 快照。\n          # 注意这里**没有** complete: true —— 一旦 complete 生效，dispatch-preset 注册的\n          # 调度模式提示词段会被当成「非唯一段」而整段丢弃（dsh-system-prompt 只保留\n          # effective complete 段）。这是必须保持的约束。\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a helpful software engineer assistant.\n              includeRuntimeContext: false\n\n          # 调度模式提示词（分轮面试式提问工作流）/ 团队开关命令 / 开关工具。\n          # 由本包提供：name 是子路径导出，解析走 profile 的 node_modules（本包所在处）。\n          - id: dispatch-preset\n            name: '@zws/dsh-dispatch-agent-team/preset'\n\n          # AGENTS.md / workspace instruction 注入（durable USER 消息基线，不受 persona 影响）。\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n\n          # ── shell: exactly one persistent shell per host ─────────────────────────\n          - id: persistent-shell\n            name: cordis:group\n            group: true\n            isolate:\n              terminals: true\n            config:\n              - id: pty\n                name: '@deepseek-ai/dsh-terminal'\n\n              - id: terminal-bash\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform === 'win32'\n                config:\n                  timeoutMs: 300000\n\n              - id: persistent-bash\n                name: '@deepseek-ai/dsh-tool-bash-persistent'\n                disabled: !!js process.platform === 'win32'\n                config:\n                  timeoutMs: 300000\n                  description: |-\n                    Run commands in a bash shell\n                    * When invoking this tool, the contents of the \"command\" parameter does NOT need to be XML-escaped.\n                    * You don't have access to the internet via this tool.\n                    * You do have access to a mirror of common linux and python packages via apt and pip.\n                    * State is persistent across command calls and discussions with the user.\n                    * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.\n                    * Please avoid commands that may produce a very large amount of output.\n                    * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.\n\n              - id: terminal-pwsh\n                name: '@deepseek-ai/dsh-terminal-bash'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  shellDialect: pwsh\n                  timeoutMs: 300000\n\n              - id: persistent-pwsh\n                name: '@deepseek-ai/dsh-tool-pwsh-persistent'\n                disabled: !!js process.platform !== 'win32'\n                config:\n                  timeoutMs: 300000\n                  description: |-\n                    Run commands in a PowerShell shell\n                    * When invoking this tool, the contents of the \"command\" parameter does NOT need to be XML-escaped.\n                    * You don't have access to the internet via this tool.\n                    * State is persistent across command calls and discussions with the user.\n                    * Use native Windows paths (C:\\...) and $env:NAME variables; this is PowerShell, not bash.\n                    * Please avoid commands that may produce a very large amount of output.\n                    * Please run long lived commands in the background, e.g. 'Start-Job' or start a process with Start-Process.\n\n          # ── filesystem ───────────────────────────────────────────────────────────\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n\n          # ── background jobs ──────────────────────────────────────────────────────\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n\n          # ── skills ──────────────────────────────────────────────────────────────\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n\n          # ── goal ────────────────────────────────────────────────────────────────\n          - id: command-goal\n            name: '@deepseek-ai/dsh-command-goal'\n\n          - id: tool-goal\n            name: '@deepseek-ai/dsh-tool-goal'\n\n          # ── plan mode ───────────────────────────────────────────────────────────\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n\n          # ── compaction ──────────────────────────────────────────────────────────\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n\n          # ── delegation ──────────────────────────────────────────────────────────\n          # 探查型的一次性子代理（「事实由 Lead 派子代理查」这条纪律也用它）。\n          # 九个**团队**工具不在这里：它们在团队开启后由 host 半按 agent 作用域安装。\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              # 注意：这里**刻意不写** `modelSelectionSettings: true`（极简灰度那一行是写的）。\n              # 见本文件头「与极简灰度的三处差异」第 3 条：调度模式里「给谁挑模型」只有一个\n              # 入口（本插件的配置页：每个角色一个模型/强度），不叠加官方那套。\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  backgroundMode: continuable\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n                  backgroundMode: continuable\n              - id: tool-subagent-codex\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: codex\n                  toolName: subagent_codex\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: tool-subagent-claude-code\n                name: '@deepseek-ai/dsh-tool-subagent'\n                disabled: true\n                config:\n                  provider: claude-code\n                  toolName: subagent_claude_code\n                  backgroundMode: one-shot\n                  maxDepth: provider-managed\n              - id: workflow-ptc\n                name: '@deepseek-ai/dsh-workflow-ptc'\n                config:\n                  provider: spawn\n              - id: tool-workflow\n                name: '@deepseek-ai/dsh-tool-workflow'\n              - id: tool-ralph\n                name: '@deepseek-ai/dsh-tool-ralph'\n                disabled: true\n                config:\n                  subagentProvider: spawn\n                  maxRounds: 64\n\n          # ── everyday tools ──────────────────────────────────────────────────────\n          # ⚠️ 必须显式设 `mode: timed`（2026-10-10，用户报障「弹窗回答了但官方仍等待」）：\n          #\n          # 官方 `ask_user_question` 有**两条互不相通的路径**，由工具 schema 是否声明\n          # `timeout` 参数决定（dsh-user-questions/lib/index.js:190 的 timed 判定）：\n          #   * legacy（默认、无 config）：提问走 `ctx.waterfall(\"user-questions/request\")`\n          #     （同文件 :681），答案**只能**由持有该 waterfall 的一方给出 ——\n          #     而它只存在于官方前端内存里（dsh-client-ui-user-questions/lib/client.js:1927\n          #     `ctx.remote.$on(\"user-questions/request\", ...)`，:1795 `await waterfall.result`）。\n          #     宿主侧没有任何 API 能 resolve 它，所以**插件无法关闭官方提问卡**：\n          #     `userQuestions.answer()` 的 :554 `continued(agent).find(...)` 找不到\n          #     （:200 `if (!fold.timed || ...) return fold` —— 投影整条跳过 legacy）\n          #     ⇒ :555 `return false`。实测（.probe/verify-timed-legacy-real.cjs）：\n          #     会话 session-0000100f 的 request/header 里 ask_user_question 参数只有\n          #     `[\"questions\"]` ⇒ legacy ⇒ 弹窗回答只能作为普通消息排队，而 agent\n          #     正阻塞在工具调用里，官方界面永远显示「等待回答」。\n          #   * timed（本行 config）：提问进入 `userQuestions` 投影（:199-237 记 continued）,\n          #     超时后模型可继续工作，问题**仍可回答**；此时官方卡片自己的提交路径变为\n          #     RPC（dsh-client-ui-user-questions/lib/client.js:396-405 的\n          #     `this.#state === \"continued\" && rpc !== void 0 → rpc.answer(answer)`）,\n          #     与插件走的是**同一条** `userQuestions.answer` ⇒ 弹窗回答能真正 settle。\n          #\n          # timeout: -1 = 每次 timed 调用的**默认**期限（无限等）。为什么不是 600（2026-10-13）：\n          # 有限期限到期时工具返回的是 `{\"pending\":true,...}` —— **模型在没有答案的情况下被放行**，\n          # 用户随后给的答案会以「另一条 user 消息」在**新回合**送达。对调度模式这就是「会话断了」：\n          # 分轮面试的整条纪律是「没答复不能往下走、不要替用户拍板」，而官方 pendingNotice 自己\n          # 写着 \"Do not treat this as permission\"。实测本机 4 个会话真出现过 pending（如\n          # session-0000100f seq 2671）。-1 让卡片一直挂着等，答案以**工具结果**回到同一个回合 ——\n          # 这正是官方 README 的用法：「如果没有回答就无法安全继续，请使用 -1」。\n          # 已在本机验证：timed 模式下显式传 -1 的两次调用（session-00001009、session-00001007）\n          # 都正常返回了答案批次。模型仍可对单次调用传正数期限，-1 只是缺省。\n          # 注意：mode 仍是 timed —— schema 因此带 timeout 参数，提问进 userQuestions 投影，\n          # 官方卡与插件弹窗都拿得到（见上面 mode: timed 那段）。\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n            config:\n              mode: timed\n              timeout: -1\n\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: false\n              searchTimeoutMs: 60000\n\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n\n          - id: tool-plugin-manager\n            name: '@deepseek-ai/dsh-plugin-manager/tools'\n            disabled: true"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "lib/preset.js",
+    "lib/client.js",
+    "lib/roster.js",
+    "lib/playbook.js",
+    "package.json",
+    "cordis.patch.yml",
+    "presets/dispatch-mode.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/ops-adapter.js:184"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/resume.js:61"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/runtime.js:448"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "lib/self-heal.js:73"
+    },
+    {
+      "name": "USERPROFILE",
+      "kind": "env",
+      "where": "lib/self-heal.js:86"
+    },
+    {
+      "name": "HOME",
+      "kind": "env",
+      "where": "lib/self-heal.js:86"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "tools/asar-probe.cjs:34"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/cache-prefix-audit.cjs:205"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/cache-prefix-audit.cjs:206"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "tools/drift-check.cjs:51"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/history-audit.cjs:31"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/history-audit.cjs:32"
+    },
+    {
+      "name": "LOCALAPPDATA",
+      "kind": "env",
+      "where": "tools/install.cjs:74"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:143"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:637"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:654"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:1603"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:1670"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:1674"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:1685"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:1696"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:1923"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:1924"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:1938"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:2049"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/integration-test.cjs:4368"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/ops-enable.cjs:76"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/ops-enable.cjs:77"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/ops-enable.cjs:331"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/ops-enable.cjs:332"
+    },
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "tools/ops-mount-check.mjs:25"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/selftest.cjs:2937"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/session-probe.cjs:40"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "tools/session-probe.cjs:41"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "www.w3.org",
+      "url": "http://www.w3.org/2000/svg",
+      "where": "lib/client.js:3668"
+    },
+    {
+      "host": "registry.npmmirror.com，",
+      "url": "https://registry.npmmirror.com，",
+      "where": "tools/repair.cjs:642"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 194,
+    "pushed_at": "2026-11-06T07:44:03Z",
+    "created_at": "2026-10-03T15:53:17Z"
+  },
+  "repository_health": {
+    "lifecycle": {
+      "status": "active",
+      "repository_archived": null,
+      "repository_disabled": null,
+      "deprecated_notice": false,
+      "maintenance_notice": false,
+      "last_push_at": "2026-11-06T07:44:03Z",
+      "inactive_days": 6,
+      "commit_count": 194,
+      "checked_at": "2026-11-12T15:06:07.775541+00:00",
+      "signals": [
+        "list:pushed_at=2026-11-06T07:44:03Z",
+        "list:commits=194"
+      ]
+    },
+    "maintenance": {
+      "frequency": "unknown",
+      "commits_30d": null,
+      "commits_90d": null,
+      "commits_365d": null,
+      "active_months_12m": null,
+      "median_commit_interval_days": null
+    },
+    "issues": {
+      "enabled": null,
+      "open_issue_count": null,
+      "open_items_count": null,
+      "sample_size": null,
+      "open_sample": null,
+      "closed_sample": null,
+      "close_rate_sample": null,
+      "median_close_days_sample": null,
+      "updated_90d_sample": null,
+      "latest_updated_at": ""
+    },
+    "health_score": 62,
+    "score_confidence": "low",
+    "score_components": {
+      "lifecycle": 40,
+      "maintenance": 10,
+      "issues": 12
+    },
+    "method": "repository-health-v1"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/cache.js",
+    "lib/client.js",
+    "lib/graph.js",
+    "lib/index.js",
+    "lib/ops-adapter.js",
+    "lib/playbook.js",
+    "lib/preset.js",
+    "lib/resume.js",
+    "lib/roster.js",
+    "lib/runtime.js",
+    "lib/self-heal.js",
+    "lib/text-clip.js",
+    "lib/tools.js",
+    "package.json",
+    "presets/dispatch-mode.patch.yml",
+    "tools/drift-check.cjs",
+    "tools/lib-atomic-write.cjs",
+    "tools/lib-dsh-home.cjs",
+    "tools/ops-enable.cjs",
+    "tools/repair.cjs"
+  ],
+  "readme": [
+    {
+      "section": "调度模式智能体团队",
+      "text": "一个 DSH 桌面端插件 + 一个 agent preset。它把官方实验性的 Agent Teams 改造成一套\n**「先把需求问清楚，再动手」**的团队工作方式。"
+    },
+    {
+      "section": "调度模式智能体团队",
+      "text": "- **调度模式（dispatch-mode）preset**：Lead 先分轮把需求问清楚再落地 —— 每轮把问题一次列完，\n  用**聊天界面的提问卡片**（选项 + 推荐项）问你，你点选提交；没有静默假设、用户确认共享理解之前不动手。\n  「找事实」由 Lead 自己查或派队员查，不问用户。\n  提问走卡片而不是写在回复正文里：卡片的答案以工具结果回到**同一个回合**，会话不断；\n  写在正文里则这一轮直接结束，你得再发一条才能继续。默认无限等（不会因为超时先替你继续）。\n- **12 个队员角色**（按工作流阶段排列，按需叫、不必叫满）：外部调研、探索调研、前沿审查、计划审查、\n  执行落地、集成落地、复现回归、逻辑审查、对抗审查、美术审查、反思优化、文档术语。\n- **模型与强度配置**：插件详情页可以**一次性给全部角色统一模型与思考强度**（省得逐行点），也可以逐角色单独指定；不用编辑 YAML，默认全部「跟随 Lead」。\n- **队员的能力面自动收窄**：自动摘掉目标工具与子代理工具，只保留它本职需要的团队工具。\n- **结构化汇报**：队员做完必须调 `report_result`（状态 / 证据 / 验收 / 未决项），\n  插件会把它投递给 Lead —— 「没有结构化报告就当没完成」不再只是一句纪律。\n- **`/team` 开启团队**，默认关闭（团队会真的多花模型预算）。开关按会话记忆，\n  宿主重启后会自动把开过团的会话装回来。\n- **缓存友好**：所有队员共用**同一份**队员卡与同一份工具目录，角色差异只走 Lead 派活时写的\n  那段提示词，队员之间因此能共用提示词前缀。\n  精确说法：**逐字节相同的是「队员卡 + 工具目录」这一层**，不是整份系统提示词 ——\n  每个队员还会按自己的角色配置挂一段各不相同的工具用法/遮蔽段（收窄工具面、预设重绑、ops 指引等），\n  且预设不同时工具文档段本身也不同。所以「前缀可共用」成立，「整份提示词逐字相同」不成立。"
+    },
+    {
+      "section": "要求",
+      "text": "| 项 | 要求 |\n|---|---|\n| DSH 桌面端 | 0.2.0-rc.2 或更新（更早的版本请先跑 `node tools/drift-check.cjs` 看兼容性） |\n| Node.js | ≥ 18 |\n| 官方 bundle | 需在插件页启用 `@deepseek-ai/dsh-experimental-agent-team-profile`（本插件复用它不可替代的持久化域服务；工具面与界面由本插件接管） |\n| 可选：dsh-ops | 装了并启用后，Lead 与每个队员自动获得它的**文件检索四件套**（注册在全局层）；其余工具各有权限门 —— `ops_bash` 与四个 job 工具要会话处于「完全访问」，`ops_batch`/`ops_result` 只给纯 PTC 档队员（见下文「ops 工具」）。**不装也完全能用**，本插件不依赖它 |"
+    },
+    {
+      "section": "安装",
+      "text": "**先完全退出 DSH 桌面端**（官方要求 desktop profile 的操作在它退出后进行），然后在本目录执行：\n\n```bash\nnode tools/install.cjs\n```\n\n然后重启桌面端 → 新建会话 → 推理模式选「**调度模式**」→ 输入 `/team`。\n\n- 只想看这条命令会做什么、不改任何东西：`node tools/install.cjs --dry-run`\n- **界面安装**（等价路径）：插件 → 已安装 → 添加插件 → 填本目录的**绝对路径**，\n  然后再跑一次 `node tools/repair.cjs --apply`。"
+    },
+    {
+      "section": "安装",
+      "text": "> 为什么装完还要补跑一次 `repair.cjs --apply`：官方安装器不负责两件必需品 ——\n> 包内指向 `~/.dsh/profiles/node_modules` 的依赖 junction（缺了插件行在**加载期**就起不来），\n> 以及 profile 层的 `agent-team` 容量覆盖（缺了有效容量退回官方默认 8，8 次派活之后团队就派不出人）。\n> `install.cjs` 会自动串跑它；走界面安装时才需要手动补一次。\n\n> 注意：安装会把 profile 指向**你运行 `install.cjs` 的那个目录**。如果你另外留着一份副本，\n> 那份就是死代码 —— 改它不会生效。用 `node tools/repair.cjs` 可以确认 profile 实际链接到哪一份。"
+    },
+    {
+      "section": "装完后哪里找",
+      "text": "- **插件 → 已安装 → 调度模式智能体团队**：配置页（每个角色的模型 / 思考强度）。\n- **推理模式选择器**：多出「调度模式」。\n  本插件**不**改新会话的默认 preset（安全选择：preset 配错会让新建会话直接失败），\n  要用调度模式请手选一次；已开始过的会话不能切换 preset，需要新建会话。"
+    },
+    {
+      "section": "改代码后的生效方式",
+      "text": "| 改动 | 生效方式 |\n|---|---|\n| `lib/*.js`（宿主半） | **重启 DSH** |\n| `lib/client.js`（浏览器半） | 刷新页面即可 |\n| `presets/*.patch.yml`、`cordis.patch.yml` | 重新加载插件后生效 |\n\n如果源码目录与桌面端实际加载的那份是两个目录，改完要同步一次：\n`node tools/sync-to-dsh.cjs`（`--dry-run` 只看差异）。"
+    },
+    {
+      "section": "分支约定（用户 2026-10-14 定案）",
+      "text": "**日常改动一律在 `dev`，提交后推 `origin/dev`；攒一批再合并进 `main`**（合并需用户批准，\n历史上是 10-09、10-11、10-14 三次）。`main` 是仓库默认分支，也是「已发布」的那一份。\n\n为什么必须定期合：GitHub 贡献图**只统计默认分支可达的提交**。实测 10-13 那 17 个提交\n只推了 dev 时，图上 10-13 = 0；合并进 main 后同一格变成 17。所以「改动都在远端、图上却是 0」\n不是丢提交，是分支问题 —— 先 `git ls-remote origin dev` 确认在不在，再看 main 可不可达。\n\n合并的做法（照 10-14 那次）："
+    },
+    {
+      "section": "分支约定（用户 2026-10-14 定案）",
+      "text": "1. `git merge-tree --write-tree origin/main origin/dev` 先干跑，确认零冲突；\n2. **用临时 worktree 操作**（`git worktree add <tmp> --detach origin/main`），不要在正在运行的\n   插件目录里 checkout —— 那个目录是桌面端实际加载的 junction，切分支会当场改变插件代码；\n3. `git merge --no-ff origin/dev`（保留合并提交，与历史两次一致）；\n4. 核对 `git diff --stat HEAD origin/dev` 为空，再 `git push origin HEAD:main`；\n5. `git worktree remove <tmp>`，确认插件目录仍在 `dev` 且工作树干净。"
+    },
+    {
+      "section": "开启与关闭团队",
+      "text": "这些入口**只在「调度模式」的会话里**出现（别的 preset 看不到、也开不了本插件的团队）。\n\n| 操作 | 怎么做 |\n|---|---|\n| 开启 | 输入 `/team`（推荐，`/` 菜单里能搜到），或直接说「组队」「开团队」让 Lead 自己开 |\n| 关闭 | 直接说「关掉团队」「解散团队」，Lead 会调 `disable_agent_team` |"
+    },
+    {
+      "section": "开启与关闭团队",
+      "text": "- **没有 `/team-off`**：团队开关只有一个斜杠命令 `/team` 与两个模型工具，不需要记第二个命令。\n- 命令执行后命令行只显示 `>_ team`，**不会**再追加一段横幅；紧跟其后的用户气泡就是你打的那一行。\n- **不要用 `/智能体团队` 这类自造斜杠命令**：命令名在宿主侧只允许 ASCII，未注册的 `/xxx`\n  会被客户端命令面板吞掉 —— 既不报错也不发给模型，也就是什么都不会发生。\n- 团队开关**按会话记忆**：`/team` 成功后这个会话会被记下来，宿主重启或重开该会话时自动把团队装回来，\n  你不用再打一次 `/team`。说「关掉团队」会立刻删掉这条记录。\n- **`/team` 可以带附件**：贴一张截图再打 `/team 帮我查这个报错`，图片和你那行文字会一起进 Lead 的上下文。\n  通用文件（日志、CSV 等）按只读路径交给模型，需要时它自己读。"
+    },
+    {
+      "section": "配置队员的模型与思考强度",
+      "text": "插件 → 已安装 → 调度模式智能体团队 → 详情页。\n\n页面顶部有一个**统一选择队员模型与思考强度**：选一次就把下面**所有**角色的对应项都改成这一个；\n只想给某个角色特殊待遇时，再单独改它那一行。\n\n> 思考强度依附于模型（档位是**每个模型各自广告**的），所以强度那个下拉要先把模型统一后才能选；\n> 没统一时它会保持可见但禁用，并写明原因与下一步。\n\n- 默认每行都是**跟随 Lead**：不配置 = 不加任何覆盖，队员跟着 Lead 当前的选择走。\n- 统一选择时，思考强度会按新模型重算：仍然支持的档位保留，不支持的退回「模型默认」。\n- 改完**立即生效**：已经在跑的队员也在下一次请求就用上新路由，不需要重启。\n- 唯一的例外是 `spawn_teammate` 的显式参数（`provider`/`model`/`reasoning_effort`）——\n  那是「这一次派活」的命令，会钉在该队员身上。\n- 配置文件在 `~/.dsh/dispatch-agent-team.json`。"
+    },
+    {
+      "section": "典型的协作节奏",
+      "text": "1. 你说需求（可以很模糊）。\n2. Lead 派 1–3 个 `scout`（查本仓库）或 `researcher`（查仓库之外）去查事实。\n3. Lead 把不依赖这些事实的问题**一次性**列成一轮，等你答复；答复改变设计树后重算下一轮。\n4. 前沿快空时派 `frontier-auditor` 复核有没有被跳过的分支，直到你确认共享理解。\n5. Lead 切写域、在任务板上建任务、派 `builder` 落地；多写域时派 `integrator` 接线。\n6. 声称完成后派 `verify` 走真实链路验证，高风险改动加 `red-team` 主动证伪。\n7. Lead 自己复核关键结论后给你最终答案。"
+    },
+    {
+      "section": "工作区（团队拓扑可视化）",
+      "text": "会话顶栏点「智能体团队」打开成员面板，面板的「成员」标题右侧有**进入工作区**。\n\n画布上每个方块是一个真实成员，数据全部来自你自己的会话日志与团队域服务，不是演示数字："
+    },
+    {
+      "section": "工作区（团队拓扑可视化）",
+      "text": "- **列 = 真实依赖深度**：Lead 在最左；只读别人产出的在左列，互相读写的成员被收进\n  虚线「协作核」容器（点容器或顶栏「展开协作核」摊开看内部关系）。\n- **线 = 真实关系**：蓝虚线 = Lead 正在派活（流光 Lead→队员）；绿实线 = 该队员已向\n  Lead 交付（流光 队员→Lead）；紫线 = 承接关系，即「A 写的文件被 B 读了」（流光 写方→读方，\n  越粗共享文件越多）。队员之间的线只画**真实存在**的读写关系，不是并列装饰。\n- **方块内容**：TODO（完成/进行中/总数）、模型、输出/缓存 token、缓存命中率、运行时长、\n  输出速度（TPS）、上下文占用圆环（悬停看数值）。\n- **底栏**：全队总 token、整体缓存命中率、平均 TPS、承接关系数。\n- 点任意方块弹出该成员的详情浮窗（指标 + 实时对话 + 提问回答）。顶栏可开关流光/弱关系、\n  缩放、适配窗口。Esc 退出。\n- **浮窗与官方聊天界面等价**（不是「另做一套再想办法同步」）：\n  - **实时**：浮窗吃的是官方对话自己在用的那份事件窗口，所以思考、正文、工具调用\n    都是**一个 token 一个 token 长出来**的，与你在官方界面看到的同帧；这一步结算后\n    由宿主的正式对话行接管（按 callId 与 (turn, step) 去重，不会显示两遍）。\n    思考在有正文时收成一行「思考过程」，点开看全文（与官方同一套披露行）。\n  - **回答提问**：弹窗里点「提交回答」调的是**官方那张提问卡自己的** answer()，\n    与你在聊天界面点提交是同一个方法、同一个对象 —— 阻塞中的那次提问当场拿到答案、\n    官方卡片自己关闭。**不是**把答案拼成一条消息插进对话。\n    答案批次的形状照抄官方 submitDrafts（没填自定义时 `custom` 键**不出现**）：\n    写成 `custom: undefined` 会被网关的 lossless-JSON 校验拒掉，那次提问会当场\n    以 isError 结算（实测 session-00001004）。而官方 answer() 永远 resolve、\n    不回报失败，所以弹窗**另外去查这次工具调用的结算结果**，只有确认被接受了\n    才说「已回答」；查出来是死的就如实报错，不谎报、也不退成消息投递。\n  - 拿不到这套对象层时（宿主版本不对 / 该会话没有活体对象）自动退回「轮询会话日志」，\n    功能不丢，只是不再逐 token 实时，并且会如实说明答案只是投递。\n- **新队员实时出现**：给 Lead 发消息后进工作区，每派一个队员画布上就多一个方块（约 1 秒内），\n  入场带淡入动画，派活线同时"
+    },
+    {
+      "section": "工作区（团队拓扑可视化）",
+      "text": "暗色模式跟随 DSH 主题自动切换，无需设置。"
+    },
+    {
+      "section": "Lead 能用的工具",
+      "text": "| 工具 | 作用 |\n|---|---|\n| `spawn_teammate` | 创建一个具名队员（带角色；可选覆盖模型 / 思考强度） |\n| `send_message` / `broadcast_message` | 给一个 / 多个队员发消息 |\n| `list_agents` / `wait_agent` / `interrupt_agent` | 看成员状态、等变化、打断某个队员 |\n| `team_task_create` / `team_task_list` / `team_task_get` / `team_task_update` | 共享任务板（含写域与依赖） |\n| `wake_teammate` | 队员被输出上限截断、没交报告时叫它**从断点续写**（不用你手动打「继续」） |\n\n队员看到的是另一份子集：没有 `spawn_teammate` / `interrupt_agent`（只有 Lead 能创建或打断），\n多一个 `report_result`（交付报告）与 `ask_lead`（中途向 Lead 提问），也没有目标与子代理工具。"
+    },
+    {
+      "section": "ops 工具（可选插件 dsh-ops，原生链接）",
+      "text": "[dsh-ops](https://github.com/T-Auto/dsh-ops) 是另一个插件：用 Rust 实现的文件检索、后台任务与批量操作，\n比宿主同名工具更快、输出更省 token。**本插件不内嵌它、也不依赖它** —— 两个插件各自安装、各自启用；\n检测到它在场时，队员**不需要任何配置**就直接看得到它的工具，并额外收到一段简短的使用指引。\n\n分工要说准（实测，别当成「全都一样」）。**dsh-ops 的呈现方式随版本变过**，两代都要认清："
+    },
+    {
+      "section": "ops 工具（可选插件 dsh-ops，原生链接）",
+      "text": "- **0.3.x（旧）**：`file` 组件的工具注册在全局层，Lead 与每个队员都直接看得到；\n  `shell` / `background` / `PTC 增强` 注册在**各 agent 自己的作用域**上，各有一道门。\n- **0.5.x（本机装机版）**：改成「一条预设一档」的 **mode 行族**（`dsh-ops-mode-*` + `dsh-ops-discovery`），\n  并且把 file 工具从「全部常驻」改成 **按需加载**：native 档常驻的只有 `ops_read_files`，\n  其余（grep / glob / replace / diff / stat / copy / move / remove / read_pdf / read_docx / read_table …）\n  要先经 `ops_discover_tools` 选中才在下一步出现；纯 PTC 档常驻的是 `ops_inspect_local_file` 与 `ops_result`，\n  其余在 `run_code` 程序里通过 `ops_load_sdk` 加载。\n  **所以新版里「工具清单里没有 `ops_grep`」是设计，不是没装好** —— 这是最容易误判的一条。"
+    },
+    {
+      "section": "ops 工具（可选插件 dsh-ops，原生链接）",
+      "text": "批量工具（`ops_batch`/`ops_result`）的门两代都最窄：**只放行纯 PTC 呈现档**\n（dsh-ops `lib/ptc/index.js`：该作用域的工具组合恰好只有一个 `run_code`，且 `tools:ptc-only` 段非空）。\n所以实测结论是：**Lead（原生档）拿不到那两个工具**，而队员能不能拿到取决于它是不是纯 PTC 档\n（= 预设 `ptc` + **打开**「批量调用」；2026-10-21 起开/关就是 ptc/native 两档，不再有 both）。\n这不是缺陷，是 ops 的设计；怎么配见下面第一条。Lead 那侧本插件**刻意不动** —— 那是你的主会话。"
+    },
+    {
+      "section": "ops 工具（可选插件 dsh-ops，原生链接）",
+      "text": "想确认这套链接在你机器上真的通了（**不用重启 DSH**）：`node tools/ops-mount-check.mjs` —— 它挂真 dsh-ops 组件与真宿主注册表跑一遍，\n四段各自独立（各用独立 Context）：A 交付态（按**装机那一代**装配：0.3.x 的四组件行 / 0.5.x 的 mode 行族）、\nB 负对照（同一份原版组件只差呈现档）、C 后台任务（0.3.2 起该组件已移除，自动跳过）、\nD shell 通道（`ops_bash` 已发布 + 本包的 extraGuidance 确实进渲染结果）。\n**本机 dsh-ops 没装原生 worker 时，A/B 会如实跳过而不是报错** —— 那种情况下 file 与 PTC 工具按 ops 的设计\n就不会发布，把「装机缺件」报成「插件坏了」是错的；判定是三值的（true / false / 跳过）。"
+    },
+    {
+      "section": "ops 工具（可选插件 dsh-ops，原生链接）",
+      "text": "| dsh-ops 组件 | 队员拿到什么 |\n|---|---|\n| file | 常驻：`ops_read_files`（0.5.x）/ 整套 `ops_*` 文件工具（0.3.x）。其余按需：`ops_discover_tools` 选中 `grep` / `glob` / `replace` / `diff` / `stat` / `copy` / `move` / `remove` / `read_pdf` / `read_docx` / `read_table` 后于下一步出现 |\n| background | `ops_run_background` / `ops_job_output` / `ops_job_list` / `ops_job_kill` —— 长任务托管（需会话处于完全访问）。**0.3.2 起该组件已被 dsh-ops 整体移除**，行留着只会打一条警告，四个工具不再发布 |\n| shell | `ops_bash`（一次性 POSIX 命令）+ 把命令执行器换成随包 PowerShell 7（Windows 上通常比系统自带的好用） |\n| discovery（0.5.x 新增） | `ops_discover_tools` —— file 工具的按需激活入口，native 档才有 |\n| PTC 增强 | `ops_batch` / `ops_result`（+ 0.5.x 的 `ops_load_sdk`）—— 一次调用完成跨文件的复制/移动/删除（先 plan 再执行），大结果分页引用。**仅纯 PTC 档队员**（预设 `ptc` + **打开**「批量调用」）拿得到；Lead 与原生档队员按 ops 的设计拿不到 |"
+    },
+    {
+      "section": "ops 工具（可选插件 dsh-ops，原生链接）",
+      "text": "- **`ops_batch`/`ops_result` 要纯 PTC 档才有**：dsh-ops 的 PTC 组件按自己的设计只把这两个工具\n  给纯 PTC 呈现档的作用域。本包**不改 dsh-ops 一行源码**，用已有的配置就能拿到：把该角色的\n  **预设设为 `ptc`** 并**打开它的「批量调用」开关**（见上文配置页），那名队员就是纯 PTC 档，\n  ops 自己会把这两个工具给他（可在 `run_code` 程序里调用）。\n  注意方向：2026-10-21 起这个开关的语义是「**开 = 钉 ptc 档 / 关 = 钉 native 档**」\n  （宿主已删掉 both 档）。所以「关掉批量」恰恰会把它变成原生档、拿不到这两个工具 ——\n  那是 both 还在时的老杠杆，已不适用。关掉批量时其余 ops 工具照常可用，不影响任何功能。\n- **没装 dsh-ops 的用户零影响**：不注册任何提示词、不多一个字节，插件页也不会出现 ops 组件。\n- **状态可查**：`~/.dsh/dispatch-agent-team-status.json` 的 `opsIntegration` 字段记录组件的挂载事实、\n  当前可见的 ops_* 清单，以及（仅当某名**纯 PTC 档**队员看不到 `ops_batch`/`ops_result` 时）一句点名修法。\n  两代行名都认：0.3.x 的 `dsh-ops-shell/file/background/ptc` 与 0.5.x 的 `dsh-ops-mode-*` / `dsh-ops-discovery`。\n  注意 `node tools/ops-enable.cjs` 只管**旧四行**（老版本才有对应 insert）；0.5.x 上它会如实说明\n  那四行已不再是开关载体，别照着它去插件页找不存在的开关。"
+    },
+    {
+      "section": "ops 工具（可选插件 dsh-ops，原生链接）",
+      "text": "想在**老版本 dsh-ops** 上把四个组件都开（含它默认关着的 background 与 PTC）：\n`node tools/ops-enable.cjs` 后重启 DSH；`--check` 只看不改，`--prune` 只清死配置，\n`--revert` 删掉本工具管过的全部行回到 dsh-ops 自带默认。\n**0.5.x 上这四行已不再是开关载体**（上游不再 insert 它们），此时该命令的职责是**清理**，不是启用：\n跑一次会把 profile 里那些孤儿覆盖连同它们的注释块一起删掉。"
+    },
+    {
+      "section": "卸载",
+      "text": "```bash\nnode tools/install.cjs --uninstall          # 推荐：走官方 CLI（先退出桌面端）\n```\n\n- 界面卸载：插件 → 已安装 → 调度模式智能体团队 → 卸载。\n- 卸载后把推理模式选择器里的默认 preset 换回你原来的那个。\n- 界面卸载或应急摘除**不会**自动回收 profile 层那段托管块（`tool-agent-team: disabled` +\n  `agent-team` 容量覆盖），需要自己补一次：`node tools/repair.cjs --revert`（幂等）。\n- 角色配置与会话记忆文件会留在 `~/.dsh/` 下，可以手动删。\n- DSH 起不来时的应急路径：`node tools/emergency-disable.cjs`（把本插件从 bundles 里摘掉）。"
+    },
+    {
+      "section": "维护",
+      "text": "改完代码、以及每次官方升级 DSH 之后，建议跑一遍（全部只读）：\n\n```bash\nnode tools/selftest.cjs           # 纯逻辑回归（零 dsh 依赖）\nnode tools/drift-check.cjs        # 官方实现假设校验（升级后必跑）\nnode tools/integration-test.cjs   # 真链路集成测试\nnode tools/client-smoke-test.cjs  # 浏览器半渲染冒烟\n\n注意：除 `client-smoke-test` 外，其余脚本都需要先有安装期那个依赖 junction\n（也就是跑过 `repair.cjs --apply`），否则会报 `ERR_MODULE_NOT_FOUND` —— 那是「还没装好」，不是插件坏了。\n\n还有三个只读探针，排查问题时很有用："
+    },
+    {
+      "section": "维护",
+      "text": "```bash\nnode tools/session-probe.cjs --tools --session <会话子串>          # 会话里团队工具面的真实增删\nnode tools/asar-probe.cjs --grep \"<字符串>\" --list \"dsh-llm/lib\"   # 官方安装包里到底有没有这个东西\nnode tools/cache-prefix-audit.cjs                                  # 缓存命中率：① 实测（读会话日志的 usage）② 前缀复用模型（定位断裂点）\nnode tools/cache-prefix-audit.cjs --all --tail 200                 # 连非本插件的会话一起看"
+    },
+    {
+      "section": "开发者文档",
+      "text": "实现契约、精确的 API 签名与官方行为实测记录（`agent/request` waterfall 形状、`ctx.webServer.register`、\n`plugins.bundle.config` 槽位契约、以及一份逐条标注「原文哪里错了」的勘误表）都在\n[`INTERFACES.md`](./INTERFACES.md)。**改这个插件之前先读它。**\n\n设计取舍与历史事故（为什么这样切缓存、为什么必须关掉官方同名工具行、\n两道容量帽分别是什么、历次故障的根因与修法）不在本文件里 —— 那些属于维护者笔记，\n按本仓库约定不进版本库（见 `.gitignore`）。README 只讲怎么用。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

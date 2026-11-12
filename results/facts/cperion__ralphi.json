@@ -1,0 +1,178 @@
+{
+  "repo": "cperion/ralphi",
+  "commit": "ed1e40eec90168a6f16d17941b1f0bc12f75a157",
+  "extracted_at": "2026-11-11T18:40:15.216909+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 114180,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 1029,
+      "Markdown": 227,
+      "Other": 2,
+      "TypeScript": 1253,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "pi/extensions/ralph.ts",
+      "pi/package.json",
+      "plugin.js"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-plugin-arch-loop",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "ralph: resumable fresh-context loop (build/design) as a DSH tool",
+    "exports": {
+      ".": "./plugin.js",
+      "./package.json": "./package.json"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "files": [
+      "plugin.js",
+      "cordis.patch.yml"
+    ]
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# arch_loop: one tool row in the host composition. It also appears inside agent\n# presets because the tool registry is global; workers are told not to call it.\n- insert:\n    - id: tool-arch-loop\n      name: '@local/dsh-plugin-arch-loop'\n      config:\n        provider: spawn\n        maxRounds: 64\n        defaultRounds: 24\n"
+    }
+  ],
+  "entries": [
+    "plugin.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 13,
+    "pushed_at": "2026-10-20T16:55:19Z",
+    "created_at": "2026-10-19T09:03:16Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "package.json",
+    "pi/extensions/ralph.ts",
+    "plugin.js"
+  ],
+  "readme": [
+    {
+      "section": "ralphi",
+      "text": "`ralph` — one resumable fresh-context loop for both harnesses. Two protocols\nbehind one argument:\n\n| `kind` | Goal | Round | Final audit |\n|---|---|---|---|\n| `build` (default) | make a real change in a repo | one unit of work, verified and committed | independent verifier runs the project's checks against the goal |\n| `design` | find the simplest target architecture | one design investigation | independent implementability audit |"
+    },
+    {
+      "section": "ralphi",
+      "text": "One call creates (or resumes) `docs/ralph/<slug>/` inside the project repository,\nruns N rounds with a fresh agent each round, then runs the audit. State is\ncommitted with the code; `STATE.json` survives interruption.\n\nNo manual setup: no template copying, no files to create."
+    },
+    {
+      "section": "Use",
+      "text": "```\nralph({ goal: \"Add cursor pagination to GET /items, tests included\", rounds: 8 })\n```\n\n```\nralph({ kind: \"design\", goal: \"Design the module structure and data types for X\", rounds: 16 })\n```"
+    },
+    {
+      "section": "Use",
+      "text": "| Argument | Meaning |\n|---|---|\n| `goal` | Objective. For `build`: what must be true when done. For `design`: the problem, behavior, constraints, non-goals. |\n| `kind` | `build` (default) or `design`. |\n| `constraints` | Hard constraints only: bounds, compatibility, runtime, invariants. |\n| `paths` | Existing files/directories the work or design must account for. |\n| `rounds` | Rounds to run in this call. Default 24, ceiling 64; later calls add more. Build mode stops early once the goal is verified, so this is a ceiling, not a quota. |\n| `name` | Stable directory name. Reusing it resumes that run. |\n| `project` | Repository root that owns `docs/ralph/`. Defaults to the git root containing the workspace, else the workspace. |\n| `answer` | The user's answer to a question from a previous `needs-input` run. Omit otherwise. |"
+    },
+    {
+      "section": "Use",
+      "text": "Long-running: the call blocks the turn. Cancelling preserves every completed\nround; call again with the same `name` and `goal` to continue. In build mode a\nround that reports `done` triggers the independent verifier immediately: if it\naccepts the goal the run stops early, and if it rejects the concrete gaps are\nfed into the next round. Remaining rounds are never burned on busywork."
+    },
+    {
+      "section": "What it creates",
+      "text": "Inside the project repository, so the record is versioned with the code and\ncommitted by the workers:\n\n```\ndocs/ralph/<slug>/\n  STATE.json        controller-owned resume marker (next / in-progress round)\n  rounds.jsonl      per-round reports (controller-owned)\n  runs.jsonl        one record per call (controller-owned)\n\n`kind=design` additionally:"
+    },
+    {
+      "section": "What it creates",
+      "text": "```\n  CONTRACT.md       goal + constraints + paths\n  ARCHITECTURE.md   best-known design; changes need evidence\n  QUESTIONS.md      material open questions\n  experiments/      prototypes, benchmarks, re-derivations\n\n`kind=build` additionally:\n\n```\n  GOAL.md           objective + constraints + paths\n  PLAN.md           current approach, done / next\n  NOTES.md          durable findings, commands, chosen interpretations\n  work/             scratch files"
+    },
+    {
+      "section": "What a round does",
+      "text": "`build`: read `GOAL.md`, `PLAN.md`, `NOTES.md`, `LOG.md`, inspect the repo and\ngit status; resume from the previous report's `next`; pick the highest-value\nstep from `PLAN.md`; implement it and keep going while safe progress is\navailable (not just the first small edit); run the project's checks and fix\ndamage; commit; update the three files; report\n`{action, summary, evidence, next, blocked, ask}`. A round must leave the\nrepository measurably closer to the goal: finishing the whole goal in one round\nis not required, superficial work is rejected. The audit is a fresh verifier that\nruns the checks itself and returns `{satisfied, evidence, gaps}` — it does not\ntrust the log."
+    },
+    {
+      "section": "What a round does",
+      "text": "`design`: read the four design files; write three candidate questions, rank by\nmateriality, and pursue the most material one until it is answered with\nevidence (an immaterial first question means chasing the next one, not ending\nthe round); choose `continue`, `simplify`, `experiment`, or `rederive`\n(contract-only, independent design first); update the files, commit, report\n`{mode, question, evidence, decision, next, ask}`. The audit tries to implement\nthe contract and reports the first place it must invent semantics."
+    },
+    {
+      "section": "User questions",
+      "text": "A round has no direct line to the user, but it is not forced to guess. When a\nuser-owned decision changes the work, the round sets `ask` instead of inventing a\nrequirement or calling itself blocked:"
+    },
+    {
+      "section": "User questions",
+      "text": "- the controller relays the question to the user through the host question\n  service while the ralph call is still open;\n- the answer is written to `ANSWERS.md` and into `STATE.json`, and the next round\n  receives it as `userAnswer` and must apply it first;\n- if the relay cannot run (no answerer, or ralph was started inside a child\n  agent), the call ends with status `needs-input` and the question in its result.\n  The caller asks the user, then re-invokes `ralph` with the same `name` and\n  `goal` plus `answer`."
+    },
+    {
+      "section": "Progress discipline",
+      "text": "- starts from the previous report's `next` and does not redo discovery already\n  recorded in `LOG.md` or `NOTES.md`;\n- keeps working while safe progress is available, instead of stopping at the\n  first edit or at a next step it could execute now;\n- treats \"blocked\" as external and concrete only (missing credential, unavailable\n  service), never as \"this needs more than one round\" and never as a user-owned\n  decision — those go to `ask`;\n- writes `next` as a self-contained continuation contract: which file, which\n  change, which command, which result proves it."
+    },
+    {
+      "section": "Early completion",
+      "text": "`build` mode must not keep working after the goal is met. A build round sets\n`done: true` only when it ran the checks and believes the acceptance criteria\nare satisfied. The controller then:"
+    },
+    {
+      "section": "Early completion",
+      "text": "1. runs the independent verifier immediately (it does not wait for the round\n   budget);\n2. stops with `complete` and an early-stop line when the verifier agrees;\n3. otherwise passes the verifier's concrete gaps into the next round as\n   feedback, so the round fixes the real gap instead of guessing;\n4. stops with `blocked` when two consecutive verifications reject the goal with\n   identical gaps — that is a disagreement the loop cannot resolve by itself."
+    },
+    {
+      "section": "Early completion",
+      "text": "`design` mode keeps its full search budget: it is an exploration, not a\ndone-condition, and stops on its audit only at the end of the call."
+    },
+    {
+      "section": "Resume",
+      "text": "`STATE.json` is written atomically before and after every round. If the harness\nor the machine stops mid-call, call again with the same `name`, `kind`, and\n`goal`:"
+    },
+    {
+      "section": "Resume",
+      "text": "- completed rounds are never repeated;\n- a round whose report was already written is ingested instead of re-run (pi);\n- a round interrupted mid-flight is retried at the same number;\n- a round that asked the user resumes at the next round with the answer, whether\n  it was relayed live or supplied as `answer` after a `needs-input` result;\n- the interrupted round is the resume granularity, not the conversation;\n- the same name with a different goal or kind is rejected instead of mixed."
+    },
+    {
+      "section": "Reviewing a run",
+      "text": "```sh\ngit log --oneline -- docs/ralph/<slug>\ngit diff <start>.. -- docs/ralph/<slug>/\n```\n\n`kind=build`: read `AUDIT.json` first — `satisfied=false` means the goal was not\nmet, `gaps` says what is missing. `kind=design`: `AUDIT.json` `material=true`\nmeans the design still has an implementability gap."
+    },
+    {
+      "section": "Install / update",
+      "text": "Both harnesses register the same tool name, `ralph`."
+    },
+    {
+      "section": "DSH",
+      "text": "Installed in a DSH profile as the bundle `@local/dsh-plugin-arch-loop` (the\npackage name is historical; it now provides `ralph`). Install it with\n`plugin_manager` / `install_bundle` pointing at this repository, then restart\nDSH.\n\nThe tool can be registered at host scope (available to every agent), inside a\npreset, or both. If the shipped `tool-ralph` row is enabled in the same preset,\ndisable it: the scoped built-in `ralph` would shadow this one."
+    },
+    {
+      "section": "DSH",
+      "text": "Requires **DSH 0.2.1-rc.2 or newer**: one-shot children are started through\n`ctx.subagents.startActivation({ delivery: \"caller\" })`. On 0.2.0-rc.2 the tool\nloads but its first call fails, because that release exposed\n`ctx.subagents.start()` instead. The plugin imports only Node builtins, so it\nhas no peer dependency to enforce this — check `dsh --version` after upgrading.\n\nAfter editing `plugin.js` or either patch, restart DSH: the live process imports\na module generation once."
+    },
+    {
+      "section": "DSH",
+      "text": "Config in `cordis.patch.yml`:\n\n| Field | Default | Meaning |\n|---|---|---|\n| `provider` | `spawn` | Fresh subagent provider; must support structured output. |\n| `maxRounds` | `64` | Per-call ceiling. |\n| `defaultRounds` | `24` | Used when `rounds` is omitted. |"
+    },
+    {
+      "section": "pi",
+      "text": "Extension in [`pi/`](pi/). Install:\n\n```sh\npi install ./pi\n```\n\nEach round spawns a fresh `pi` child with built-in tools only\n(`read,write,edit,bash,grep,find,ls`), in the project root, inheriting the\nparent model and thinking level. The child writes `rounds/rNNN.json`; the tool\nvalidates it. `/reload` after editing."
+    },
+    {
+      "section": "Deliberate limits",
+      "text": "- Round is the resume granularity: a child that dies mid-round is retried, not\n  continued mid-conversation.\n- `rederive` blindness (design) is procedural, not enforced.\n- No per-round wall-clock timeout yet; interrupt and resume is the control.\n- One auditor/verifier, not an adversarial panel.\n- Completion is a per-call budget plus an audit verdict; no auto-continuation\n  after a restart — re-invoke with the same name and goal.\n- Question relay requires the exact live root agent as caller. A ralph started\n  inside another agent ends `needs-input` instead of blocking forever.\n- The pi port does not relay user questions; a pi round guesses or reports\n  blocked."
+    }
+  ],
+  "skipped": []
+}

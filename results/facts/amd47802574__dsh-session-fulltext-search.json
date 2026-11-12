@@ -1,0 +1,151 @@
+{
+  "repo": "amd47802574/dsh-session-fulltext-search",
+  "commit": "93d4c0c415acbf63d3c6b5665b9095ec468c9a9f",
+  "extracted_at": "2026-11-11T17:15:29.652576+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 26866,
+    "lines_by_language": {
+      "JSON": 29,
+      "JavaScript": 351,
+      "Markdown": 144,
+      "Other": 21,
+      "YAML": 37
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "README.zh-CN.md",
+      "assets/icon-180.png",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-session-fulltext-search",
+    "version": "0.2.2",
+    "description": "DSH plugin: turn on full-text search over session history (session-query-sqlite FTS5) and add a substring fallback so CJK queries match inside continuous Chinese text.",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/amd47802574/dsh-session-fulltext-search.git"
+    },
+    "files": [
+      "cordis.patch.yml",
+      "lib/index.js",
+      "README.md",
+      "README.zh-CN.md",
+      "LICENSE"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-session-fulltext-search — enable full-text search over session history.\n# 让 DSH 侧边栏放大镜搜索会话正文，而不只是标题。\n#\n# Layer 1: the deployment switch. The dsh-base and dsh-web-app bundles ship\n# the SQLite FTS5 search backend (session-query-sqlite) with `openAt: never`:\n# the sidebar search box then matches session titles and workspace names only.\n# This override row turns content search on:\n#\n#   - openAt: first-search — node:sqlite is imported and the index opened at\n#     the first search, keeping startup output clean.\n#   - path — a persistent derived index under $DSH_HOME. Rebuilt automatically\n#     when missing; safe to delete at any time. Never point it at the session\n#     persistence database.\n#\n# Layer 2: the CJK fallback node half. FTS5's unicode61 tokenizer treats a\n# run of continuous CJK text as one token, so a Chinese query that does not\n# align with token boundaries never matches (searching 福州大学 does not hit\n# 已保研至福州大学). The row below mounts this package's node half after the\n# engine; it wraps ctx.sessionQuery and answers CJK queries with a literal\n# substring scan over the same derived index. inject waits for the engine\n# service; the api-proxy resolves the service per request, so the wrapper —\n# mounted last — is what the sidebar RPC sees.\n#\n# Mounted as a bundle layer (dsh.profile.bundles), applied after dsh-base and\n# dsh-web-app but before the profile's own cordis.patch.yml — a manual override\n# there still wins over this plugin.\n- id: session-query-sqlite\n  config:\n    path: !!js dshHomePath('session-query-index.sqlite3')\n    openAt: first-search\n\n- insert:\n    - id: session-fulltext-search-cjk\n      name: dsh-session-fulltext-search\n      inject: [ sessionQuery ]\n      config:\n        index: !!js dshHomePath('session-query-index.sqlite3')\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/amd47802574/dsh-session-fulltext-search.git",
+      "where": "package.json:15"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-11-02T07:33:50Z",
+    "created_at": "2026-11-02T01:38:11Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-session-fulltext-search",
+      "text": "Enable full-text search over DSH session history in the Web sidebar — and make it actually find Chinese text. [中文说明](README.zh-CN.md)"
+    },
+    {
+      "section": "dsh-session-fulltext-search",
+      "text": "The DeepSeek Harness web UI ships with a content-search backend\n(`@deepseek-ai/dsh-session-query-sqlite`, SQLite FTS5) that is **disabled by\ndefault** (`openAt: never`): the sidebar magnifier then matches only session\ntitles and workspace names. This plugin is the deployment override the\nbackend's documentation prescribes — `openAt: first-search` with a persistent\nderived index under `$DSH_HOME`."
+    },
+    {
+      "section": "dsh-session-fulltext-search",
+      "text": "That alone has a catch for CJK users: FTS5's `unicode61` tokenizer treats a\nrun of continuous Chinese text as **one token**, so a query only matches when\nit aligns with token boundaries — searching `福州大学` does not hit\n`已保研至福州大学`. This plugin therefore also mounts a **substring fallback**:\nqueries containing CJK are answered with a literal substring scan over the\nsame derived index, so any Chinese phrase inside message bodies is found,\nexactly as you typed it. Non-CJK queries use the tokenizer unchanged."
+    },
+    {
+      "section": "What you get",
+      "text": "- The sidebar magnifier searches **message bodies** (user messages, assistant\n  replies) across all workspaces, with a content snippet per hit.\n- **Chinese searches are substring-based** — no whole-token boundary problem.\n- The index updates incrementally as sessions grow."
+    },
+    {
+      "section": "Install",
+      "text": "Into a profile (e.g. `desktop`):\n\n```sh\ndsh plugin --profile desktop add github:amd47802574/dsh-session-fulltext-search\n```\n\n`dsh plugin add` also registers the package in `dsh.profile.bundles` (the\npatch-layer stack). Restart DSH afterwards. Manual equivalent:\n\n```jsonc\n// <profile>/package.json\n\"dependencies\": {\n  \"dsh-session-fulltext-search\": \"github:amd47802574/dsh-session-fulltext-search\"\n},\n\nthen `pnpm install` inside the profile directory and restart DSH."
+    },
+    {
+      "section": "Uninstall",
+      "text": "```sh\ndsh plugin --profile desktop remove dsh-session-fulltext-search\n```\n\nAfter restarting DSH the sidebar falls back to title-only search. The derived\nindex file (`$DSH_HOME/session-query-index.sqlite3`) can be deleted."
+    },
+    {
+      "section": "Notes",
+      "text": "- CJK queries take the substring scan; other queries keep the tokenizer's\n  word/phrase matching (so `pytho` still does not match `python` — by design,\n  that is how FTS5 works). Wrap a query in quotes (`\"two words\"`) for\n  exact-phrase search; FTS5 operators (`OR`, `*`) are treated as plain text.\n- The fallback reads the derived index with its own read-only SQLite\n  connection; the owning engine keeps writing (WAL). A missing or rebuilding\n  index simply returns fewer results for that one query.\n- This layer only overrides the `session-query-sqlite` row's config\n  (`path`, `openAt`) and adds its own wrapper row. Your own profile\n  `cordis.patch.yml` sits later in the stack, so a manual override there still\n  wins over this plugin.\n- The index is derived data — delete the file to force a rebuild. Never point\n  `path` at the session persistence database."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    },
+    {
+      "section": "dsh-session-fulltext-search",
+      "text": "让 DSH 网页侧边栏的放大镜支持**会话历史全文搜索**——并且真正搜得到中文。[English](README.md)\n\nDeepSeek Harness 自带 SQLite FTS5 内容搜索后端\n（`@deepseek-ai/dsh-session-query-sqlite`），但默认部署把它配置为\n`openAt: never`：侧边栏搜索只会匹配会话标题与工作区名。本插件就是后端\n文档规定的部署级开关——把该行覆盖为 `openAt: first-search`，并在\n`$DSH_HOME` 下使用持久化派生索引。\n\n但对中文用户这只解决了第一层：FTS5 的 `unicode61` 分词器把**连续中文\n文本整体当作一个 token**，查询词只有恰好在 token 边界对齐时才能命中——\n搜 `福州大学` 搜不到 `已保研至福州大学`。因此本插件同时挂载一个\n**子串回退层**：包含 CJK 字符的查询改用字面子串扫描同一个派生索引，\n消息正文里的任何中文片段都能按原文找到；非 CJK 查询仍走分词索引。"
+    },
+    {
+      "section": "效果",
+      "text": "- 侧边栏放大镜可搜索**消息正文**（用户消息、助手回复），跨全部工作区，\n  命中行附带内容摘要。\n- **中文搜索是子串匹配**——不存在整 token 边界问题。\n- 索引随会话增量更新。"
+    },
+    {
+      "section": "安装",
+      "text": "装进某个 profile（例如 `desktop`）：\n\n```sh\ndsh plugin --profile desktop add github:amd47802574/dsh-session-fulltext-search\n```\n\n`dsh plugin add` 会同时把包登记进 `dsh.profile.bundles`（组合层列表），\n随后重启 DSH 即生效。手动等价写法：\n\n```jsonc\n// <profile>/package.json\n\"dependencies\": {\n  \"dsh-session-fulltext-search\": \"github:amd47802574/dsh-session-fulltext-search\"\n},\n\n然后在 profile 目录里执行 `pnpm install` 并重启 DSH。"
+    },
+    {
+      "section": "卸载",
+      "text": "```sh\ndsh plugin --profile desktop remove dsh-session-fulltext-search\n```\n\n重启 DSH 后侧边栏退回仅标题搜索。派生索引文件\n（`$DSH_HOME/session-query-index.sqlite3`）可随手删除。"
+    },
+    {
+      "section": "注意",
+      "text": "- 含 CJK 字符的查询走子串扫描；其他查询保持分词器的词/短语匹配\n  （`pytho` 依然搜不到 `python`——这是 FTS5 的设计）。整句精确搜索请加\n  引号（`\"两个 词\"`）；FTS5 操作符（`OR`、`*`）会被当作普通文本处理。\n- 回退层用独立的只读 SQLite 连接读派生索引，引擎继续写入（WAL）。\n  索引缺失或正在重建时，该次查询只是结果少一些，不会报错。\n- 插件只覆盖 `session-query-sqlite` 一行的 `config`（`path`、`openAt`）\n  并新增自己的包装行。你自己 profile 的 `cordis.patch.yml` 在层栈中更靠后，\n  若你再覆盖该行，仍以你的配置为准。\n- 索引是派生数据，删掉文件即触发重建；不要把 `path` 指向会话持久化\n  数据库。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

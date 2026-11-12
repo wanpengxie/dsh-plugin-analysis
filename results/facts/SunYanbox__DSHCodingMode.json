@@ -1,0 +1,221 @@
+{
+  "repo": "SunYanbox/DSHCodingMode",
+  "commit": "571bacab07e120e492159def8638cf175538d2c5",
+  "extracted_at": "2026-11-11T15:02:47.855325+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 61828,
+    "lines_by_language": {
+      "JSON": 40,
+      "JavaScript": 608,
+      "Markdown": 137,
+      "Other": 373,
+      "YAML": 313
+    },
+    "outline": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "selftest.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@suntion/dsh-coding-mode",
+    "version": "1.0.0",
+    "keywords": [
+      "dsh-plugin"
+    ],
+    "description": "DSH coding mode: the `coding` agent preset (coding-only tool roster) plus the host-plane tool mask that keeps browser, scheduling, goal, workflow, plugin-manager and skill-authoring tools out of it.",
+    "author": "Suntion",
+    "type": "module",
+    "license": "MPL-2.0",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/SunYanbox/DSHCodingMode"
+    },
+    "homepage": "https://www.npmjs.com/package/@suntion/dsh-coding-mode",
+    "bugs": {
+      "url": "https://github.com/SunYanbox/DSHCodingMode/issues"
+    },
+    "main": "./index.js",
+    "exports": {
+      ".": {
+        "import": "./index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node selftest.mjs"
+    },
+    "engines": {
+      "node": "^22.19 || >=24"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-coding-mode bundle layer.\n#\n# Declares one `@deepseek-ai/dsh-agent-preset` entry: the `coding` mode, i.e.\n# the shipped `standard` roster with everything that is not coding work\n# removed —\n#\n#   dropped preset rows : tool-schedule, command-goal, tool-goal,\n#                         workflow-ptc, tool-workflow,\n#                         tool-plugin-manager, tool-plugin-market\n#   masked host rows    : browser_* (bridge-browser), create_skill\n#                         (skills-manager), plugin_manager, cordis_inspect_*,\n#                         load_workspace_dependencies — via the\n#                         `coding-tools-restrict` row at the end of the list\n#\n# `inject: [biliBasicCompactionPolicy]` mirrors the shipped presets (see\n# billion-context's dsh.bundle.patch.yml): it makes this preset's nested\n# `compaction-basic` row wait for billion-context's load-time overlay instead\n# of taking over compaction on its own. Keep it, or context compression stops\n# being the one the user configured.\n- insert:\n    - id: preset-coding\n      name: '@deepseek-ai/dsh-agent-preset'\n      inject: [biliBasicCompactionPolicy]\n      config:\n        id: coding\n        name: 编码模式\n        description: 只带编码相关工具：文件、shell、检索、计划、待办、子代理与上下文压缩；屏蔽浏览器、定时任务、目标、工作流、插件管理与技能创建。\n        order: 5\n        plugins:\n          - id: persona\n            name: '@deepseek-ai/dsh-persona'\n            config:\n              prefix: You are a coding agent powered by the {{model}} model.\n          - id: agent-instructions\n            name: '@deepseek-ai/dsh-agent-instructions'\n            config:\n              maxBytes: 65536\n          - id: time-context\n            name: '@deepseek-ai/dsh-time-context'\n          - id: tool-bash\n            name: '@deepseek-ai/dsh-tool-bash'\n            disabled: !!js process.platform === 'win32'\n          - id: tool-pwsh\n            name: '@deepseek-ai/dsh-tool-pwsh'\n            disabled: !!js process.platform !== 'win32'\n          - id: tool-fs\n            name: '@deepseek-ai/dsh-tool-fs'\n          - id: tool-fs-search\n            name: '@deepseek-ai/dsh-tool-fs-search'\n            config:\n              sampleOverCapGlobResults: false\n          - id: tool-jobs\n            name: '@deepseek-ai/dsh-tool-jobs'\n          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill\n            name: '@deepseek-ai/dsh-tool-skill'\n          - id: planning\n            name: cordis:group\n            group: true\n            isolate:\n              planMode: true\n            config:\n              - id: plan-mode\n                name: '@deepseek-ai/dsh-plan-mode'\n                config:\n                  section: |\n                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.\n\n                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.\n\n                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.\n\n                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.\n\n                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.\n\n                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask \"should I proceed?\" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.\n          - id: compaction\n            name: cordis:group\n            group: true\n            isolate:\n              compaction: true\n              toolResultPruner: true\n            config:\n              - id: compaction-basic\n                name: '@deepseek-ai/dsh-compaction-basic'\n              - id: command-compact\n                name: '@deepseek-ai/dsh-command-compact'\n              - id: tool-result-pruner\n                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'\n                config:\n                  thresholdChars: 8192\n                  headChars: 4096\n                  tailChars: 1024\n          - id: delegation\n            name: cordis:group\n            group: true\n            isolate:\n              workflowEngine: true\n            config:\n              - id: tool-subagent-control\n                name: '@deepseek-ai/dsh-tool-subagent-control'\n              - id: tool-subagent-list-agents\n                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'\n              - id: tool-subagent\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: spawn\n                  toolName: subagent\n                  modelSelectionSettings: true\n              - id: tool-subagent-fork\n                name: '@deepseek-ai/dsh-tool-subagent'\n                config:\n                  provider: fork\n                  toolName: subagent_fork\n          - id: tool-ask-user\n            name: '@deepseek-ai/dsh-tool-ask-user'\n          - id: tool-todo\n            name: '@deepseek-ai/dsh-tool-todo'\n            config:\n              allowParallelInProgress: true\n          - id: tool-web\n            name: '@deepseek-ai/dsh-tool-web'\n            config:\n              fetch: true\n              searchTimeoutMs: 60000\n          - id: present\n            name: '@deepseek-ai/dsh-tool-present'\n          - id: coding-tools-restrict\n            name: '@suntion/dsh-coding-mode'\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "TEMP",
+      "kind": "env",
+      "where": "selftest.mjs:22"
+    },
+    {
+      "name": "TMP",
+      "kind": "env",
+      "where": "selftest.mjs:23"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org",
+      "where": ".github/workflows/release.yml:37"
+    },
+    {
+      "host": "registry.npmjs.org",
+      "url": "https://registry.npmjs.org/${ENCODED_NAME",
+      "where": ".github/workflows/release.yml:80"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SunYanbox/DSHCodingMode",
+      "where": "package.json:11"
+    },
+    {
+      "host": "www.npmjs.com",
+      "url": "https://www.npmjs.com/package/@suntion/dsh-coding-mode",
+      "where": "package.json:13"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/SunYanbox/DSHCodingMode/issues",
+      "where": "package.json:15"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 6,
+    "pushed_at": "2026-10-21T11:03:42Z",
+    "created_at": "2026-10-21T10:59:43Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json",
+    "selftest.mjs"
+  ],
+  "readme": [
+    {
+      "section": "@suntion/dsh-coding-mode —「编码模式」DSH 预设",
+      "text": "给 DeepSeek Harness Desktop 增加一个只有编码刚需能力的 agent preset（预设 id：`coding`，界面名：**编码模式**）。"
+    },
+    {
+      "section": "组成",
+      "text": "| 文件 | 作用 |\n| --- | --- |\n| `package.json` | bundle 包声明，`dsh.bundle.patch` 指向下面的 patch |\n| `cordis.patch.yml` | 挂载 `preset-coding`（宣告预设）与 `coding-tools-restrict`（屏蔽插件） |\n| `index.js` | `coding-tools-restrict`：在本预设作用域内屏蔽非编码工具（组装期过滤 + 注册表 `restrict`） |\n\n预设本体是 `@deepseek-ai/dsh-agent-preset` 的一个实例，其 `config.plugins` 复刻 `standard` 预设的名单，去掉了与编码无关的行。"
+    },
+    {
+      "section": "保留的能力",
+      "text": "- 人格/指令/时间上下文：`persona`、`agent-instructions`、`time-context`\n- 执行与文件：`tool-bash`（非 Windows）、`tool-pwsh`（Windows）、`tool-fs`、`tool-fs-search`\n- 后台作业：`tool-jobs`\n- 技能：`skill-filesystem`、`tool-skill`\n- 计划模式：`planning` 组（`plan-mode`，含计划章节）\n- 压缩/委派/上下文：`compaction` 组（bili 插件）、`delegation` 组（subagent 系）\n- 交互与交付：`tool-ask-user`、`tool-todo`、`tool-web`、`present`"
+    },
+    {
+      "section": "移除的能力",
+      "text": "- **定时任务**：`tool-schedule`（不再挂载）\n- **目标编排**：`command-goal`、`tool-goal`（只用于单个编码任务）\n- **工作流**：`workflow-ptc`、`tool-workflow`\n- **插件面板**：`tool-plugin-manager`、`tool-plugin-market`（避免在编码会话里改宿主插件）"
+    },
+    {
+      "section": "为什么还要一个屏蔽插件",
+      "text": "`browser_*`、`dsh_browser_*`、`create_skill`、`terminal_*`、`create_worktree`、`plugin_manager`、`cordis_inspect_*`、`load_workspace_dependencies` 这些工具由**预设法管不到的作用域**注册（profile bundle：bridge-browser、skills-manager、实验性 terminal / worktree bundle，以及 web-app 的宿主行），预设法没法按会话摘掉它们。因此 `index.js` 用两条互补的路子："
+    },
+    {
+      "section": "为什么还要一个屏蔽插件",
+      "text": "**第一路（主力）：`system-prompt/assemble` 瀑布流。** 运行时把 `{ sections, contexts, tools, variables }` 组装完毕、跑完瀑布流之后，**以瀑布流的返回值作为发给模型的内容**（`@deepseek-ai/dsh-system-prompt` 的 `assemble()`）。所以在这里按名字过滤 `assembly.tools` 与 `assembly.sections`，就是对模型隐藏工具的最终手段——无论该工具由哪个作用域注册：\n\n```js\nscope.on('system-prompt/assemble', async (assembly, _context, next) => {\n  const result = (await next()) ?? assembly   // 先跑完整条链，后面的监听器无法再加回来\n  return filterAssembly(result)               // 只剔除名单内的 tool / section\n})"
+    },
+    {
+      "section": "为什么还要一个屏蔽插件",
+      "text": "**第二路（注册表层）：`tools.restrict()`。** 官方文档里「对某个 agent 隐藏工具」的正式手段（只减不增，schema、查找、执行三者保持一致），可同时让工具从 agent 的 schema 视图（含 GUI 工具列表）里消失：\n\n```js\nscope.tools.restrict({ deny: ['browser_navigate'] })\n```\n\n它只对**本作用域能看到的注册层**里的工具生效：命中别处注册的名字会让 `restrict` 抛错。所以这里**一个名字一次调用**、逐个 try/catch——被拒绝的名字不会连累其余名字（早期版本一次传整个数组，只要有一个名字不合法就整批失效，这正是上次回归的根因）。插件工具是**逐条注册**的，所以还有一个 `tools/change` 监听器做补拦；因为限制本身也会改变工具集合，这一路带**重入保护 + 100ms 去抖**（曾经因为没有保护而递归到 `Maximum call stack size exceeded`），只让当前这一遍跑完、再补一遍。"
+    },
+    {
+      "section": "为什么还要一个屏蔽插件",
+      "text": "两条路都在预设根 ctx（自身即 agent 作用域）与每个新 agent 的 ctx 上各执行一遍，效果叠加；都挂在 effect 作用域上，插件卸载时自动恢复。\n\n被屏蔽名单（66 项，见 `NON_CODING_TOOLS`）：`browser_*`（15 个，bridge-browser 的旧名字）、`dsh_browser_*`（34 个，`dsh-builtin-browser` 的 `tool-browser` 行注册的**全部**工具）、`bsk_*`（6 个，BrowserSkill）、`cordis_inspect_list`、`cordis_inspect_query`、`create_skill`、`load_workspace_dependencies`、`plugin_manager`、`terminal_*`（6 个）。"
+    },
+    {
+      "section": "为什么还要一个屏蔽插件",
+      "text": "**刻意保留**：`create_worktree`（`@deepseek-ai/dsh-experimental-tool-worktree`）。它和本插件要屏蔽的工具一样是「宿主层注册、预设法管不到」，但它让多个 agent 并行开发，属于编码刚需。该 bundle 另提供 `worktrees` 服务，且不往系统提示词里插段落，所以两个名单都没有它。\n\n提示词段落名单（`NON_CODING_PROMPT_SECTIONS`）：`tool:bridge-browser`（浏览器桥段落）、`tool:browser`（`dsh-builtin-browser` 的 `dsh_browser_*` 指引段落）、`tool:pty`、`tool:terminal`（持久终端 bundle 的段落，按名字预置）。今后再有插件塞入非编码段落，把它的 section 名加进来即可。"
+    },
+    {
+      "section": "调整名单：`coding-mode.policy.json`（不用改代码、不用重启）",
+      "text": "在本目录放一个可选的 `coding-mode.policy.json`，插件每秒检查一次 mtime，改动即时生效：\n\n```json\n{\n  \"keepTools\": [\"terminal_open\", \"terminal_list\", \"terminal_read\", \"terminal_send\", \"terminal_signal\", \"terminal_close\"],\n  \"keepSections\": [],\n  \"denyTools\": [\"...\"],\n\n- `keepTools` / `keepSections`：从默认名单里**减去**。离开名单的名字会被主动解除注册层限制，工具重新可用（不只是重新出现在提示词里）。\n- `denyTools` / `denySections`：**整体替换**默认名单（省略即用内置名单）。\n- 文件解析失败或字段类型不对时**绝不半生效**：继续用上一份可用名单，并在诊断日志里记一行。\n- 删掉该文件即回到内置名单。"
+    },
+    {
+      "section": "调整名单：`coding-mode.policy.json`（不用改代码、不用重启）",
+      "text": "诊断：插件会往系统临时目录写 `%TEMP%\\dsh-coding-mode-diag.log`，只在观测内容变化时记一行——`restrict ok=[...] refused=[...] released=[...]` 与 `assemble tools=[...] sections=[...]`（后者是**过滤后**真正发给模型的工具与段落名）。想确认某次会话里屏蔽是否真的生效，看这个文件最快；不需要时可删掉 `index.js` 里的 `diag()` 调用。"
+    },
+    {
+      "section": "环境要求",
+      "text": "- DeepSeek Harness 0.2.x。\n- Node.js `^22.19 || >=24`，见 `package.json` 的 `engines.node`；CI 在 22 / 24 上跑测试。桌面端插件实际运行在 DSH 内置的 Electron/Node 上，无需另装 Node；只有在源码里跑测试或用 `dsh` CLI 时才需要本机 Node。\n- `engines` 只是元数据：npm 默认只在不匹配时给出 `EBADENGINE` 警告，不会阻止安装；要硬拦截需在消费侧开启 `engine-strict`。"
+    },
+    {
+      "section": "自测",
+      "text": "```text\nnode selftest.mjs        # 在本目录运行\n```\n\n7 项检查：默认名单的组装过滤（含 MCP 工具、未知工具、`create_worktree` 保留）、插件导出契约、整表屏蔽、`tools/change` 自触发不再递归、迟注册工具被补拦、`keepTools` 释放、坏 policy 文件保持上一份名单。自测会把 `index.js` 复制到临时目录再 import，不影响正在运行的会话。"
+    },
+    {
+      "section": "安装与启用",
+      "text": "```powershell\ndsh plugin --profile desktop add link:<本目录的绝对路径>\n```\n\n然后在 `$DSH_HOME/profiles/desktop/package.json`（`DSH_HOME` 默认是 `~/.dsh`）的 `dsh.profile.bundles` 末尾确认有 `@suntion/dsh-coding-mode`（`dsh plugin add` 会自动追加），重启 DSH 生效。\n\n也可以在 GUI 里用 `plugin_manager install_bundle`，`target` 填本目录的绝对路径。以 link/junction 方式安装后，pnpm 会把它记为 `link:<本目录的绝对路径>`，Node 也能经 junction 解析 `@suntion/dsh-coding-mode`；已安装时无需重装。"
+    },
+    {
+      "section": "安装与启用",
+      "text": "改 `cordis.patch.yml` / `package.json` 时加载器会即时重算，无需干预；但**改 `index.js` 后必须重启 Desktop**，否则进程里留着的还是旧 ESM 模块。实测对该 bundle 执行「禁用 → 启用」无效：`plugin_manager` 返回 `application: restart-required`，禁用和启用都只是改写 `dsh.profile.bundles`、等下次启动才落地。所以名单类微调请走 `coding-mode.policy.json`（见上），只有改代码才需要重启。\n\n启用方式：GUI 新建会话时选择预设 **编码模式**；已存在的会话仍用旧预设。"
+    },
+    {
+      "section": "验证要点",
+      "text": "- `plugin_manager list_bundles` 中应出现 `@suntion/dsh-coding-mode`，行 `preset-coding` → `@deepseek-ai/dsh-agent-preset`。\n- `plugin_manager list_plugins` 中 `include:preset-coding` 应为 `enabled: true`、`patchId: preset-coding`，且无诊断信息。\n- 预设内嵌的插件行（含 `coding-tools-restrict`）不会出现在 `list_plugins` 中，这是正常现象。"
+    },
+    {
+      "section": "端到端自检（30 秒）",
+      "text": "1. GUI 新建会话 → 预设选「编码模式」。\n2. 让模型回答「列出你当前可用的工具名」。\n3. 应看不到 `browser_*`、`dsh_browser_*`、`schedule_*`、`create_goal`/`update_goal`、`plugin_manager`、`create_skill`、`terminal_*`、`load_workspace_dependencies`、`workflow`、`cordis_inspect_*`；应能看到 `read`/`write`/`edit`/`glob`/`grep`/`pwsh`、`create_worktree`、`job_*`、`todo_write`、`exit_plan_mode`、`subagent*`、`skill`、`acp_*`/`compress`、`present`、以及任意 MCP 工具。\n4. 打开会话的「系统 → 初始系统提示词」标签页：不应再出现 `A browser bridge may be connected. ... browser_snapshot ...`，也不应出现 `Use the dsh_browser_* tools to operate the built-in browser.` 这一段；其余段落应与普通模式一致。"
+    },
+    {
+      "section": "注意事项",
+      "text": "- 本预设的 compaction 组带 `inject: [biliBasicCompactionPolicy]`，用于让 billion-context 的压缩策略覆盖到本预设（insert 行的 `inject` 会替换而非追加）。\n- 按仓库实践，profile 的 `package.json` 不要手改，安装一律走 `plugin_manager` 或 `dsh plugin add`。"
+    },
+    {
+      "section": "发布",
+      "text": "发布由 `.github/workflows/release.yml` 处理。发布 `vX.Y.Z` 格式的 GitHub Release 后，工作流会：\n\n1. 校验 Release tag 与 `package.json` 的 `version` 一致；\n2. 查询 npm registry，确认 `@suntion/dsh-coding-mode@X.Y.Z` 尚未发布；\n3. 运行测试，用 `pnpm pack` 生成 tarball，再用 `npm publish` 发布到 npm（`pnpm` 与 `npm` 共用同一个 registry，不需要分别发布）。\n\n发布到 npm 后工作流即结束，不再轮询 registry 做二次确认：`npm publish` 返回 0 就代表 tarball 已被接收，而 npm 会对新版本做自动审核，审核完成前 registry 一直对该版本返回 404（npm 网站上状态显示为「验证」，实测需要几分钟）。想看结果直接打开 `https://www.npmjs.com/package/@suntion/dsh-coding-mode`。"
+    },
+    {
+      "section": "发布",
+      "text": "首次使用前，在仓库 **Settings → Secrets and variables → Actions** 中添加 `NPM_TOKEN`，token 需要拥有该包的发布权限。工作流也支持手动触发：填写已有的 Release tag 即可重试。"
+    }
+  ],
+  "skipped": []
+}

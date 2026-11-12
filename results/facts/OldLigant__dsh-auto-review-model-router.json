@@ -1,0 +1,192 @@
+{
+  "repo": "OldLigant/dsh-auto-review-model-router",
+  "commit": "2d8bea3bab8cd070f6c08cc91f39def49b9f4cc3",
+  "extracted_at": "2026-11-11T13:27:37.160732+00:00",
+  "tree": {
+    "files": 13,
+    "bytes": 74463,
+    "lines_by_language": {
+      "JSON": 44,
+      "JavaScript": 1099,
+      "Markdown": 461,
+      "Other": 39,
+      "YAML": 48
+    },
+    "outline": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "test/live.test.js",
+      "test/router.test.js"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-auto-review-model-router",
+    "version": "0.2.1",
+    "description": "Route DSH's experimental auto-review safety reviewer to a cheaper model: every review call is re-targeted to a configured provider/model while the agent's own route is untouched.",
+    "type": "module",
+    "main": "./index.js",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "cordis.patch.yml",
+      "test",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "README.zh.md",
+      ".github"
+    ],
+    "license": "MIT",
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "cordis",
+      "auto-review",
+      "approval",
+      "llm",
+      "cost"
+    ],
+    "engines": {
+      "node": "^22.19.0 || >=24.0.0"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "scripts": {
+      "test": "node --test"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The row a profile needs. It is only applied automatically when this package is\n# listed in a profile's `dsh.profile.bundles`; an ordinary install (pnpm add, or\n# a link: dependency) needs this row copied into the profile patch layer:\n#\n#   # <profile>/cordis.patch.yml\n#   - insert:\n#       - id: auto-review-model-router\n#         name: dsh-auto-review-model-router\n#         config:\n#           reviewModel: deepseek-official/deepseek-flash\n#\n# The row carries no `config` here, so the plugin's own defaults apply:\n# reviewModel is deepseek-official/deepseek-flash, which is also what the\n# commented example above states explicitly.\n- insert:\n    - id: auto-review-model-router\n      name: dsh-auto-review-model-router\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_PROFILE_DIR",
+      "kind": "env",
+      "where": "test/live.test.js:27"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": true,
+    "has_lint": false,
+    "typed": false,
+    "commits": 4,
+    "pushed_at": "2026-10-17T15:49:52Z",
+    "created_at": "2026-10-12T18:32:57Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-auto-review-model-router",
+      "text": "Route DSH's experimental **auto-review** safety gate to a model you choose, so a\npremium agent model does not pay for its own safety reviews.\n\n```yaml"
+    },
+    {
+      "section": "<profile>/cordis.patch.yml",
+      "text": "- insert:\n    - id: auto-review-model-router\n      name: dsh-auto-review-model-router\n      config:\n        reviewModel: deepseek-official/deepseek-flash\n```\n\nWith that entry every review runs on `deepseek-official/deepseek-flash` while the\nagent keeps `claude-opus-4`, `gpt-6-astra`, or whatever else the session selected."
+    },
+    {
+      "section": "The problem it solves",
+      "text": "`@deepseek-ai/dsh-experimental-auto-review` reviews each gated tool call by\ncalling `ctx.llm.stream()` on **the session's own route**: it copies `provider`\nand `model` out of the session request header\n(`snapshotAutoReview()` in `packages/experimental/auto-review/src/index.ts`).\nThere is no `reviewModel` field in the shipped plugin, so an expensive agent\nmodel is charged for one extra full review request per gated call."
+    },
+    {
+      "section": "How it works",
+      "text": "The plugin wraps two service methods at activation: `llm.stream` always, and\n`llm.prepareCall` unless `wrapPrepareCall` is off."
+    },
+    {
+      "section": "How it works",
+      "text": "1. A request is recognized as an auto-review call when it is **hand-built**\n   (it does not carry the agent loop's own-request mark) **and** its `system`\n   prompt starts with auto-review's fixed `REVIEW_POLICY` opening. Only such a\n   request is ever rewritten.\n2. It is copied onto `reviewModel`, and the source route's `reasoningEffort` and\n   `maxTokens` are dropped. Both are properties of the *agent's* model: a\n   reasoning effort the target does not declare makes the harness throw\n   `UNSUPPORTED_REASONING_EFFORT`, and an inherited output cap can exceed the\n   target's limit. Either would fail every review closed.\n3. Everything else — the review prompt, its policy system prompt, `temperature`,\n   and the `{\"risk\":…,\"decision\":…}` JSON protocol the gate parses — is\n   unchanged. Only the model that produces the verdict changes.\n4. A review that fails transiently is retried on the same route\n   (`retryAttempts`, default 4). The gate calls `llm.stream` directly, outside\n   the agent loop, so the harness retry plugin (an `agent/request-error`\n   listener) never sees a review: without this, one dropped connection denies\n   the tool call."
+    },
+    {
+      "section": "Why retries need their own classification",
+      "text": "Only the codes the harness itself treats as transient are retried:\n`EMPTY_RESPONSE`, `RATE_LIMIT`, `SERVER`, `TRANSPORT`. `TIMEOUT` is deliberately\nexcluded — the DeepSeek adapter raises it from an **idle watchdog**, so retrying\nit multiplies a silent wait by the attempt count while the auto-review deadline\ndrains. `ABORTED` (the deadline, or the caller cancelling) and configuration\nerrors such as `AUTH` are not fixed by trying again."
+    },
+    {
+      "section": "Why retries need their own classification",
+      "text": "A failed attempt's terminal `finish` chunk is held back: the gate's reader ends\nthe review on any terminal `finish`, so yielding it would end the review on the\nfirst transport blip. Reasoning chunks stay live (the reader ignores reasoning\ncontent), so a retried review exposes more than one attempt's reasoning while the\nverdict is still parsed from the final text block alone."
+    },
+    {
+      "section": "Why the wrappers, and not an `llm/stream` listener",
+      "text": "- Mutating the request inside an `llm/stream` listener throws: auto-review\n  freezes it (`deepFreeze`) before streaming.\n- Returning `next(replacement)` from a listener never reaches the adapter:\n  Cordis's `EventsService.waterfall` invokes the innermost callback with the\n  argument list it closed over.\n- Writing `ctx.llm.stream = wrapper` is also ineffective: `ctx.llm` is a\n  per-read traceable proxy, and its property overlay shadows what you write."
+    },
+    {
+      "section": "Why the wrappers, and not an `llm/stream` listener",
+      "text": "The wrappers are therefore installed on the object that owns each method in the\nservice's prototype chain (`LlmRuntime.prototype` in practice), which is the one\nseam every consumer actually calls. Both are removed when the plugin's fiber\ndisposes."
+    },
+    {
+      "section": "Why `prepareCall` needs its own wrapper",
+      "text": "A prepared handle resolves its route during `prepareCall` and then rejects a\ndispatch whose config differs from the resolved one\n(`INVALID_PREPARED_CALL`). The retarget must therefore happen *before* the call\nis prepared; swapping the route in the returned handle cannot work. With\n`wrapPrepareCall: true` (the default) a review prepared that way runs on the\nreview route, and turning it off restores the session route for that path."
+    },
+    {
+      "section": "Install",
+      "text": "Published on npm as `dsh-auto-review-model-router`:\n\n```sh"
+    },
+    {
+      "section": "in the profile directory",
+      "text": "pnpm add dsh-auto-review-model-router\n```\n\nFrom a local checkout instead, link it:\n\n```jsonc\n// <profile>/package.json\n\"dependencies\": { \"dsh-auto-review-model-router\": \"link:D:/path/to/dsh-auto-review-model-router\" }\n```\n\nThen insert it in the profile patch layer, after the auto-review bundle:\n\n```yaml"
+    },
+    {
+      "section": "<profile>/cordis.patch.yml",
+      "text": "- insert:\n    - id: auto-review-model-router\n      name: dsh-auto-review-model-router\n      config:\n        reviewModel: deepseek-official/deepseek-flash\n```\n\nRestart the app: patch-layer changes apply at profile startup."
+    },
+    {
+      "section": "Configuration",
+      "text": "| Field | Default | Meaning |\n| --- | --- | --- |\n| `reviewModel` | `deepseek-official/deepseek-flash` | `<provider>/<model>` every review runs on. An empty string disables routing. |\n| `systemPromptPatterns` | the shipped `REVIEW_POLICY` opening | Substrings, or `/regex/u` literals, matched against a request's `system` prompt. Widen this only if a harness release rewrites that prompt. |\n| `retryAttempts` | `4` | Retries after the first attempt of one review call, so up to 5 attempts. `0` disables retrying. Maximum 10. |\n| `retryDelayMs` | `500` | Pause before each retry. |\n| `wrapPrepareCall` | `true` | Also route review requests issued through `llm.prepareCall`. |\n| `dropReasoningEffort` | `true` | Drop the source route's reasoning effort on the review request. |\n| `dropMaxTokens` | `true` | Drop the source route's output cap on the review request. |\n| `logRetargets` | `true` | Log each retargeted review. Retries log a warning regardless. |"
+    },
+    {
+      "section": "Verify",
+      "text": "The test suite has two files. `test/router.test.js` covers the decision surface\nwith no harness at all; `test/live.test.js` runs the wrappers over the real\n`LlmRuntime` and skips those checks when neither this package nor\n`DSH_PROFILE_DIR` resolves `@deepseek-ai/dsh-llm`.\n\n```sh\nnode test/router.test.js\nDSH_PROFILE_DIR=<profile dir> node test/live.test.js\n```"
+    },
+    {
+      "section": "Verify",
+      "text": "Two commands rather than `node --test`: each file runs its `node:test` suite\nin-process, while `node --test` spawns a child process per file.\n\n> The plugin patches `LlmRuntime.prototype`, so each live test disposes its own\n> mount. Skipping that teardown leaks a wrapper into the next test's dispatches.\n\nAt runtime each retarget logs one line, and each retry logs a warning:"
+    },
+    {
+      "section": "Verify",
+      "text": "```\nauto-review-model-router: review request re-routed anthropic/claude-opus-4 -> deepseek-official/deepseek-flash (stream)\nauto-review-model-router: review attempt 1/5 failed with TRANSPORT; retrying in 500 ms\n```"
+    },
+    {
+      "section": "Scope and limits",
+      "text": "- Only requests recognized as auto-review calls change route. A false negative\n  costs nothing (the review runs exactly as before); a false positive is bounded\n  to one extra object and one changed route for one hand-built request.\n- The standalone `dsh-auto-review` plugin needs none of this: its `reviewerModel`\n  config field already sets the reviewer's model directly.\n- DSH public APIs are pre-stable. A release that changes the `REVIEW_POLICY`\n  opening, `LlmRuntime.prototype`'s method names, or the prepared-handle contract\n  needs a matching update here. Detection is configurable\n  (`systemPromptPatterns`) precisely for the first case, and the plugin logs a\n  warning instead of failing the profile boot when a method it needs is missing."
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

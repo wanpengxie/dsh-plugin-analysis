@@ -1,0 +1,243 @@
+{
+  "repo": "shy19805/dsh-tool-args-unwrap",
+  "commit": "f0e90101598c0ff5fea52fe71177d87c20afa626",
+  "extracted_at": "2026-11-12T04:38:47.259875+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 125368,
+    "lines_by_language": {
+      "JSON": 3546,
+      "JavaScript": 715,
+      "Markdown": 201,
+      "Other": 24,
+      "YAML": 9
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "schemas-snapshot.json",
+      "state.json"
+    ]
+  },
+  "manifest": {
+    "name": "@dsh-external/dsh-tool-args-unwrap",
+    "version": "0.3.1",
+    "description": "Fixes malformed tool-call arguments (nested {\"arguments\":{…}} wrappers, wrapper-key aliases, param-key aliases) at the llm/stream seam — repairs execution, persistence and history replay in one place. 修复模型产出的畸形工具参数。",
+    "type": "module",
+    "main": "./lib/index.js",
+    "exports": {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib",
+      "cordis.patch.yml"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "cordis",
+      "tool-call",
+      "arguments",
+      "llm",
+      "stream",
+      "wrapper",
+      "unwrap",
+      "schema"
+    ],
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/shy19805/dsh-tool-args-unwrap.git"
+    },
+    "homepage": "https://github.com/shy19805/dsh-tool-args-unwrap#readme",
+    "bugs": {
+      "url": "https://github.com/shy19805/dsh-tool-args-unwrap/issues"
+    },
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/dsh-llm": ">=0.0.1-rc <2",
+      "cordis": ">=4.0.0-rc <5",
+      "schemastery": "^3.18.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh bundle patch：bundle 装配入口。\n# 注意：若由注入器（dev_inject_plugin）在 profile patch 之外装配，\n# 请勿在 profile cordis.patch.yml 里保留同 id 条目，否则会 duplicate loader entry id。\n- insert:\n    - id: dsh-tool-args-unwrap\n      name: '@dsh-external/dsh-tool-args-unwrap'\n      config:\n        enabled: true\n        logUnwrap: true\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "github.com",
+      "url": "https://github.com/shy19805/dsh-tool-args-unwrap.git",
+      "where": "package.json:30"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/shy19805/dsh-tool-args-unwrap#readme",
+      "where": "package.json:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/shy19805/dsh-tool-args-unwrap/issues",
+      "where": "package.json:34"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-09-05T16:46:55Z",
+    "created_at": "2026-09-05T06:14:43Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-tool-args-unwrap",
+      "text": "> 修复模型产出的**畸形工具参数**，挂在官方 `llm/stream` waterfall 上。\n> Fixes **malformed tool-call arguments** produced by models, hooked on the official `llm/stream` waterfall.\n\n**[为什么需要它](#为什么需要它) · [修复家族](#修复家族-全部来自真实语料不是猜测) · [安全保证](#安全保证-这是最重要的一节) · [验证数据](#验证数据) · [安装与使用](#安装与使用) · [运维与排障](#运维与排障) · [已知限制](#已知限制) — [English section](#english)**\n\n---"
+    },
+    {
+      "section": "为什么需要它",
+      "text": "部分模型（尤其小参数/长会话/高频工具调用场景）会产出畸形工具参数，最典型的是多套了一层 `{\"arguments\":{…}}` 包装。宿主把这层包装**原样持久化**进 `tool/call` 与 `assistant/message`，下一轮整段回放给模型；模型于是看到\"我上一轮就是这么调的\"→ **越模仿越像 → 越陷越深**（实测包装层数 1→8→13→33→34→38，递归加深）。这就是\"agent 自称跳不出来、只有重开会话才好\"的真因——重开有效是因为坏示范没了，不是模型状态变了。\n\n这个插件在**参数被持久化之前**拦截并修正，一处同时修好三件事：**执行、持久化、历史回放**——坏示范根本不会被写进会话。"
+    },
+    {
+      "section": "老会话需要重开吗？/ Do old sessions need to be recreated?",
+      "text": "**不需要（v0.3.0 起）。** 插件在两个方向同时闭环：\n\n- **输出侧**：模型新产出的畸形参数在持久化前被修正——不再产生新的坏示范；\n- **输入侧（v0.3.0 引入，v0.3.1 重做）**：老会话历史里的存量畸形 `tool/call` 在请求发往模型**之前**被就地修正（内存内克隆替换，持久化数据一个字节不动）。模型从此看不到坏示范 → 停止模仿 → 下一轮就自愈。\n\n输入侧与输出侧共用同一套判定（宿主校验器 + 违例严格减少 + 名字相关性），历史里的合法调用一个字节都不会变；WeakMap 记忆化保证同一条历史只修一次，不给每轮请求添开销。"
+    },
+    {
+      "section": "老会话需要重开吗？/ Do old sessions need to be recreated?",
+      "text": "> **v0.3.1 关键修正**：llm/stream 的请求对象被 agent-loop `deepFreeze`（含 messages），v0.3.0 在监听器里赋值 `options.messages` 会抛 `Cannot assign to read only property 'messages'` 并**杀死整轮对话**（只在有污染历史的老会话触发——宝可梦天国会话实测）。v0.3.1 改为包装 `llm.stream` 服务方法（clone-on-write：清洗结果放进浅克隆交给原方法，调用方的冻结对象零改动，与宿主 adapterStream 处理冻结请求的模式一致），清洗环节异常完全隔离——任何失败都降级为放行原始请求，绝不影响对话。"
+    },
+    {
+      "section": "老会话需要重开吗？/ Do old sessions need to be recreated?",
+      "text": "**No (since v0.3.0).** The plugin closes the loop in both directions: the **output side** fixes freshly produced malformed arguments before persistence (no new bad exemplars), and the **input side** (v0.3.0, redesigned in v0.3.1 as a `llm.stream` service wrapper with clone-on-write) sanitizes the replayed history before the request reaches the model. Both sides share the same acceptance rules (host validator + strict violation reduction + name relevance); valid history records are never touched, sanitizer failures degrade to pass-through, and a WeakMap memoizes each history block so repeated requests cost nothing."
+    },
+    {
+      "section": "修复家族（全部来自真实语料，不是猜测）",
+      "text": "| 家族 | 形态 | 实测条数 | 报错 | 插件动作 |\n|---|---|---|---|---|\n| A | 嵌套包装 `{\"arguments\":{…}}`（1–38 层） | 547 | `missing required property` | `unwrap:arguments`（无条件解包） |\n| B | 包装键别名 `{\"args\":{…}}` / `{\"parameters\":{…}}` | 2 | 同上 | `unwrap:args` 等 |\n| C | 包装键 + 兄弟键混排 `{\"arguments\":{…},\"offset\":5}` | 1 | 同上 | `merge:arguments`（合并，冲突则放弃） |\n| D | 参数键名别名 `skill_name→name`、`path↔file_path`、`new_str→new_string`、`query→queries` | ≈13 | 同上 | `rename:x→y`（需名字相关 + 违例减少） |"
+    },
+    {
+      "section": "修复家族（全部来自真实语料，不是猜测）",
+      "text": "**明确不修**（语料证明它们不是缺陷，改了就是编造）：把 JSON 当文本写进文件的 `{\"content\":\"{…}\"}`（75 条，报错全是\"需先 read\"，与参数形状无关）、模型真漏必填（`run_code` 漏 `description`、`{}` 空参数）、兄弟键与内层重名的歧义合并。"
+    },
+    {
+      "section": "安全保证（这是最重要的一节）",
+      "text": "1. **用宿主自己的校验器当裁判**：插件优先加载 `@deepseek-ai/dsh-tools` 的 `validateJsonSchemaValue`（宿主校验工具参数的那个函数）——修完后的参数是否真的过校验，由宿主说了算。加载不到时退化为内置保守计数器（只数必填缺失/浅层类型不符/多余键，刻意**松**：宁可少修不误修）。\n2. **用本次请求真实下发的 schema**（`options.tools`）判定，绝不缓存、绝不猜测。\n3. **schema 说某个键是参数就绝不动它**：例如 `dev_stage_add` 真有个 `parameters` 参数、`str_replace_editor` 真有个 `path` 参数，它们**不会**被解包/改名（语料里实测确认）。\n4. **除 A 类外，改写必须让违例数严格减少**，否则整个回退、原样放行。\n5. **键名改名额外要求名字相关**（规范化后相等 / 前缀 / 后缀 / 单复数归一），且只在\"改完真的少报错\"时生效——所以 `configuration` **绝不会**被塞进 `description`（语料里真实存在这个陷阱，已验证被拒绝）。\n6. **A 类（单键 `arguments`）无条件解包**的理由：`arguments` 在 dsh 全量工具集里从未作为参数名出现（已在 node_modules 全量核验）；它必须无条件，否则\"无必填参数\"的工具会**静默吞掉包装**——比报错更坏（模型以为调用成功，其实参数全丢）。\n7. **歧义即放弃**：合并时兄弟键与内层重名 → 不改名不合并，让调用带着原本清晰的报错失败（模型会自己改），而不是替你猜哪个值是对的。\n8. **改不了就原样放行**：没有候选能让违例数减少 → 返回 `null`，块原样透传。"
+    },
+    {
+      "section": "验证数据",
+      "text": "- **全量 dry-run（16,535 条真实记录，宿主校验器为裁判）**：541 条真实 `missing required property` 报错中，**520 条完全修复**（校验器判定 0 违例）；3 条\"修了但仍缺\"（模型用了语义错键，如 glob 要 `pattern` 却写了 `file_path`——名字不相关，按纪律不猜）；18 条未动（空 `{}` / 真漏必填 / 嵌套缺失，属\"改了就是编造\"）。\n- **零误修证明**：把同一批参数放到**声明了该键的旧 schema**下，插件完全不动（schema 漂移不是线上危险——线上永远用当次请求自己的 schema）。\n- **静默吞包装修复**：45 处\"曾成功\"的调用被触碰，全部是**无必填参数的工具**被静默吞掉 `arguments` 包装的潜在 bug（语义无损，只是让落盘的参数诚实）。\n- **单元测试 16/16**：覆盖 A/B/C/D 四类、无条件解包边界、声明键豁免、歧义拒绝、类型不符改名拒绝、JSON 文本不触碰。\n- **端到端**：经真实 `BlockAssembler` 全链路（适配器 chunk → 插件改写 → 宿主组装 → 校验器），修复后违例清零。"
+    },
+    {
+      "section": "方式一：开发装配（推荐，本插件即以此验证）",
+      "text": "把插件目录 link 进 profile，加进 `bundles` 数组，重启即持久生效：\n\n```jsonc\n// <profile>/package.json\n{\n  \"dependencies\": { \"@dsh-external/dsh-tool-args-unwrap\": \"link:/abs/path/to/dsh-tool-args-unwrap\" },\n  \"dsh\": { \"profile\": { \"bundles\": [\"@dsh-external/dsh-tool-args-unwrap\"] } }\n\n```yaml"
+    },
+    {
+      "section": "<plugin>/cordis.patch.yml（仓库已附）",
+      "text": "- bundle:\n    insert:\n      id: dsh-tool-args-unwrap\n      # 入口自动指向 lib/index.js\n```"
+    },
+    {
+      "section": "方式二：手动",
+      "text": "1. 把仓库 clone 到任意目录；\n2. 在 profile 的 `package.json` 加 `link:` 依赖 + `bundles` 数组项（如上）；\n3. 重启 dsh。\n\n**确认生效**：插件目录会写 `state.json`，看到 `listenerRegistered: true` 且 `streamsSeen` 随模型调用递增即在工作；`hostValidator: true` 表示已接入宿主校验器（最高保真）；每次修正会打一条 `warn` 日志并记入 `lastFix`。\n\n**临时停用**：设配置 `enabled: false` 即可完全停用流改写（不卸载插件）。"
+    },
+    {
+      "section": "运维与排障",
+      "text": "- `state.json`：插件每次加载/修正时写。`streamsSeen` 不涨 → 监听器没装上（检查 bundle 是否装配）；`hostValidator: false` → 用了内置兜底（功能仍正常，只是判定略松）。\n- `schemas-snapshot.json`：每进程写一次，仅含工具名+参数名+类型+必填名，**不含描述文本**，用于离线核对。\n- 每次修正的 `warn` 日志含：provider/model、工具名、动作列表、字符数、累计次数。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 只修\"形状畸形\"，不修\"语义缺失\"：模型真没写 `description`、真漏了必填 → 插件不猜（也猜不了）。\n- 跨 provider 的实机复现未全部完成（网络受限环境）；但缺陷形态与修复判定都与 provider 无关——schema 是宿主下发的，校验器是宿主的。\n- 更根本的修复应在宿主侧：持久化前对 tool-call 参数做一次 schema 校验 + 规范化（本插件即是一个可插拔的实现参考）。\n\n---\n\n<a id=\"english\"></a>"
+    },
+    {
+      "section": "English",
+      "text": "> Fixes **malformed tool-call arguments** produced by models, hooked on the official `llm/stream` waterfall."
+    },
+    {
+      "section": "Why it's needed",
+      "text": "Some models (especially small-parameter ones, long sessions, high-frequency tool-calling) emit malformed tool arguments — most typically an extra `{\"arguments\":{…}}` wrapper. The host persists that wrapper **verbatim** into `tool/call` and `assistant/message`, then replays the whole history back to the model next turn; the model sees \"that's what I did last time\" and **imitates its own mistake, recursively deepening** (observed 1→8→13→33→34→38 layers). This is the real reason agents claim they \"can't escape\" and only a session restart helps — restart works because the bad exemplars vanish, not because model state resets. This plugin intercepts and fixes arguments **before they are persisted**, repairing three things at once: **execution, persistence, and history replay** — the bad exemplar never gets written into the session."
+    },
+    {
+      "section": "Why it's needed",
+      "text": "**No (since v0.3.0).** See the bilingual section above (\"老会话需要重开吗？\"). Both sides share the same acceptance rules; valid history records are never touched."
+    },
+    {
+      "section": "The defect family (all from real corpus, not guesswork)",
+      "text": "Every family below was actually observed in **16,535 real `tool/call` records** and checked against the real `tool/result` error text one by one:"
+    },
+    {
+      "section": "The defect family (all from real corpus, not guesswork)",
+      "text": "| Family | Shape | Observed | Error | Plugin action |\n|---|---|---|---|---|\n| A | Nested wrapper `{\"arguments\":{…}}` (1–38 layers) | 547 | `missing required property` | `unwrap:arguments` (unconditional) |\n| B | Wrapper-key alias `{\"args\":{…}}` / `{\"parameters\":{…}}` | 2 | same | `unwrap:args` etc. |\n| C | Wrapper + sibling keys `{\"arguments\":{…},\"offset\":5}` | 1 | same | `merge:arguments` (aborts on ambiguity) |\n| D | Param-key alias `skill_name→name`, `path↔file_path`, `new_str→new_string`, `query→queries` | ≈13 | same | `rename:x→y` (needs name-relevance + fewer violations) |"
+    },
+    {
+      "section": "The defect family (all from real corpus, not guesswork)",
+      "text": "**Explicitly not fixed** (the corpus proves these aren't defects; fixing them would be fabrication): `{\"content\":\"{…}\"}` cases that legitimately write JSON text into a file (75 of them, error was \"must read first\", unrelated to shape), genuine omissions (`run_code` missing `description`, empty `{}`), and ambiguous merges where a sibling key collides with an inner key."
+    },
+    {
+      "section": "Safety guarantees (the most important section)",
+      "text": "The acceptance criterion is **strictly fewer total violations**, not \"required keys present\":"
+    },
+    {
+      "section": "Safety guarantees (the most important section)",
+      "text": "1. **The host's own validator is the judge**: the plugin preferentially loads `validateJsonSchemaValue` from `@deepseek-ai/dsh-tools` (the very function the host uses) — whether a fixed argument actually passes is decided by the host itself. If unavailable it falls back to a conservative built-in counter (only missing-required / shallow type mismatch / extra keys), deliberately **lenient**: better to under-fix than mis-fix.\n2. **Judged against the schema the current request actually sent** (`options.tools`), never cached, never guessed.\n3. **A key the schema declares as a parameter is never touched**: e.g. `dev_stage_add` really has a `parameters` param, `str_replace_editor` really has a `path` param — they are **not** unwrapped/renamed (verified against the live toolset).\n4. **Except class A, a rewrite must strictly reduce the violation count**, otherwise it reverts and passes through unchanged.\n5. **Key renames additionally require name-relevance** (normalized equality / prefix / suffix / plural collapse) and only take effect when they genuinely reduce errors — so `configuration` is **never** mapped onto `description` (this exact trap exists in the corpus and is verified rejected"
+    },
+    {
+      "section": "Verification data",
+      "text": "- **Full-corpus dry-run (16,535 real records, host validator as judge)**: of 541 real `missing required property` errors, **520 fully fixed** (validator reports 0 violations); 3 \"fixed but still failing\" (model used a semantically wrong key, e.g. glob wants `pattern` but got `file_path` — not name-related, not guessed per policy); 18 untouched (empty `{}` / genuinely missing required / nested gaps — \"fixing would be fabrication\").\n- **Zero-mis-fix proof**: the same arguments under an **older schema that declared that key** are left completely untouched (schema drift is not a live danger — live always uses the request's own schema).\n- **Silent-swallow fixes**: 45 \"previously successful\" calls were touched, all potential bugs where a **no-required-param tool** silently swallowed an `arguments` wrapper (semantically lossless — just makes the persisted arguments honest).\n- **Unit tests 16/16**: covering A/B/C/D, unconditional-unwrap boundary, declared-key exemption, ambiguity refusal, type-mismatch rename refusal, and JSON-text untouched.\n- **End-to-end**: through the real `BlockAssembler` chain (adapter chunk → plugin rewrite → host assembly → validator), violations drop to zero after"
+    },
+    {
+      "section": "Install & use",
+      "text": "Recommended (how this plugin was verified): link the plugin dir into the profile and add it to the `bundles` array — persistent across restarts:\n\n```jsonc\n// <profile>/package.json\n{\n  \"dependencies\": { \"@dsh-external/dsh-tool-args-unwrap\": \"link:/abs/path/to/dsh-tool-args-unwrap\" },\n  \"dsh\": { \"profile\": { \"bundles\": [\"@dsh-external/dsh-tool-args-unwrap\"] } }\n\n```yaml"
+    },
+    {
+      "section": "<plugin>/cordis.patch.yml (shipped with this repo)",
+      "text": "- bundle:\n    insert:\n      id: dsh-tool-args-unwrap\n```\n\nManual: clone the repo anywhere, add the `link:` dependency + `bundles` entry to the profile `package.json` (as above), restart dsh.\n\n**Confirm it's live**: the plugin dir writes `state.json`; `listenerRegistered: true` with `streamsSeen` incrementing on each model call means it's working; `hostValidator: true` means the host validator is attached (highest fidelity); each fix emits one `warn` log and is recorded in `lastFix`."
+    },
+    {
+      "section": "<plugin>/cordis.patch.yml (shipped with this repo)",
+      "text": "**Kill switch**: set config `enabled: false` to fully disable stream rewriting without unloading."
+    },
+    {
+      "section": "Operations & troubleshooting",
+      "text": "`state.json` is written on load/fix; if `streamsSeen` doesn't grow, the listener isn't installed (check bundle assembly); `hostValidator: false` means the built-in fallback is in use (still works, just slightly looser). `schemas-snapshot.json` is written once per process — tool names + param names + types + required only, **no description text** — for offline auditing. Each fix's `warn` log carries provider/model, tool name, action list, char counts, and a running total."
+    },
+    {
+      "section": "Known limits",
+      "text": "Only shape-malformation is fixed, not semantic omission: if the model genuinely omitted `description` or a required key, the plugin doesn't guess (and can't). Cross-provider live reproduction isn't fully complete (network-restricted environment), but the defect shape and the fix judgement are provider-independent — the schema comes from the host, the validator is the host's. The deeper fix belongs upstream: validate + normalize tool-call arguments before persistence (this plugin is a pluggable reference implementation of exactly that)."
+    },
+    {
+      "section": "Layout",
+      "text": "```\nlib/index.js           the plugin, all logic\ncordis.patch.yml       bundle assembly declaration\nschemas-snapshot.json  live tool-schema snapshot (names/types/required only)\nstate.json             live state (proves it's working)"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

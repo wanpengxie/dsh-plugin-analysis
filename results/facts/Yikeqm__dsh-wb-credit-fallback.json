@@ -1,0 +1,104 @@
+{
+  "repo": "Yikeqm/dsh-wb-credit-fallback",
+  "commit": "c1955f1d3ba09889448a1c91a5ae3407e63bfd09",
+  "extracted_at": "2026-11-11T16:24:47.787280+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 19801,
+    "lines_by_language": {
+      "JSON": 14,
+      "JavaScript": 351,
+      "Markdown": 74,
+      "Other": 25,
+      "YAML": 15
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "package.json",
+      "tests/smoke.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-wb-credit-fallback",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Auto-switch the session model from WorkBuddy to DeepSeek when WorkBuddy reports exhausted credits, then retry the failed request once.",
+    "type": "module",
+    "main": "index.js",
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# Bundle patch for dsh-wb-credit-fallback.\n#\n# Inserts one host-side row into the profile tree. The row reads the WorkBuddy\n# credit-exhaustion failure, records a DeepSeek selection for the session, and\n# returns one retry so the turn finishes instead of failing.\n- insert:\n    - id: wb-credit-fallback\n      name: dsh-wb-credit-fallback\n      config:\n        from: workbuddy\n        to:\n          provider: deepseek-account\n          model: deepseek-flash\n          reasoningEffort: high\n        persistDefault: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 2,
+    "pushed_at": "2026-10-17T04:02:28Z",
+    "created_at": "2026-10-17T03:56:39Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js"
+  ],
+  "readme": [
+    {
+      "section": "dsh-wb-credit-fallback",
+      "text": "WorkBuddy 积分耗尽时，自动把会话切到 DeepSeek，并把默认模型永久回落到 DeepSeek——这一轮照常答完，之后新开的会话也不再撞额度墙。\n\nDSH（DeepSeek Harness）本身没有跨 provider 的回退链：\n\n- WorkBuddy 插件在积分不足时让本地 shim 返回 `402 / hard_credit`；\n- DSH 的 pi-ai 适配器会把 402 归到 `PI_AI_ERROR`（不是 `QUOTA`）；\n- 内置 `dsh-llm-retry` 只会用同一个模型重试。\n\n所以这里用一个 host 侧小插件补上缺口。它只用 DSH 0.2.0-rc.2 公开的扩展点，宿主代码零运行时依赖。"
+    },
+    {
+      "section": "行为",
+      "text": "1. 监听 `agent/request-error`：失败 provider 是 `from`（默认 `workbuddy`）且错误文本命中积分不足标记（`hard_credit`、`insufficient credit`、`402`、`积分不足`、`额度不足`、`余额不足` 等）时：\n   - 用 `sessionController.agents.selectForNextRequest` 把当前会话切到 `to`（默认 `deepseek-account / deepseek-flash`）；\n   - 用 `agentDefaultModel.saveSelection` 把它写成 profile 默认模型（走官方配置编辑器写回 `cordis.patch.yml`，不手改 YAML），此后新会话直接走 DeepSeek；\n   - 返回 `{ kind: \"retry\" }`，让这一轮重试一次。\n2. 监听 `agent/request`：切换尚未落盘时直接重写这次请求的 provider/model，因为同一步的重试不会重新组装系统提示。\n3. 保护：每个 turn 最多自动切换一次；内置重试策略已决定重试时让内置优先；非积分类失败（400/401/网络错误）不触发；监听器内部异常全部吞掉，不影响正常请求。"
+    },
+    {
+      "section": "行为",
+      "text": "不做的事：DeepSeek 也失败时不再切；积分恢复后不会自动切回 WorkBuddy（在模型选择器里重选一次即可）；不处理 WorkBuddy 登录失效（401 `session_dead`）。"
+    },
+    {
+      "section": "安装",
+      "text": "桌面客户端的 profile 由 App 独占管理，CLI 不能装，用 App 内入口：\n\n1. 左侧栏「插件」→「添加插件」；\n2. 输入本目录的**绝对路径**（安装向导接受绝对路径）；\n3. 安装 → 立即启用 → 完全退出客户端（含托盘）再打开。\n\n卸载在插件页里完成，本插件不写任何用户数据。\n\n`dsh web` / `dsh tui` 这类命令行 profile 可以直接从 GitHub 源码安装（桌面客户端的 `desktop` profile 仍只能用 App 内入口）：\n\n```sh\ndsh plugin --profile web add github:Yikeqm/dsh-wb-credit-fallback\n```\n\n装完重启对应 profile，再刷新页面即可。用 GitHub 源安装时插件会跟随仓库 `main` 分支更新，需要重新 `dsh plugin remove` + `add` 才会取到新提交。"
+    },
+    {
+      "section": "配置",
+      "text": "bundle 的 `cordis.patch.yml` 里给了默认值，可在 profile 的 `cordis.patch.yml` 里按行 id `wb-credit-fallback` 覆盖：\n\n```yaml\nconfig:\n  from: workbuddy            # 触发条件：哪个 provider 报额度不足\n  to:                        # 切到哪个 provider/model\n    provider: deepseek-account"
+    },
+    {
+      "section": "验证",
+      "text": "逻辑层：`node tests/smoke.mjs`（用假 ctx 模拟瀑布调用，覆盖触发 / 不触发 / 只切一次 / 默认写回）。\n\n集成层：在独立的 headless profile 里挂两个手工声明的 pi-ai 路由（一个返回 402 `hard_credit`，一个正常流式返回），跑真实 agent loop：\n\n- 第一次运行：`BAD → GOOD`，会话里 `request/header` 从故障 provider 换成回退 provider，`turn/end` 为 `completed`，profile 的 `agent-default-model` 被改写；\n- 第二次运行（新会话）：只有 `GOOD`，直接走回退后的默认模型；\n- 负向用例：非积分错误（400）不触发切换；回退目标也失败时不会在两个 provider 之间打转。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 依赖 DSH `0.2.0-rc.2` 的 `agent/request` / `agent/request-error` 瀑布与 `sessionController`、`agentDefaultModel` 服务；升级 DSH 大版本后需复核。\n- 积分不足靠错误文本匹配；WorkBuddy 若更换措辞需要补标记。\n- 插件在宿主进程内运行，如遇异常行为先在插件页禁用它。"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

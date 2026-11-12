@@ -1,0 +1,194 @@
+{
+  "repo": "fengxiforcy/dsh-surrogate-guard",
+  "commit": "1babb28a582af17baafa1a88e7b4bc7af7874ccd",
+  "extracted_at": "2026-11-11T20:06:59.983248+00:00",
+  "tree": {
+    "files": 9,
+    "bytes": 45732,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 889,
+      "Markdown": 141,
+      "Other": 21,
+      "YAML": 12
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/client.js",
+      "lib/vaccine.js",
+      "package.json",
+      "test/guard.test.mjs",
+      "test/vaccine.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-surrogate-guard",
+    "version": "0.1.10",
+    "private": false,
+    "description": "DeepSeek Harness plugin: neutralize lone UTF-16 surrogates before the session log records them, and auto-scan/repair session files that already contain one (prevents permanent 400 INVALID_REQUEST).",
+    "type": "module",
+    "license": "MIT",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./lib/client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "lib",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE",
+      "test"
+    ],
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "dsh",
+      "unicode",
+      "surrogate",
+      "utf-16",
+      "invalid-request",
+      "session-repair"
+    ],
+    "author": "dsh-surrogate-guard contributors",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "inject": []
+      }
+    },
+    "engines": {
+      "node": "^22.19 || >=24"
+    },
+    "scripts": {
+      "test": "node test/guard.test.mjs && node test/vaccine.test.mjs"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-surrogate-guard bundle patch.\n#\n# 中和「落单的半个字符」（UTF-16 孤立代理）：它们由工具结果截断产生，\n# 写进会话后会让该会话此后每一轮都 400 INVALID_REQUEST。\n# 只改内容进入会话日志的入口，不动报文出口（Harness 要求日志可重建）。\n- insert:\n    - id: surrogate-guard\n      name: dsh-surrogate-guard\n      config:\n        toolResults: true\n        userMessages: true\n        log: true\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:31"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "index.js:234"
+    }
+  ],
+  "endpoints": [],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 11,
+    "pushed_at": "2026-11-05T10:01:01Z",
+    "created_at": "2026-10-29T15:45:52Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "index.js",
+    "lib/client.js",
+    "lib/vaccine.js",
+    "package.json",
+    "test/guard.test.mjs",
+    "test/vaccine.test.mjs"
+  ],
+  "readme": [
+    {
+      "section": "dsh-surrogate-guard",
+      "text": "DeepSeek Harness 插件：在内容进入会话日志之前，把**落单的半个字符**（UTF-16 孤立代理）中和成替换符 U+FFFD。\n\n从 **0.1.5** 起还会**自检自修已经落盘的存量会话**：模型请求失败（400）时或每 10 分钟，扫描最近修改的会话文件，命中就备份并修复——用于钩子覆盖不到的入口（如 `agent/inbox/spliced`，2026-11-03 小汐事故）。**修完必须重启 DSH 才生效**（内存里的会话仍是坏的）。"
+    },
+    {
+      "section": "它解决什么",
+      "text": "工具结果（read / grep / 命令输出 / 联网抓取）在某些截断路径上会把 emoji 从代理对中间切断，只留一个 0xD800-0xDBFF。这个字符在 JS 里合法，`JSON.stringify` 会安静地转义成 6 个字符；送到 DeepSeek API 时解析失败：\n\n```text\nserde_json: unexpected end of hex escape at line 1 column NNNNN\n→ 400 INVALID_REQUEST\n```\n\n因为每一轮都会重发已存历史，它一旦写进会话，**该会话此后每一轮都 400**：重试无效、重启无效，只能手工修会话文件。\n\n官方 Discussion（deepseek-ai/deepseek-harness）：#8846（read 工具截断切开代理对）、#1449（工具结果截断 → 永久 400）。"
+    },
+    {
+      "section": "与 dsh-text-guard 的区别",
+      "text": "| | dsh-text-guard | 本插件 |\n|---|---|---|\n| 靶子 | 区域指示符对（国旗 emoji） | 落单的代理（UTF-16 截断产物） |\n| 报错 | Content Exists Risk | unexpected end of hex escape |\n| 病因 | 内容合规过滤 | 截断把字符切成两半 |\n\n症状相同（会话永久 400），药不同，需要一起装才覆盖两种。"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile <profile> add github:<your-github>/dsh-surrogate-guard"
+    },
+    {
+      "section": "或发到 npm 后：dsh plugin --profile <profile> add dsh-surrogate-guard",
+      "text": "```\n\n然后把 `dsh-surrogate-guard` 加进 profile `package.json` 的 `dsh.profile.bundles`，重启生效。"
+    },
+    {
+      "section": "配置",
+      "text": "```yaml\n- id: surrogate-guard\n  config:\n    replacement: '?'      # 默认 U+FFFD\n    toolResults: true     # tools/post-execute + tools/ptc-dispatch-log"
+    },
+    {
+      "section": "测试",
+      "text": "```sh\nnode test/guard.test.mjs\n```\n\n17 项钩子检查 + 2 项存量修复检查（造毒会话 → 扫描 → 修复 → 复核帧数/行数不变、有备份）。"
+    },
+    {
+      "section": "已知限制",
+      "text": "- 经由系统提示段落的文本不经过这些入口。\n- **`agent/inbox/spliced` 这条路径钩子覆盖不到**（它是 `session.append` 的普通事件，不是可拦截的钩子）——0.1.5 的自检自修就是为它兜底。\n- 若上游已把孤立代理降级成 U+FFFD，钩子无法回溯；自检自修读的是**原始文件**，仍能定位并修复。\n- **修复后必须重启 DSH**：改的是磁盘文件，内存里的会话仍是坏的。\n- 改写是有损的，但只损残字本身。\n- 无命中时零额外分配（返回原引用）。"
+    },
+    {
+      "section": "许可",
+      "text": "MIT"
+    },
+    {
+      "section": "0.1.8 (2026-11-05)",
+      "text": "- **修复成功即刻推送**：不再只靠下一轮 `pre-step` 注入。修复后立即 `ctx.agents.list()` 遍历活跃会话、`agent.inject()` 推提醒，用户不发消息也能看到「已修好，请重启」。\n- `pre-step` 保留为兜底：只在 `notified=false` 时注入，避免重复。\n- 起因：老板指出「你修好了但我不知道」——原机制要等用户下一句话，不发消息就永远看不到。"
+    },
+    {
+      "section": "0.1.10 (2026-11-05)",
+      "text": "- **客户端弹窗**（新增 `lib/client.js`）：host 修复后记录最近一次修复（session/backup/ts）并注册 `GET /surrogate-guard/pending`；浏览器端每 4 秒轮询，发现新记录就弹**系统通知**「DSH 会话已自动修复…请点热重启」。不依赖用户是否在看对话。\n- 修复「推错会话」：notifyAgents 优先推最近 pre-step 的 agent（用户正在看的会话）。\n- 文案去掉方位词（热重启按钮位置会变）。"
+    },
+    {
+      "section": "0.1.7 (2026-11-05)",
+      "text": "- **修复提醒带会话名**：注入文案由「本会话」改为「会话 `<工作区>/<session-id>`」。原因：notice 是全局的，谁下一个 pre-step 就注入给谁，曾出现「修的是 `--E-ws-test--`、提醒却进了 `--E-ws-dsh--`」的误导。\n- `writeRepairNotice` 的 session 字段改为相对 `sessionsRoot` 的路径（含工作区前缀）。"
+    },
+    {
+      "section": "0.1.1 (2026-10-30)",
+      "text": "**修复 read 路径漏扫（Kluth 实测发现）**：tools/post-execute 的决策里，read 工具把行文本放在 data.meta.lines[].text，旧版只扫 value / content，导致 read 截断产生的孤立代理原样写进会话。现在改为：\n\n- 决策自身所有字段深扫（value / content / meta / 任意工具自定义字段）；\n- 决策没带、但结果上有的载荷字段（value / content / meta / data / output / result / lines）也一并深扫。\n\n新增 4 项离线检查（read 结构、仅 result 携带、错误结果不改、拒绝决策不改），共 13 项。\n\n> 顺带说明：DSH 侧 @deepseek-ai/dsh-tool-fs 的 truncateLine 仍是裸 substring 截断（line.substring(0, 2000)），这是产生孤立代理的源头。本插件只能事后中和，根治要在核心侧做码点对齐。"
+    },
+    {
+      "section": "0.1.3 (2026-10-30)",
+      "text": "- 把 `test/` 打进 npm 包：此前 `files` 漏了它，装包的人无法复现 13 项检查。现在 `node test/guard.test.mjs` 装完即可跑。\n- 同步 GitHub 与 npm：0.1.1 只发到了 npm，GitHub 停在 0.1.0，导致 `dsh plugin add github:...` 会装到有 bug 的旧版。本版起两边一致（0.1.2 与 0.1.3 内容相同，0.1.3 是绕开 npm 一次状态卡顿的重发）。"
+    },
+    {
+      "section": "0.1.6 (2026-11-05)",
+      "text": "- **实时监视**：`fs.watch` 监听会话根目录，`.jsonl.zstd` 一变就扫（去抖 1 秒），把中毒暴露窗口从「最多 30 分钟」压到「约 1 秒」；`fs.watch` 不可用时自动降级为定时巡检。\n- **覆盖 run_code**：`neutralizeDecision` 的字段顺序补 `stdout` / `stderr`（#11476 提醒 run_code 打印也会触发同类问题）。\n- 配置新增 `realtime`（默认 true）与 `watchDebounceMs`（默认 1000）。"
+    },
+    {
+      "section": "0.1.5 (2026-11-03)",
+      "text": "**新增存量会话自检自修（B 档：自动修，不自动重启）**：\n\n- 监听 `agent/request-error`：失败信息含 400 / INVALID_REQUEST / surrogate / invalid utf 时，扫描最近修改的会话文件；\n- 每 10 分钟定时巡检兜底；\n- 修复流程：备份 → 删除孤立的 `\\uXXXX` 转义 → 重新压缩 → 校验帧数/行数/可解析/无孤立；\n- 修复后写日志并提示「RESTART DSH to reload the session」。\n\n来源：2026-11-03 小汐会话（`agent/inbox/spliced`，半个 emoji → 永久 400）复盘，冯愿/小汐侧实测。"
+    },
+    {
+      "section": "0.1.4 (2026-10-30)",
+      "text": "**修复 0.1.1 引入的回归（Kluth 实测）**：tools/post-execute 的合约规定 accept 决策**不能同时替换 value 与 content**。0.1.1 遍历全部字段做深扫，read 的 value 与 content 同源同义、两处同时命中，导致框架拒掉整条结果：\n\n```text\nError: tools/post-execute accept decision cannot replace both value and content\n```\n\n现象是「毒没进会话，但 read 内容完全拿不到」——比原来的 bug 更糟。\n\n现在改为：按 value → content → meta → data → output → result → lines 的顺序找**第一处命中**，命中即返回，**绝不两处都改**。深扫的覆盖面保留，落地只替换一处。\n\n新增 4 项测试（同时命中只改 value、只 content、只 value、只有 meta），合计 17 项。"
+    }
+  ],
+  "skipped": []
+}

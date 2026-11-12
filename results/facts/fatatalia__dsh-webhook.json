@@ -1,0 +1,132 @@
+{
+  "repo": "fatatalia/dsh-webhook",
+  "commit": "66b1c4adac90a9c7706cf8e3030194afce496f6e",
+  "extracted_at": "2026-11-11T19:52:18.170501+00:00",
+  "tree": {
+    "files": 7,
+    "bytes": 37654,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 677,
+      "Markdown": 67,
+      "Other": 9,
+      "YAML": 5
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "client.js",
+      "cordis.patch.yml",
+      "index.js",
+      "lib/webhook-core.mjs",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-webhook",
+    "version": "0.1.0",
+    "private": true,
+    "description": "dsh webhook plugin: HTTP webhook -> fixed session delivery (async queue), for bank SMS auto-bookkeeping etc. Bearer token auth, per-hook workspace/session mapping.",
+    "type": "module",
+    "main": "index.js",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "lib",
+      "cordis.patch.yml"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "inject": [
+          "@deepseek-ai/dsh-client-runtime",
+          "@deepseek-ai/dsh-client-ui-settings",
+          "@deepseek-ai/dsh-api-remotes"
+        ],
+        "platform": "web"
+      }
+    },
+    "peerDependencies": {
+      "react": "^18.2.0",
+      "@deepseek-ai/cordis": "^4.0.1",
+      "@deepseek-ai/dsh-typert-protocol": ">=0.1.0-rc.6",
+      "@deepseek-ai/schemastery": ">=3.18.0"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-webhook bundle patch\n# 插入 host 插件行：注册 /webhook HTTP 入口 + webhook settings namespace + 配置 remote。\n- insert:\n    - id: dsh-webhook\n      name: dsh-webhook\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "internal",
+      "url": "http://internal",
+      "where": "index.js:189"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 14,
+    "pushed_at": "2026-10-18T14:15:40Z",
+    "created_at": "2026-08-16T03:03:09Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "lib/webhook-core.mjs",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-webhook — Webhook 插件",
+      "text": "提供 HTTP webhook 入口 `POST /webhook/<hookId>`，把外部请求转成消息投递到 dsh 的固定会话，由 agent 处理。随 dsh web 启停，零 dsh 框架改动。"
+    },
+    {
+      "section": "dsh 版本兼容性",
+      "text": "**要求 dsh ≥ 0.1.7-rc.1**（已在 0.1.7-rc.1 实测通过）。\n\n- **`ctx.settings.register()` 已移除**（2026-09-24）：原 `webhook` settings namespace 并入插件 `Config`，可热改字段标 `.volatile()`；`inject` 去掉 `settings`。\n- **Typert strict codec 必须带 `create()` 工厂**（0.1.7 客户端校验）：config / payload / result 三处 codec 均已补 `create()`。"
+    },
+    {
+      "section": "功能",
+      "text": "- **HTTP 入口**：`POST /webhook/<hookId>`，Bearer token 认证（常数时间比较，防时序攻击）\n- **异步队列**：默认立即 202 返回，消息入队投递；同一 hook 串行处理（上一条未完成下一条排队），不同 hook 互不阻塞\n- **同步模式**：hook 配置 `sync: true` 时，等待 agent 完成并随 HTTP 响应返回回复文本（200 `{ok, reply}`）——适合小爱音箱等\"发一句等一句\"的交互场景\n- **固定会话**：hookId 派生固定会话 id，上下文延续；支持 workspace / session / sessionMode(新/持久) / template 映射\n- **典型场景**：手机把银行短信 POST 进来 → 固定会话 agent 用记账工具自动记账 → 完成后可调 iMessage 网关的全局 message 工具通知"
+    },
+    {
+      "section": "目录",
+      "text": "```\ndsh-webhook/\n├── index.js              # host 插件：webServer 路由 + Bearer 认证 + 配置 remote\n├── client.js             # 浏览器 bundle：Settings → Webhook 配置页（hooks 表）\n├── lib/webhook-core.mjs  # 队列 + 投递核心（固定会话 + preset mount + workspace 归属）\n\n挂载：web profile（`~/.dsh/profiles/web/`）`package.json` → `dependencies[\"dsh-webhook\"] = \"link:<project>/dsh-webhook\"`，bundles 列表含 `dsh-webhook`。"
+    },
+    {
+      "section": "配置",
+      "text": "`$DSH_HOME/settings.yaml` 的 `webhook:` 段（可在配置页编辑）：\n\n```yaml\nwebhook:\n  hooks:\n    sms-forward:\n      token: \"<bearer-token>\"                 # 必填；请求头 Authorization: Bearer <token>\n\n调用方式：\n\n```sh\ncurl -X POST https://<dsh-host>/webhook/sms-forward \\\n  -H \"Authorization: Bearer <token>\" \\\n  -d '您的账户入账 100.00 元'\n```"
+    },
+    {
+      "section": "开发要点",
+      "text": "- 新插件项目必须建依赖软链（否则 import `@deepseek-ai/*` 报 ERR_MODULE_NOT_FOUND）：\n  ```sh\n  mkdir -p node_modules && ln -sfn /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai node_modules/@deepseek-ai\n  ```\n- 改代码后重启 web 生效（web profile 的 HMR 已禁用）"
+    }
+  ],
+  "skipped": []
+}

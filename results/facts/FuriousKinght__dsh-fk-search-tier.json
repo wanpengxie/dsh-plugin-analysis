@@ -1,0 +1,258 @@
+{
+  "repo": "FuriousKinght/dsh-fk-search-tier",
+  "commit": "30c887af0e10aae61af3ed9e11d0edca586bdc48",
+  "extracted_at": "2026-11-11T10:12:51.919546+00:00",
+  "tree": {
+    "files": 8,
+    "bytes": 58822,
+    "lines_by_language": {
+      "JSON": 39,
+      "JavaScript": 1125,
+      "Markdown": 414,
+      "Other": 49,
+      "YAML": 71
+    },
+    "outline": [
+      ".gitignore",
+      "LICENSE",
+      "README.md",
+      "cordis.patch.yml",
+      "lib/index.js",
+      "package.json",
+      "test/e2e.mjs",
+      "test/selftest.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-fk-search-tier",
+    "version": "0.2.0",
+    "description": "两级搜索 failover（Tavily → DeepSeek Search API）：第一层失败/额度耗尽自动切第二层，带额度感知熔断。DeepSeek Harness 插件。",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+      ".": {
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "files": [
+      "lib/",
+      "cordis.patch.yml",
+      "README.md",
+      "LICENSE"
+    ],
+    "keywords": [
+      "dsh",
+      "dsh-plugin",
+      "deepseek-harness",
+      "search",
+      "failover",
+      "tavily"
+    ],
+    "license": "MIT",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "peerDependencies": {
+      "@deepseek-ai/cordis": ">=4.0.1 <5"
+    },
+    "engines": {
+      "node": ">=20"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-fk-search-tier — bundle patch layer\n#\n# 由 dsh plugin add 安装后、且本包出现在 profile 的 dsh.profile.bundles 里时，\n# DSH 会按 bundle 顺序自动加载本文件。**不要手工把内容抄进 profile 的\n# cordis.patch.yml** —— 那会绕过 bundle 的加载时序，导致 web 服务与\n# provider 互相等待（tool-web: waiting for web）。\n#\n# 生效原理：\n#   1. insert 一行 loader，注册本插件的 search provider（id: search-tier）\n#   2. 覆盖 base 的 web 行，把 searchProvider / fetchProvider 指向本插件\n#\n# ⚠️ patch 是「整段替换」而不是合并：base 的 web 行原本带\n#    `fetchProvider: http`，这里必须原样重述该行需要的每一个键。\n- id: web\n  config:\n    searchProvider: search-tier\n    fetchProvider: fetch-tier      # 本插件提供两级抓取；改成 http 则回退官方直连\n\n- insert:\n    - id: search-tier\n      name: dsh-fk-search-tier\n      config:\n        # ── Search 层级顺序：先 Tavily，失败/额度耗尽后切 DeepSeek ──\n        order:\n          - tavily\n          - deepseek\n\n        # ── Fetch 层级顺序：先 DeepSeek Fetch API（干净 Markdown），失败切直连 ──\n        fetchOrder:\n          - deepseek-fetch\n          - direct\n\n        # 第 1 层：Tavily\n        #   apiKey 留空 → 自动走 keyless 匿名档（免注册，实测可用）\n        #   有 key 时填在下面，走账户额度（1000 credits/月免费）\n        tavily:\n          # apiKey: ''\n          depth: basic          # basic | advanced（advanced 消耗 2 倍额度）\n          maxResults: 8\n\n        # 第 2 层（Search）/ 第 1 层（Fetch）：DeepSeek 官方 API\n        #   Search: POST /v1/tools/search，5 元/1000 次成功请求\n        #   Fetch:  POST /v1/tools/fetch，  同样按次计费\n        #   apiKey 与主模型同一个 DeepSeek key 即可\n        deepseek:\n          # ⚠️ 不要在这里写密钥！这里是【随插件发布】的文件，写到哪都会被公开。\n          #    正确做法：把 key 设成 DSH 的环境变量 DEEPSEEK_API_KEY，\n          #    插件会自动读取（见 README「配置」章节）。\n          #    也可以在本机 profile 的 cordis.patch.yml 里覆盖本行 —— 那是私有文件。\n          apiKey: ''              # 留空 → 回退读 DEEPSEEK_API_KEY\n          baseURL: https://api.deepseek.com\n          maxResults: 8\n          needContent: false     # true 会额外返回网页正文（更慢、结果更长）\n\n        # Fetch 第 2 层：直连抓取（零成本兜底，HTML → 纯文本）\n        #   userAgent 可覆盖默认 UA；一般不用填\n        direct:\n          # userAgent: ''\n          {}\n\n        # ── 通用 ──\n        timeoutMs: 20000         # 单层超时（搜索）\n        fetchTimeoutMs: 30000    # 单层超时（抓取，页面通常更大，给多点）\n        failOnEmpty: true        # 搜索：上一层返回 0 条也切下一层\n\n        # 熔断参数（搜索与抓取各用一个实例，参数相同）\n        breaker:\n          threshold: 3           # 瞬时故障累计几次才开断\n          burstWindowMs: 300000  # 5 分钟窗口\n          cooldownMs: 60000      # 瞬时故障冷却 60 秒\n          quotaCooldownMs: 3600000  # 额度耗尽冷却 1 小时\n"
+    }
+  ],
+  "entries": [
+    "lib/index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DEEPSEEK_API_KEY",
+      "kind": "env",
+      "where": "test/selftest.mjs:244"
+    },
+    {
+      "name": "DSH_HOME",
+      "kind": "env",
+      "where": "test/selftest.mjs:249"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "cordis.patch.yml:51"
+    },
+    {
+      "host": "api.tavily.com",
+      "url": "https://api.tavily.com/search",
+      "where": "lib/index.js:211"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "lib/index.js:244"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "lib/index.js:339"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/a",
+      "where": "test/e2e.mjs:19"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com/b",
+      "where": "test/e2e.mjs:20"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "test/selftest.mjs:222"
+    },
+    {
+      "host": "api.deepseek.com",
+      "url": "https://api.deepseek.com",
+      "where": "test/selftest.mjs:261"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "test/selftest.mjs:265"
+    },
+    {
+      "host": "example.com",
+      "url": "https://example.com",
+      "where": "test/selftest.mjs:266"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 2,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 3,
+    "pushed_at": "2026-10-20T13:58:57Z",
+    "created_at": "2026-10-20T13:29:16Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml",
+    "lib/index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-fk-search-tier",
+      "text": "**两级搜索 + 两级抓取 failover** —— 搜索先 Tavily 后 DeepSeek Search API；抓取先 DeepSeek Fetch API 后直连兜底。\n\n> DeepSeek Harness 插件。不改 DSH 本体，纯 `ctx.web` provider 注册。\n\n---"
+    },
+    {
+      "section": "为什么做这个",
+      "text": "DSH 默认的 `deepseek-official` 搜索通道：\n\n- 每次搜索**消耗一个完整模型轮次**（实测约 9.6K input token）\n- 按 token 计费，高峰期成本翻倍\n\n两级方案把成本压到最低：\n\n```\n【搜索】searchProvider: search-tier\n第 1 层  Tavily   → 免 key 匿名档 / 免费 1000 credits/月\n                    ↓  429 / 额度耗尽 / 5xx / 超时 / 空结果\n第 2 层  DeepSeek → 5 元 / 1000 次成功请求（按次，不烧 token）\n\n**实测数据**（2026-10-17）："
+    },
+    {
+      "section": "为什么做这个",
+      "text": "| 项目 | 结果 |\n|---|---|\n| Tavily keyless 免注册 | ✅ 返回 5 条真实结果 |\n| DeepSeek Fetch API | ✅ 0.53s / 931 字符（example.com） |\n| DeepSeek Fetch 真实页面 | ✅ 0.27s / 24,740 字符（GitHub 仓库页） |\n| 不存在的域名 | HTTP 500（API 的预期行为，触发切层） |\n\n---"
+    },
+    {
+      "section": "安装",
+      "text": "```sh\ndsh plugin --profile desktop add <本包路径或包名>\n```\n\n⚠️ **必须让 DSH 走 bundle 机制自动加载 patch**，不要手工把 `cordis.patch.yml`\n的内容抄进 profile 的 `cordis.patch.yml` —— 那会绕过加载时序，导致\n`tool-web: waiting for web`。\n\n装完重启 DSH。\n\n---"
+    },
+    {
+      "section": "⚠️ 先把这件事说清楚：密钥不要写进插件目录",
+      "text": "插件目录里的 `cordis.patch.yml` 是**随插件发布**的文件。\n把 `apiKey` 写在那里，等于把密钥公开（推 GitHub、发给别人、打包分发都会带上）。\n\n**正确做法有两种，任选其一（推荐 A）：**\n\n---"
+    },
+    {
+      "section": "A. 用环境变量（推荐）",
+      "text": "插件会自动读这两个环境变量，`cordis.patch.yml` 里留空即可：\n\n| 后端 | 环境变量 |\n|---|---|\n| DeepSeek Search / Fetch | `DEEPSEEK_API_KEY` |\n| Tavily（可选） | `TAVILY_API_KEY` |\n\n**Windows — PowerShell（当前用户，永久生效）：**\n\n```powershell\n[Environment]::SetEnvironmentVariable(\"DEEPSEEK_API_KEY\", \"sk-你的key\", \"User\")\n```\n\n**Windows — 图形界面：**\n\n```\nWin + R  →  sysdm.cpl  →  高级  →  环境变量\n  → 用户变量 → 新建 → 变量名 DEEPSEEK_API_KEY，变量值填你的 key\n  → 确定 → 重启 DSH\n```\n\n> 改完环境变量**必须重启 DSH** 才生效 —— 已在运行的进程不会重新读取。\n\n---"
+    },
+    {
+      "section": "B. 在 profile 层覆盖（密钥放私有文件）",
+      "text": "`$DSH_HOME/profiles/<profile>/cordis.patch.yml` 是**你自己的私有文件**，不随插件发布。\n\n在文件末尾追加：\n\n```yaml"
+    },
+    {
+      "section": "覆盖 search-tier 的配置（本文件是私有的，可以写密钥）",
+      "text": "- id: search-tier\n  name: dsh-fk-search-tier\n  config:\n    order: [tavily, deepseek]\n\ndeepseek:\n      apiKey: 'sk-你的key'\n      baseURL: https://api.deepseek.com\n\ntavily:\n      apiKey: 'tvly-你的key'   # 可选；没有就走 keyless 匿名档\n```\n\n**注意**：profile 层的同名 id 会**整段覆盖**插件自带的配置，\n所以「想保留的键都要重述一遍」，不能只写 `apiKey`。\n\n---"
+    },
+    {
+      "section": "最小配置（零配置也能用）",
+      "text": "**不配任何密钥**也能工作：\n\n- **Search**：Tavily 的 keyless 匿名档（免注册，实测可用）\n- **Fetch**：直连抓取（零成本兜底）\n\n```yaml\n- id: search-tier\n  name: dsh-fk-search-tier\n  config:\n    order: [tavily, deepseek]\n\n**代价**：没有 DeepSeek 层作为兜底，Tavily 匿名档限流时就没有第二层了。\n\n---"
+    },
+    {
+      "section": "完整配置项",
+      "text": "```yaml\n- id: search-tier\n  name: dsh-fk-search-tier\n  config:\n    # ── 层级顺序 ──\n\n---"
+    },
+    {
+      "section": "怎么确认密钥读到了",
+      "text": "配好并重启 DSH 后，让 AI 调一次诊断工具：\n\n```\nsearch_tier_status\n```\n\n返回的 `layers` 里看 `hasKey` 字段：\n\n```json\n{\n  \"id\": \"deepseek\",\n  \"hasKey\": true,        ← true 表示密钥读到了\n  \"needsKey\": true,\n\n**`hasKey: false` 说明密钥没读到**，按上面 A / B 检查，并确认已重启 DSH。\n\n---"
+    },
+    {
+      "section": "排查清单",
+      "text": "| 现象 | 原因 | 解决 |\n|---|---|---|\n| `hasKey: false` | 环境变量没设，或设了没重启 DSH | 重设 + 重启 |\n| `hasKey: true` 但报 401 | key 无效或已过期 | 去平台确认 |\n| 一直用 Tavily，从不切 DeepSeek | Tavily 正常时不会切（这是设计） | 正常现象 |\n| 两层都失败 | 网络问题 / 两边都额度耗尽 | 看错误信息里的 `skipped-open` |\n\n---"
+    },
+    {
+      "section": "切换规则",
+      "text": "搜索与抓取共用同一套熔断语义（两个独立实例，参数相同）。\n\n| 触发条件 | 行为 | 冷却 |\n|---|---|---|\n| `429` / `402` / 文本含 `insufficient` `quota` | 该层开断，立即切下一层 | **1 小时** |\n| `401` / `403`（凭据问题） | 跳过该层（不冷却，配置改了立刻恢复） | 无 |\n| `5xx` / 超时 / 网络错误 | 窗口内累计 3 次才开断 | **60 秒** |\n| 返回 **0 条结果**（仅搜索） | 本次直接切下一层（不计入熔断） | 无 |\n| 该层缺 key（仅 deepseek / deepseek-fetch） | 直接跳过 | 无 |\n\n冷却到期后**自动半开**：下一次请求放行做探活，成功即闭合。\n\n---"
+    },
+    {
+      "section": "搜索",
+      "text": "严格遵循 DSH 的 `ctx.web` 契约，**只返回 `sources`**（让模型自己读）：\n\n```js\n{\n  sources: [\n    { url, title, snippet, publishedAt? }\n  ],\n\n- **Tavily**：`snippet` 取 `content` 前 500 字符\n- **DeepSeek**：`snippet` 优先取 `summary`（600-800 字符长摘要），回退 `snippet`（100-200 字符）\n\n模型收到的最终文本由 DSH 的 `formatSearchOutput` 组装成 markdown 来源列表。"
+    },
+    {
+      "section": "抓取",
+      "text": "按官方 `WebFetchResult` 契约：\n\n```js\n{\n  url: string,              // 请求的 URL（API 不报告重定向后的最终 URL）\n  statusCode: 200,          // 成功即 200（DeepSeek API 不报告目标页面状态）\n  body: { kind: 'text', content: string },\n\n- **DeepSeek Fetch**：直接用 API 返回的 `content`（已是 Markdown）\n- **直连抓取**：`fetch` 原始 HTML → `htmlToText()` 转纯文本；非 HTML 原样返回\n\n---"
+    },
+    {
+      "section": "诊断",
+      "text": "注册了一个只读工具 `search_tier_status`，AI 可直接调用查看：\n\n```json\n{\n  \"search\": {\n    \"providerId\": \"search-tier\",\n    \"order\": [\"tavily\", \"deepseek\"],\n\n---"
+    },
+    {
+      "section": "自测",
+      "text": "```sh\nnode test/selftest.mjs\n```\n\n**53 项断言**，覆盖：\n\n| 段 | 内容 |\n|---|---|\n| 一 | 错误分类 `classify()` |\n| 二 | 熔断器（额度 / 瞬时 / 半开） |\n| 三 | 搜索 provider 契约 |\n| 四 | **真实** Tavily keyless 调用 |\n| 五 | 降级逻辑（熔断跳过） |\n| 六 | 空结果切层 |\n| 七 | **Fetch provider 契约与 failover**（13 项） |\n| 八 | **真实** DeepSeek Fetch API 调用（5 项） |\n\n---"
+    },
+    {
+      "section": "与 dsh-search-failover 的区别",
+      "text": "| | `dsh-search-failover` | **本插件** |\n|---|---|---|\n| 搜索后端数 | 10 个 | **2 个（专注）** |\n| 抓取 failover | ❌ | ✅ **有（2 层）** |\n| 支持 DeepSeek 新 Search API | ❌ 无 | ✅ **有** |\n| 支持 DeepSeek Fetch API | ❌ 无 | ✅ **有** |\n| Tavily keyless | ✅ | ✅ |\n| 熔断 | ✅ | ✅ |\n| 设置页 | ✅ | ❌（纯配置） |\n| 代码量 | ~90 KB | **~26 KB** |\n\n如果你的需求就是「Tavily → DeepSeek」两级搜索加重试兜底抓取，本插件更轻。\n\n---"
+    },
+    {
+      "section": "与官方 `dsh-web-deepseek-api` 的区别",
+      "text": "DSH 0.2.1-rc.2 起官方内置了 DeepSeek Search / Fetch provider。两者不冲突，但定位不同：\n\n| | 官方内置 | **本插件** |\n|---|---|---|\n| DeepSeek Search | ✅ | ✅ |\n| DeepSeek Fetch | ✅ | ✅ |\n| **两级 failover** | ❌ **无**（README 明确写「不会自动重试或回退至其他提供者」） | ✅ **有** |\n| **Tavily 免费额度兜底** | ❌ 无 | ✅ 1000 次/月 |\n| **消费 `summary` 长摘要** | ❌ 丢弃（只映射 `snippet`） | ✅ 优先使用 |\n| 热切换 provider | ✅（rc.2 的 Volatile） | ❌ 需重启 |\n| 维护方 | 官方 | 自己 |"
+    },
+    {
+      "section": "与官方 `dsh-web-deepseek-api` 的区别",
+      "text": "⚠️ **两者同时存在时可能触发 `WEB_PROVIDER_AMBIGUOUS`**（多个可用 provider 但未显式指定）。\n本插件的 patch 显式写了 `searchProvider` / `fetchProvider`，所以不会歧义；\n但如果你在设置页把官方开关打开，要注意读一下最终生效的是哪个。\n\n---"
+    },
+    {
+      "section": "已知限制",
+      "text": "1. **Tavily keyless 是匿名档**，有速率限制，随时可能被官方关闭\n2. **DeepSeek Search / Fetch API 均按次计费**，各 5 元/1000 次\n3. **直连抓取层不解析 JS 渲染的页面**（纯 `fetch` + HTML 转文本）\n4. **抓取成功一律报 200** —— DeepSeek API 不报告目标页面状态，这是官方契约的行为\n5. 无设置页，改配置需编辑 YAML 并重启\n\n---"
+    },
+    {
+      "section": "v0.2.0（2026-10-20）",
+      "text": "**密钥不再随插件发布 —— 修掉一个会泄露 API Key 的安全问题**\n\n插件目录里的 `cordis.patch.yml` 是随插件分发的文件。之前把 `apiKey` 写在那里，\n等于把密钥公开（推 GitHub、发给别人、打包分发都会带上）。\n\n- `cordis.patch.yml` 里的 `apiKey` 一律留空\n- 插件新增环境变量支持：`DEEPSEEK_API_KEY` / `TAVILY_API_KEY`\n- 读取顺序：patch 配置 → 环境变量 → 该层跳过\n- README 新增完整的「配置」章节（含 Windows 设置步骤、profile 覆盖法、排查清单）\n\n**抓取层新增两级 failover**\n\n原来只有搜索有 failover，抓取是单层。现在抓取也两级：\n\n- 第 1 层：DeepSeek Fetch API（返回干净 Markdown）\n- 第 2 层：直连抓取（`fetch` + HTML 转文本，零成本兜底）\n\n**额度感知熔断**"
+    },
+    {
+      "section": "v0.2.0（2026-10-20）",
+      "text": "- 瞬时故障：5 分钟内累计 3 次开断，冷却 60 秒\n- **额度耗尽单独识别**：冷却 1 小时（避免反复撞额度墙）\n- 两层都失败时抛明确错误，不静默返回空\n\n**诊断工具**\n\n新增 `search_tier_status` 工具，返回各层状态：是否被熔断、剩余冷却时间、\n最近错误、上次成功用的是哪层、`hasKey` 是否读到密钥。\n\n**自测**\n\n`test/selftest.mjs` 覆盖切换规则、熔断、错误分类；`test/e2e.mjs` 走真实调用。\n测试里的密钥来源改为「环境变量优先，其次从 DSH 凭据文件动态读取」，\n不再硬编码本机路径。\n\n---"
+    },
+    {
+      "section": "License",
+      "text": "MIT"
+    }
+  ],
+  "skipped": []
+}

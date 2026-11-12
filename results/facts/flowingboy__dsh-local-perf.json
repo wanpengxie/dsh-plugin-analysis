@@ -1,0 +1,169 @@
+{
+  "repo": "flowingboy/dsh-local-perf",
+  "commit": "b306e53ab0df4e4a567e61f44ed950b90deb98ad",
+  "extracted_at": "2026-11-11T20:13:23.139480+00:00",
+  "tree": {
+    "files": 23,
+    "bytes": 47217,
+    "lines_by_language": {
+      "JSON": 59,
+      "JavaScript": 145,
+      "Markdown": 234,
+      "Other": 8,
+      "TypeScript": 264,
+      "YAML": 248
+    },
+    "outline": [
+      ".gitignore",
+      "CHANGELOG.md",
+      "README.md",
+      "cordis.patch.yml",
+      "package.json",
+      "plugins/text-toolcall-guard/README.md",
+      "plugins/text-toolcall-guard/package.json",
+      "settings.example.yaml"
+    ]
+  },
+  "manifest": {
+    "name": "@flowingboy/dsh-local-perf",
+    "version": "0.2.0",
+    "description": "Durable DeepSeek Harness bundle: the local-model performance tuning carried as a re-installable plugin layer (compaction, tool-result pruning, time context, cloud title routing, text-toolcall guard) — survives dsh updates",
+    "license": "MIT",
+    "type": "module",
+    "files": [
+      "cordis.patch.yml",
+      "README.md",
+      "settings.example.yaml",
+      "plugins/text-toolcall-guard"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "cordis.patch.yml"
+      }
+    },
+    "dependencies": {
+      "@deepseek-ai/dsh-text-toolcall-guard": "file:plugins/text-toolcall-guard"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-local-perf — performance tuning layer for local-model setups.\n#\n# This is a dsh BUNDLE: a package whose `dsh.bundle.patch` manifest key points\n# here. Installed with `dsh plugin --profile <name> add`, it joins the\n# profile's bundle layers (after dsh-base / dsh-web-app), so its rows re-apply\n# on EVERY boot and survive dsh updates — re-install once, never re-edit by\n# hand again.\n#\n# Patch semantics: a patch REPLACES the targeted row's whole `config`, so any\n# field a plugin requires must be restated here (see the numeric fields below,\n# which mirror the base bundle's defaults).\n\n# ── per-step clock context ──────────────────────────────────────────────────\n# The model always sees the current date/time (fixes hallucinated \"today\"\n# answers, e.g. 2025-05-14). refreshIntervalMs caps how often a fresh\n# timestamp is injected per session.\n- insert:\n    - id: time-context\n      name: '@deepseek-ai/dsh-time-context'\n      config:\n        timeZone: Asia/Shanghai\n        refreshIntervalMs: 600000\n\n# ── automatic context compaction ────────────────────────────────────────────\n# The web bundle disables it. Without it, session context grows unbounded and\n# every local-model request re-prefills the ENTIRE history — the 2026-08-18\n# \"fan spin / no response\" incident was a 114,650-token prefill on\n# Qwen3.5-122B. thresholdRatio 0.6 compacts at 60% of each model's\n# contextWindow (auto=true, retainRatio 0.16 stay at defaults).\n- id: compaction-basic\n  disabled: false\n  config:\n    thresholdRatio: 0.6\n\n# ── stale tool-result pruning + manual /compact ─────────────────────────────\n# Both also disabled by the web bundle; pruning keeps stale tool results from\n# riding every subsequent request.\n- id: tool-result-pruner\n  disabled: false\n\n- id: command-compact\n  disabled: false\n\n# ── session-title LLM routed to the cloud model ─────────────────────────────\n# The title request fires in the same second as a turn's first step; on the\n# local single-slot mlx-dspark server it queues behind (or ahead of) the\n# interactive generation and one of them starves past the idle budget.\n# Numeric fields restate the bundle defaults because a patch replaces the\n# whole config.\n- id: session-title-llm\n  config:\n    targetWords: 5\n    targetCjkCharacters: 10\n    maxInputBytes: 4096\n    maxOutputTokens: 64\n    timeoutMs: 60000\n    provider: deepseek-official\n    model: deepseek-v4-flash\n\n# ── text-toolcall guard ─────────────────────────────────────────────────────\n# Local OpenAI-compatible models (Qwen3.8-27B-8bit on MLX DSpark, etc.)\n# sometimes fall out of the structured tool-call protocol and write calls as\n# literal <tool_call> text, which the harness never executes. This guard\n# detects the markers at turn-close and steers a corrective native re-issue.\n# Vendored at plugins/text-toolcall-guard (installed as a dependency), so the\n# bundle is self-contained.\n- insert:\n    - id: text-toolcall-guard\n      name: '@deepseek-ai/dsh-text-toolcall-guard'\n      config:\n        maxCorrections: 2\n"
+    }
+  ],
+  "entries": [
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:11434/v1",
+      "where": "settings.example.yaml:6"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8080/v1",
+      "where": "settings.example.yaml:75"
+    },
+    {
+      "host": "127.0.0.1",
+      "url": "http://127.0.0.1:8081/v1",
+      "where": "settings.example.yaml:130"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {
+      "@deepseek-ai/dsh-text-toolcall-guard": "file:plugins/text-toolcall-guard"
+    },
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": true,
+    "commits": 2,
+    "pushed_at": "2026-08-24T04:53:49Z",
+    "created_at": "2026-08-23T03:09:33Z"
+  },
+  "runtime_files": [
+    "cordis.patch.yml"
+  ],
+  "readme": [
+    {
+      "section": "dsh-local-perf",
+      "text": "Durable DeepSeek Harness plugin bundle carrying the **local-model performance\ntuning process** as a re-installable layer — so it **survives dsh updates**\ninstead of living in hand-edited patch files that a version bump can wipe or\nwhose rationale dies with the author.\n\nInstall once, re-apply forever:\n\n```sh"
+    },
+    {
+      "section": "from the GitHub repository",
+      "text": "git clone https://github.com/flowingboy/dsh-local-perf.git /tmp/dsh-local-perf\ndsh plugin --profile web add file:/tmp/dsh-local-perf"
+    },
+    {
+      "section": "or from a checkout: dsh plugin --profile web add file:./dsh-local-perf",
+      "text": "```\n\nThe bundle joins the profile's layer stack after `dsh-base` / `dsh-web-app`,\nre-applies all tuning rows on every boot, and vendors its own copy of the\n`text-toolcall-guard` plugin (self-contained, no dsh checkout required).\n\n---"
+    },
+    {
+      "section": "The complete performance process (why every knob exists)",
+      "text": "Everything below was learned the hard way on an M5 Max running four local\nOpenAI-compatible servers (Ollama / MLX / Rapid-MLX / MLX-DSpark) against the\nDSH web GUI. The bundle encodes the *conclusions*; this README preserves the\n*reasoning*."
+    },
+    {
+      "section": "Incident log",
+      "text": "| Date | Symptom | Root cause | Fix |\n| --- | --- | --- | --- |\n| 2026-08-18 | \"fan spin / no response\" | A 114,650-token prefill on Qwen3.5-122B — session context had grown unbounded because the web bundle disables auto-compaction | Re-enable `compaction-basic` at `thresholdRatio: 0.6` |\n| 2026-08-19 | session-title starves the interactive step | The title LLM request fires in the same second as a turn's first step; on the single-slot mlx-dspark server it queues behind the interactive generation and one of them starves past the idle budget | Route `session-title-llm` to the cloud model (`deepseek-official` / `deepseek-v4-flash`) |\n| 2026-08-19 | mlxdspark timeouts with tools present | The mlx-dspark server buffers the whole generation and emits no data events until it finishes; its 15s SSE keepalive comments are discarded by the OpenAI SDK parser and never reset the idle watchdog | Raise `timeoutMs` / `streamIdleTimeoutMs` to 600000 |\n| 2026-08-20 | tool calls appear as literal text | Local Qwen3.8-27B-8bit fell out of the structured `tool_calls` protocol under long tool-heavy steps and wrote `<tool_call>` prose the harness never executes | Ship the `text-toolcall-guard` plugin (v"
+    },
+    {
+      "section": "Layer 1 — model configs (`settings.example.yaml` → `~/.dsh/settings.yaml`)",
+      "text": "Machine-specific (paths, ports, model ids), so the bundle carries them as a\n**template**, not a runtime patch. Copy the `llm-pi-ai` section into\n`~/.dsh/settings.yaml` on a fresh machine.\n\nThe recurring principles:"
+    },
+    {
+      "section": "Layer 1 — model configs (`settings.example.yaml` → `~/.dsh/settings.yaml`)",
+      "text": "- **Timeout ≠ prefill tolerance.** A slow local server needs `timeoutMs` +\n  `streamIdleTimeoutMs` ≥ worst-case prefill + reasoning + decode. Gemma 4 31B\n  prefills at ~180 tok/s (system prompt + tool schemas ≈ 13k tokens → ~70s),\n  mlx-dspark buffers whole generations, so both budgets sit at 300–600s.\n- **Retry only TRANSPORT.** Connection-level failures happen before prefill\n  and are cheap; a TIMEOUT must never re-prefill a long prompt.\n- **Context window ≤ practical prefill budget.** 262144 tokens at ~180 tok/s\n  is minutes of prefill. Lower to 32K–64K; compaction at 0.6× keeps sessions\n  safely under the server limit.\n- **maxTokens ≤ decode budget.** At ~27 tok/s decode, 16K output is ~10 min.\n  Cap at 8192–16384 so one step's worst case fits the timeout budgets.\n- **Reasoning effort default \"off\"** (or the server's lowest level) for\n  quick, low-latency local loops; the local model's thinking stream still\n  renders as a DSH reasoning block when enabled."
+    },
+    {
+      "section": "Layer 2 — cordis rows (`cordis.patch.yml`)",
+      "text": "| Row | What | Why |\n| --- | --- | --- |\n| `time-context` | per-step clock | kills hallucinated dates |\n| `compaction-basic` | auto-compact at 60% | bounds prefill; the 08-18 incident fix |\n| `tool-result-pruner` | drop stale tool results | keeps them off later requests |\n| `command-compact` | manual `/compact` | escape hatch |\n| `session-title-llm` | title via cloud model | keeps the local slot free for the interactive step |"
+    },
+    {
+      "section": "Layer 3 — text-toolcall guard (`plugins/text-toolcall-guard`)",
+      "text": "Vendored from `@deepseek-ai/dsh-text-toolcall-guard` (built `lib/` + `src/`).\nWhen a step closes with no native tool calls but the assistant text carries\n`<tool_call>` / `<function=…>` markers at line starts, the guard steers a\ncorrective message so the model re-issues the call natively. Bounded to\n`maxCorrections` (2) per turn per agent; marker detection requires line-start\nplacement so prose that merely quotes the format is not corrected. Peers are\nresolved at runtime from the dsh installation's `profiles/node_modules`\nfallback (the designed out-of-tree-plugin path), so no registry fetch needed."
+    },
+    {
+      "section": "Layer 3 — text-toolcall guard (`plugins/text-toolcall-guard`)",
+      "text": "---"
+    },
+    {
+      "section": "Installation",
+      "text": "```sh"
+    },
+    {
+      "section": "from this directory",
+      "text": "dsh plugin --profile web add file:$(pwd)"
+    },
+    {
+      "section": "verify the layer joined the stack",
+      "text": "dsh --profile web --dump-config | grep -A3 \"dsh-local-perf\"\n```\n\nThe web profile's `cordis.patch.yml` should then only hold rows this bundle\ndoes NOT own (currently: none — everything moved into the bundle)."
+    },
+    {
+      "section": "Updating the bundle",
+      "text": "```sh\ngit pull                       # or edit locally\ncd plugins/text-toolcall-guard # rebuild the vendored guard if its src changed\npnpm exec tsc -p tsconfig.json --outDir lib --declarationDir lib/types"
+    },
+    {
+      "section": "reinstall the layer",
+      "text": "dsh plugin --profile web add file:$(pwd)\n```"
+    },
+    {
+      "section": "Publishing (GitHub / dsh-plugin ecosystem)",
+      "text": "Published at **https://github.com/flowingboy/dsh-local-perf** (public, `main`,\ntopics: `dsh-plugin`). To re-publish after local edits:\n\n```sh\ngit add -A && git commit -m \"dsh-local-perf: ...\"\ngit push origin main"
+    },
+    {
+      "section": "topics (once)",
+      "text": "gh repo edit dsh-local-perf --add-topic dsh-plugin\n```"
+    },
+    {
+      "section": "Layout",
+      "text": "```\ncordis.patch.yml                  the perf layer (all tuning rows)\nsettings.example.yaml             model-config template (copy to ~/.dsh/settings.yaml)\nplugins/text-toolcall-guard/      vendored guard plugin (lib + src)\nREADME.md                         this document — the preserved process"
+    }
+  ],
+  "skipped": []
+}

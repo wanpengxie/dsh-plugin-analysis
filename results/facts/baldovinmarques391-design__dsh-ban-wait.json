@@ -1,0 +1,179 @@
+{
+  "repo": "baldovinmarques391-design/dsh-ban-wait",
+  "commit": "97edb828e5914f457f3549c4d7784fbf48a63e09",
+  "extracted_at": "2026-11-11T17:41:39.824282+00:00",
+  "tree": {
+    "files": 10,
+    "bytes": 26117,
+    "lines_by_language": {
+      "JSON": 49,
+      "JavaScript": 325,
+      "Markdown": 114,
+      "Other": 12,
+      "YAML": 29
+    },
+    "outline": [
+      ".gitignore",
+      "README.md",
+      "bundle-check.mjs",
+      "check.mjs",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json"
+    ]
+  },
+  "manifest": {
+    "name": "dsh-ban-wait",
+    "version": "0.1.1",
+    "private": true,
+    "type": "module",
+    "main": "index.js",
+    "description": "拒绝会把智能体循环钉住的工具参数：阻塞等待、临场延长超时、以及（可选）同步长任务。",
+    "icon": "./icon.svg",
+    "exports": {
+      ".": "./index.js",
+      "./package.json": "./package.json",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "check.mjs",
+      "bundle-check.mjs",
+      "cordis.patch.yml",
+      "icon.svg",
+      "locale/*.json",
+      "README.md"
+    ],
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      }
+    },
+    "keywords": [
+      "dsh-plugin",
+      "deepseek-harness",
+      "agent-loop"
+    ],
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/baldovinmarques391-design/dsh-ban-wait.git"
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# dsh-ban-wait bundle patch: one Host-plane row carrying the policy.\n#\n# This file is what a proper bundle installation (`plugin_manager`\n# `install_bundle`, then adding `dsh-ban-wait` to the profile's\n# `dsh.profile.bundles`) applies. A profile that instead references `index.js`\n# by path — as instance 3080 does — must NOT also list this bundle: both would\n# insert the same row id `ban-wait`.\n- insert:\n    - id: ban-wait\n      name: dsh-ban-wait\n      config:\n        # Ceiling for any per-call blocking hint the model supplies.\n        maxBlockingMs: 1000\n        # `wait: true` is refused on these tools.\n        denyWaitTools:\n          - job_output\n        # `timeoutMs` / `timeout_ms` on these tools is checked against maxBlockingMs.\n        timeoutHintTools:\n          - pwsh\n          - bash\n        # Tools that must run as background jobs. Off by default: `workflow` and a\n        # synchronous `subagent` do real WORK inside the call, and backgrounding\n        # them changes how the result is consumed (job id + completion notice\n        # instead of a return value). Uncomment when that trade is wanted.\n        #\n        # requireBackgroundTools:\n        #   - workflow\n        #   - subagent\n        requireBackgroundTools: []\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [
+    {
+      "name": "DSH_RUNTIME",
+      "kind": "env",
+      "where": "bundle-check.mjs:19"
+    }
+  ],
+  "endpoints": [
+    {
+      "host": "x",
+      "url": "https://x",
+      "where": "check.mjs:32"
+    },
+    {
+      "host": "github.com",
+      "url": "https://github.com/baldovinmarques391-design/dsh-ban-wait.git",
+      "where": "package.json:35"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 0,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-17T10:30:47Z",
+    "created_at": "2026-10-17T09:50:10Z"
+  },
+  "runtime_files": [
+    "bundle-check.mjs",
+    "check.mjs",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "dsh-ban-wait",
+      "text": "One Host plugin that refuses tool arguments which would park the DSH agent loop."
+    },
+    {
+      "section": "dsh-ban-wait",
+      "text": "It exists because the shell command timeout is not a ceiling. `pwsh-sandbox`'s\n`timeoutMs: 1000` promotes a long command to a background job, but the model can\npass `timeoutMs: 180000` on the call itself and the executor honors it up to\n`maxTimeoutMs` (600000 ms by default) — three minutes inside one tool call. The\nsame class of leak is `job_output { wait: true }`, clamped only by a 10-minute\ndefault. This plugin makes \"no single call parks the loop\" a property of the\ntool registry instead of a property of the model's discipline."
+    },
+    {
+      "section": "Files",
+      "text": "| File | Role |\n|---|---|\n| `index.js` | the plugin: policy + global `ctx.tools.guard()` |\n| `check.mjs` | offline self-check of the policy (30 assertions, no DSH process) |\n| `bundle-check.mjs` | pre-install check: replays what the plugin page inspects, with the harness's own patch loader |\n| `cordis.patch.yml` | the bundle's patch: inserts the Host-plane row |\n| `package.json` | `dsh.bundle.patch` → `cordis.patch.yml`; no dependencies |"
+    },
+    {
+      "section": "Policy",
+      "text": "| Config field | Default | Meaning |\n|---|---|---|\n| `maxBlockingMs` | `1000` | ceiling for any per-call blocking hint the model supplies |\n| `denyWaitTools` | `[\"job_output\"]` | tools whose `wait: true` is refused |\n| `timeoutHintTools` | `[\"pwsh\", \"bash\"]` | tools whose `timeoutMs` / `timeout_ms` is checked against `maxBlockingMs` |\n| `requireBackgroundTools` | `[]` | tools that must be called with `run_in_background: true` |"
+    },
+    {
+      "section": "Policy",
+      "text": "A refusal is a `Error: …` tool result that names the ban, clears the background\njob of blame, and states how to re-issue the call, so the model recovers in one\nstep. An unusable config value is logged and replaced by its default rather than\nthrown: a typo here must not fail the instance's boot."
+    },
+    {
+      "section": "Install",
+      "text": "Through the plugin page — the only channel that keeps the plugin visible in the\ninventory with its own toggle:"
+    },
+    {
+      "section": "Install",
+      "text": "1. **添加插件** → paste the absolute project directory\n   (the checkout you just cloned). A local directory is recognised by\n   `isAbsolute()` before any npm-spec parsing and never touches a registry, so\n   the registry chooser in that dialog is irrelevant.\n2. The manager reads `package.json`, requires a `name` and a `dsh.bundle`, adds\n   the dependency to the profile, then reconciles `dsh.profile.bundles`\n   automatically (\"new bundle dependencies activate automatically\"). The plugin\n   then appears under 已安装 with a toggle.\n3. If the result reports that a restart is required, restart the instance: a new\n   Host module generation is not loaded into a running process."
+    },
+    {
+      "section": "Install",
+      "text": "Do **not** also add a raw loader row for this plugin to the profile patch. The\nbundle's `cordis.patch.yml` inserts row id `ban-wait`, and two rows sharing that\nid make id-targeted patches — the toggle, any override — reach only one of them.\n\nCompanion configuration, without which the guard is the only thing standing\nbetween the model and a three-minute call:\n\n```yaml\n- id: pwsh-sandbox\n  name: \"@deepseek-ai/dsh-pwsh-sandbox\"\n  config:\n    timeoutMs: 1000       # default for a command"
+    },
+    {
+      "section": "Verify",
+      "text": "```powershell"
+    },
+    {
+      "section": "the policy itself (30 assertions)",
+      "text": "node check.mjs"
+    },
+    {
+      "section": "`files` coverage, and a real parse of cordis.patch.yml by the harness loader",
+      "text": "node bundle-check.mjs\n```\n\nNeither proves activation — that happens when the profile mounts the bundle's\nlayer, which the plugin page reports in its install result."
+    },
+    {
+      "section": "`files` coverage, and a real parse of cordis.patch.yml by the harness loader",
+      "text": "job_output   { job_id: \"pwsh-1\", wait: true }        → Error: … (ban-wait): job_output was called with wait: true\npwsh         { command: \"ok\", timeoutMs: 180000 }    → Error: … caps how long one tool call may hold the agent loop at 1000 ms\npwsh         { command: \"ok\" }                       → runs normally\nworkflow     { script: \"return 1\" }                  → runs synchronously (not banned by default)\n```"
+    },
+    {
+      "section": "`files` coverage, and a real parse of cordis.patch.yml by the harness loader",
+      "text": "Verified on instance 3080: both refusals fire, plain calls and non-blocking job\nreads behave exactly as before, and the row mounts and unmounts live — no\nrestart was needed for any of it."
+    },
+    {
+      "section": "Boundaries",
+      "text": "- The guard sees **arguments**, not duration. A tool with no blocking argument\n  that simply runs long is out of its reach; that is what `requireBackgroundTools`\n  is for, and what the shell `maxTimeoutMs` cap already handles for commands.\n- `ask_user_question` is deliberately never banned: blocking on a human is the\n  feature.\n- `workflow` and a synchronous `subagent` are **not** banned by default. They do\n  real work inside the call, so backgrounding them changes how the result is\n  consumed. Enable per tool when that trade is wanted:\n  ```yaml\n  requireBackgroundTools: [workflow, subagent]\n  ```"
+    },
+    {
+      "section": "Superseded",
+      "text": "This plugin began as a single-rule ban that refused only `job_output { wait: true }`;\nthat early version has been folded into the policy shipped here, so there is nothing\nleft to install separately."
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,156 @@
+{
+  "repo": "az13js/dsh-multiuser-keys",
+  "commit": "1ce59a6c6dbd218fe6361de400e9b7e8894b67eb",
+  "extracted_at": "2026-11-11T17:35:50.418848+00:00",
+  "tree": {
+    "files": 11,
+    "bytes": 51766,
+    "lines_by_language": {
+      "JSON": 48,
+      "JavaScript": 1004,
+      "Markdown": 125,
+      "Other": 27,
+      "YAML": 60
+    },
+    "outline": [
+      "LICENSE",
+      "README.md",
+      "client.js",
+      "config.example.yml",
+      "cordis.patch.yml",
+      "icon.svg",
+      "index.js",
+      "locale/en.json",
+      "locale/zh.json",
+      "package.json",
+      "test/host.test.mjs"
+    ]
+  },
+  "manifest": {
+    "name": "@local/dsh-multiuser-keys",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Per-user provider API keys that stay in each user's browser",
+    "exports": {
+      ".": "./index.js",
+      "./client": "./client.js",
+      "./package.json": "./package.json",
+      "./cordis.patch.yml": "./cordis.patch.yml",
+      "./locale/*.json": "./locale/*.json"
+    },
+    "files": [
+      "index.js",
+      "client.js",
+      "cordis.patch.yml",
+      "config.example.yml",
+      "icon.svg",
+      "locale/*.json",
+      "README.md"
+    ],
+    "icon": "./icon.svg",
+    "dsh": {
+      "bundle": {
+        "patch": "./cordis.patch.yml"
+      },
+      "client": {
+        "platform": "web",
+        "immediately": true,
+        "inject": [
+          "@deepseek-ai/dsh-client-ui-settings"
+        ]
+      }
+    }
+  },
+  "bundle": [
+    {
+      "path": "cordis.patch.yml",
+      "text": "# The bundle's own patch: one Host row. It ships inert — with no mapped\n# provider every credential keeps the Harness default, and the plugin only adds\n# a settings page that says so.\n#\n# An administrator maps providers by overriding this row (same `id`) in the\n# profile patch layer, or by pointing `configFile` at a JSON document. See\n# config.example.yml and README.md.\n- insert:\n    - id: multiuser-keys\n      name: '@local/dsh-multiuser-keys'\n      config:\n        providers: []\n"
+    }
+  ],
+  "entries": [
+    "index.js",
+    "client.js",
+    "package.json",
+    "cordis.patch.yml"
+  ],
+  "config": [],
+  "endpoints": [
+    {
+      "host": "localhost",
+      "url": "http://localhost/",
+      "where": "client.js:153"
+    }
+  ],
+  "declared": [],
+  "deps": {
+    "dependencies": {},
+    "devDependencies": {}
+  },
+  "quality_raw": {
+    "test_files": 1,
+    "has_ci": false,
+    "has_lint": false,
+    "typed": false,
+    "commits": 1,
+    "pushed_at": "2026-10-16T05:41:08Z",
+    "created_at": "2026-10-16T05:40:21Z"
+  },
+  "runtime_files": [
+    "client.js",
+    "cordis.patch.yml",
+    "index.js",
+    "package.json"
+  ],
+  "readme": [
+    {
+      "section": "@local/dsh-multiuser-keys",
+      "text": "让**同一台 DeepSeek Harness 服务**被多个人共用时，每个人用自己的 provider API Key、消耗自己账户的额度。\n\n- Key 只保存在**用户自己的浏览器**（`localStorage`），随请求进入服务器**内存**，不落盘。\n- 服务器管理员配置**哪些 provider 需要用户自备 Key**；没配置的 provider 完全走 Harness 默认行为（服务器自身的凭据），公司以后想统一发额度，把该 provider 从配置里去掉即可。\n- 服务器重启/更新后无需任何操作：浏览器下一次请求会自动带上 Key。"
+    },
+    {
+      "section": "一、工作原理",
+      "text": "```\n浏览器 A                        Harness 服务器 X                   公司大模型网关\n────────                        ─────────────────                  ──────────────\nlocalStorage: Key\n   │ 每个 /api 请求带 header\n\n- **Host 半**（`index.js`）包装 `ctx.credentials.resolve()`：只拦截管理员映射的凭据引用（`apiKeyEnv` 的名字），其余一律委托给原生实现。\n- **Client 半**（`client.js`）提供设置页 `设置 → 我的 API Key`，并把 Key 挂到同源 `/api` 请求上（不发给任何第三方域名）。\n- Key 在服务器上仅存在于进程内存：会话绑定（最多 512 条）+ 最近活动 Key 环（默认 30 分钟内有效，用于后台任务/子 agent 等没有会话上下文的调用）。"
+    },
+    {
+      "section": "二、安装",
+      "text": "前置：目标机器上有 `pnpm`（Harness 插件管理器需要；只有 corepack 时可用 `corepack enable pnpm`，或写一个 `exec corepack pnpm \"$@\"` 的 shim）。\n\n把本目录放到服务器上任意位置（例如 `/opt/dsh-plugins/dsh-multiuser-keys`），然后二选一：\n\n**方式一（推荐）**：用 Harness 自带的插件管理器安装这个目录 —— 在 GUI 的插件页安装，或让 Agent 调 `plugin_manager install_bundle`，`target` 传目录绝对路径。\n\n**方式二**：等价的两步手工操作：\n\n```bash\ndsh plugin --profile web add /opt/dsh-plugins/dsh-multiuser-keys"
+    },
+    {
+      "section": "dsh.profile.bundles 数组",
+      "text": "**K8s 要点**：`$DSH_HOME`（默认 `~/.dsh`）里的 `profiles/web/`（依赖 + `dsh.profile.bundles` 选择 + `node_modules`）必须在**镜像里预先装好**，否则 Pod 重建后插件消失。因此请把“安装本插件”放进镜像构建阶段，而不是运行阶段：dockerfile\nCOPY dsh-multiuser-keys /opt/dsh-plugins/dsh-multiuser-keys\nRUN dsh plugin --profile web add /opt/dsh-plugins/dsh-multiuser-keys \\\n && node -e \"const f='/root/.dsh/profiles/web/package.json',fs=require('fs'),p=require(f);p.dsh.profile.bundles.includes('@local/dsh-multiuser-keys')||p.dsh.profile.bundles.push('@local/dsh-multiuser-keys');fs.writeFileSync(f,JSON.stringify(p,null,2))\"\n```"
+    },
+    {
+      "section": "dsh.profile.bundles 数组",
+      "text": "本插件没有安装脚本、没有 npm 依赖（只用 Node 内置模块与页面自带的 React），因此安装不会触发任何 build script。"
+    },
+    {
+      "section": "与 `--trusted-host` / Nginx 的关系",
+      "text": "**不影响**。本插件不新增任何 HTTP 端点，只是复用既有的 `/api` 请求：Nginx 的 `proxy_pass` 默认透传未知请求头，`--trusted-host x.example.com` 的信任栅栏照常生效，无需改 Nginx 或启动参数。唯一需要留意的是：**不要在 Nginx/网关日志里记录请求头**（Key 在 header 中传输，走的是同一条 HTTPS 连接）。"
+    },
+    {
+      "section": "三、管理员配置",
+      "text": "两种方式，选一种。\n\n**A. 覆盖 profile patch 里的插件行**（完整示例见 `config.example.yml`）：\n\n```yaml\n- id: multiuser-keys\n  name: \"@local/dsh-multiuser-keys\"\n  config:\n    providers:\n\n**B. 独立的 JSON 配置文件**（适合 ConfigMap 挂载）：\n\n```yaml\n- id: multiuser-keys\n  name: \"@local/dsh-multiuser-keys\"\n  config:\n    configFile: /etc/dsh/multiuser-keys.json\n\n```json\n{ \"providers\": [ { \"provider\": \"company-gateway\", \"label\": \"公司大模型网关\" } ] }\n```"
+    },
+    {
+      "section": "三、管理员配置",
+      "text": "- `ref` 可省略：插件会从实时 settings 文档里读取该 provider 的 `apiKeyEnv`（`llm-pi-ai` 的 `providers.<路由>.apiKeyEnv`；官方 DeepSeek 路由的 `llm-deepseek-api-key.apiKeyEnv` 也识别）。读不到的 provider 会在日志里告警并跳过。\n- 可选字段：`recentRingWindowMs`（默认 1800000，设 0 关闭“最近活动”回退）、`header`（默认 `x-dsh-user-keys`）、`source`（默认 `browser`）、`logResolutions`（默认 false）。\n- **改完配置要刷新浏览器页面**：provider 目录随首页 HTML 下发。"
+    },
+    {
+      "section": "四、用户使用",
+      "text": "`设置 → 我的 API Key`（英文界面为 *My API keys*）：每个已映射的 provider 一行，粘贴自己的 Key → 保存，立即对下一次请求生效。清除则回退到服务器默认凭据。\n\n页面会显示“已配置/未配置”，Key 输入框默认掩码显示。"
+    },
+    {
+      "section": "五、已知限制",
+      "text": "1. **同一个会话被两个用户同时使用**时，会话绑定以最后一次发起请求的人为准，可能把 A 的请求记到 B 的 Key 上（服务器上是共享会话模型，本身就没有用户隔离）。建议各自用自己的会话。\n2. **非 Web 传输**（桌面端 IPC、ACP/CLI）没有浏览器，Key 无法注入，行为等同未配置。\n3. **无会话上下文的后台任务**（定时任务、团队协作触发的调用）在 `recentRingWindowMs` 窗口内使用最近活跃用户的 Key，超出窗口则回退默认凭据。\n4. 映射后的凭据，Models 设置页仍然只反映服务器端存储状态（`describe` 未被改写），用户 Key 的状态以本插件页面为准。\n5. Key 的信任边界等同于同源页面本身：任何能在 `x.example.com` 上执行脚本的人都能读到 `localStorage`。"
+    },
+    {
+      "section": "六、验证状态",
+      "text": "已在本机 Harness（0.2.0-rc.2，web profile，provider `company-gateway`）验证：\n\n- 安装返回 `application: applied`、无告警；插件行 `include:multiuser-keys` 处于 `enabled + active`。\n- 客户端插件已在真实页面注册：`settings.section` 中出现 `multiuser-keys`（order 25，active）。\n- `node test/host.test.mjs`：18 项通过 —— 覆盖 header 解码、请求作用域、会话绑定、子 agent 继承、最近活动回退、未映射/无 Key 委托、目录发现、销毁还原。\n\n尚未在真实浏览器里点过：页面外观、保存后 header 往返、以及**映射生效时的真实计费路径**（需要在管理员配置里加上 provider、刷新页面、填入 Key 后发一条消息来确认）。这一步只有你能完成。"
+    },
+    {
+      "section": "七、自检与卸载",
+      "text": "```bash\nnode test/host.test.mjs\n```\n\n卸载：插件管理器 `remove_bundle @local/dsh-multiuser-keys`；用户浏览器里的 Key 属于浏览器，清站点数据即清空。"
+    }
+  ],
+  "skipped": []
+}
